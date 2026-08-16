@@ -1,0 +1,239 @@
+<div align="center">
+
+# NEXOR · by Norty
+
+**O sistema operacional do condomínio.**
+
+MVP navegável — Fase 1
+
+</div>
+
+---
+
+## O que é esta entrega
+
+Um **MVP evolutivo** do NEXOR: uma aplicação navegável, com identidade visual
+definitiva, arquitetura de produto real e todos os fluxos principais funcionando
+ponta a ponta sobre um banco de dados provisório.
+
+Não é um protótipo descartável. A separação entre interface, regras de negócio,
+serviços e camada de dados foi construída para que a troca do banco provisório
+pelo definitivo (Fase 2) não exija reescrever o frontend.
+
+```
+UI  →  Services  →  Repositories  →  Banco provisório   (hoje)
+UI  →  Services  →  Repositories  →  Banco de produção  (Fase 2)
+```
+
+---
+
+## Como executar
+
+```bash
+npm install
+npm run dev      # ambiente de desenvolvimento
+npm run build    # build de produção
+npm run preview  # serve o build
+```
+
+Aplicação em `http://localhost:5173`.
+
+---
+
+## Contas de demonstração
+
+Todas usam a senha **`123456`**.
+
+| Perfil | E-mail | Contexto |
+|---|---|---|
+| Morador | `morador@nexor.test` | Carlos Almeida · Torre A · Apto 1204 |
+| Portaria | `portaria@nexor.test` | Marcos Vieira · Portaria Principal |
+| Síndico(a) | `sindico@nexor.test` | Helena Duarte · mandato 2025–2027 |
+| Administrador | `admin@nexor.test` | Ricardo Monteiro · acesso amplo + portfólio |
+| Administradora | `administradora@nexor.test` | Beatriz Salgado · 24 condomínios |
+
+Na tela de login, clicar em uma das contas preenche as credenciais.
+
+---
+
+## Roteiro de demonstração
+
+O caminho abaixo percorre os cinco fluxos completos exigidos pelo escopo.
+
+### 1. Morador — `morador@nexor.test`
+
+1. **Home** — identidade condominial digital: unidade, veículos, autorizados,
+   funcionários, encomendas e acessos.
+2. **Visitantes → Autorizar visitante** — preencher e gerar a autorização.
+   O sistema emite um **QR Code** e o visitante aparece imediatamente na portaria.
+3. **Visitantes → Criar evento** — gera convites individuais com QR para cada convidado.
+4. **Veículos → Cadastrar veículo** — a placa passa a ser reconhecida na garagem.
+5. **Reservas** — escolher área, data e horário; a disponibilidade é validada.
+6. **Chamados → Abrir chamado** — a administração recebe na hora.
+7. **Financeiro → Pagar boleto** — pagamento simulado com baixa registrada.
+8. **NEXOR AI** — perguntar "Tenho alguma encomenda?" ou "Quando vence meu boleto?".
+
+### 2. Portaria — `portaria@nexor.test`
+
+1. **Console** — busca única resolve visitante, morador, unidade, placa e funcionário.
+2. **Visitantes** — localizar o visitante criado no passo anterior e **Liberar**.
+   A entrada é registrada e o morador recebe notificação.
+3. **Validar QR Code** — digitar o código do convite para validar na guarita.
+4. **Leitura de placa** — simular `ABC1D23` (autorizada) e `ABC9X88` (não cadastrada).
+5. **Encomendas → Nova encomenda** para o apto 1204; depois registrar a retirada.
+6. **Portões** — acionamento simulado com registro em auditoria.
+7. **Modo monitor** — layout de tela cheia para o painel da guarita.
+
+### 3. Síndico(a) — `sindico@nexor.test`
+
+Dashboard com indicadores e gráficos, controle de acesso, financeiro
+administrativo, chamados, ocorrências, manutenção, comunicados, documentos,
+assembleias com votação, central de segurança e trilha de auditoria.
+
+### 4. Administradora — `administradora@nexor.test`
+
+Portfólio consolidado de 24 condomínios, indicadores agregados e troca de
+contexto para a gestão de qualquer condomínio da carteira.
+
+> Voltando ao morador, as notificações geradas pela portaria durante o roteiro
+> já estarão lá — os papéis compartilham o mesmo estado.
+
+---
+
+## Arquitetura
+
+```
+src/
+├── app/            Sessão, navegação, guards de rota e PWA
+├── brand/          Identidade NEXOR (símbolo, lockup, composição visual)
+├── components/
+│   ├── ui/         Design system (24 componentes + tokens aplicados)
+│   ├── charts/     Gráficos SVG próprios (área, barras, rosca, ranking)
+│   └── …           Busca global, notificações, tabela de acessos, câmeras
+├── data/
+│   ├── types.ts    Modelo de domínio completo
+│   ├── seed/       Gerador determinístico do condomínio fictício
+│   ├── db.ts       Banco provisório (seed + journal de alterações)
+│   └── repositories/  Única porta de acesso aos dados
+├── layouts/        Shell da aplicação (sidebar desktop / bottom nav mobile)
+├── lib/            Utilitários de data e formatação pt-BR
+├── modules/
+│   ├── auth/       Login
+│   ├── resident/   Experiência do morador
+│   ├── gate/       Console e operação da portaria
+│   ├── management/ Gestão do condomínio
+│   ├── portfolio/  Administradora multi-condomínio
+│   └── shared/     Telas compartilhadas entre papéis
+├── services/       Regras de negócio por domínio
+└── styles/         Tokens, reset e utilitários
+```
+
+### Camada de dados provisória
+
+O dataset **não é persistido**: ele é reconstruído de forma determinística a
+cada carregamento a partir de uma semente fixa. Apenas as alterações feitas
+durante a demonstração são gravadas, como um journal compacto de operações.
+
+```
+seed determinístico  +  journal de alterações  =  estado atual
+```
+
+Isso mantém o `localStorage` livre, torna a demonstração reprodutível em
+qualquer máquina e faz de "reiniciar demonstração" apenas o descarte do journal.
+O contador de **30 dias** de teste é exibido na barra lateral.
+
+### Permissões e multi-tenant
+
+`services/permissions.ts` define a matriz de papel → permissões. Cada rota é
+protegida por permissão e a navegação é montada a partir dela: um módulo sem
+permissão não aparece no menu nem é acessível por URL direta.
+
+```
+Tenant (administradora)
+ └── Condomínio          dados, usuários e configurações próprios
+      ├── Torres · Unidades · Vagas
+      ├── Portarias · Áreas comuns
+      ├── Veículos · Visitantes · Funcionários
+      └── Financeiro · Documentos · Governança
+```
+
+### Concierge (NEXOR AI)
+
+Definido por uma interface de provedor. O provedor local interpreta a intenção
+da pergunta e responde consultando os **mesmos serviços** do restante da
+aplicação — as respostas refletem os dados reais da demonstração. Na Fase 5,
+registrar um provedor conectado a um modelo de linguagem não exige mudar
+nenhuma tela.
+
+---
+
+## Dados da demonstração
+
+**Residencial Parque Central** — São Paulo/SP
+
+| | |
+|---|---|
+| Torres | 4 (Aurora, Boreal, Cristal, Diamante) |
+| Unidades | 1.248 (26 andares × 12 unidades por torre) |
+| Moradores | ~2.850 |
+| Veículos | 734 |
+| Funcionários e prestadores | ~330 |
+| Áreas comuns | 10 |
+| Portarias | 4 · Câmeras: 12 |
+| Visitantes esperados hoje | 127 |
+| Encomendas na portaria | ~85 |
+| Chamados abertos | 23 · Ocorrências: 7 |
+| Registros de acesso | ~12 mil (3 dias) |
+| Boletos, lançamentos, documentos, assembleias | dataset completo |
+
+Nenhum dado pessoal real é utilizado.
+
+---
+
+## Escopo desta fase
+
+**Implementado e funcional**
+
+Identidade visual · design system · login · dashboards · perfil e segurança ·
+morador · portaria · visitantes · eventos com convite · veículos · controle de
+acesso · leitura de placa simulada · encomendas · reservas · financeiro pessoal
+e administrativo · chamados · ocorrências · comunicados · documentos ·
+assembleias com votação · funcionários e prestadores · central de segurança ·
+concierge · auditoria · multi-condomínio · responsividade · modo monitor · PWA.
+
+**Simulado por decisão de escopo**
+
+Pagamento e boleto bancário · integração bancária · reconhecimento de placa
+real · abertura física de portão · CFTV · biometria · WhatsApp · IA de produção ·
+assinatura digital · integração contábil.
+
+Todos aparecem na arquitetura e no roadmap, com a experiência de uso completa.
+
+---
+
+## Roadmap
+
+| Fase | Entrega |
+|---|---|
+| **1** | **MVP navegável — esta entrega** |
+| 2 | Banco definitivo, autenticação real, API, logs, segurança e backup |
+| 3 | Financeiro real: boletos, PIX, integração bancária e conciliação |
+| 4 | Portaria real: controle de acesso, CFTV (ONVIF/RTSP), LPR e equipamentos |
+| 5 | NEXOR AI conectado aos dados reais |
+| 6 | Marketplace de prestadores, serviços e parceiros |
+
+---
+
+## Stack
+
+React 19 · TypeScript · Vite · React Router · CSS com design tokens ·
+gráficos SVG próprios · lucide-react.
+
+Sem dependência de UI kit: o design system é próprio, o que mantém o controle
+total da identidade NEXOR e o bundle enxuto.
+
+---
+
+<div align="center">
+<sub><b>NEXOR</b> · by Norty · Plataforma operacional para condomínios</sub>
+</div>

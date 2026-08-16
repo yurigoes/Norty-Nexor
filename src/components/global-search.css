@@ -1,0 +1,73 @@
+.nx-gsearch-modal .nx-modal__body { padding: 0; }
+.nx-gsearch { display: flex; flex-direction: column; }
+
+.nx-gsearch__field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-subtle);
+}
+.nx-gsearch__field input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: var(--text-lg);
+  color: var(--text-strong);
+}
+.nx-gsearch__field input::placeholder { color: var(--text-subtle); font-size: var(--text-md); }
+.nx-gsearch__field kbd {
+  font-size: var(--text-2xs);
+  padding: 3px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--border-default);
+  background: var(--surface-sunken);
+}
+
+.nx-gsearch__body { max-height: 56vh; overflow-y: auto; padding: var(--space-3); }
+
+.nx-gsearch__hint { padding: var(--space-5); }
+.nx-gsearch__hint ul { display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-3); }
+.nx-gsearch__hint li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+.nx-gsearch__hint li svg { color: var(--text-subtle); }
+.nx-gsearch__hint strong { font-family: var(--font-mono); color: var(--text-strong); }
+
+.nx-gsearch__group { margin-bottom: var(--space-3); }
+.nx-gsearch__group-label {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-widest);
+  color: var(--text-subtle);
+  font-weight: var(--weight-semibold);
+  padding: var(--space-2) var(--space-3);
+}
+.nx-gsearch__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  text-align: left;
+  transition: background var(--duration-fast);
+}
+.nx-gsearch__item:hover { background: var(--surface-hover); }
+.nx-gsearch__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background: var(--gradient-brand-soft);
+  color: var(--nexor-blue);
+  flex-shrink: 0;
+}

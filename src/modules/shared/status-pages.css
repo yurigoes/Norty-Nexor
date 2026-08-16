@@ -1,0 +1,28 @@
+.nx-status-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  text-align: center;
+  padding: var(--space-8) var(--space-5);
+}
+.nx-status-page.is-inline { min-height: 60vh; }
+.nx-status-page__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 66px;
+  height: 66px;
+  border-radius: var(--radius-lg);
+  background: var(--gradient-brand-soft);
+  color: var(--nexor-blue);
+  margin-top: var(--space-5);
+}
+.nx-status-page__icon.is-danger { background: var(--danger-bg); color: var(--danger); }
+.nx-status-page h1 { font-size: var(--text-2xl); }
+.nx-status-page p { color: var(--text-muted); max-width: 46ch; }
+.nx-status-page .nx-btn { margin-top: var(--space-4); }
+.nx-status-page__link { font-size: var(--text-sm); color: var(--text-muted); }

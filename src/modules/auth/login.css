@@ -1,0 +1,210 @@
+.nx-login {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--surface-app);
+}
+
+/* ---------------- Painel de marca ---------------- */
+
+.nx-login__hero {
+  position: relative;
+  background: var(--gradient-navy);
+  color: #fff;
+  padding: var(--space-9) var(--space-8);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+}
+
+.nx-login__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.9;
+}
+
+.nx-login__hero-content {
+  position: relative;
+  max-width: 520px;
+  margin: auto 0;
+  animation: nx-rise var(--duration-slow) var(--ease-out) both;
+}
+
+.nx-login__headline {
+  font-size: clamp(30px, 3.2vw, 44px);
+  font-weight: var(--weight-bold);
+  line-height: 1.12;
+  letter-spacing: var(--tracking-tight);
+  color: #fff;
+  margin-top: var(--space-8);
+  max-width: 12ch;
+}
+
+.nx-login__lead {
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  color: rgba(255, 255, 255, 0.68);
+  margin-top: var(--space-4);
+  max-width: 52ch;
+}
+
+.nx-login__features {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-7);
+}
+.nx-login__features li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-base);
+  color: rgba(255, 255, 255, 0.8);
+}
+.nx-login__features li span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--nexor-cyan);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 4px rgba(32, 213, 232, 0.15);
+}
+
+.nx-login__hero-foot {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.4);
+  letter-spacing: var(--tracking-wide);
+  padding-top: var(--space-6);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ---------------- Painel de acesso ---------------- */
+
+.nx-login__panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8) var(--space-6);
+  overflow-y: auto;
+}
+
+.nx-login__panel-inner {
+  width: 100%;
+  max-width: 420px;
+  animation: nx-rise var(--duration-slow) var(--ease-out) both;
+  animation-delay: 60ms;
+}
+
+.nx-login__mobile-brand { display: none; margin-bottom: var(--space-7); }
+
+.nx-login__header { margin-bottom: var(--space-6); }
+.nx-login__header h2 { font-size: var(--text-2xl); }
+.nx-login__header p { color: var(--text-muted); margin-top: var(--space-1); }
+
+.nx-login__error {
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  color: #c22c2c;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.nx-login__links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-subtle);
+}
+.nx-login__links button { color: var(--text-brand); font-weight: var(--weight-medium); }
+.nx-login__links button:hover { text-decoration: underline; }
+
+.nx-login__divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-7) 0 var(--space-4);
+}
+.nx-login__divider::before,
+.nx-login__divider::after { content: ''; flex: 1; height: 1px; background: var(--border-subtle); }
+.nx-login__divider span {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-widest);
+  color: var(--text-subtle);
+  font-weight: var(--weight-semibold);
+}
+
+.nx-login__accounts { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.nx-login__account {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-card);
+  text-align: left;
+  transition: all var(--duration-fast);
+}
+.nx-login__account:hover {
+  border-color: var(--nexor-blue);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+.nx-login__account-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-xs);
+  background: var(--gradient-brand-soft);
+  color: var(--nexor-blue);
+  flex-shrink: 0;
+}
+.nx-login__account-role { font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--text-strong); }
+.nx-login__account-detail { font-size: var(--text-2xs); color: var(--text-subtle); }
+.nx-login__account-email {
+  font-size: var(--text-2xs);
+  font-family: var(--font-mono);
+  color: var(--text-subtle);
+  flex-shrink: 0;
+}
+
+.nx-login__hint {
+  margin-top: var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+  text-align: center;
+}
+.nx-login__hint strong { font-family: var(--font-mono); color: var(--text-default); }
+
+/* ---------------- Responsivo ---------------- */
+
+@media (max-width: 1080px) {
+  .nx-login__account-email { display: none; }
+}
+
+@media (max-width: 900px) {
+  .nx-login { grid-template-columns: 1fr; }
+  .nx-login__hero { display: none; }
+  .nx-login__mobile-brand { display: block; }
+  .nx-login__panel { align-items: flex-start; padding: var(--space-8) var(--space-4) var(--space-9); }
+  .nx-login__account-email { display: block; }
+}
+
+@media (max-width: 520px) {
+  .nx-login__account-email { display: none; }
+}

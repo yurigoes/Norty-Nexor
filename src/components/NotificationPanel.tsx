@@ -1,0 +1,93 @@
+import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  AlertTriangle, Bell, CalendarCheck, Car, DoorOpen, FileText, Gavel, Megaphone, Package,
+  UserCheck, Wallet, Wrench,
+} from 'lucide-react';
+import { useAuthenticated } from '../app/SessionContext';
+import { markAllRead, markRead, notificationsFor } from '../services/notifications';
+import type { AppNotification, NotificationKind } from '../data/types';
+import { Button, Drawer, EmptyState } from './ui';
+import { timeAgo } from '../lib/date';
+import './notifications.css';
+
+const ICONS: Record<NotificationKind, typeof Bell> = {
+  visitante_chegou: UserCheck,
+  encomenda: Package,
+  veiculo: Car,
+  aviso: Megaphone,
+  boleto: Wallet,
+  reserva: CalendarCheck,
+  chamado: Wrench,
+  ocorrencia: AlertTriangle,
+  acesso: DoorOpen,
+  autorizacao: FileText,
+  assembleia: Gavel,
+};
+
+const TONES: Partial<Record<NotificationKind, string>> = {
+  visitante_chegou: 'brand',
+  encomenda: 'cyan',
+  veiculo: 'brand',
+  aviso: 'warning',
+  boleto: 'success',
+  ocorrencia: 'danger',
+};
+
+export function NotificationPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { user, condominium, dataVersion } = useAuthenticated();
+  const navigate = useNavigate();
+
+  const items = useMemo(
+    () => notificationsFor(user, condominium.id),
+    [user, condominium.id, dataVersion],
+  );
+
+  const unread = items.filter((n) => !n.read).length;
+
+  const openNotification = (n: AppNotification) => {
+    markRead(n.id);
+    if (n.link) { onClose(); navigate(n.link); }
+  };
+
+  return (
+    <Drawer
+      open={open}
+      onClose={onClose}
+      title="Notificações"
+      subtitle={unread ? `${unread} não lidas` : 'Tudo em dia'}
+      width={430}
+      footer={
+        <Button variant="ghost" block onClick={() => markAllRead(user, condominium.id)} disabled={!unread}>
+          Marcar todas como lidas
+        </Button>
+      }
+    >
+      {items.length === 0 ? (
+        <EmptyState icon={<Bell size={24} />} title="Nenhuma notificação" description="As novidades do condomínio aparecerão aqui." />
+      ) : (
+        <ul className="nx-notifications">
+          {items.map((n) => {
+            const Icon = ICONS[n.kind] ?? Bell;
+            const tone = TONES[n.kind] ?? 'neutral';
+            return (
+              <li key={n.id}>
+                <button className={`nx-notification ${n.read ? '' : 'is-unread'}`} onClick={() => openNotification(n)}>
+                  <span className={`nx-notification__icon nx-notification__icon--${tone}`}><Icon size={17} /></span>
+                  <span className="nx-stack nx-grow nx-gap-1">
+                    <span className="nx-row nx-between nx-gap-2">
+                      <span className="nx-notification__title">{n.title}</span>
+                      <span className="nx-notification__time">{timeAgo(n.at)}</span>
+                    </span>
+                    <span className="nx-notification__body">{n.body}</span>
+                  </span>
+                  {!n.read && <span className="nx-notification__dot" />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Drawer>
+  );
+}
