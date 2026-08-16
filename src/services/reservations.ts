@@ -46,20 +46,39 @@ export function availability(areaId: ID, date: string): { slot: string; availabl
 }
 
 /** Mapa de ocupação do mês, usado para colorir o calendário. */
-export function monthAvailability(areaId: ID, monthIso: string): Record<string, { status: 'free' | 'partial' | 'full'; count: number }> {
+export function monthAvailability(
+  areaId: ID,
+  monthIso: string,
+): Record<string, { status: 'free' | 'partial' | 'full' | 'blocked'; count: number }> {
   const target = area(areaId);
   if (!target) return {};
+
   const prefix = monthIso.slice(0, 7);
-  const map: Record<string, { status: 'free' | 'partial' | 'full'; count: number }> = {};
+  const map: Record<string, { status: 'free' | 'partial' | 'full' | 'blocked'; count: number }> = {};
+
+  // Dias em que a área não abre ficam bloqueados no calendário.
+  const [year, month] = prefix.split('-').map(Number);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const date = new Date(year, month - 1, day);
+    const iso = `${prefix}-${String(day).padStart(2, '0')}`;
+    if (!target.openDays.includes(date.getDay())) {
+      map[iso] = { status: 'blocked', count: 0 };
+    }
+  }
+
   where('reservations', (r) => r.areaId === areaId && r.date.startsWith(prefix) && (r.status === 'confirmada' || r.status === 'pendente'))
     .forEach((r) => {
-      const current = map[r.date] ?? { status: 'free' as const, count: 0 };
-      current.count += 1;
-      map[r.date] = current;
+      const current = map[r.date];
+      if (current?.status === 'blocked') return;
+      map[r.date] = { status: 'free', count: (current?.count ?? 0) + 1 };
     });
-  Object.keys(map).forEach((date) => {
-    map[date].status = map[date].count >= target.slots.length ? 'full' : 'partial';
+
+  Object.entries(map).forEach(([date, info]) => {
+    if (info.status === 'blocked') return;
+    map[date].status = info.count >= target.slots.length ? 'full' : 'partial';
   });
+
   return map;
 }
 
@@ -81,6 +100,10 @@ export class ReservationError extends Error {}
 export function createReservation(input: CreateReservationInput): Reservation {
   const target = area(input.areaId);
   if (!target) throw new ReservationError('Área comum não encontrada.');
+  const weekday = new Date(`${input.date}T12:00:00`).getDay();
+  if (!target.openDays.includes(weekday)) {
+    throw new ReservationError(`${target.name} não abre neste dia da semana.`);
+  }
   if (takenSlots(input.areaId, input.date).includes(input.slot)) {
     throw new ReservationError('Este horário já está reservado. Escolha outro horário.');
   }

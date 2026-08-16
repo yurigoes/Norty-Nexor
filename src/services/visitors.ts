@@ -186,6 +186,102 @@ export function findByCode(condominiumId: ID, code: string): Visitor | undefined
   return where('visitors', (v) => v.condominiumId === condominiumId && v.code.toUpperCase() === normalized)[0];
 }
 
+
+/* ---------------- Autorização solicitada pela portaria ---------------- */
+
+export interface RequestAuthorizationInput {
+  condominiumId: ID;
+  unitId: ID;
+  name: string;
+  document?: string;
+  vehiclePlate?: string;
+  gateName: string;
+  requestedBy: string;
+}
+
+/**
+ * Visitante não anunciado chega à portaria: o porteiro solicita a autorização
+ * e o morador decide pelo aplicativo. A notificação carrega as ações
+ * "Liberar" e "Recusar", resolvidas por `resolveArrival`.
+ */
+export function requestAuthorization(input: RequestAuthorizationInput): Visitor {
+  const visitor: Visitor = {
+    id: nextId('vis'),
+    condominiumId: input.condominiumId,
+    unitId: input.unitId,
+    residentId: '',
+    name: input.name,
+    document: input.document ?? '—',
+    kind: 'unica',
+    status: 'aguardando',
+    expectedDate: new Date().toISOString().slice(0, 10),
+    expectedTime: new Date().toTimeString().slice(0, 5),
+    category: 'visita',
+    vehiclePlate: input.vehiclePlate,
+    code: generateCode(),
+    createdAt: new Date().toISOString(),
+    createdBy: `${input.requestedBy} · portaria`,
+    notes: 'Autorização solicitada pela portaria na chegada.',
+  };
+  insert('visitors', visitor);
+
+  pushNotification({
+    condominiumId: input.condominiumId,
+    unitId: input.unitId,
+    kind: 'visitante_chegou',
+    title: 'Visitante chegou',
+    body: `${visitor.name}${visitor.vehiclePlate ? ` (placa ${visitor.vehiclePlate})` : ''} chegou à ${input.gateName} e aguarda sua autorização.`,
+    link: '/app/visitantes',
+    refId: visitor.id,
+    actions: [
+      { id: 'liberar', label: 'Liberar', tone: 'primary' },
+      { id: 'recusar', label: 'Recusar', tone: 'danger' },
+    ],
+  });
+
+  recordAudit({
+    condominiumId: input.condominiumId,
+    actorName: input.requestedBy,
+    actorRole: 'portaria',
+    action: 'Solicitou autorização ao morador',
+    target: visitor.name,
+    detail: `${unitLabel(visitor.unitId)} · ${input.gateName}`,
+    module: 'Visitantes',
+  });
+
+  return visitor;
+}
+
+/** Resposta do morador à solicitação da portaria. */
+export function resolveArrival(visitorId: ID, approve: boolean, actorName: string): Visitor | undefined {
+  const visitor = byId('visitors', visitorId);
+  if (!visitor) return undefined;
+
+  const next = update('visitors', visitorId, { status: approve ? 'liberado' : 'recusado' });
+
+  pushNotification({
+    condominiumId: visitor.condominiumId,
+    role: 'portaria',
+    kind: 'autorizacao',
+    title: approve ? 'Entrada autorizada pelo morador' : 'Entrada recusada pelo morador',
+    body: `${visitor.name} · ${unitLabel(visitor.unitId)}`,
+    link: '/portaria/visitantes',
+    refId: visitor.id,
+  });
+
+  recordAudit({
+    condominiumId: visitor.condominiumId,
+    actorName,
+    actorRole: 'morador',
+    action: approve ? 'Autorizou entrada solicitada' : 'Recusou entrada solicitada',
+    target: visitor.name,
+    detail: unitLabel(visitor.unitId),
+    module: 'Visitantes',
+  });
+
+  return next;
+}
+
 /* ---------------- Eventos ---------------- */
 
 export function eventsOfUnit(unitId: ID): CondoEvent[] {

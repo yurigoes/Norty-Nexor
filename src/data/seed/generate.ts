@@ -862,8 +862,12 @@ function buildReservations({ today, rng, condoId, commonAreas, occupiedUnits, re
 
   for (let dayOffset = -20; dayOffset <= 45; dayOffset += 1) {
     const perDay = dayOffset === 0 ? 30 : rng.int(4, 22);
+    const weekday = shiftDays(today, dayOffset).getDay();
     for (let i = 0; i < perDay; i += 1) {
       const area = rng.pick(commonAreas);
+      // Respeita os dias de funcionamento da área: o calendário bloqueia
+      // esses dias, então o seed não pode criar reservas neles.
+      if (!area.openDays.includes(weekday)) continue;
       const unit = rng.pick(occupiedUnits);
       const resident = residents.find((r) => r.unitId === unit.id);
       const status: Reservation['status'] = dayOffset < 0

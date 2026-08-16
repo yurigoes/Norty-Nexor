@@ -27,7 +27,8 @@
   line-height: 1;
   color: #fff;
 }
-.nx-gate-head__clock span { font-size: var(--text-xs); color: rgba(255, 255, 255, 0.55); text-transform: capitalize; }
+.nx-gate-head__clock span { font-size: var(--text-xs); color: rgba(255, 255, 255, 0.55); }
+.nx-gate-head__clock span::first-letter { text-transform: uppercase; }
 
 /* ---------------- Busca ---------------- */
 

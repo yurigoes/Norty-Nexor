@@ -60,7 +60,9 @@ export function GateConsole() {
     toast.warning('Entrada recusada', `${visitor.name} não foi liberado.`);
   };
 
-  const nextArrivals = data.expected.filter((v) => v.status === 'aguardando').slice(0, 8);
+  const nextArrivals = data.expected
+    .filter((v) => v.status === 'aguardando' || v.status === 'liberado')
+    .slice(0, 8);
 
   return (
     <div className="nx-stack nx-gap-5">
@@ -202,7 +204,9 @@ export function GateConsole() {
                   <span className="nx-gate-arrival__time"><Clock size={13} /> {v.expectedTime}</span>
                   <div className="nx-row nx-gap-2 nx-shrink-0">
                     <Button variant="ghost" size="sm" icon={<XCircle size={16} />} onClick={() => deny(v)} aria-label="Recusar" />
-                    <Button variant="success" size="sm" icon={<CheckCircle2 size={16} />} onClick={() => release(v)}>Liberar</Button>
+                    <Button variant="success" size="sm" icon={<CheckCircle2 size={16} />} onClick={() => release(v)}>
+                      {v.status === 'liberado' ? 'Registrar entrada' : 'Liberar'}
+                    </Button>
                   </div>
                 </li>
               ))}

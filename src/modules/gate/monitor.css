@@ -36,7 +36,8 @@
   line-height: 1;
   color: #fff;
 }
-.nx-monitor__clock span { font-size: var(--text-xs); color: rgba(255, 255, 255, 0.5); text-transform: capitalize; }
+.nx-monitor__clock span { font-size: var(--text-xs); color: rgba(255, 255, 255, 0.5); }
+.nx-monitor__clock span::first-letter { text-transform: uppercase; }
 .nx-monitor .nx-btn--ghost { color: rgba(255, 255, 255, 0.6); }
 .nx-monitor .nx-btn--ghost:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
 

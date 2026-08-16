@@ -33,6 +33,13 @@
 .nx-notification__icon--warning { background: var(--warning-bg); color: #b97706; }
 .nx-notification__icon--danger { background: var(--danger-bg); color: var(--danger); }
 
+.nx-notification__main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  text-align: left;
+}
 .nx-notification__title { font-size: var(--text-base); font-weight: var(--weight-semibold); color: var(--text-strong); }
 .nx-notification__time { font-size: var(--text-2xs); color: var(--text-subtle); white-space: nowrap; }
 .nx-notification__body { font-size: var(--text-sm); color: var(--text-muted); line-height: var(--leading-snug); }

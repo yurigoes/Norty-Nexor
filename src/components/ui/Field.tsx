@@ -21,10 +21,11 @@ export function Field({
 }) {
   return (
     <div className={`nx-field ${error ? 'has-error' : ''} ${className}`}>
+      {/* O asterisco de obrigatório é decoração via CSS: o nome acessível
+          do campo continua sendo exatamente o texto do rótulo. */}
       {label && (
-        <label className="nx-field__label" htmlFor={htmlFor}>
+        <label className="nx-field__label" htmlFor={htmlFor} data-required={required || undefined}>
           {label}
-          {required && <span className="nx-field__required">*</span>}
         </label>
       )}
       {children}

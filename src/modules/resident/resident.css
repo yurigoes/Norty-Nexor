@@ -298,8 +298,9 @@
   display: grid;
   grid-template-columns: 1.6fr 1fr;
   gap: var(--space-4);
-  align-items: start;
+  align-items: stretch;
 }
+.nx-finance-hero > .nx-stack { gap: var(--space-4); }
 .nx-finance-hero__main { position: relative; overflow: hidden; }
 .nx-finance-hero__main::after {
   content: '';

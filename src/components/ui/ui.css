@@ -232,7 +232,11 @@
   display: flex;
   gap: 3px;
 }
-.nx-field__required { color: var(--danger); }
+.nx-field__label[data-required]::after {
+  content: '*';
+  color: var(--danger);
+  margin-left: 3px;
+}
 .nx-field__hint { font-size: var(--text-xs); color: var(--text-subtle); }
 .nx-field__error { font-size: var(--text-xs); color: var(--danger); font-weight: var(--weight-medium); }
 

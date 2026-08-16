@@ -6,8 +6,9 @@ import {
 } from 'lucide-react';
 import { useAuthenticated } from '../app/SessionContext';
 import { markAllRead, markRead, notificationsFor } from '../services/notifications';
+import { resolveArrival } from '../services/visitors';
 import type { AppNotification, NotificationKind } from '../data/types';
-import { Button, Drawer, EmptyState } from './ui';
+import { Button, Drawer, EmptyState, useToast } from './ui';
 import { timeAgo } from '../lib/date';
 import './notifications.css';
 
@@ -37,6 +38,7 @@ const TONES: Partial<Record<NotificationKind, string>> = {
 export function NotificationPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user, condominium, dataVersion } = useAuthenticated();
   const navigate = useNavigate();
+  const toast = useToast();
 
   const items = useMemo(
     () => notificationsFor(user, condominium.id),
@@ -48,6 +50,16 @@ export function NotificationPanel({ open, onClose }: { open: boolean; onClose: (
   const openNotification = (n: AppNotification) => {
     markRead(n.id);
     if (n.link) { onClose(); navigate(n.link); }
+  };
+
+  /** Ações inline: a portaria pediu autorização e o morador decide daqui. */
+  const decide = (n: AppNotification, approve: boolean) => {
+    if (!n.refId) return;
+    const visitor = resolveArrival(n.refId, approve, user.name);
+    markRead(n.id);
+    if (!visitor) return;
+    if (approve) toast.success('Entrada liberada', `${visitor.name} foi autorizado na portaria.`);
+    else toast.warning('Entrada recusada', `${visitor.name} não foi autorizado.`);
   };
 
   return (
@@ -72,17 +84,33 @@ export function NotificationPanel({ open, onClose }: { open: boolean; onClose: (
             const tone = TONES[n.kind] ?? 'neutral';
             return (
               <li key={n.id}>
-                <button className={`nx-notification ${n.read ? '' : 'is-unread'}`} onClick={() => openNotification(n)}>
+                <div className={`nx-notification ${n.read ? '' : 'is-unread'}`}>
                   <span className={`nx-notification__icon nx-notification__icon--${tone}`}><Icon size={17} /></span>
-                  <span className="nx-stack nx-grow nx-gap-1">
-                    <span className="nx-row nx-between nx-gap-2">
-                      <span className="nx-notification__title">{n.title}</span>
-                      <span className="nx-notification__time">{timeAgo(n.at)}</span>
-                    </span>
-                    <span className="nx-notification__body">{n.body}</span>
-                  </span>
+                  <div className="nx-stack nx-grow nx-gap-1">
+                    <button className="nx-notification__main" onClick={() => openNotification(n)}>
+                      <span className="nx-row nx-between nx-gap-2">
+                        <span className="nx-notification__title">{n.title}</span>
+                        <span className="nx-notification__time">{timeAgo(n.at)}</span>
+                      </span>
+                      <span className="nx-notification__body">{n.body}</span>
+                    </button>
+                    {n.actions && !n.read && (
+                      <div className="nx-row nx-gap-2" style={{ marginTop: 'var(--space-2)' }}>
+                        {n.actions.map((action) => (
+                          <Button
+                            key={action.id}
+                            size="sm"
+                            variant={action.tone === 'danger' ? 'secondary' : 'primary'}
+                            onClick={() => decide(n, action.id === 'liberar')}
+                          >
+                            {action.label}
+                          </Button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   {!n.read && <span className="nx-notification__dot" />}
-                </button>
+                </div>
               </li>
             );
           })}

@@ -1,15 +1,15 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle2, LogOut, QrCode, ScanLine, UserCheck, XCircle } from 'lucide-react';
+import { BellRing, CheckCircle2, LogOut, QrCode, ScanLine, UserCheck, XCircle } from 'lucide-react';
 import { useAuthenticated } from '../../app/SessionContext';
 import {
   AUTHORIZATION_LABEL, VISITOR_STATUS_LABEL, checkIn, checkOut, denyVisitor, findByCode,
-  statusTone, visitorsOfCondominium,
+  requestAuthorization, statusTone, visitorsOfCondominium,
 } from '../../services/visitors';
-import { unitLabel } from '../../services/directory';
+import { unitLabel, units } from '../../services/directory';
 import type { Visitor } from '../../data/types';
 import {
   Avatar, Badge, Button, Card, DataTable, EmptyState, Input, Modal, PageHeader, SearchInput,
-  StatCard, Tabs, useToast, type Column,
+  Select, StatCard, Tabs, useToast, type Column,
 } from '../../components/ui';
 import { CellStack, FilterBar } from '../../components/PageBits';
 import { formatDate, formatTime, isoDate } from '../../lib/date';
@@ -26,10 +26,22 @@ export function GateVisitors() {
   const [code, setCode] = useState('');
   const [scanned, setScanned] = useState<Visitor | null | 'not-found'>(null);
   const [scanning, setScanning] = useState(false);
+  const [requestOpen, setRequestOpen] = useState(false);
+  const [requestName, setRequestName] = useState('');
+  const [requestUnitQuery, setRequestUnitQuery] = useState('');
+  const [requestUnitId, setRequestUnitId] = useState('');
 
   const all = useMemo(() => visitorsOfCondominium(condominium.id), [condominium.id, dataVersion]);
 
-  const expected = all.filter((v) => v.expectedDate === today && v.status === 'aguardando');
+  const unitOptions = useMemo(() => {
+    const list = units(condominium.id);
+    const q = requestUnitQuery.trim().toLowerCase();
+    return (q ? list.filter((u) => `${u.block}${u.label}`.toLowerCase().includes(q) || u.label.includes(q)) : list)
+      .slice(0, 40)
+      .map((u) => ({ value: u.id, label: `Torre ${u.block} · Apto ${u.label} — ${u.ownerName}` }));
+  }, [condominium.id, requestUnitQuery, dataVersion]);
+
+  const expected = all.filter((v) => v.expectedDate === today && (v.status === 'aguardando' || v.status === 'liberado'));
   const inside = all.filter((v) => v.status === 'no_local');
   const finished = all.filter((v) => v.status === 'finalizado' && v.checkOutAt?.slice(0, 10) === today);
 
@@ -81,10 +93,12 @@ export function GateVisitors() {
       width: '230px',
       render: (v) => (
         <span className="nx-row nx-gap-2 nx-end">
-          {v.status === 'aguardando' && (
+          {(v.status === 'aguardando' || v.status === 'liberado') && (
             <>
               <Button variant="ghost" size="sm" icon={<XCircle size={15} />} onClick={() => { denyVisitor(v.id, user.name); toast.warning('Entrada recusada', v.name); }}>Recusar</Button>
-              <Button variant="success" size="sm" icon={<CheckCircle2 size={15} />} onClick={() => release(v)}>Liberar</Button>
+              <Button variant="success" size="sm" icon={<CheckCircle2 size={15} />} onClick={() => release(v)}>
+                {v.status === 'liberado' ? 'Registrar entrada' : 'Liberar'}
+              </Button>
             </>
           )}
           {v.status === 'no_local' && (
@@ -104,7 +118,16 @@ export function GateVisitors() {
         icon={<UserCheck size={22} />}
         title="Visitantes"
         subtitle="Lista de chegadas do dia e validação de convites"
-        actions={<Button variant="primary" icon={<ScanLine size={17} />} onClick={() => { setScanOpen(true); setScanned(null); setCode(''); }}>Validar QR Code</Button>}
+        actions={
+          <>
+            <Button variant="secondary" icon={<BellRing size={17} />} onClick={() => setRequestOpen(true)}>
+              Solicitar autorização
+            </Button>
+            <Button variant="primary" icon={<ScanLine size={17} />} onClick={() => { setScanOpen(true); setScanned(null); setCode(''); }}>
+              Validar QR Code
+            </Button>
+          </>
+        }
         tabs={
           <Tabs
             value={tab}
@@ -143,10 +166,12 @@ export function GateVisitors() {
                 </div>
                 <Badge tone={statusTone(v.status)} size="sm">{VISITOR_STATUS_LABEL[v.status]}</Badge>
               </div>
-              {v.status === 'aguardando' && (
+              {(v.status === 'aguardando' || v.status === 'liberado') && (
                 <div className="nx-row nx-gap-2">
                   <Button variant="secondary" size="sm" block onClick={() => denyVisitor(v.id, user.name)}>Recusar</Button>
-                  <Button variant="success" size="sm" block onClick={() => release(v)}>Liberar</Button>
+                  <Button variant="success" size="sm" block onClick={() => release(v)}>
+                    {v.status === 'liberado' ? 'Registrar entrada' : 'Liberar'}
+                  </Button>
                 </div>
               )}
               {v.status === 'no_local' && <Button variant="secondary" size="sm" block onClick={() => exit(v)}>Registrar saída</Button>}
@@ -154,6 +179,51 @@ export function GateVisitors() {
           )}
         />
       </Card>
+
+      {/* ---------- Visitante não anunciado: pede autorização ao morador ---------- */}
+      <Modal
+        open={requestOpen}
+        onClose={() => setRequestOpen(false)}
+        title="Solicitar autorização"
+        subtitle="O morador recebe a notificação e decide pelo aplicativo"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setRequestOpen(false)}>Cancelar</Button>
+            <Button
+              variant="primary"
+              icon={<BellRing size={16} />}
+              disabled={requestName.trim().length < 3 || !requestUnitId}
+              onClick={() => {
+                requestAuthorization({
+                  condominiumId: condominium.id,
+                  unitId: requestUnitId,
+                  name: requestName.trim(),
+                  gateName: 'Portaria Principal',
+                  requestedBy: user.name,
+                });
+                setRequestOpen(false);
+                setRequestName(''); setRequestUnitId(''); setRequestUnitQuery('');
+                toast.success('Autorização solicitada', 'O morador foi notificado e pode liberar ou recusar a entrada.');
+              }}
+            >
+              Enviar solicitação
+            </Button>
+          </>
+        }
+      >
+        <div className="nx-stack nx-gap-4">
+          <Input label="Nome do visitante" value={requestName} onChange={(e) => setRequestName(e.target.value)} placeholder="Nome informado na portaria" autoFocus />
+          <Input label="Buscar unidade" value={requestUnitQuery} onChange={(e) => setRequestUnitQuery(e.target.value)} placeholder="Ex.: 1204 ou A1204" />
+          <Select label="Unidade" options={unitOptions} placeholder="Selecione a unidade" value={requestUnitId} onChange={(e) => setRequestUnitId(e.target.value)} required />
+          <div className="nx-callout">
+            <p className="nx-medium">Como funciona</p>
+            <p className="nx-text-sm nx-text-muted">
+              O morador recebe a notificação “Visitante chegou” com os botões Liberar e Recusar.
+              A decisão volta para a portaria e a entrada só é registrada após a liberação.
+            </p>
+          </div>
+        </div>
+      </Modal>
 
       {/* ---------- Validação de QR / código ---------- */}
       <Modal

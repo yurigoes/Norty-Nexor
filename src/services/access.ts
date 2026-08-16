@@ -121,7 +121,7 @@ export function readPlate(condominiumId: ID, plate: string): PlateReadResult {
   if (vehicle.validUntil && vehicle.validUntil < new Date().toISOString().slice(0, 10)) {
     return { plate: normalized, vehicle, authorized: false, reason: 'Autorização do veículo expirada.' };
   }
-  return { plate: normalized, vehicle, authorized: true, reason: 'Veículo autorizado.' };
+  return { plate: normalized, vehicle, authorized: true, reason: 'Placa reconhecida na base de veículos do condomínio.' };
 }
 
 export function confirmPlateEntry(condominiumId: ID, result: PlateReadResult, gateId: ID, registeredBy: string): AccessLog {
