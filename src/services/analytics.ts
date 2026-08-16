@@ -52,12 +52,18 @@ export function dashboardSnapshot(condominiumId: ID, now = new Date()): Dashboar
   };
 }
 
-/** Fluxo de acessos por hora do dia atual. */
+/**
+ * Fluxo de acessos por hora do dia atual.
+ * A série vai apenas até a hora corrente: incluir horas que ainda não
+ * aconteceram desenharia uma queda a zero no fim do gráfico.
+ */
 export function accessByHour(condominiumId: ID, now = new Date()) {
   const today = isoDate(now);
-  const buckets = Array.from({ length: 24 }, () => ({ entradas: 0, saidas: 0 }));
+  const lastHour = now.getHours();
+  const buckets = Array.from({ length: lastHour + 1 }, () => ({ entradas: 0, saidas: 0 }));
   accessesToday(condominiumId, today).forEach((log) => {
     const hour = new Date(log.at).getHours();
+    if (hour > lastHour) return;
     if (log.direction === 'entrada') buckets[hour].entradas += 1;
     else buckets[hour].saidas += 1;
   });

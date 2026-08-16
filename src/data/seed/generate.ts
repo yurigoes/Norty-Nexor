@@ -39,9 +39,19 @@ function shiftDays(base: Date, days: number): Date {
   return d;
 }
 
-function atTime(base: Date, dayOffset: number, hour: number, minute: number): string {
-  const d = shiftDays(base, dayOffset);
+/**
+ * Instante de referência da geração. Registros de eventos que já
+ * aconteceram (encomendas recebidas, acessos, chamados, auditoria) usam
+ * `pastTime`, que nunca produz um horário no futuro — caso contrário a
+ * demonstração exibiria uma encomenda "recebida" daqui a três horas.
+ */
+let genNow = new Date();
+let genToday = new Date();
+
+function pastTime(dayOffset: number, hour: number, minute: number): string {
+  const d = shiftDays(genToday, dayOffset);
   d.setHours(hour, minute, 0, 0);
+  if (d.getTime() > genNow.getTime()) d.setDate(d.getDate() - 1);
   return localIso(d);
 }
 
@@ -74,6 +84,8 @@ export function generateDatabase(now = new Date()): NexorDatabase {
   const rng = new Rng(SEED_KEY);
   const today = new Date(now);
   today.setHours(0, 0, 0, 0);
+  genNow = new Date(now);
+  genToday = today;
 
   const tenantId = 'tenant-meridian';
   const condoId = 'condo-parque-central';
@@ -285,7 +297,7 @@ export function generateDatabase(now = new Date()): NexorDatabase {
       residentId: demoResident.id,
       phone: '(11) 98214-7730',
       jobTitle: 'Proprietário · Torre A · Apto 1204',
-      lastLoginAt: atTime(today, -1, 21, 4),
+      lastLoginAt: pastTime(-1, 21, 4),
     },
     {
       id: 'user-portaria',
@@ -297,7 +309,7 @@ export function generateDatabase(now = new Date()): NexorDatabase {
       condominiumIds: [condoId],
       phone: '(11) 3555-4400',
       jobTitle: 'Porteiro · Portaria Principal · Turno 06h–18h',
-      lastLoginAt: atTime(today, 0, 6, 2),
+      lastLoginAt: pastTime(0, 6, 2),
     },
     {
       id: 'user-sindico',
@@ -310,7 +322,7 @@ export function generateDatabase(now = new Date()): NexorDatabase {
       unitId: 'unit-C-1802',
       phone: '(11) 99120-3388',
       jobTitle: 'Síndica · Mandato 2025–2027',
-      lastLoginAt: atTime(today, 0, 8, 41),
+      lastLoginAt: pastTime(0, 8, 41),
     },
     {
       id: 'user-admin',
@@ -322,7 +334,7 @@ export function generateDatabase(now = new Date()): NexorDatabase {
       condominiumIds: condominiums.map((c) => c.id),
       phone: '(11) 3120-9800',
       jobTitle: 'Gerente de operações · Meridian Administração',
-      lastLoginAt: atTime(today, 0, 7, 55),
+      lastLoginAt: pastTime(0, 7, 55),
     },
     {
       id: 'user-administradora',
@@ -334,7 +346,7 @@ export function generateDatabase(now = new Date()): NexorDatabase {
       condominiumIds: [],
       phone: '(11) 3120-9801',
       jobTitle: 'Diretora de portfólio · Meridian Administração',
-      lastLoginAt: atTime(today, -1, 18, 12),
+      lastLoginAt: pastTime(-1, 18, 12),
     },
   ];
 
@@ -354,10 +366,10 @@ export function generateDatabase(now = new Date()): NexorDatabase {
 
   /* ---------- Portões e câmeras ---------- */
   const gates: Gate[] = [
-    { id: 'gate-principal', condominiumId: condoId, name: 'Portão Principal', kind: 'principal', status: 'online', lastOpenedAt: atTime(today, 0, 10, 42), lastOpenedBy: 'Marcos Vieira' },
-    { id: 'gate-garagem', condominiumId: condoId, name: 'Portão Garagem', kind: 'garagem', status: 'online', lastOpenedAt: atTime(today, 0, 10, 45), lastOpenedBy: 'Leitura de placa' },
-    { id: 'gate-servico', condominiumId: condoId, name: 'Portão de Serviço', kind: 'servico', status: 'online', lastOpenedAt: atTime(today, 0, 9, 18), lastOpenedBy: 'Ana Paula Reis' },
-    { id: 'gate-pedestre', condominiumId: condoId, name: 'Acesso Pedestres', kind: 'pedestre', status: 'manutencao', lastOpenedAt: atTime(today, -1, 17, 3), lastOpenedBy: 'Marcos Vieira' },
+    { id: 'gate-principal', condominiumId: condoId, name: 'Portão Principal', kind: 'principal', status: 'online', lastOpenedAt: pastTime(0, 10, 42), lastOpenedBy: 'Marcos Vieira' },
+    { id: 'gate-garagem', condominiumId: condoId, name: 'Portão Garagem', kind: 'garagem', status: 'online', lastOpenedAt: pastTime(0, 10, 45), lastOpenedBy: 'Leitura de placa' },
+    { id: 'gate-servico', condominiumId: condoId, name: 'Portão de Serviço', kind: 'servico', status: 'online', lastOpenedAt: pastTime(0, 9, 18), lastOpenedBy: 'Ana Paula Reis' },
+    { id: 'gate-pedestre', condominiumId: condoId, name: 'Acesso Pedestres', kind: 'pedestre', status: 'manutencao', lastOpenedAt: pastTime(-1, 17, 3), lastOpenedBy: 'Marcos Vieira' },
   ];
 
   const CAMERA_SPOTS = [
@@ -410,7 +422,7 @@ export function generateDatabase(now = new Date()): NexorDatabase {
       kind: isMoto ? 'moto' : rng.weighted([['carro', 88], ['utilitario', 12]]),
       parkingSpot: unit.parkingSpots[0],
       authorized: rng.bool(0.985),
-      createdAt: atTime(today, -rng.int(30, 900), rng.int(8, 19), rng.int(0, 59)),
+      createdAt: pastTime(-rng.int(30, 900), rng.int(8, 19), rng.int(0, 59)),
     });
   });
 
@@ -505,7 +517,7 @@ export function generateDatabase(now = new Date()): NexorDatabase {
     expectedGuests: 30,
     areaId: 'area-salao',
     status: 'planejado',
-    createdAt: atTime(today, -6, 20, 15),
+    createdAt: pastTime(-6, 20, 15),
     inviteCode: 'NX-EVT-4821',
   }];
 
@@ -523,21 +535,21 @@ export function generateDatabase(now = new Date()): NexorDatabase {
   pushVisitor({
     unitId: demoUnit.id, residentId: demoResident.id, name: 'João da Silva', document: '284.771.330-19',
     phone: '(11) 99117-4402', kind: 'unica', status: 'aguardando', expectedDate: localDate(today),
-    expectedTime: '14:30', category: 'visita', code: 'NX-8FQ2K1', createdAt: atTime(today, 0, 9, 12),
+    expectedTime: '14:30', category: 'visita', code: 'NX-8FQ2K1', createdAt: pastTime(0, 9, 12),
     createdBy: 'Carlos Almeida', notes: 'Amigo da família. Subir direto.',
   });
   pushVisitor({
     unitId: demoUnit.id, residentId: demoResident.id, name: 'Bianca Ferreira', document: '661.204.887-45',
     phone: '(11) 98410-2277', kind: 'temporaria', status: 'aguardando', expectedDate: localDate(today),
     expectedTime: '17:00', validUntil: localDate(shiftDays(today, 3)), category: 'visita',
-    code: 'NX-P3RM09', createdAt: atTime(today, -1, 19, 40), createdBy: 'Juliana Almeida',
+    code: 'NX-P3RM09', createdAt: pastTime(-1, 19, 40), createdBy: 'Juliana Almeida',
   });
   pushVisitor({
     unitId: demoUnit.id, residentId: demoResident.id, name: 'Anderson Luz', document: '118.930.552-77',
     phone: '(11) 97220-8813', kind: 'recorrente', status: 'aguardando', expectedDate: localDate(today),
     expectedTime: '09:00', recurrenceDays: [2, 4], validUntil: localDate(shiftDays(today, 60)),
     category: 'prestador', companyName: 'AquaClean Piscinas', code: 'NX-RC7742',
-    createdAt: atTime(today, -22, 11, 5), createdBy: 'Carlos Almeida',
+    createdAt: pastTime(-22, 11, 5), createdBy: 'Carlos Almeida',
   });
 
   // Convidados do evento
@@ -547,7 +559,7 @@ export function generateDatabase(now = new Date()): NexorDatabase {
       unitId: demoUnit.id, residentId: demoResident.id, name, document: cpf(rng),
       kind: 'unica', status: 'aguardando', expectedDate: events[0].date, expectedTime: '19:00',
       category: 'convidado_evento', eventId: events[0].id, code: shortCode(rng, 'NX'),
-      createdAt: atTime(today, -5, 21, rng.int(0, 59)), createdBy: 'Carlos Almeida',
+      createdAt: pastTime(-5, 21, rng.int(0, 59)), createdBy: 'Carlos Almeida',
     });
   });
 
@@ -570,7 +582,7 @@ export function generateDatabase(now = new Date()): NexorDatabase {
       companyName: rng.bool(0.25) ? rng.pick(SERVICE_COMPANIES) : undefined,
       vehiclePlate: rng.bool(0.4) ? plate(rng) : undefined,
       code: shortCode(rng, 'NX'),
-      createdAt: atTime(today, -rng.int(0, 3), rng.int(7, 22), rng.int(0, 59)),
+      createdAt: pastTime(-rng.int(0, 3), rng.int(7, 22), rng.int(0, 59)),
       createdBy: main?.name ?? 'Morador',
     });
   });
@@ -592,10 +604,10 @@ export function generateDatabase(now = new Date()): NexorDatabase {
         expectedTime: `${pad(hour)}:00`,
         category: rng.weighted([['visita', 70], ['prestador', 18], ['entrega', 12]]),
         code: shortCode(rng, 'NX'),
-        createdAt: atTime(today, -d, rng.int(7, 20), rng.int(0, 59)),
+        createdAt: pastTime(-d, rng.int(7, 20), rng.int(0, 59)),
         createdBy: main?.name ?? 'Morador',
-        checkInAt: atTime(today, -d, hour, rng.int(0, 30)),
-        checkOutAt: atTime(today, -d, Math.min(23, hour + rng.int(1, 4)), rng.int(0, 59)),
+        checkInAt: pastTime(-d, hour, rng.int(0, 30)),
+        checkOutAt: pastTime(-d, Math.min(23, hour + rng.int(1, 4)), rng.int(0, 59)),
       });
     });
   }
@@ -622,7 +634,7 @@ interface AssembleInput {
 
 function assemble(input: AssembleInput): NexorDatabase {
   const {
-    today, rng, condoId, tenants, condominiums, towers, units, residents, users, commonAreas,
+    rng, condoId, tenants, condominiums, towers, units, residents, users, commonAreas,
     gates, cameras, visitors, staff, vehicles, events, demoUnit, demoResident, occupiedUnits,
   } = input;
 
@@ -641,8 +653,8 @@ function assemble(input: AssembleInput): NexorDatabase {
 
   const sessions: DeviceSession[] = [
     { id: 'sess-1', userId: 'user-morador', device: 'iPhone 15 Pro', browser: 'NEXOR App', location: 'São Paulo, SP', lastActiveAt: localIso(new Date()), current: true },
-    { id: 'sess-2', userId: 'user-morador', device: 'MacBook Air', browser: 'Safari 18', location: 'São Paulo, SP', lastActiveAt: atTime(today, -2, 22, 14), current: false },
-    { id: 'sess-3', userId: 'user-morador', device: 'iPad Air', browser: 'NEXOR App', location: 'Campos do Jordão, SP', lastActiveAt: atTime(today, -11, 9, 30), current: false },
+    { id: 'sess-2', userId: 'user-morador', device: 'MacBook Air', browser: 'Safari 18', location: 'São Paulo, SP', lastActiveAt: pastTime(-2, 22, 14), current: false },
+    { id: 'sess-3', userId: 'user-morador', device: 'iPad Air', browser: 'NEXOR App', location: 'Campos do Jordão, SP', lastActiveAt: pastTime(-11, 9, 30), current: false },
   ];
 
   void tenants; void towers; void units; void residents; void users; void commonAreas;
@@ -667,7 +679,7 @@ const HOUR_WEIGHTS = [
   5.5, 5.0, 5.0, 5.5, 6.0, 7.5, 8.5, 7.0, 5.0, 3.5, 2.0, 1.0,
 ];
 
-function buildAccessLogs({ now, today, rng, condoId, residents, vehicles, staff, visitors, gates, demoUnit }: AssembleInput): AccessLog[] {
+function buildAccessLogs({ now, rng, condoId, residents, vehicles, staff, visitors, gates, demoUnit }: AssembleInput): AccessLog[] {
   const logs: AccessLog[] = [];
   let seq = 0;
   const totalWeight = HOUR_WEIGHTS.reduce((a, b) => a + b, 0);
@@ -684,7 +696,12 @@ function buildAccessLogs({ now, today, rng, condoId, residents, vehicles, staff,
     const limitHour = isToday ? now.getHours() : 23;
 
     for (let hour = 0; hour <= limitHour; hour += 1) {
-      const count = Math.round((HOUR_WEIGHTS[hour] / totalWeight) * DAILY_TARGET * (isToday ? 1 : rng.float(0.9, 1.08, 3)));
+      // A hora corrente ainda não terminou: gera apenas a fração já decorrida,
+      // senão o volume de uma hora inteira ficaria comprimido em poucos minutos.
+      const elapsed = isToday && hour === limitHour ? Math.max(1, now.getMinutes()) / 60 : 1;
+      const count = Math.round(
+        (HOUR_WEIGHTS[hour] / totalWeight) * DAILY_TARGET * elapsed * (isToday ? 1 : rng.float(0.9, 1.08, 3)),
+      );
       for (let i = 0; i < count; i += 1) {
         const minute = isToday && hour === limitHour ? rng.int(0, Math.max(0, now.getMinutes())) : rng.int(0, 59);
         const subjectType = rng.weighted<AccessLog['subjectType']>([
@@ -747,7 +764,7 @@ function buildAccessLogs({ now, today, rng, condoId, residents, vehicles, staff,
           gateId: gate.id,
           gateName: gate.name,
           plate: plateValue,
-          at: atTime(today, dayOffset, hour, minute),
+          at: pastTime(dayOffset, hour, minute),
           registeredBy: method === 'manual' ? rng.pick(porters) : 'Sistema NEXOR',
           method,
           authorized: rng.bool(0.994),
@@ -758,10 +775,10 @@ function buildAccessLogs({ now, today, rng, condoId, residents, vehicles, staff,
 
   // Acessos garantidos da unidade de demonstração (roteiro do MVP)
   const demoAccesses: Omit<AccessLog, 'id' | 'condominiumId'>[] = [
-    { unitId: demoUnit.id, subjectType: 'morador', subjectName: 'Carlos Almeida', direction: 'saida', gateId: 'gate-garagem', gateName: 'Portão Garagem', plate: 'ABC1D23', at: atTime(today, 0, 7, 48), registeredBy: 'Sistema NEXOR', method: 'placa', authorized: true },
-    { unitId: demoUnit.id, subjectType: 'funcionario', subjectName: 'Maria Santos', direction: 'entrada', gateId: 'gate-servico', gateName: 'Portão de Serviço', at: atTime(today, 0, 8, 2), registeredBy: 'Ana Paula Reis', method: 'biometria', authorized: true },
-    { unitId: demoUnit.id, subjectType: 'entrega', subjectName: 'Mercado Livre', direction: 'entrada', gateId: 'gate-servico', gateName: 'Portão de Serviço', at: atTime(today, 0, 9, 26), registeredBy: 'Marcos Vieira', method: 'manual', authorized: true },
-    { unitId: demoUnit.id, subjectType: 'morador', subjectName: 'Juliana Almeida', direction: 'entrada', gateId: 'gate-garagem', gateName: 'Portão Garagem', plate: 'RFT4J81', at: atTime(today, 0, 9, 55), registeredBy: 'Sistema NEXOR', method: 'placa', authorized: true },
+    { unitId: demoUnit.id, subjectType: 'morador', subjectName: 'Carlos Almeida', direction: 'saida', gateId: 'gate-garagem', gateName: 'Portão Garagem', plate: 'ABC1D23', at: pastTime(0, 7, 48), registeredBy: 'Sistema NEXOR', method: 'placa', authorized: true },
+    { unitId: demoUnit.id, subjectType: 'funcionario', subjectName: 'Maria Santos', direction: 'entrada', gateId: 'gate-servico', gateName: 'Portão de Serviço', at: pastTime(0, 8, 2), registeredBy: 'Ana Paula Reis', method: 'biometria', authorized: true },
+    { unitId: demoUnit.id, subjectType: 'entrega', subjectName: 'Mercado Livre', direction: 'entrada', gateId: 'gate-servico', gateName: 'Portão de Serviço', at: pastTime(0, 9, 26), registeredBy: 'Marcos Vieira', method: 'manual', authorized: true },
+    { unitId: demoUnit.id, subjectType: 'morador', subjectName: 'Juliana Almeida', direction: 'entrada', gateId: 'gate-garagem', gateName: 'Portão Garagem', plate: 'RFT4J81', at: pastTime(0, 9, 55), registeredBy: 'Sistema NEXOR', method: 'placa', authorized: true },
   ];
   demoAccesses.forEach((a, i) => logs.push({ id: `acc-demo-${i + 1}`, condominiumId: condoId, ...a }));
 
@@ -772,25 +789,25 @@ function buildAccessLogs({ now, today, rng, condoId, residents, vehicles, staff,
 
 const SHELVES = ['A1', 'A2', 'A3', 'B1', 'B2', 'B3', 'C1', 'C2', 'D1', 'D2'];
 
-function buildDeliveries({ today, rng, condoId, occupiedUnits, residents, demoUnit, demoResident }: AssembleInput): Delivery[] {
+function buildDeliveries({ rng, condoId, occupiedUnits, residents, demoUnit, demoResident }: AssembleInput): Delivery[] {
   const deliveries: Delivery[] = [];
   const porters = ['Marcos Vieira', 'Ana Paula Reis', 'Jorge Tavares'];
 
   deliveries.push({
     id: 'del-demo-1', condominiumId: condoId, unitId: demoUnit.id, residentId: demoResident.id,
     carrier: 'Mercado Livre', trackingCode: 'ML4471209BR', size: 'media', status: 'notificada',
-    receivedAt: atTime(today, 0, 9, 26), receivedBy: 'Marcos Vieira', shelf: 'A2', requiresSignature: false,
+    receivedAt: pastTime(0, 9, 26), receivedBy: 'Marcos Vieira', shelf: 'A2', requiresSignature: false,
   });
   deliveries.push({
     id: 'del-demo-2', condominiumId: condoId, unitId: demoUnit.id, residentId: demoResident.id,
     carrier: 'Amazon', trackingCode: 'AMZ88320174', size: 'pequena', status: 'notificada',
-    receivedAt: atTime(today, -1, 16, 4), receivedBy: 'Ana Paula Reis', shelf: 'A1', requiresSignature: false,
+    receivedAt: pastTime(-1, 16, 4), receivedBy: 'Ana Paula Reis', shelf: 'A1', requiresSignature: false,
   });
   deliveries.push({
     id: 'del-demo-3', condominiumId: condoId, unitId: demoUnit.id, residentId: demoResident.id,
     carrier: 'Correios', trackingCode: 'BR772109883SP', size: 'pequena', status: 'retirada',
-    receivedAt: atTime(today, -6, 11, 12), receivedBy: 'Jorge Tavares', shelf: 'B2',
-    pickedUpAt: atTime(today, -6, 19, 33), pickedUpBy: 'Carlos Almeida', requiresSignature: true,
+    receivedAt: pastTime(-6, 11, 12), receivedBy: 'Jorge Tavares', shelf: 'B2',
+    pickedUpAt: pastTime(-6, 19, 33), pickedUpBy: 'Carlos Almeida', requiresSignature: true,
   });
 
   const pendingUnits = rng.sample(occupiedUnits.filter((u) => u.id !== demoUnit.id), 82);
@@ -805,7 +822,7 @@ function buildDeliveries({ today, rng, condoId, occupiedUnits, residents, demoUn
       trackingCode: `${shortCode(rng)}${rng.int(1000, 9999)}BR`,
       size: rng.weighted([['pequena', 52], ['media', 36], ['grande', 12]]),
       status: rng.weighted([['notificada', 74], ['recebida', 26]]),
-      receivedAt: atTime(today, dayOffset, rng.int(8, 20), rng.int(0, 59)),
+      receivedAt: pastTime(dayOffset, rng.int(8, 20), rng.int(0, 59)),
       receivedBy: rng.pick(porters),
       shelf: rng.pick(SHELVES),
       requiresSignature: rng.bool(0.18),
@@ -815,7 +832,7 @@ function buildDeliveries({ today, rng, condoId, occupiedUnits, residents, demoUn
   for (let d = 1; d <= 12; d += 1) {
     const sample = rng.sample(occupiedUnits, 22);
     sample.forEach((unit, i) => {
-      const received = atTime(today, -d, rng.int(8, 19), rng.int(0, 59));
+      const received = pastTime(-d, rng.int(8, 19), rng.int(0, 59));
       deliveries.push({
         id: `del-h${d}-${i}`,
         condominiumId: condoId,
@@ -827,7 +844,7 @@ function buildDeliveries({ today, rng, condoId, occupiedUnits, residents, demoUn
         receivedAt: received,
         receivedBy: rng.pick(porters),
         shelf: rng.pick(SHELVES),
-        pickedUpAt: atTime(today, -d + (rng.bool(0.7) ? 0 : 1), rng.int(18, 22), rng.int(0, 59)),
+        pickedUpAt: pastTime(-d + (rng.bool(0.7) ? 0 : 1), rng.int(18, 22), rng.int(0, 59)),
         pickedUpBy: residents.find((r) => r.unitId === unit.id)?.name ?? unit.ownerName,
         requiresSignature: rng.bool(0.15),
       });
@@ -852,12 +869,12 @@ function buildReservations({ today, rng, condoId, commonAreas, occupiedUnits, re
   push({
     areaId: 'area-salao', unitId: demoUnit.id, residentId: demoResident.id, residentName: 'Carlos Almeida',
     date: localDate(shiftDays(today, 4)), slot: '19:00–00:00', guests: 30, status: 'confirmada', fee: 380,
-    createdAt: atTime(today, -6, 20, 15), notes: 'Festa de aniversário do Pedro.', eventId: 'event-demo-1',
+    createdAt: pastTime(-6, 20, 15), notes: 'Festa de aniversário do Pedro.', eventId: 'event-demo-1',
   });
   push({
     areaId: 'area-churrasq1', unitId: demoUnit.id, residentId: demoResident.id, residentName: 'Carlos Almeida',
     date: localDate(shiftDays(today, -18)), slot: '11:00–16:00', guests: 12, status: 'concluida', fee: 90,
-    createdAt: atTime(today, -25, 10, 2),
+    createdAt: pastTime(-25, 10, 2),
   });
 
   for (let dayOffset = -20; dayOffset <= 45; dayOffset += 1) {
@@ -885,7 +902,7 @@ function buildReservations({ today, rng, condoId, commonAreas, occupiedUnits, re
         guests: rng.int(2, Math.max(3, Math.round(area.capacity * 0.7))),
         status,
         fee: area.fee,
-        createdAt: atTime(today, dayOffset - rng.int(2, 20), rng.int(8, 22), rng.int(0, 59)),
+        createdAt: pastTime(dayOffset - rng.int(2, 20), rng.int(8, 22), rng.int(0, 59)),
       });
     }
   }
@@ -994,7 +1011,7 @@ function buildFinance({ today, rng, condoId, units, demoUnit }: AssembleInput): 
 
 /* ---------------- Chamados ---------------- */
 
-function buildTickets({ today, rng, condoId, occupiedUnits, residents, demoUnit }: AssembleInput): Ticket[] {
+function buildTickets({ rng, condoId, occupiedUnits, residents, demoUnit }: AssembleInput): Ticket[] {
   const tickets: Ticket[] = [];
   const assignees = ['Equipe de Manutenção', 'Zeladoria', 'Elevalux Elevadores', 'HidroPrime Serviços', 'Administração'];
   const locations = ['Corredor Torre A', 'Corredor Torre B', 'Corredor Torre C', 'Corredor Torre D', 'Hall Social', 'Garagem S1', 'Garagem S2', 'Área de Lazer', 'Academia', 'Piscina', 'Portaria', 'Salão de Festas'];
@@ -1002,16 +1019,16 @@ function buildTickets({ today, rng, condoId, occupiedUnits, residents, demoUnit 
   const make = (i: number, status: Ticket['status'], dayOffset: number, unit?: Unit, override?: Partial<Ticket>): Ticket => {
     const category = rng.pick(TICKET_CATEGORIES);
     const title = rng.pick(TICKET_TITLES[category] ?? ['Solicitação de manutenção']);
-    const createdAt = atTime(today, dayOffset, rng.int(7, 21), rng.int(0, 59));
+    const createdAt = pastTime(dayOffset, rng.int(7, 21), rng.int(0, 59));
     const resident = unit ? residents.find((r) => r.unitId === unit.id) : undefined;
     const updates: Ticket['updates'] = [
       { id: `tu-${i}-1`, at: createdAt, author: resident?.name ?? 'Morador', message: 'Chamado aberto.' },
     ];
     if (status !== 'aberto') {
-      updates.push({ id: `tu-${i}-2`, at: atTime(today, dayOffset, rng.int(8, 22), rng.int(0, 59)), author: 'Zeladoria', message: 'Chamado recebido e encaminhado à equipe responsável.', status: 'em_andamento' });
+      updates.push({ id: `tu-${i}-2`, at: pastTime(dayOffset, rng.int(8, 22), rng.int(0, 59)), author: 'Zeladoria', message: 'Chamado recebido e encaminhado à equipe responsável.', status: 'em_andamento' });
     }
     if (status === 'resolvido') {
-      updates.push({ id: `tu-${i}-3`, at: atTime(today, dayOffset + rng.int(1, 3), rng.int(8, 18), rng.int(0, 59)), author: rng.pick(assignees), message: 'Serviço executado e conferido no local.', status: 'resolvido' });
+      updates.push({ id: `tu-${i}-3`, at: pastTime(dayOffset + rng.int(1, 3), rng.int(8, 18), rng.int(0, 59)), author: rng.pick(assignees), message: 'Serviço executado e conferido no local.', status: 'resolvido' });
     }
     return {
       id: `tkt-${i}`,
@@ -1062,7 +1079,7 @@ function buildTickets({ today, rng, condoId, occupiedUnits, residents, demoUnit 
 
 /* ---------------- Ocorrências ---------------- */
 
-function buildIncidents({ today, rng, condoId, occupiedUnits, residents }: AssembleInput): Incident[] {
+function buildIncidents({ rng, condoId, occupiedUnits, residents }: AssembleInput): Incident[] {
   const incidents: Incident[] = [];
   const types: Incident['type'][] = ['barulho', 'danos', 'acidente', 'seguranca', 'estrutural', 'regras', 'outros'];
   const locations = ['Torre A — 12º andar', 'Torre B — Hall', 'Garagem S1', 'Área de Lazer', 'Piscina', 'Portaria Principal', 'Salão de Festas', 'Playground', 'Torre D — 20º andar'];
@@ -1072,18 +1089,18 @@ function buildIncidents({ today, rng, condoId, occupiedUnits, residents }: Assem
     const title = rng.pick(INCIDENT_TITLES[type]);
     const unit = rng.pick(occupiedUnits);
     const reporter = residents.find((r) => r.unitId === unit.id);
-    const createdAt = atTime(today, dayOffset, rng.int(6, 23), rng.int(0, 59));
+    const createdAt = pastTime(dayOffset, rng.int(6, 23), rng.int(0, 59));
     const actions: Incident['actions'] = [
       { id: `ia-${i}-1`, at: createdAt, author: reporter?.name ?? 'Portaria', message: 'Ocorrência registrada.' },
     ];
     if (status !== 'registrada') {
-      actions.push({ id: `ia-${i}-2`, at: atTime(today, dayOffset, rng.int(8, 23), rng.int(0, 59)), author: 'Helena Duarte', message: 'Ocorrência analisada pela síndica. Providências em andamento.' });
+      actions.push({ id: `ia-${i}-2`, at: pastTime(dayOffset, rng.int(8, 23), rng.int(0, 59)), author: 'Helena Duarte', message: 'Ocorrência analisada pela síndica. Providências em andamento.' });
     }
     if (status === 'notificada' || status === 'encerrada') {
-      actions.push({ id: `ia-${i}-3`, at: atTime(today, dayOffset + 1, rng.int(9, 18), rng.int(0, 59)), author: 'Administração', message: 'Notificação formal enviada à unidade envolvida.' });
+      actions.push({ id: `ia-${i}-3`, at: pastTime(dayOffset + 1, rng.int(9, 18), rng.int(0, 59)), author: 'Administração', message: 'Notificação formal enviada à unidade envolvida.' });
     }
     if (status === 'encerrada') {
-      actions.push({ id: `ia-${i}-4`, at: atTime(today, dayOffset + rng.int(2, 6), rng.int(9, 18), rng.int(0, 59)), author: 'Administração', message: 'Ocorrência encerrada sem reincidência.' });
+      actions.push({ id: `ia-${i}-4`, at: pastTime(dayOffset + rng.int(2, 6), rng.int(9, 18), rng.int(0, 59)), author: 'Administração', message: 'Ocorrência encerrada sem reincidência.' });
     }
     return {
       id: `inc-${i}`,
@@ -1166,7 +1183,7 @@ function buildMaintenance({ today, rng, condoId }: AssembleInput): MaintenanceOr
 
 /* ---------------- Comunicados ---------------- */
 
-function buildAnnouncements({ today, rng, condoId }: AssembleInput): Announcement[] {
+function buildAnnouncements({ rng, condoId }: AssembleInput): Announcement[] {
   const items: Array<[string, string, Announcement['priority'], Announcement['audience'], number]> = [
     ['Manutenção programada dos elevadores', 'Nos dias 22 e 23 os elevadores sociais das Torres A e B passarão por manutenção preventiva entre 09h e 15h. Os elevadores de serviço permanecerão em operação.', 'importante', { kind: 'torre', ids: ['tower-A', 'tower-B'], label: 'Torres A e B' }, -1],
     ['Assembleia Geral Ordinária', 'Convocação para a Assembleia Geral Ordinária. Pauta: reforma da academia, aprovação das contas e eleição do conselho fiscal. Presença de todos os condôminos é essencial para o quórum.', 'urgente', { kind: 'todos', label: 'Todos os moradores' }, -2],
@@ -1189,7 +1206,7 @@ function buildAnnouncements({ today, rng, condoId }: AssembleInput): Announcemen
     body,
     priority,
     audience,
-    publishedAt: atTime(today, dayOffset, rng.int(8, 18), rng.int(0, 59)),
+    publishedAt: pastTime(dayOffset, rng.int(8, 18), rng.int(0, 59)),
     author: rng.bool(0.7) ? 'Helena Duarte · Síndica' : 'Meridian Administração',
     readBy: [],
     pinned: i < 2,
@@ -1198,7 +1215,7 @@ function buildAnnouncements({ today, rng, condoId }: AssembleInput): Announcemen
 
 /* ---------------- Documentos ---------------- */
 
-function buildDocuments({ today, rng, condoId }: AssembleInput): DocumentFile[] {
+function buildDocuments({ rng, condoId }: AssembleInput): DocumentFile[] {
   const docs: Array<[string, DocumentFile['category'], DocumentFile['format']]> = [
     ['Convenção do Condomínio — consolidada', 'convencao', 'pdf'],
     ['Convenção — registro em cartório', 'convencao', 'pdf'],
@@ -1237,7 +1254,7 @@ function buildDocuments({ today, rng, condoId }: AssembleInput): DocumentFile[] 
     category,
     sizeKb: rng.int(180, 9400),
     format,
-    uploadedAt: atTime(today, -rng.int(3, 400), rng.int(8, 18), rng.int(0, 59)),
+    uploadedAt: pastTime(-rng.int(3, 400), rng.int(8, 18), rng.int(0, 59)),
     uploadedBy: rng.bool(0.6) ? 'Meridian Administração' : 'Helena Duarte',
     restricted: category === 'contratos' && rng.bool(0.4),
     downloads: rng.int(4, 860),
@@ -1262,7 +1279,7 @@ function buildAssemblies({ today, rng, condoId, occupiedUnits, residents }: Asse
       votes.push({
         unitId: unit.id,
         option,
-        at: atTime(today, -rng.int(1, 5), rng.int(8, 22), rng.int(0, 59)),
+        at: pastTime(-rng.int(1, 5), rng.int(8, 22), rng.int(0, 59)),
         voterName: residents.find((r) => r.unitId === unit.id)?.name ?? unit.ownerName,
       });
       void i;
@@ -1356,7 +1373,7 @@ type AssemblyAgendaItemVote = Assembly['agenda'][number]['votes'][number];
 function buildNotifications(
   input: AssembleInput & { deliveries: Delivery[]; invoices: Invoice[]; reservations: Reservation[]; tickets: Ticket[] },
 ): AppNotification[] {
-  const { today, condoId, demoUnit, deliveries, invoices } = input;
+  const { condoId, demoUnit, deliveries, invoices } = input;
   const notifications: AppNotification[] = [];
   const nextInvoice = invoices.find((i) => i.unitId === demoUnit.id && i.status === 'aberto');
 
@@ -1368,69 +1385,69 @@ function buildNotifications(
     userId: 'user-morador', unitId: demoUnit.id, kind: 'encomenda',
     title: 'Nova encomenda recebida',
     body: `Uma encomenda da ${deliveries[0]?.carrier ?? 'transportadora'} foi recebida na portaria e está na prateleira A2.`,
-    at: atTime(today, 0, 9, 27), read: false, link: '/app/encomendas', refId: 'del-demo-1',
+    at: pastTime(0, 9, 27), read: false, link: '/app/encomendas', refId: 'del-demo-1',
   });
   push({
     userId: 'user-morador', unitId: demoUnit.id, kind: 'veiculo',
     title: 'Veículo detectado na garagem',
     body: 'O veículo RFT4J81 (Toyota Corolla Cross) entrou pelo Portão Garagem.',
-    at: atTime(today, 0, 9, 55), read: false, link: '/app/acessos',
+    at: pastTime(0, 9, 55), read: false, link: '/app/acessos',
   });
   push({
     userId: 'user-morador', unitId: demoUnit.id, kind: 'aviso',
     title: 'Assembleia Geral Ordinária',
     body: 'Convocação publicada. Sua participação é essencial para o quórum.',
-    at: atTime(today, -2, 10, 12), read: false, link: '/app/assembleias',
+    at: pastTime(-2, 10, 12), read: false, link: '/app/assembleias',
   });
   push({
     userId: 'user-morador', unitId: demoUnit.id, kind: 'boleto',
     title: 'Boleto disponível',
     body: `Seu boleto de ${nextInvoice?.reference ?? 'competência atual'} está disponível. Vencimento em ${nextInvoice ? nextInvoice.dueDate.split('-').reverse().join('/') : '10'}.`,
-    at: atTime(today, -3, 8, 0), read: true, link: '/app/financeiro',
+    at: pastTime(-3, 8, 0), read: true, link: '/app/financeiro',
   });
   push({
     userId: 'user-morador', unitId: demoUnit.id, kind: 'reserva',
     title: 'Reserva confirmada',
     body: 'Sua reserva do Salão de Festas foi confirmada pela administração.',
-    at: atTime(today, -6, 20, 22), read: true, link: '/app/reservas',
+    at: pastTime(-6, 20, 22), read: true, link: '/app/reservas',
   });
   push({
     userId: 'user-morador', unitId: demoUnit.id, kind: 'autorizacao',
     title: 'Autorização prestes a vencer',
     body: 'A autorização recorrente de Anderson Luz (AquaClean Piscinas) vence em 7 dias.',
-    at: atTime(today, -1, 7, 30), read: true, link: '/app/visitantes',
+    at: pastTime(-1, 7, 30), read: true, link: '/app/visitantes',
   });
 
   push({
     role: 'portaria', kind: 'acesso',
     title: '127 visitantes esperados hoje',
     body: 'A lista de visitantes do dia foi atualizada. 12 chegadas previstas para a próxima hora.',
-    at: atTime(today, 0, 7, 0), read: false, link: '/portaria',
+    at: pastTime(0, 7, 0), read: false, link: '/portaria',
   });
   push({
     role: 'portaria', kind: 'ocorrencia',
     title: 'Portão de pedestres em manutenção',
     body: 'O acesso de pedestres está em manutenção. Direcione o fluxo para o Portão Principal.',
-    at: atTime(today, 0, 6, 15), read: false, link: '/portaria/portoes',
+    at: pastTime(0, 6, 15), read: false, link: '/portaria/portoes',
   });
 
   push({
     role: 'sindico', kind: 'chamado',
     title: '23 chamados abertos',
     body: '4 chamados estão marcados como urgentes e aguardam atribuição.',
-    at: atTime(today, 0, 8, 5), read: false, link: '/gestao/chamados',
+    at: pastTime(0, 8, 5), read: false, link: '/gestao/chamados',
   });
   push({
     role: 'sindico', kind: 'ocorrencia',
     title: 'Nova ocorrência de segurança',
     body: 'Uma ocorrência classificada como alta severidade foi registrada na Garagem S1.',
-    at: atTime(today, -1, 22, 41), read: false, link: '/gestao/ocorrencias',
+    at: pastTime(-1, 22, 41), read: false, link: '/gestao/ocorrencias',
   });
   push({
     role: 'sindico', kind: 'assembleia',
     title: 'Votação em andamento',
     body: 'A Assembleia Geral Ordinária já registrou 372 votos. Quórum atingido para as três pautas.',
-    at: atTime(today, -1, 9, 0), read: true, link: '/gestao/assembleias',
+    at: pastTime(-1, 9, 0), read: true, link: '/gestao/assembleias',
   });
 
   return notifications.sort((a, b) => (a.at < b.at ? 1 : -1));
@@ -1438,7 +1455,7 @@ function buildNotifications(
 
 /* ---------------- Auditoria ---------------- */
 
-function buildAudit({ today, rng, condoId, residents, occupiedUnits }: AssembleInput): AuditEntry[] {
+function buildAudit({ rng, condoId, residents, occupiedUnits }: AssembleInput): AuditEntry[] {
   const entries: AuditEntry[] = [];
   const actions: Array<[string, string, string]> = [
     ['Autorizou visitante', 'Visitantes', 'morador'],
@@ -1466,12 +1483,12 @@ function buildAudit({ today, rng, condoId, residents, occupiedUnits }: AssembleI
   };
 
   entries.push({
-    id: 'aud-demo-1', condominiumId: condoId, at: atTime(today, 0, 10, 42),
+    id: 'aud-demo-1', condominiumId: condoId, at: pastTime(0, 10, 42),
     actorName: 'Carlos Almeida', actorRole: 'morador', action: 'Autorizou visitante',
     target: 'João da Silva', detail: 'Torre A · Apto 1204 · Autorização única', ip: '187.22.104.61', module: 'Visitantes',
   });
   entries.push({
-    id: 'aud-demo-2', condominiumId: condoId, at: atTime(today, 0, 10, 44),
+    id: 'aud-demo-2', condominiumId: condoId, at: pastTime(0, 10, 44),
     actorName: 'Marcos Vieira', actorRole: 'portaria', action: 'Registrou entrada',
     target: 'João da Silva', detail: 'Portão Principal · Validação por QR Code', ip: '10.0.14.22', module: 'Controle de acesso',
   });
@@ -1482,7 +1499,7 @@ function buildAudit({ today, rng, condoId, residents, occupiedUnits }: AssembleI
     entries.push({
       id: `aud-${i + 1}`,
       condominiumId: condoId,
-      at: atTime(today, -rng.int(0, 14), rng.int(6, 23), rng.int(0, 59)),
+      at: pastTime(-rng.int(0, 14), rng.int(6, 23), rng.int(0, 59)),
       actorName: rng.pick(actorsByRole[role]),
       actorRole: role as AuditEntry['actorRole'],
       action,

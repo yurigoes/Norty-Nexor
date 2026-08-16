@@ -29,7 +29,8 @@ export function ManagementSecurity() {
     gateList: gates(condominium.id),
     inside: onSite(condominium.id),
     expected: expectedToday(condominium.id, today),
-    incidents: openIncidents(condominium.id).slice(0, 6),
+    // Lista completa para o indicador; o recorte é só para exibição.
+    incidents: openIncidents(condominium.id),
   }), [condominium.id, today, dataVersion]);
 
   const camsOnline = data.cams.filter((c) => c.status === 'online');
@@ -111,7 +112,7 @@ export function ManagementSecurity() {
             ) : (
               <Timeline
                 dense
-                entries={data.incidents.map((i) => ({
+                entries={data.incidents.slice(0, 6).map((i) => ({
                   id: i.id,
                   time: timeAgo(i.createdAt),
                   title: i.title,
