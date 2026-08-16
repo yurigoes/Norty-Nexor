@@ -17,6 +17,8 @@ import { staffOfUnit, unitLabel } from '../../services/directory';
 import { announcements } from '../../services/communication';
 import { currency, firstName } from '../../lib/format';
 import { daysUntil, formatDate, isoDate, timeAgo } from '../../lib/date';
+import { WelcomeScene } from '../../brand/scenes/WelcomeScene';
+import '../../brand/scenes/scenes.css';
 import './resident.css';
 
 const QUICK_ACTIONS = [
@@ -65,14 +67,39 @@ export function ResidentHome() {
   const greeting = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
   const dueIn = data.invoice ? daysUntil(data.invoice.dueDate) : null;
 
+  /**
+   * Uma linha só, dizendo o que está esperando pela pessoa. É a diferença
+   * entre abrir um sistema e chegar em casa — por isso vem antes de
+   * qualquer indicador, na ordem em que importa para quem acabou de entrar.
+   */
+  const welcome = (() => {
+    const arriving = data.visitors.filter((v) => v.expectedDate === today && v.status === 'aguardando');
+    if (data.deliveries.length) {
+      return data.deliveries.length === 1
+        ? 'Você tem uma encomenda esperando na portaria.'
+        : `Você tem ${data.deliveries.length} encomendas esperando na portaria.`;
+    }
+    if (arriving.length) {
+      return arriving.length === 1
+        ? `${arriving[0].name} chega hoje às ${arriving[0].expectedTime}.`
+        : `${arriving.length} visitantes autorizados chegam hoje.`;
+    }
+    if (data.tickets.length) return 'Seu chamado está em andamento com a administração.';
+    if (dueIn !== null && dueIn >= 0 && dueIn <= 5) return 'Seu boleto vence nos próximos dias.';
+    return 'Tudo tranquilo por aqui. Bom te ver de volta.';
+  })();
+
   return (
     <div className="nx-stack nx-gap-6">
       {/* ---------- Identidade condominial digital ---------- */}
       <section className="nx-identity">
+        <WelcomeScene className="nx-identity__scene" />
+        <span className="nx-identity__veil" />
         <div className="nx-identity__main">
           <p className="nx-identity__greeting">{greeting}, {firstName(user.name)} 👋</p>
           <h1 className="nx-identity__unit">{unitLabel(unitId)}</h1>
           <p className="nx-identity__condo">{condominium.name} · {condominium.city}/{condominium.state}</p>
+          <p className="nx-identity__welcome">{welcome}</p>
           <div className="nx-identity__status">
             <StatusDot tone="success" pulse />
             <span>Morador ativo</span>

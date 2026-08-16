@@ -13,6 +13,8 @@ import {
 } from '../../components/ui';
 import { RankBars } from '../../components/charts/Charts';
 import { currency, currencyCompact, number, percent } from '../../lib/format';
+import { OperationsScene } from '../../brand/scenes/OperationsScene';
+import '../../brand/scenes/scenes.css';
 import './portfolio.css';
 
 export function PortfolioOverview() {
@@ -57,6 +59,8 @@ export function PortfolioOverview() {
       />
 
       <section className="nx-portfolio-hero">
+        <OperationsScene className="nx-portfolio-hero__scene" />
+        <span className="nx-portfolio-hero__veil" />
         <div className="nx-portfolio-hero__brand">
           <NexorMark size={44} variant="light" />
           <div>

@@ -4,10 +4,14 @@
 
 /* ---------------- Identidade condominial digital ---------------- */
 
+/* A chegada do morador é uma faixa em coluna: a saudação no alto, os
+   atalhos da unidade embaixo e a cena do portal visível à direita. */
 .nx-identity {
   display: flex;
-  gap: var(--space-6);
-  align-items: center;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-5);
+  min-height: 236px;
   padding: var(--space-6);
   border-radius: var(--radius-xl);
   background: var(--gradient-navy);
@@ -16,37 +20,23 @@
   overflow: hidden;
   box-shadow: var(--shadow-lg);
 }
-.nx-identity::before {
-  content: '';
-  position: absolute;
-  top: -60px;
-  right: -40px;
-  width: 320px;
-  height: 320px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(23, 107, 255, 0.34), transparent 68%);
-}
-.nx-identity::after {
-  content: '';
-  position: absolute;
-  bottom: -80px;
-  left: 30%;
-  width: 280px;
-  height: 280px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(32, 213, 232, 0.16), transparent 70%);
-}
-
 .nx-identity__main { position: relative; flex: 1; min-width: 0; }
-.nx-identity__greeting { font-size: var(--text-md); color: rgba(255, 255, 255, 0.72); }
+.nx-identity__greeting { font-size: var(--text-lg); color: rgba(255, 255, 255, 0.78); }
 .nx-identity__unit {
-  font-size: var(--text-3xl);
+  font-size: var(--text-4xl);
   font-weight: var(--weight-bold);
   letter-spacing: var(--tracking-tight);
   color: #fff;
   margin-top: var(--space-1);
 }
 .nx-identity__condo { font-size: var(--text-sm); color: rgba(255, 255, 255, 0.55); margin-top: 3px; }
+.nx-identity__welcome {
+  font-size: var(--text-md);
+  color: #FFDCA8;
+  margin-top: var(--space-3);
+  max-width: 46ch;
+}
+
 .nx-identity__status {
   display: flex;
   align-items: center;
@@ -61,9 +51,10 @@
 .nx-identity__stats {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(5, minmax(78px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--space-2);
-  flex-shrink: 0;
+  /* Limitado à esquerda para não cobrir o portal iluminado da cena */
+  max-width: 560px;
 }
 .nx-identity__stat {
   display: flex;
@@ -235,8 +226,8 @@
 }
 
 @media (max-width: 900px) {
-  .nx-identity { flex-direction: column; align-items: stretch; gap: var(--space-5); padding: var(--space-5); }
-  .nx-identity__stats { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .nx-identity { gap: var(--space-5); padding: var(--space-5); min-height: 0; }
+  .nx-identity__stats { grid-template-columns: repeat(5, minmax(0, 1fr)); max-width: none; }
   .nx-identity__unit { font-size: var(--text-2xl); }
 }
 

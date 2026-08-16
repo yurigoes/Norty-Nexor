@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, Car, CheckCircle2, DoorOpen, KeyRound, Package, ScanLine, Search,
-  UserCheck, Users, Video, XCircle, Clock,
+  ShieldCheck, UserCheck, Users, Video, XCircle, Clock,
 } from 'lucide-react';
 import { useAuthenticated } from '../../app/SessionContext';
 import { checkIn, denyVisitor, expectedToday, onSite } from '../../services/visitors';
@@ -15,9 +15,11 @@ import {
   Avatar, Badge, Button, Card, CardHeader, EmptyState, SearchInput, StatCard, StatusDot,
   useToast,
 } from '../../components/ui';
+import { GateScene } from '../../brand/scenes/GateScene';
 import { formatTime, isoDate } from '../../lib/date';
 import { number } from '../../lib/format';
 import './gate.css';
+import '../../brand/scenes/scenes.css';
 
 const QUICK_ACTIONS = [
   { to: '/portaria/visitantes', label: 'Visitante', icon: UserCheck },
@@ -48,6 +50,12 @@ export function GateConsole() {
   }), [condominium.id, today, dataVersion]);
 
   const results = useMemo(() => searchDirectory(condominium.id, term), [condominium.id, term, dataVersion]);
+
+  /** O posto já é o título da faixa: o crachá mostra quem está e em qual turno. */
+  const shift = (user.jobTitle ?? '')
+    .split(' · ')
+    .filter((part) => part !== 'Portaria Principal')
+    .join(' · ');
   const hasQuery = term.trim().length >= 2;
 
   const release = (visitor: Visitor) => {
@@ -66,15 +74,24 @@ export function GateConsole() {
 
   return (
     <div className="nx-stack nx-gap-5">
-      <header className="nx-gate-head">
-        <div>
-          <p className="nx-uppercase nx-text-subtle">Console de portaria</p>
-          <h1 className="nx-gate-head__title">Portaria Principal</h1>
-          <p className="nx-text-sm nx-text-muted">{user.name} · {user.jobTitle}</p>
-        </div>
-        <div className="nx-gate-head__clock">
-          <strong>{formatTime(new Date().toISOString())}</strong>
-          <span>{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}</span>
+      <header className="nx-gate-hero">
+        <GateScene />
+        <div className="nx-gate-hero__content">
+          <div>
+            <span className="nx-gate-hero__eyebrow">
+              <ShieldCheck size={13} /> Posto em operação
+            </span>
+            <h1 className="nx-gate-hero__title">Portaria Principal</h1>
+            <p className="nx-gate-hero__meta">{condominium.name} · {condominium.city}/{condominium.state}</p>
+            <span className="nx-gate-hero__shift">
+              <StatusDot tone="success" pulse />
+              {user.name} · {shift}
+            </span>
+          </div>
+          <div className="nx-gate-hero__clock">
+            <strong>{formatTime(new Date().toISOString())}</strong>
+            <span>{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}</span>
+          </div>
         </div>
       </header>
 

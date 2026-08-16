@@ -1,8 +1,11 @@
+/* Faixa em coluna: a administradora no alto, os números da carteira
+   embaixo e o mecanismo girando à direita. */
 .nx-portfolio-hero {
   display: flex;
-  align-items: center;
-  gap: var(--space-6);
-  flex-wrap: wrap;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-5);
+  min-height: 236px;
   padding: var(--space-6);
   border-radius: var(--radius-xl);
   background: var(--gradient-navy);
@@ -11,24 +14,16 @@
   position: relative;
   overflow: hidden;
 }
-.nx-portfolio-hero::after {
-  content: '';
-  position: absolute;
-  top: -110px;
-  right: -50px;
-  width: 360px;
-  height: 360px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(23, 107, 255, 0.3), transparent 70%);
-}
 .nx-portfolio-hero__brand { position: relative; display: flex; align-items: center; gap: var(--space-4); flex: 1; min-width: 260px; }
 .nx-portfolio-hero__brand h2 { color: #fff; font-size: var(--text-xl); }
 
 .nx-portfolio-hero__stats {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(5, minmax(104px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--space-3);
+  /* Limitado à esquerda para não cobrir o mecanismo da cena */
+  max-width: 620px;
 }
 .nx-portfolio-hero__stats > div {
   display: flex;
@@ -87,12 +82,12 @@
 
 @media (max-width: 1100px) {
   .nx-portfolio-grid { grid-template-columns: 1fr; }
-  .nx-portfolio-hero__stats { grid-template-columns: repeat(3, 1fr); }
+  .nx-portfolio-hero__stats { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: none; }
 }
 
 @media (max-width: 700px) {
   .nx-condo-card__metrics { display: none; }
-  .nx-portfolio-hero__stats { grid-template-columns: repeat(2, 1fr); }
+  .nx-portfolio-hero__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 .nx-condo-metrics {

@@ -1,0 +1,207 @@
+/* =========================================================
+   NEXOR — Cenas de entrada por papel
+   Cada área abre com uma composição própria, desenhada em SVG.
+   ========================================================= */
+
+.nx-scene {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* ---------------- Animações das cenas ---------------- */
+
+@keyframes nx-scene-sweep {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(1160px); }
+}
+.nx-scene__sweep { animation: nx-scene-sweep 9s linear infinite; }
+
+@keyframes nx-scene-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+.nx-scene__pulse { animation: nx-scene-pulse 2.4s ease-in-out infinite; }
+
+@keyframes nx-scene-mote {
+  0% { opacity: 0; transform: translateY(0); }
+  20% { opacity: 0.9; }
+  100% { opacity: 0; transform: translateY(-58px); }
+}
+.nx-scene__mote { animation: nx-scene-mote 6s ease-out infinite; }
+
+@keyframes nx-scene-node {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+.nx-scene__node { animation: nx-scene-node 4.5s ease-in-out infinite; }
+
+@keyframes nx-scene-gear {
+  to { transform: rotate(360deg); }
+}
+.nx-scene__gear {
+  animation: nx-scene-gear linear infinite;
+  /* Em SVG o padrão de `transform-box` é `view-box`: sem esta linha,
+     `transform-origin: center` apontaria para o centro da cena inteira e
+     cada engrenagem giraria em órbita, saindo do quadro. */
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nx-scene__sweep,
+  .nx-scene__pulse,
+  .nx-scene__mote,
+  .nx-scene__node,
+  .nx-scene__gear { animation: none; }
+  .nx-scene__mote { opacity: 0.7; }
+  .nx-scene__node { opacity: 0.8; }
+}
+
+/* =========================================================
+   Portaria — guarita
+   ========================================================= */
+
+.nx-gate-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  background: #05090F;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: var(--shadow-lg);
+  min-height: 236px;
+  display: flex;
+  align-items: flex-end;
+}
+
+/* Véu que garante a leitura do texto sobre a cena */
+.nx-gate-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, rgba(5, 9, 15, 0.95) 0%, rgba(5, 9, 15, 0.9) 26%, rgba(5, 9, 15, 0.42) 44%, rgba(5, 9, 15, 0.08) 62%, rgba(5, 9, 15, 0.34) 100%);
+}
+
+.nx-gate-hero__content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-5);
+  width: 100%;
+  padding: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.nx-gate-hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-widest);
+  text-transform: uppercase;
+  color: var(--nexor-cyan);
+}
+
+.nx-gate-hero__title {
+  font-size: var(--text-4xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-tight);
+  color: #fff;
+  margin-top: var(--space-2);
+}
+
+.nx-gate-hero__meta {
+  font-size: var(--text-sm);
+  color: rgba(255, 255, 255, 0.62);
+  margin-top: var(--space-1);
+}
+
+.nx-gate-hero__shift {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding: 6px var(--space-3);
+  border-radius: var(--radius-pill);
+  /* Fundo sólido: o crachá pode cair sobre a janela acesa da guarita */
+  background: rgba(4, 8, 14, 0.78);
+  border: 1px solid rgba(32, 213, 232, 0.34);
+  backdrop-filter: blur(6px);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: #bff3f9;
+}
+
+.nx-gate-hero__clock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-md);
+  background: rgba(4, 8, 14, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(6px);
+}
+.nx-gate-hero__clock strong {
+  font-family: var(--font-mono);
+  font-size: var(--text-4xl);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  color: #fff;
+}
+.nx-gate-hero__clock span { font-size: var(--text-xs); color: rgba(255, 255, 255, 0.5); }
+.nx-gate-hero__clock span::first-letter { text-transform: uppercase; }
+
+/* =========================================================
+   Morador — chegada em casa
+   ========================================================= */
+
+.nx-identity__scene {
+  position: absolute;
+  inset: 0;
+  opacity: 0.95;
+}
+
+/* Véu à esquerda: a saudação e o endereço precisam de fundo limpo */
+.nx-identity__veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(96deg, rgba(8, 17, 31, 0.94) 0%, rgba(8, 17, 31, 0.86) 26%, rgba(8, 17, 31, 0.4) 44%, rgba(8, 17, 31, 0.06) 62%, rgba(8, 17, 31, 0.3) 100%);
+}
+
+/* =========================================================
+   Administradora — mecanismo da carteira
+   ========================================================= */
+
+.nx-portfolio-hero__scene { position: absolute; inset: 0; opacity: 0.9; }
+
+.nx-portfolio-hero__veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(96deg, rgba(8, 17, 31, 0.94) 0%, rgba(8, 17, 31, 0.86) 28%, rgba(8, 17, 31, 0.44) 46%, rgba(8, 17, 31, 0.1) 64%, rgba(8, 17, 31, 0.24) 100%);
+}
+
+/* ---------------- Responsivo ---------------- */
+
+@media (max-width: 900px) {
+  .nx-gate-hero__content { padding: var(--space-5); }
+  .nx-gate-hero__title { font-size: var(--text-2xl); }
+  .nx-gate-hero__clock strong { font-size: var(--text-2xl); }
+  .nx-gate-hero::after {
+    background: linear-gradient(180deg, rgba(4, 7, 12, 0.86) 0%, rgba(4, 7, 12, 0.42) 44%, rgba(4, 7, 12, 0.9) 100%);
+  }
+  /* Em tela estreita a cena é ampliada pelo recorte e passa a disputar a
+     leitura com o texto — recua para textura, sem sumir. */
+  .nx-portfolio-hero__scene { opacity: 0.4; }
+  .nx-identity__scene { opacity: 0.5; }
+
+  .nx-identity__veil,
+  .nx-portfolio-hero__veil {
+    background: linear-gradient(180deg, rgba(8, 17, 31, 0.9) 0%, rgba(8, 17, 31, 0.58) 46%, rgba(8, 17, 31, 0.88) 100%);
+  }
+}
