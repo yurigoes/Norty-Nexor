@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:standalone": "tsc -b && node scripts/build-standalone.mjs",
+    "fonts:embed": "node scripts/embed-fonts.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.31.0",

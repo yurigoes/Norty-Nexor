@@ -38,6 +38,21 @@ npm run preview  # serve o build
 
 Aplicação em `http://localhost:5173`.
 
+### Demonstração em arquivo único
+
+```bash
+npm run build:standalone   # gera dist-standalone/nexor-demo.html
+```
+
+Empacota a aplicação inteira — código, estilos e tipografia — em um único
+HTML sem nenhuma referência externa. Serve para hospedar a demonstração em
+qualquer lugar, enviar por anexo ou abrir localmente, sem depender de um
+servidor que saiba reescrever rotas: nesse modo a navegação usa hash
+(`#/app/visitantes`).
+
+A tipografia embutida é gerada por `npm run fonts:embed`, que baixa as
+faces uma única vez para `src/styles/fonts.embedded.css`.
+
 ---
 
 ## Contas de demonstração
