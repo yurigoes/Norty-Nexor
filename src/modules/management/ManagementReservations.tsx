@@ -15,6 +15,7 @@ import { CellStack, FilterBar } from '../../components/PageBits';
 import { formatDate, isoDate } from '../../lib/date';
 import { currency, number } from '../../lib/format';
 import { RankBars } from '../../components/charts/Charts';
+import './management.css';
 
 const PAGE_SIZE = 20;
 
@@ -115,7 +116,7 @@ export function ManagementReservations() {
         />
       </div>
 
-      <div className="nx-dash-charts">
+      <div className="nx-split-wide">
         <Card padding="none">
           <FilterBar>
             <SearchInput value={term} onChange={(v) => { setTerm(v); setPage(1); }} placeholder="Buscar por morador, unidade ou área..." />

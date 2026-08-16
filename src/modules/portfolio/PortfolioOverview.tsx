@@ -77,7 +77,14 @@ export function PortfolioOverview() {
       </section>
 
       <div className="nx-grid-auto nx-mb-4">
-        <StatCard label="Receita mensal consolidada" value={currency(snapshot.monthlyRevenue)} icon={<Receipt size={17} />} tone="success" trend={{ value: '+2,4%', direction: 'up' }} />
+        <StatCard
+          label="Receita mensal consolidada"
+          value={currencyCompact(snapshot.monthlyRevenue)}
+          hint={currency(snapshot.monthlyRevenue)}
+          icon={<Receipt size={17} />}
+          tone="success"
+          trend={{ value: '+2,4%', direction: 'up' }}
+        />
         <StatCard label="Inadimplência média" value={percent(snapshot.averageDelinquency)} icon={<TrendingUp size={17} />} tone={snapshot.averageDelinquency > 6 ? 'danger' : 'brand'} />
         <StatCard label="Chamados abertos" value={number(snapshot.openTickets)} icon={<Wrench size={17} />} tone="warning" hint="Somatório da carteira" />
         <StatCard label="Unidades por condomínio" value={number(Math.round(snapshot.units / snapshot.condominiums))} icon={<Building2 size={17} />} tone="cyan" hint="Média" />

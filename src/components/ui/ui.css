@@ -83,6 +83,7 @@
 .nx-btn--success:hover:not(:disabled) { background: #0ea672; }
 
 .nx-icon-btn {
+  --only-mobile-display: inline-flex;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -553,7 +554,7 @@
 }
 .nx-table__cards { display: none; }
 
-@media (max-width: 768px) {
+@media (max-width: 900px) {
   .nx-col-hide-sm { display: none !important; }
   .has-mobile-cards .nx-table { display: none; }
   .has-mobile-cards .nx-table__cards { display: flex; flex-direction: column; }

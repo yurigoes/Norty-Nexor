@@ -136,7 +136,7 @@ export function generateDatabase(now = new Date()): NexorDatabase {
       id: `condo-p${i + 1}`,
       tenantId,
       name,
-      shortName: name.replace(/^(Residencial|Condomínio|Edifício|Parque)\s+/, ''),
+      shortName: name.replace(/^(Residencial|Condomínio|Edifício)\s+/, ''),
       address: `Rua ${rng.pick(['das Acácias', 'Bela Vista', 'dos Pinheiros', 'Santa Clara', 'do Comércio'])}, ${rng.int(100, 3200)}`,
       city: rng.pick(['São Paulo', 'Guarulhos', 'Osasco', 'Santo André', 'Barueri', 'Campinas']),
       state: 'SP',

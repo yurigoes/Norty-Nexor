@@ -11,9 +11,22 @@
 
 .nx-dash-charts {
   display: grid;
-  grid-template-columns: 1.25fr 1fr;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
   gap: var(--space-4);
   margin-bottom: var(--space-5);
+}
+
+/* Listagem larga + painel lateral: a tabela precisa de espaço real,
+   por isso a proporção é bem diferente da grade de gráficos. */
+.nx-split-wide {
+  display: grid;
+  grid-template-columns: minmax(0, 2.6fr) minmax(260px, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+@media (max-width: 1200px) {
+  .nx-split-wide { grid-template-columns: minmax(0, 1fr); }
 }
 
 .nx-dash-grid {

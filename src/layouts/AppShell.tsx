@@ -237,7 +237,7 @@ export function AppShell() {
           </div>
         </main>
 
-        <nav className="nx-bottomnav nx-only-mobile">
+        <nav className="nx-bottomnav">
           {bottomNav.map((item) => {
             const count = badgeValue(item);
             return (

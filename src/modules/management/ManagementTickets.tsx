@@ -17,6 +17,7 @@ import { RankBars } from '../../components/charts/Charts';
 import { formatDateTime, timeAgo } from '../../lib/date';
 import { number } from '../../lib/format';
 import { TICKET_CATEGORIES } from '../../data/seed/random';
+import './management.css';
 
 const PAGE_SIZE = 20;
 const ASSIGNEES = ['Equipe de Manutenção', 'Zeladoria', 'Elevalux Elevadores', 'HidroPrime Serviços', 'SegurPro Sistemas', 'Administração'];
@@ -90,7 +91,7 @@ export function ManagementTickets() {
         <StatCard label="Resolvidos" value={number(all.filter((t) => t.status === 'resolvido').length)} icon={<CheckCircle2 size={17} />} tone="success" />
       </div>
 
-      <div className="nx-dash-charts">
+      <div className="nx-split-wide">
         <Card padding="none">
           <FilterBar>
             <SearchInput value={term} onChange={(v) => { setTerm(v); setPage(1); }} placeholder="Buscar por título, código, local ou autor..." />

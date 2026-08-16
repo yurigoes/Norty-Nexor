@@ -55,10 +55,16 @@
 .nx-rise { animation: nx-rise var(--duration-slow) var(--ease-out) both; }
 .nx-fade { animation: nx-fade-in var(--duration-base) var(--ease-out) both; }
 
-.nx-hide-mobile { }
+/* Visibilidade por breakpoint.
+   `--only-mobile-display` permite que cada componente declare o display
+   correto quando reaparece no mobile — usar `revert` aqui apagaria o
+   layout flex do próprio elemento. */
 .nx-only-mobile { display: none !important; }
 
-@media (max-width: 768px) {
+/* 900px é o mesmo ponto em que o shell troca a sidebar fixa pela
+   navegação off-canvas — os dois precisam coincidir, senão o botão de
+   abrir o menu some antes de a sidebar voltar. */
+@media (max-width: 900px) {
   .nx-hide-mobile { display: none !important; }
-  .nx-only-mobile { display: revert !important; }
+  .nx-only-mobile { display: var(--only-mobile-display, block) !important; }
 }
