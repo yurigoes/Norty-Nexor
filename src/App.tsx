@@ -24,6 +24,7 @@ import { DocumentsPage } from './modules/shared/DocumentsPage';
 import { AssembliesPage } from './modules/shared/AssembliesPage';
 import { ProfilePage } from './modules/shared/ProfilePage';
 import { ConciergePage } from './modules/shared/ConciergePage';
+import { ProfessionalsPage } from './modules/shared/ProfessionalsPage';
 
 import { GateConsole } from './modules/gate/GateConsole';
 import { GateVisitors } from './modules/gate/GateVisitors';
@@ -106,6 +107,14 @@ function AppRoutes() {
         <Route path="/app/ocorrencias" element={<RequirePermission permission="incidents.view"><ResidentIncidents /></RequirePermission>} />
         <Route path="/app/veiculos" element={<RequirePermission permission="vehicles.view"><ResidentVehicles /></RequirePermission>} />
         <Route path="/app/funcionarios" element={<RequirePermission permission="staff.view"><ResidentStaff /></RequirePermission>} />
+        <Route
+          path="/app/profissionais"
+          element={(
+            <RequirePermission permission="professionals.view">
+              <ProfessionalsPage subtitle="Prestadores indicados pela administração e avaliados pelos vizinhos" />
+            </RequirePermission>
+          )}
+        />
         <Route path="/app/comunicados" element={<AnnouncementsPage />} />
         <Route path="/app/documentos" element={<DocumentsPage />} />
         <Route path="/app/assembleias" element={<AssembliesPage />} />
@@ -137,6 +146,14 @@ function AppRoutes() {
         <Route path="/gestao/chamados" element={<RequirePermission permission="tickets.view"><ManagementTickets /></RequirePermission>} />
         <Route path="/gestao/ocorrencias" element={<RequirePermission permission="incidents.view"><ManagementIncidents /></RequirePermission>} />
         <Route path="/gestao/manutencao" element={<RequirePermission permission="maintenance.view"><ManagementMaintenance /></RequirePermission>} />
+        <Route
+          path="/gestao/profissionais"
+          element={(
+            <RequirePermission permission="professionals.view">
+              <ProfessionalsPage subtitle="Catálogo indicado ao condomínio e pedidos de orçamento dos moradores" />
+            </RequirePermission>
+          )}
+        />
         <Route path="/gestao/financeiro" element={<RequirePermission permission="finance.admin"><ManagementFinance /></RequirePermission>} />
         <Route path="/gestao/comunicados" element={<AnnouncementsPage />} />
         <Route path="/gestao/documentos" element={<DocumentsPage />} />

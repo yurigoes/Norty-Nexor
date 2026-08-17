@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  AlertTriangle, Bell, CalendarCheck, Car, DoorOpen, FileText, Gavel, Megaphone, Package,
-  UserCheck, Wallet, Wrench,
+  AlertTriangle, Bell, CalendarCheck, Car, DoorOpen, FileText, Gavel, Hammer, Megaphone,
+  Package, UserCheck, Wallet, Wrench,
 } from 'lucide-react';
 import { useAuthenticated } from '../app/SessionContext';
 import { markAllRead, markRead, notificationsFor } from '../services/notifications';
@@ -24,6 +24,7 @@ const ICONS: Record<NotificationKind, typeof Bell> = {
   acesso: DoorOpen,
   autorizacao: FileText,
   assembleia: Gavel,
+  servico: Hammer,
 };
 
 const TONES: Partial<Record<NotificationKind, string>> = {
@@ -33,6 +34,7 @@ const TONES: Partial<Record<NotificationKind, string>> = {
   aviso: 'warning',
   boleto: 'success',
   ocorrencia: 'danger',
+  servico: 'cyan',
 };
 
 export function NotificationPanel({ open, onClose }: { open: boolean; onClose: () => void }) {

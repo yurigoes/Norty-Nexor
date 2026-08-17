@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Users, Building2, DoorOpen, UserCheck, Car, Package, CalendarDays,
   Wallet, Wrench, AlertTriangle, Megaphone, FolderOpen, Gavel, HardHat, ShieldCheck,
   Sparkles, ScrollText, Settings, Home, Network, Monitor, ScanLine, KeyRound, Video,
-  Receipt, ClipboardList, Bell, UserCog,
+  Receipt, ClipboardList, Bell, UserCog, Hammer,
 } from 'lucide-react';
 import type { Permission, User } from '../data/types';
 import { can } from '../services/permissions';
@@ -42,6 +42,7 @@ const RESIDENT_NAV: NavGroup[] = [
       { to: '/app/ocorrencias', label: 'Ocorrências', icon: AlertTriangle, permission: 'incidents.view' },
       { to: '/app/veiculos', label: 'Veículos', icon: Car, permission: 'vehicles.view' },
       { to: '/app/funcionarios', label: 'Funcionários', icon: HardHat, permission: 'staff.view' },
+      { to: '/app/profissionais', label: 'Profissionais', icon: Hammer, permission: 'professionals.view' },
     ],
   },
   {
@@ -106,6 +107,7 @@ const MANAGEMENT_NAV: NavGroup[] = [
       { to: '/gestao/chamados', label: 'Chamados', icon: Wrench, permission: 'tickets.view', badge: 'tickets' },
       { to: '/gestao/ocorrencias', label: 'Ocorrências', icon: AlertTriangle, permission: 'incidents.view' },
       { to: '/gestao/manutencao', label: 'Manutenção', icon: ClipboardList, permission: 'maintenance.view' },
+      { to: '/gestao/profissionais', label: 'Profissionais', icon: Hammer, permission: 'professionals.view' },
     ],
   },
   {

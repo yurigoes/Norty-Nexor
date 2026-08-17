@@ -131,6 +131,7 @@ export type Permission =
   | 'documents.view' | 'documents.manage'
   | 'assemblies.view' | 'assemblies.manage' | 'assemblies.vote'
   | 'staff.view' | 'staff.manage'
+  | 'professionals.view' | 'professionals.manage'
   | 'maintenance.view' | 'maintenance.manage'
   | 'security.view'
   | 'audit.view'
@@ -490,7 +491,8 @@ export interface Assembly {
 
 export type NotificationKind =
   | 'visitante_chegou' | 'encomenda' | 'veiculo' | 'aviso' | 'boleto'
-  | 'reserva' | 'chamado' | 'ocorrencia' | 'acesso' | 'autorizacao' | 'assembleia';
+  | 'reserva' | 'chamado' | 'ocorrencia' | 'acesso' | 'autorizacao' | 'assembleia'
+  | 'servico';
 
 export interface AppNotification {
   id: ID;
@@ -533,6 +535,73 @@ export interface DeviceSession {
   current: boolean;
 }
 
+/* ---------- Profissionais recomendados ---------- */
+
+export type ProfessionalCategory =
+  | 'eletrica' | 'hidraulica' | 'reformas' | 'limpeza' | 'climatizacao'
+  | 'montagem' | 'chaveiro' | 'pintura' | 'tecnologia' | 'jardinagem'
+  | 'pet' | 'aulas' | 'mudancas' | 'dedetizacao';
+
+export interface Professional {
+  id: ID;
+  condominiumId: ID;
+  name: string;
+  document: string;
+  company?: string;
+  category: ProfessionalCategory;
+  specialties: string[];
+  phone: string;
+  email?: string;
+  bio: string;
+  serviceArea: string;
+  /** Atende o condomínio desde. */
+  since: string;
+  /** Atendimentos concluídos dentro do condomínio. */
+  jobsInCondo: number;
+  rating: number;
+  reviewsCount: number;
+  priceFrom?: number;
+  responseTime: string;
+  /** Documentação conferida pela administração. */
+  verified: boolean;
+  /** Indicado formalmente pelo condomínio, não apenas cadastrado. */
+  recommendedByCondo: boolean;
+  recommendedBy?: string;
+  emergency: boolean;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface ProfessionalReview {
+  id: ID;
+  professionalId: ID;
+  condominiumId: ID;
+  unitId: ID;
+  authorName: string;
+  /** De 1 a 5. */
+  rating: number;
+  service: string;
+  comment: string;
+  at: string;
+}
+
+export type ServiceRequestStatus = 'enviado' | 'respondido' | 'contratado' | 'concluido' | 'cancelado';
+
+export interface ServiceRequest {
+  id: ID;
+  condominiumId: ID;
+  professionalId: ID;
+  unitId: ID;
+  residentName: string;
+  service: string;
+  description: string;
+  preferredDate?: string;
+  status: ServiceRequestStatus;
+  createdAt: string;
+  quotedAmount?: number;
+  respondedAt?: string;
+}
+
 /* ---------- Estado completo do banco provisório ---------- */
 
 export interface NexorDatabase {
@@ -565,6 +634,9 @@ export interface NexorDatabase {
   notifications: AppNotification[];
   audit: AuditEntry[];
   sessions: DeviceSession[];
+  professionals: Professional[];
+  professionalReviews: ProfessionalReview[];
+  serviceRequests: ServiceRequest[];
 }
 
 export type CollectionName = {

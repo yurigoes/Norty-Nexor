@@ -21,6 +21,7 @@ const MORADOR: Permission[] = [
   'documents.view',
   'assemblies.view', 'assemblies.vote',
   'staff.view', 'staff.manage',
+  'professionals.view',
   'concierge.use',
 ];
 
@@ -53,6 +54,7 @@ const SINDICO: Permission[] = [
   'documents.view', 'documents.manage',
   'assemblies.view', 'assemblies.manage',
   'staff.view', 'staff.manage',
+  'professionals.view', 'professionals.manage',
   'maintenance.view', 'maintenance.manage',
   'security.view',
   'audit.view',
@@ -77,6 +79,7 @@ const ADMINISTRADORA: Permission[] = [
   'announcements.view', 'announcements.publish',
   'assemblies.view',
   'maintenance.view',
+  'professionals.view',
   'audit.view',
   'settings.manage',
   'concierge.use',

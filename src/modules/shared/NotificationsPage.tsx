@@ -18,6 +18,7 @@ const KIND_LABEL: Record<string, string> = {
   acesso: 'Acesso',
   autorizacao: 'Autorização',
   assembleia: 'Assembleia',
+  servico: 'Serviço',
 };
 
 export function NotificationsPage() {

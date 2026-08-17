@@ -10,11 +10,12 @@ import type {
   AccessLog, Announcement, Assembly, AuditEntry, Camera, CommonArea, CondoEvent, Condominium,
   Delivery, DeviceSession, DocumentFile, Gate, Incident, Invoice, LedgerEntry, MaintenanceOrder,
   NexorDatabase, Reservation, Resident, Staff, Tenant, Ticket, Tower, Unit, User, Vehicle, Visitor,
-  AppNotification,
+  AppNotification, Professional, ProfessionalCategory, ProfessionalReview, ServiceRequest,
 } from '../types';
 import {
-  CARRIERS, COLORS, EXPENSE_CATEGORIES, INCIDENT_TITLES, MOTORCYCLES, REVENUE_CATEGORIES,
-  Rng, SERVICE_COMPANIES, STAFF_ROLES_CONDO, STAFF_ROLES_UNIT, TICKET_CATEGORIES, TICKET_TITLES,
+  CARRIERS, COLORS, EXPENSE_CATEGORIES, INCIDENT_TITLES, MOTORCYCLES, PROFESSIONAL_CATALOG,
+  REVENUE_CATEGORIES, REVIEW_COMMENTS_GOOD, REVIEW_COMMENTS_MIXED, Rng, SERVICE_COMPANIES,
+  SERVICE_REQUEST_SUBJECTS, STAFF_ROLES_CONDO, STAFF_ROLES_UNIT, TICKET_CATEGORIES, TICKET_TITLES,
   VEHICLES, cpf, email, fullName, phone, plate, shortCode,
 } from './random';
 
@@ -650,6 +651,7 @@ function assemble(input: AssembleInput): NexorDatabase {
   const assemblies = buildAssemblies(input);
   const notifications = buildNotifications({ ...input, deliveries, invoices, reservations, tickets });
   const audit = buildAudit(input);
+  const { professionals, professionalReviews, serviceRequests } = buildProfessionals(input);
 
   const sessions: DeviceSession[] = [
     { id: 'sess-1', userId: 'user-morador', device: 'iPhone 15 Pro', browser: 'NEXOR App', location: 'São Paulo, SP', lastActiveAt: localIso(new Date()), current: true },
@@ -667,7 +669,7 @@ function assemble(input: AssembleInput): NexorDatabase {
     tenants, condominiums, towers, units, residents, users, commonAreas, gates, cameras,
     visitors, staff, vehicles, accessLogs, deliveries, reservations, events, invoices, ledger,
     tickets, incidents, maintenance, announcements, documents, assemblies, notifications,
-    audit, sessions,
+    audit, sessions, professionals, professionalReviews, serviceRequests,
   };
 }
 
@@ -1511,4 +1513,127 @@ function buildAudit({ rng, condoId, residents, occupiedUnits }: AssembleInput): 
   }
 
   return entries.sort((a, b) => (a.at < b.at ? 1 : -1));
+}
+
+
+/* ---------------- Profissionais recomendados ---------------- */
+
+const PROFESSIONAL_MIX: [ProfessionalCategory, number][] = [
+  ['eletrica', 5], ['hidraulica', 5], ['reformas', 4], ['limpeza', 5],
+  ['climatizacao', 4], ['montagem', 3], ['chaveiro', 3], ['pintura', 3],
+  ['tecnologia', 3], ['jardinagem', 2], ['pet', 3], ['aulas', 3],
+  ['mudancas', 2], ['dedetizacao', 2],
+];
+
+const RESPONSE_TIMES = ['Responde em minutos', 'Responde em até 1 h', 'Responde em até 2 h', 'Responde no mesmo dia'];
+
+function buildProfessionals({ condoId, occupiedUnits, residents }: AssembleInput): {
+  professionals: Professional[];
+  professionalReviews: ProfessionalReview[];
+  serviceRequests: ServiceRequest[];
+} {
+  // Semente própria: o volume de acessos gerado antes daqui varia com a hora
+  // do dia, o que deslocaria o fluxo compartilhado e faria o catálogo mudar a
+  // cada carregamento. Com um `Rng` isolado a lista é sempre a mesma.
+  const rng = new Rng(`${SEED_KEY}-profissionais`);
+
+  const professionals: Professional[] = [];
+  const professionalReviews: ProfessionalReview[] = [];
+  const serviceRequests: ServiceRequest[] = [];
+
+  let seq = 0;
+  let reviewSeq = 0;
+
+  for (const [category, count] of PROFESSIONAL_MIX) {
+    const catalog = PROFESSIONAL_CATALOG[category];
+
+    for (let i = 0; i < count; i += 1) {
+      seq += 1;
+      const name = fullName(rng);
+      const soloTrader = rng.bool(0.45);
+      const company = soloTrader ? undefined : `${name.split(' ')[0]} ${rng.pick(catalog.suffixes)}`;
+
+      // A nota média sai de uma faixa alta: são profissionais que já
+      // passaram pelo crivo do condomínio, não um cadastro aberto.
+      const rating = rng.float(3.9, 5, 1);
+      const reviewsCount = rng.int(4, 38);
+      const recommended = rng.bool(0.42);
+
+      const professional: Professional = {
+        id: `prof-${seq}`,
+        condominiumId: condoId,
+        name,
+        document: soloTrader ? cpf(rng) : `${rng.int(10, 99)}.${rng.int(100, 999)}.${rng.int(100, 999)}/0001-${rng.int(10, 99)}`,
+        company,
+        category,
+        specialties: rng.sample(catalog.specialties, rng.int(2, 4)),
+        phone: phone(rng),
+        email: rng.bool(0.6) ? email(name, seq) : undefined,
+        bio: `${rng.pick(catalog.roles)} com ${rng.int(4, 22)} anos de experiência. ${
+          recommended
+            ? 'Indicado pela administração após atendimentos recorrentes no condomínio.'
+            : 'Cadastrado a partir da indicação de moradores.'
+        }`,
+        serviceArea: rng.pick(['Zona Sul e região', 'Toda a capital', 'Bairro e adjacências', 'Capital e Grande São Paulo']),
+        since: `20${rng.int(19, 25)}-${pad(rng.int(1, 12))}-${pad(rng.int(1, 28))}`,
+        jobsInCondo: rng.int(3, 96),
+        rating,
+        reviewsCount,
+        priceFrom: rng.bool(0.75) ? rng.int(80, 460) : undefined,
+        responseTime: rng.pick(RESPONSE_TIMES),
+        verified: rng.bool(0.72),
+        recommendedByCondo: recommended,
+        recommendedBy: recommended ? rng.pick(['Helena Duarte · Síndica', 'Meridian Administração', 'Conselho fiscal']) : undefined,
+        emergency: category === 'chaveiro' || category === 'hidraulica' ? rng.bool(0.6) : rng.bool(0.15),
+        active: rng.bool(0.96),
+        createdAt: pastTime(-rng.int(30, 900), rng.int(9, 19), rng.int(0, 59)),
+      };
+      professionals.push(professional);
+
+      // Avaliações escritas por moradores reais do condomínio.
+      const written = Math.min(reviewsCount, rng.int(2, 6));
+      const reviewers = rng.sample(occupiedUnits, written);
+      reviewers.forEach((unit, k) => {
+        reviewSeq += 1;
+        const author = residents.find((r) => r.unitId === unit.id);
+        const good = rng.bool(0.82);
+        professionalReviews.push({
+          id: `prev-${reviewSeq}`,
+          professionalId: professional.id,
+          condominiumId: condoId,
+          unitId: unit.id,
+          authorName: author?.name ?? unit.ownerName,
+          rating: good ? rng.int(5, 5) : rng.int(3, 4),
+          service: rng.pick(professional.specialties),
+          comment: good ? rng.pick(REVIEW_COMMENTS_GOOD) : rng.pick(REVIEW_COMMENTS_MIXED),
+          at: pastTime(-rng.int(2, 300) - k, rng.int(8, 21), rng.int(0, 59)),
+        });
+      });
+    }
+  }
+
+  // Pedidos de orçamento já feitos por moradores — dá lastro ao histórico.
+  const requesters = rng.sample(occupiedUnits, 46);
+  requesters.forEach((unit, i) => {
+    const professional = rng.pick(professionals);
+    const resident = residents.find((r) => r.unitId === unit.id);
+    const status = rng.weighted<ServiceRequest['status']>([
+      ['concluido', 46], ['contratado', 18], ['respondido', 20], ['enviado', 10], ['cancelado', 6],
+    ]);
+    serviceRequests.push({
+      id: `sreq-${i + 1}`,
+      condominiumId: condoId,
+      professionalId: professional.id,
+      unitId: unit.id,
+      residentName: resident?.name ?? unit.ownerName,
+      service: rng.pick(SERVICE_REQUEST_SUBJECTS),
+      description: 'Solicitação enviada pelo aplicativo NEXOR.',
+      status,
+      createdAt: pastTime(-rng.int(1, 120), rng.int(8, 21), rng.int(0, 59)),
+      quotedAmount: status === 'enviado' ? undefined : rng.int(120, 1800),
+      respondedAt: status === 'enviado' ? undefined : pastTime(-rng.int(0, 60), rng.int(8, 21), rng.int(0, 59)),
+    });
+  });
+
+  return { professionals, professionalReviews, serviceRequests };
 }

@@ -1,0 +1,191 @@
+/* Catálogo de profissionais recomendados. */
+
+.nx-prof-chips {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-4);
+  scrollbar-width: none;
+}
+
+.nx-prof-chips::-webkit-scrollbar { display: none; }
+
+.nx-prof-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+
+.nx-prof-chip span {
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+}
+
+.nx-prof-chip:hover { border-color: var(--nexor-blue); color: var(--text-default); }
+
+.nx-prof-chip.is-active {
+  background: var(--info-bg);
+  border-color: var(--nexor-blue);
+  color: var(--nexor-blue-600);
+}
+
+.nx-prof-chip.is-active span { color: var(--nexor-blue-600); }
+
+.nx-prof-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-4);
+  height: 36px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--duration-fast);
+}
+
+.nx-prof-toggle:hover { border-color: var(--nexor-blue); color: var(--text-default); }
+
+.nx-prof-toggle.is-active {
+  background: var(--info-bg);
+  border-color: var(--nexor-blue);
+  color: var(--nexor-blue-600);
+}
+
+.nx-prof-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(304px, 1fr));
+  gap: var(--space-4);
+}
+
+.nx-prof-card { display: flex; flex-direction: column; }
+
+.nx-prof-card__name {
+  font-size: var(--text-base);
+  color: var(--text-default);
+}
+
+.nx-prof-verified { color: var(--nexor-blue); flex: 0 0 auto; }
+
+.nx-prof-card__specialties {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  line-height: var(--leading-normal);
+}
+
+.nx-prof-card__foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin-top: auto;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+}
+
+.nx-prof-card__foot span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.nx-prof-card__foot .nx-prof-card__price {
+  margin-left: auto;
+  color: var(--success);
+  font-weight: var(--weight-semibold);
+}
+
+/* Estrelas de avaliação */
+
+.nx-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  color: var(--border-strong);
+}
+
+.nx-stars .is-on { color: var(--warning); }
+
+.nx-rate-star {
+  display: inline-flex;
+  padding: var(--space-1);
+  border: none;
+  background: none;
+  color: var(--border-strong);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+
+.nx-rate-star:hover { transform: scale(1.12); }
+.nx-rate-star.is-on { color: var(--warning); }
+
+/* Contato e dados no drawer: e-mails longos quebram em vez de vazar. */
+
+.nx-prof-info strong { overflow-wrap: anywhere; }
+
+/* Avaliações no drawer */
+
+.nx-prof-reviews {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nx-prof-reviews li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.nx-prof-reviews li:last-child { border-bottom: none; padding-bottom: 0; }
+.nx-prof-reviews p { margin: 0; }
+
+/* Pedidos de orçamento */
+
+.nx-prof-requests {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nx-prof-request {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.nx-prof-request:last-child { border-bottom: none; }
+
+@media (max-width: 640px) {
+  /* Os indicadores são contexto, não o conteúdo principal desta tela:
+     em duas colunas eles cabem numa dobra e o catálogo sobe. */
+  .nx-grid-auto.nx-prof-stats { grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+  .nx-prof-grid { grid-template-columns: 1fr; }
+  .nx-prof-request { padding: var(--space-4); }
+}

@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle, ArrowRight, CalendarPlus, Car, ChevronRight, DoorOpen, Package,
-  Sparkles, UserPlus, Wallet, Wrench, HardHat, UserCheck, Megaphone,
+  Sparkles, UserPlus, Wallet, Wrench, HardHat, UserCheck, Megaphone, Hammer, Star,
 } from 'lucide-react';
 import { useAuthenticated } from '../../app/SessionContext';
 import { Badge, Button, Card, CardHeader, EmptyState, StatusDot } from '../../components/ui';
@@ -15,6 +15,7 @@ import { accessLogsOfUnit } from '../../services/access';
 import { vehiclesOfUnit } from '../../services/vehicles';
 import { staffOfUnit, unitLabel } from '../../services/directory';
 import { announcements } from '../../services/communication';
+import { CATEGORY_LABEL, recommendedProfessionals } from '../../services/professionals';
 import { currency, firstName } from '../../lib/format';
 import { daysUntil, formatDate, isoDate, timeAgo } from '../../lib/date';
 import { WelcomeScene } from '../../brand/scenes/WelcomeScene';
@@ -50,6 +51,7 @@ export function ResidentHome() {
       vehicles: vehiclesOfUnit(unitId),
       staff: staffOfUnit(unitId).filter((s) => s.active),
       news: announcements(condominium.id).slice(0, 3),
+      professionals: recommendedProfessionals(condominium.id, 4),
     };
   }, [unitId, condominium.id, today, dataVersion]);
 
@@ -308,6 +310,34 @@ export function ResidentHome() {
               </li>
             ))}
           </ul>
+        </Card>
+
+        {/* ---------- Profissionais indicados ---------- */}
+        <Card padding="md">
+          <CardHeader
+            title="Profissionais indicados"
+            subtitle="Quem o condomínio recomenda"
+            action={<Button variant="ghost" size="sm" to="/app/profissionais" iconRight={<ChevronRight size={15} />}>Ver todos</Button>}
+          />
+          {data.professionals.length === 0 ? (
+            <EmptyState compact icon={<Hammer size={20} />} title="Nenhuma indicação ainda" description="A administração publica aqui os prestadores de confiança." />
+          ) : (
+            <ul className="nx-list">
+              {data.professionals.map((p) => (
+                <li key={p.id} className="nx-list__item">
+                  <span className="nx-list__icon nx-list__icon--cyan"><Hammer size={16} /></span>
+                  <span className="nx-stack nx-grow">
+                    <span className="nx-medium nx-truncate">{p.name}</span>
+                    <span className="nx-text-xs nx-text-subtle">{CATEGORY_LABEL[p.category]} · {p.jobsInCondo} atendimentos aqui</span>
+                  </span>
+                  <span className="nx-row nx-gap-1 nx-text-xs nx-text-muted">
+                    <Star size={13} fill="currentColor" style={{ color: 'var(--warning)' }} />
+                    {p.rating.toFixed(1)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
       </div>
 

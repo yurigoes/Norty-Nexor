@@ -86,7 +86,9 @@ O caminho abaixo percorre os cinco fluxos completos exigidos pelo escopo.
 5. **Reservas** — escolher área, data e horário; a disponibilidade é validada.
 6. **Chamados → Abrir chamado** — a administração recebe na hora.
 7. **Financeiro → Pagar boleto** — pagamento simulado com baixa registrada.
-8. **NEXOR AI** — perguntar "Tenho alguma encomenda?" ou "Quando vence meu boleto?".
+8. **Profissionais** — catálogo de prestadores indicados pelo condomínio, com
+   nota, avaliações dos vizinhos, pedido de orçamento e histórico dos pedidos.
+9. **NEXOR AI** — perguntar "Tenho alguma encomenda?" ou "Quando vence meu boleto?".
 
 ### 2. Portaria — `portaria@nexor.test`
 
@@ -103,7 +105,8 @@ O caminho abaixo percorre os cinco fluxos completos exigidos pelo escopo.
 
 Dashboard com indicadores e gráficos, controle de acesso, financeiro
 administrativo, chamados, ocorrências, manutenção, comunicados, documentos,
-assembleias com votação, central de segurança e trilha de auditoria.
+assembleias com votação, catálogo de profissionais indicados, central de
+segurança e trilha de auditoria.
 
 ### 4. Administradora — `administradora@nexor.test`
 
@@ -168,7 +171,7 @@ Tenant (administradora)
  └── Condomínio          dados, usuários e configurações próprios
       ├── Torres · Unidades · Vagas
       ├── Portarias · Áreas comuns
-      ├── Veículos · Visitantes · Funcionários
+      ├── Veículos · Visitantes · Funcionários · Profissionais
       └── Financeiro · Documentos · Governança
 ```
 
@@ -198,6 +201,7 @@ nenhuma tela.
 | Visitantes esperados hoje | 127 |
 | Encomendas na portaria | ~85 |
 | Chamados abertos | 23 · Ocorrências: 7 |
+| Profissionais indicados | 45 · com avaliações escritas de moradores |
 | Registros de acesso | ~12 mil (3 dias) |
 | Boletos, lançamentos, documentos, assembleias | dataset completo |
 

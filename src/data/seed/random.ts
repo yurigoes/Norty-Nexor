@@ -216,3 +216,105 @@ export function shortCode(rng: Rng, prefix = ''): string {
   for (let i = 0; i < 6; i += 1) out += chars[rng.int(0, chars.length - 1)];
   return prefix ? `${prefix}-${out}` : out;
 }
+
+/* ---------------- Profissionais recomendados ---------------- */
+
+export const PROFESSIONAL_CATALOG: Record<string, { roles: string[]; specialties: string[]; suffixes: string[] }> = {
+  eletrica: {
+    roles: ['Eletricista', 'Eletricista predial', 'Técnico eletricista'],
+    specialties: ['Quadro de distribuição', 'Tomadas e interruptores', 'Iluminação', 'Chuveiro elétrico', 'Aterramento', 'Automação residencial'],
+    suffixes: ['Elétrica', 'Energia', 'Instalações'],
+  },
+  hidraulica: {
+    roles: ['Encanador', 'Bombeiro hidráulico'],
+    specialties: ['Vazamentos', 'Desentupimento', 'Troca de registro', 'Caixa acoplada', 'Instalação de filtro', 'Detecção de infiltração'],
+    suffixes: ['Hidráulica', 'Águas', 'Reparos'],
+  },
+  reformas: {
+    roles: ['Pedreiro', 'Mestre de obras', 'Gesseiro'],
+    specialties: ['Pequenos reparos', 'Revestimentos', 'Drywall', 'Rejunte', 'Impermeabilização', 'Forro de gesso'],
+    suffixes: ['Reformas', 'Construções', 'Acabamentos'],
+  },
+  limpeza: {
+    roles: ['Diarista', 'Auxiliar de limpeza', 'Limpeza pós-obra'],
+    specialties: ['Limpeza pesada', 'Pós-obra', 'Vidros e fachadas internas', 'Estofados', 'Organização'],
+    suffixes: ['Limpeza', 'Clean', 'Serviços'],
+  },
+  climatizacao: {
+    roles: ['Técnico em refrigeração', 'Instalador de ar-condicionado'],
+    specialties: ['Instalação split', 'Higienização', 'Carga de gás', 'Manutenção preventiva'],
+    suffixes: ['Climatização', 'Refrigeração', 'Clima'],
+  },
+  montagem: {
+    roles: ['Montador de móveis', 'Marceneiro'],
+    specialties: ['Montagem e desmontagem', 'Fixação em parede', 'Ajustes de portas', 'Móveis planejados'],
+    suffixes: ['Montagens', 'Marcenaria', 'Móveis'],
+  },
+  chaveiro: {
+    roles: ['Chaveiro', 'Técnico em fechaduras'],
+    specialties: ['Abertura de portas', 'Troca de segredo', 'Fechadura digital', 'Cópia de chaves', 'Atendimento 24h'],
+    suffixes: ['Chaves', 'Segurança', 'Fechaduras'],
+  },
+  pintura: {
+    roles: ['Pintor', 'Pintor residencial'],
+    specialties: ['Pintura interna', 'Textura', 'Massa corrida', 'Grafiato', 'Pequenos retoques'],
+    suffixes: ['Pinturas', 'Cores', 'Acabamentos'],
+  },
+  tecnologia: {
+    roles: ['Técnico em informática', 'Instalador de redes'],
+    specialties: ['Wi-Fi e roteadores', 'Cabeamento de rede', 'Instalação de TV', 'Suporte a computadores', 'Câmeras residenciais'],
+    suffixes: ['Tech', 'Redes', 'Informática'],
+  },
+  jardinagem: {
+    roles: ['Jardineiro', 'Paisagista'],
+    specialties: ['Poda', 'Jardim de inverno', 'Vasos e floreiras', 'Irrigação'],
+    suffixes: ['Paisagismo', 'Jardins', 'Verde'],
+  },
+  pet: {
+    roles: ['Pet sitter', 'Adestrador', 'Banho e tosa a domicílio'],
+    specialties: ['Passeio diário', 'Hospedagem', 'Adestramento básico', 'Banho e tosa'],
+    suffixes: ['Pet', 'Patas', 'Amigo Fiel'],
+  },
+  aulas: {
+    roles: ['Professor particular', 'Personal trainer', 'Professor de natação'],
+    specialties: ['Reforço escolar', 'Inglês', 'Musculação', 'Natação infantil', 'Pilates'],
+    suffixes: ['Educação', 'Performance', 'Aulas'],
+  },
+  mudancas: {
+    roles: ['Carreto e mudanças', 'Transportador'],
+    specialties: ['Mudança residencial', 'Frete pequeno', 'Içamento', 'Embalagem'],
+    suffixes: ['Mudanças', 'Transportes', 'Fretes'],
+  },
+  dedetizacao: {
+    roles: ['Dedetizador', 'Controlador de pragas'],
+    specialties: ['Dedetização', 'Descupinização', 'Controle de roedores', 'Sanitização'],
+    suffixes: ['Controle de Pragas', 'Sanitização', 'Ambiental'],
+  },
+};
+
+export const REVIEW_COMMENTS_GOOD = [
+  'Chegou no horário combinado e resolveu na primeira visita.',
+  'Trabalho caprichado e preço justo. Deixou tudo limpo ao sair.',
+  'Muito atencioso, explicou o problema antes de começar.',
+  'Atendeu no mesmo dia. Recomendo sem ressalvas.',
+  'Profissional educado e pontual. Já é a terceira vez que chamo.',
+  'Resolveu um problema que outros dois não conseguiram.',
+  'Orçamento claro, sem surpresa no valor final.',
+  'Ótimo acabamento. A portaria já conhece, entrou sem burocracia.',
+  'Rápido e organizado. Voltaria a contratar.',
+  'Preço acima da média, mas o serviço compensou.',
+];
+
+export const REVIEW_COMMENTS_MIXED = [
+  'Serviço bem feito, mas atrasou cerca de uma hora.',
+  'Resolveu o problema. A comunicação por mensagem poderia ser melhor.',
+  'Bom trabalho, embora tenha precisado voltar para um ajuste.',
+  'Atendeu bem, só achei o orçamento um pouco alto.',
+];
+
+export const SERVICE_REQUEST_SUBJECTS = [
+  'Troca de tomadas da sala', 'Vazamento embaixo da pia', 'Instalação de ar-condicionado no quarto',
+  'Montagem de armário planejado', 'Pintura da sala e do corredor', 'Limpeza pós-obra',
+  'Instalação de fechadura digital', 'Configuração da rede Wi-Fi', 'Poda das plantas da varanda',
+  'Higienização do ar-condicionado', 'Reparo no rejunte do banheiro', 'Passeio diário com o cachorro',
+];
