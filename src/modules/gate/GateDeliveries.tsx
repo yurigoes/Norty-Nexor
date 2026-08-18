@@ -124,7 +124,7 @@ export function GateDeliveries() {
       <div className="nx-grid-auto nx-mb-4">
         <StatCard label="Na portaria" value={pending.length} icon={<Package size={17} />} tone="warning" />
         <StatCard label="Retiradas hoje" value={pickedToday.length} icon={<PackageCheck size={17} />} tone="success" />
-        <StatCard label="Recebidas hoje" value={all.filter((d) => d.receivedAt.slice(0, 10) === today).length} icon={<Package size={17} />} tone="cyan" />
+        <StatCard label="Recebidas hoje" value={all.filter((d) => d.receivedAt.slice(0, 10) === today).length} icon={<Package size={17} />} tone="gold" />
       </div>
 
       <Card padding="none">
@@ -139,7 +139,7 @@ export function GateDeliveries() {
           mobileCard={(d) => (
             <div className="nx-stack nx-gap-3">
               <div className="nx-row nx-gap-3">
-                <span className="nx-list__icon nx-list__icon--cyan"><Package size={16} /></span>
+                <span className="nx-list__icon nx-list__icon--gold"><Package size={16} /></span>
                 <div className="nx-stack nx-grow">
                   <span className="nx-medium">{unitLabel(d.unitId)}</span>
                   <span className="nx-text-xs nx-text-subtle">{d.carrier} · prateleira {d.shelf}</span>

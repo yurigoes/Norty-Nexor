@@ -8,7 +8,7 @@ export function ProgressBar({
 }: {
   value: number;
   max?: number;
-  tone?: 'brand' | 'success' | 'warning' | 'danger' | 'cyan';
+  tone?: 'brand' | 'success' | 'warning' | 'danger' | 'gold';
   size?: 'sm' | 'md' | 'lg';
   label?: string;
   showValue?: boolean;

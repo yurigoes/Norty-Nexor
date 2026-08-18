@@ -21,7 +21,7 @@
   transition: all var(--duration-fast);
 }
 .nx-doc-cat:hover { border-color: var(--border-strong); }
-.nx-doc-cat.is-active { background: var(--nexor-navy); border-color: var(--nexor-navy); }
+.nx-doc-cat.is-active { background: var(--mh-black); border-color: var(--mh-black); }
 .nx-doc-cat span { font-size: var(--text-xs); color: var(--text-muted); }
 .nx-doc-cat strong { font-size: var(--text-lg); font-weight: var(--weight-bold); color: var(--text-strong); }
 .nx-doc-cat.is-active span { color: rgba(255, 255, 255, 0.6); }
@@ -39,7 +39,7 @@
   flex-shrink: 0;
 }
 .nx-doc-icon--xlsx { background: var(--success-bg); color: var(--success); }
-.nx-doc-icon--docx { background: var(--info-bg); color: var(--nexor-blue); }
+.nx-doc-icon--docx { background: var(--info-bg); color: var(--mh-ink); }
 .nx-doc-icon--jpg { background: var(--warning-bg); color: #b97706; }
 
 /* ---------------- Assembleias ---------------- */
@@ -62,7 +62,7 @@
   width: 28px;
   height: 28px;
   border-radius: var(--radius-xs);
-  background: var(--nexor-navy);
+  background: var(--mh-black);
   color: #fff;
   font-weight: var(--weight-bold);
   font-size: var(--text-sm);
@@ -77,8 +77,8 @@
   font-weight: var(--weight-medium);
   transition: all var(--duration-fast);
 }
-.nx-vote-option:hover:not(:disabled) { border-color: var(--nexor-blue); background: var(--nexor-blue-100); }
-.nx-vote-option.is-selected { border-color: var(--nexor-blue); background: var(--nexor-blue); color: #fff; }
+.nx-vote-option:hover:not(:disabled) { border-color: var(--mh-ink); background: var(--mh-ink-100); }
+.nx-vote-option.is-selected { border-color: var(--mh-ink); background: var(--mh-ink); color: #fff; }
 .nx-vote-option:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .nx-tally { display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-4); }
@@ -93,7 +93,7 @@
   gap: var(--space-5);
   padding: var(--space-6);
   border-radius: var(--radius-xl);
-  background: var(--gradient-navy);
+  background: var(--gradient-ink);
   color: #fff;
   position: relative;
   overflow: hidden;
@@ -106,7 +106,7 @@
   width: 280px;
   height: 280px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(32, 213, 232, 0.22), transparent 70%);
+  background: radial-gradient(circle, rgba(201, 162, 39, 0.22), transparent 70%);
 }
 .nx-profile-hero__info { position: relative; }
 .nx-profile-hero h1 { color: #fff; font-size: var(--text-2xl); }
@@ -147,7 +147,7 @@
   height: 34px;
   border-radius: var(--radius-sm);
   background: var(--gradient-brand);
-  color: #fff;
+  color: var(--mh-black);
   flex-shrink: 0;
 }
 .nx-chat__bubble {
@@ -158,7 +158,7 @@
   font-size: var(--text-base);
   line-height: var(--leading-normal);
 }
-.nx-chat__msg.is-user .nx-chat__bubble { background: var(--nexor-blue); border-color: var(--nexor-blue); color: #fff; }
+.nx-chat__msg.is-user .nx-chat__bubble { background: var(--mh-ink); border-color: var(--mh-ink); color: #fff; }
 .nx-chat__bubble ul { margin-top: var(--space-3); display: flex; flex-direction: column; gap: 6px; }
 .nx-chat__bubble li {
   font-size: var(--text-sm);
@@ -174,7 +174,7 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--nexor-cyan);
+  background: var(--mh-gold);
 }
 .nx-chat__composer {
   display: flex;
@@ -193,7 +193,7 @@
   color: var(--text-muted);
   transition: all var(--duration-fast);
 }
-.nx-chat__suggestion:hover { border-color: var(--nexor-blue); color: var(--nexor-blue); background: var(--nexor-blue-100); }
+.nx-chat__suggestion:hover { border-color: var(--mh-ink); color: var(--mh-ink); background: var(--mh-ink-100); }
 
 .nx-typing { display: inline-flex; gap: 4px; align-items: center; }
 .nx-typing span {

@@ -60,7 +60,7 @@ export function ProfilePage() {
           <h1>{user.name}</h1>
           <p>{user.jobTitle ?? ROLE_LABEL[user.role]}</p>
           <div className="nx-row nx-gap-2 nx-wrap" style={{ marginTop: 'var(--space-3)' }}>
-            <Badge tone="cyan">{ROLE_LABEL[user.role]}</Badge>
+            <Badge tone="gold">{ROLE_LABEL[user.role]}</Badge>
             {user.unitId && <Badge tone="brand">{unitLabel(user.unitId)}</Badge>}
             <Badge tone="neutral">{condominium.shortName}</Badge>
           </div>

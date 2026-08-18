@@ -1,5 +1,5 @@
 /* =========================================================
-   NEXOR — Shell da aplicação
+   my Home — Shell da aplicação
    Sidebar navy no desktop · bottom navigation no mobile
    ========================================================= */
 
@@ -96,7 +96,7 @@
 }
 .nx-sidebar__link:hover { background: rgba(255, 255, 255, 0.06); color: #fff; text-decoration: none; }
 .nx-sidebar__link.is-active {
-  background: linear-gradient(90deg, rgba(23, 107, 255, 0.28), rgba(32, 213, 232, 0.1));
+  background: linear-gradient(90deg, rgba(201, 162, 39, 0.22), rgba(201, 162, 39, 0.02));
   color: #fff;
 }
 .nx-sidebar__link.is-active::before {
@@ -108,15 +108,15 @@
   width: 3px;
   height: 20px;
   border-radius: 0 3px 3px 0;
-  background: var(--nexor-cyan);
+  background: var(--mh-gold);
 }
 .nx-sidebar__icon { flex-shrink: 0; }
 .is-collapsed .nx-sidebar__link { justify-content: center; padding: 11px 0; }
 .is-collapsed .nx-sidebar__link.is-active::before { left: -9px; }
 
 .nx-sidebar__badge {
-  background: var(--nexor-blue);
-  color: #fff;
+  background: var(--mh-gold);
+  color: var(--mh-black);
   font-size: var(--text-2xs);
   font-weight: var(--weight-bold);
   min-width: 20px;
@@ -136,7 +136,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--nexor-cyan);
+  background: var(--mh-gold);
 }
 
 .nx-sidebar__foot {
@@ -195,7 +195,7 @@
   height: 30px;
   border-radius: var(--radius-xs);
   background: var(--gradient-brand);
-  color: #fff;
+  color: var(--mh-black);
   flex-shrink: 0;
 }
 .nx-topbar__condo-name { font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--text-strong); text-align: left; max-width: 200px; }
@@ -203,7 +203,7 @@
 
 .nx-condo-menu { min-width: 300px; }
 .nx-condo-menu__list { max-height: 380px; overflow-y: auto; }
-.nx-dropdown__item.is-active { background: var(--nexor-blue-100); }
+.nx-dropdown__item.is-active { background: var(--mh-ink-100); }
 .nx-dropdown__scrim { position: fixed; inset: 0; z-index: -1; }
 
 .nx-topbar__search {
@@ -308,7 +308,7 @@
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(8, 17, 31, 0.5);
+    background: rgba(10, 11, 13, 0.5);
     z-index: calc(var(--z-sidebar) - 1);
     animation: nx-fade-in var(--duration-fast) var(--ease-out);
   }
@@ -342,7 +342,7 @@
     transition: color var(--duration-fast);
   }
   .nx-bottomnav__item:hover { text-decoration: none; }
-  .nx-bottomnav__item.is-active { color: var(--nexor-blue); }
+  .nx-bottomnav__item.is-active { color: var(--mh-ink); }
   .nx-bottomnav__icon { position: relative; display: flex; }
   .nx-bottomnav__item.is-active .nx-bottomnav__icon::after {
     content: '';

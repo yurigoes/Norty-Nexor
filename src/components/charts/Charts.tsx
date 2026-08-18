@@ -1,5 +1,5 @@
 /**
- * Gráficos NEXOR — SVG próprio, responsivo e alinhado aos tokens da marca.
+ * Gráficos my Home — SVG próprio, responsivo e alinhado aos tokens da marca.
  * Sem dependências externas: mantém o bundle leve e o controle visual total.
  */
 import { useId, useMemo, useState } from 'react';
@@ -93,7 +93,7 @@ export function AreaChart({
             x2={pad + hover * step}
             y1={pad - 8}
             y2={height - pad}
-            stroke="var(--nexor-blue)"
+            stroke="var(--mh-ink)"
             strokeWidth="1"
             strokeDasharray="3 3"
           />
@@ -177,7 +177,7 @@ export function BarChart({
         })}
         {labels.map((_, gi) => (
           <g key={gi} onMouseEnter={() => setHover(gi)} onMouseLeave={() => setHover(null)}>
-            <rect x={pad + gi * groupWidth} y={0} width={groupWidth} height={height} fill={hover === gi ? 'rgba(23,107,255,0.04)' : 'transparent'} />
+            <rect x={pad + gi * groupWidth} y={0} width={groupWidth} height={height} fill={hover === gi ? 'rgba(201, 162, 39,0.04)' : 'transparent'} />
             {series.map((s, si) => {
               const v = s.points[gi]?.value ?? 0;
               const h = (v / max) * (height - pad * 2);
@@ -311,7 +311,7 @@ export function RankBars({
 
 export function Sparkline({
   values,
-  color = 'var(--nexor-blue)',
+  color = 'var(--mh-ink)',
   height = 36,
   width = 120,
 }: {

@@ -1,5 +1,5 @@
 /* =========================================================
-   NEXOR — Gerador do dataset de demonstração
+   my Home — Gerador do dataset de demonstração
    ---------------------------------------------------------
    Constrói o "Residencial Parque Central" completo a partir de
    uma semente fixa. Determinístico: o mesmo condomínio,
@@ -9,7 +9,7 @@
 import type {
   AccessLog, Announcement, Assembly, AuditEntry, Camera, CommonArea, CondoEvent, Condominium,
   Delivery, DeviceSession, DocumentFile, Gate, Incident, Invoice, LedgerEntry, MaintenanceOrder,
-  NexorDatabase, Reservation, Resident, Staff, Tenant, Ticket, Tower, Unit, User, Vehicle, Visitor,
+  MyHomeDatabase, Reservation, Resident, Staff, Tenant, Ticket, Tower, Unit, User, Vehicle, Visitor,
   AppNotification, Professional, ProfessionalCategory, ProfessionalReview, ServiceRequest,
 } from '../types';
 import {
@@ -20,6 +20,9 @@ import {
 } from './random';
 
 export const DB_VERSION = 1;
+/* A semente é um valor arbitrário e permanece com o nome antigo de
+   propósito: alterá-la reconstruiria outro condomínio, com outros
+   moradores, placas e históricos. O rótulo não aparece na interface. */
 export const SEED_KEY = 'nexor-parque-central';
 
 /* ---------------- Helpers de data (sempre em horário local) ---------------- */
@@ -81,7 +84,7 @@ const PORTFOLIO_CONDOS = [
    Gerador
    ========================================================= */
 
-export function generateDatabase(now = new Date()): NexorDatabase {
+export function generateDatabase(now = new Date()): MyHomeDatabase {
   const rng = new Rng(SEED_KEY);
   const today = new Date(now);
   today.setHours(0, 0, 0, 0);
@@ -225,7 +228,7 @@ export function generateDatabase(now = new Date()): NexorDatabase {
     userId: 'user-morador',
     name: 'Carlos Almeida',
     document: '327.418.905-22',
-    email: 'morador@nexor.test',
+    email: 'morador@myhome.test',
     phone: '(11) 98214-7730',
     type: 'proprietario',
     active: true,
@@ -289,7 +292,7 @@ export function generateDatabase(now = new Date()): NexorDatabase {
     {
       id: 'user-morador',
       name: 'Carlos Almeida',
-      email: 'morador@nexor.test',
+      email: 'morador@myhome.test',
       password: '123456',
       role: 'morador',
       tenantId,
@@ -303,7 +306,7 @@ export function generateDatabase(now = new Date()): NexorDatabase {
     {
       id: 'user-portaria',
       name: 'Marcos Vieira',
-      email: 'portaria@nexor.test',
+      email: 'portaria@myhome.test',
       password: '123456',
       role: 'portaria',
       tenantId,
@@ -315,7 +318,7 @@ export function generateDatabase(now = new Date()): NexorDatabase {
     {
       id: 'user-sindico',
       name: 'Helena Duarte',
-      email: 'sindico@nexor.test',
+      email: 'sindico@myhome.test',
       password: '123456',
       role: 'sindico',
       tenantId,
@@ -328,7 +331,7 @@ export function generateDatabase(now = new Date()): NexorDatabase {
     {
       id: 'user-admin',
       name: 'Ricardo Monteiro',
-      email: 'admin@nexor.test',
+      email: 'admin@myhome.test',
       password: '123456',
       role: 'administrador',
       tenantId,
@@ -340,7 +343,7 @@ export function generateDatabase(now = new Date()): NexorDatabase {
     {
       id: 'user-administradora',
       name: 'Beatriz Salgado',
-      email: 'administradora@nexor.test',
+      email: 'administradora@myhome.test',
       password: '123456',
       role: 'administradora',
       tenantId,
@@ -633,7 +636,7 @@ interface AssembleInput {
   demoUnit: Unit; demoResident: Resident; occupiedUnits: Unit[]; unitById: Map<string, Unit>;
 }
 
-function assemble(input: AssembleInput): NexorDatabase {
+function assemble(input: AssembleInput): MyHomeDatabase {
   const {
     rng, condoId, tenants, condominiums, towers, units, residents, users, commonAreas,
     gates, cameras, visitors, staff, vehicles, events, demoUnit, demoResident, occupiedUnits,
@@ -654,9 +657,9 @@ function assemble(input: AssembleInput): NexorDatabase {
   const { professionals, professionalReviews, serviceRequests } = buildProfessionals(input);
 
   const sessions: DeviceSession[] = [
-    { id: 'sess-1', userId: 'user-morador', device: 'iPhone 15 Pro', browser: 'NEXOR App', location: 'São Paulo, SP', lastActiveAt: localIso(new Date()), current: true },
+    { id: 'sess-1', userId: 'user-morador', device: 'iPhone 15 Pro', browser: 'my Home App', location: 'São Paulo, SP', lastActiveAt: localIso(new Date()), current: true },
     { id: 'sess-2', userId: 'user-morador', device: 'MacBook Air', browser: 'Safari 18', location: 'São Paulo, SP', lastActiveAt: pastTime(-2, 22, 14), current: false },
-    { id: 'sess-3', userId: 'user-morador', device: 'iPad Air', browser: 'NEXOR App', location: 'Campos do Jordão, SP', lastActiveAt: pastTime(-11, 9, 30), current: false },
+    { id: 'sess-3', userId: 'user-morador', device: 'iPad Air', browser: 'my Home App', location: 'Campos do Jordão, SP', lastActiveAt: pastTime(-11, 9, 30), current: false },
   ];
 
   void tenants; void towers; void units; void residents; void users; void commonAreas;
@@ -767,7 +770,7 @@ function buildAccessLogs({ now, rng, condoId, residents, vehicles, staff, visito
           gateName: gate.name,
           plate: plateValue,
           at: pastTime(dayOffset, hour, minute),
-          registeredBy: method === 'manual' ? rng.pick(porters) : 'Sistema NEXOR',
+          registeredBy: method === 'manual' ? rng.pick(porters) : 'Sistema my Home',
           method,
           authorized: rng.bool(0.994),
         });
@@ -777,10 +780,10 @@ function buildAccessLogs({ now, rng, condoId, residents, vehicles, staff, visito
 
   // Acessos garantidos da unidade de demonstração (roteiro do MVP)
   const demoAccesses: Omit<AccessLog, 'id' | 'condominiumId'>[] = [
-    { unitId: demoUnit.id, subjectType: 'morador', subjectName: 'Carlos Almeida', direction: 'saida', gateId: 'gate-garagem', gateName: 'Portão Garagem', plate: 'ABC1D23', at: pastTime(0, 7, 48), registeredBy: 'Sistema NEXOR', method: 'placa', authorized: true },
+    { unitId: demoUnit.id, subjectType: 'morador', subjectName: 'Carlos Almeida', direction: 'saida', gateId: 'gate-garagem', gateName: 'Portão Garagem', plate: 'ABC1D23', at: pastTime(0, 7, 48), registeredBy: 'Sistema my Home', method: 'placa', authorized: true },
     { unitId: demoUnit.id, subjectType: 'funcionario', subjectName: 'Maria Santos', direction: 'entrada', gateId: 'gate-servico', gateName: 'Portão de Serviço', at: pastTime(0, 8, 2), registeredBy: 'Ana Paula Reis', method: 'biometria', authorized: true },
     { unitId: demoUnit.id, subjectType: 'entrega', subjectName: 'Mercado Livre', direction: 'entrada', gateId: 'gate-servico', gateName: 'Portão de Serviço', at: pastTime(0, 9, 26), registeredBy: 'Marcos Vieira', method: 'manual', authorized: true },
-    { unitId: demoUnit.id, subjectType: 'morador', subjectName: 'Juliana Almeida', direction: 'entrada', gateId: 'gate-garagem', gateName: 'Portão Garagem', plate: 'RFT4J81', at: pastTime(0, 9, 55), registeredBy: 'Sistema NEXOR', method: 'placa', authorized: true },
+    { unitId: demoUnit.id, subjectType: 'morador', subjectName: 'Juliana Almeida', direction: 'entrada', gateId: 'gate-garagem', gateName: 'Portão Garagem', plate: 'RFT4J81', at: pastTime(0, 9, 55), registeredBy: 'Sistema my Home', method: 'placa', authorized: true },
   ];
   demoAccesses.forEach((a, i) => logs.push({ id: `acc-demo-${i + 1}`, condominiumId: condoId, ...a }));
 
@@ -1040,7 +1043,7 @@ function buildTickets({ rng, condoId, occupiedUnits, residents, demoUnit }: Asse
       category,
       location: rng.pick(locations),
       title,
-      description: `${title}. Registrado pelo aplicativo NEXOR com foto anexada para conferência da equipe.`,
+      description: `${title}. Registrado pelo aplicativo my Home com foto anexada para conferência da equipe.`,
       status,
       priority: rng.weighted([['normal', 54], ['baixa', 18], ['alta', 22], ['urgente', 6]]),
       openedBy: resident?.name ?? 'Administração',
@@ -1191,7 +1194,7 @@ function buildAnnouncements({ rng, condoId }: AssembleInput): Announcement[] {
     ['Assembleia Geral Ordinária', 'Convocação para a Assembleia Geral Ordinária. Pauta: reforma da academia, aprovação das contas e eleição do conselho fiscal. Presença de todos os condôminos é essencial para o quórum.', 'urgente', { kind: 'todos', label: 'Todos os moradores' }, -2],
     ['Nova rotina de coleta seletiva', 'A partir de segunda-feira a coleta seletiva passa a ocorrer às terças e quintas. Utilize os contêineres identificados no subsolo 1.', 'normal', { kind: 'todos', label: 'Todos os moradores' }, -4],
     ['Interdição parcial da garagem S2', 'A área próxima às vagas 40 a 68 ficará interditada para reparo de infiltração entre os dias 18 e 20.', 'importante', { kind: 'todos', label: 'Todos os moradores' }, -5],
-    ['Horário de funcionamento da academia', 'A academia funciona das 05h às 23h. Reserve seu horário pelo aplicativo NEXOR para garantir a capacidade máxima de 24 pessoas.', 'normal', { kind: 'todos', label: 'Todos os moradores' }, -8],
+    ['Horário de funcionamento da academia', 'A academia funciona das 05h às 23h. Reserve seu horário pelo aplicativo my Home para garantir a capacidade máxima de 24 pessoas.', 'normal', { kind: 'todos', label: 'Todos os moradores' }, -8],
     ['Atualização do regimento interno', 'O regimento interno foi atualizado com as deliberações da última assembleia. O documento está disponível na biblioteca do aplicativo.', 'importante', { kind: 'todos', label: 'Todos os moradores' }, -12],
     ['Dedetização das áreas comuns', 'A dedetização será realizada no sábado, das 08h às 12h. Mantenha portas e janelas das áreas comuns fechadas.', 'normal', { kind: 'todos', label: 'Todos os moradores' }, -16],
     ['Instalação de carregadores para veículos elétricos', 'Foram instalados 8 pontos de recarga no subsolo 1. O cadastro é feito pelo aplicativo, na seção Veículos.', 'normal', { kind: 'todos', label: 'Todos os moradores' }, -21],
@@ -1627,7 +1630,7 @@ function buildProfessionals({ condoId, occupiedUnits, residents }: AssembleInput
       unitId: unit.id,
       residentName: resident?.name ?? unit.ownerName,
       service: rng.pick(SERVICE_REQUEST_SUBJECTS),
-      description: 'Solicitação enviada pelo aplicativo NEXOR.',
+      description: 'Solicitação enviada pelo aplicativo my Home.',
       status,
       createdAt: pastTime(-rng.int(1, 120), rng.int(8, 21), rng.int(0, 59)),
       quotedAmount: status === 'enviado' ? undefined : rng.int(120, 1800),

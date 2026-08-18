@@ -9,7 +9,7 @@ import { onSite, expectedToday } from '../../services/visitors';
 import { openIncidents } from '../../services/incidents';
 import { unitLabel } from '../../services/directory';
 import { CameraFeed } from '../../components/CameraFeed';
-import { NexorMark } from '../../brand/NexorMark';
+import { HomeMark } from '../../brand/HomeMark';
 import {
   Badge, Button, Card, CardHeader, EmptyState, PageHeader, StatusDot, Timeline,
 } from '../../components/ui';
@@ -41,16 +41,16 @@ export function ManagementSecurity() {
     <>
       <PageHeader
         icon={<ShieldCheck size={22} />}
-        title="NEXOR Security"
+        title="my Home Security"
         subtitle="Central de segurança: perímetro, câmeras, acessos e alertas"
         actions={<Button variant="secondary" to="/portaria/monitor" icon={<Video size={16} />}>Abrir modo monitor</Button>}
       />
 
       <section className="nx-security-hero">
         <div className="nx-security-hero__brand">
-          <NexorMark size={40} variant="light" />
+          <HomeMark size={40} variant="light" />
           <div>
-            <p className="nx-uppercase" style={{ color: 'var(--nexor-cyan)' }}>Central de segurança</p>
+            <p className="nx-uppercase" style={{ color: 'var(--mh-gold)' }}>Central de segurança</p>
             <h2>{condominium.name}</h2>
             <p className="nx-text-sm" style={{ color: 'rgba(255,255,255,0.55)' }}>
               {condominium.address} · {condominium.city}/{condominium.state}

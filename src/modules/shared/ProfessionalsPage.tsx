@@ -213,7 +213,7 @@ export function ProfessionalsPage({ subtitle }: { subtitle: string }) {
           <div className="nx-grid-auto nx-prof-stats nx-mb-4">
             <StatCard label="Profissionais no catálogo" value={catalog.length} icon={<Hammer size={17} />} tone="brand" />
             <StatCard label="Indicados pelo condomínio" value={recommendedCount} icon={<BadgeCheck size={17} />} tone="success" />
-            <StatCard label="Nota média" value={avgRating.toFixed(1)} icon={<Star size={17} />} tone="cyan" hint="Avaliações de moradores" />
+            <StatCard label="Nota média" value={avgRating.toFixed(1)} icon={<Star size={17} />} tone="gold" hint="Avaliações de moradores" />
             <StatCard label="Atendem urgência" value={catalog.filter((p) => p.emergency).length} icon={<Zap size={17} />} tone="warning" />
           </div>
 

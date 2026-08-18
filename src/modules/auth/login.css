@@ -10,7 +10,7 @@
 
 .nx-login__hero {
   position: relative;
-  background: var(--gradient-navy);
+  background: var(--gradient-ink);
   color: #fff;
   padding: var(--space-9) var(--space-8);
   display: flex;
@@ -69,9 +69,9 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--nexor-cyan);
+  background: var(--mh-gold);
   flex-shrink: 0;
-  box-shadow: 0 0 0 4px rgba(32, 213, 232, 0.15);
+  box-shadow: 0 0 0 4px rgba(201, 162, 39, 0.15);
 }
 
 .nx-login__hero-foot {
@@ -159,7 +159,7 @@
   transition: all var(--duration-fast);
 }
 .nx-login__account:hover {
-  border-color: var(--nexor-blue);
+  border-color: var(--mh-ink);
   box-shadow: var(--shadow-sm);
   transform: translateY(-1px);
 }
@@ -171,7 +171,7 @@
   height: 34px;
   border-radius: var(--radius-xs);
   background: var(--gradient-brand-soft);
-  color: var(--nexor-blue);
+  color: var(--mh-ink);
   flex-shrink: 0;
 }
 .nx-login__account-role { font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--text-strong); }

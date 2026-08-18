@@ -1,4 +1,6 @@
-const PALETTE = ['#176BFF', '#20D5E8', '#7C5CFF', '#0FB2C4', '#F59E0B', '#10B981', '#EC4899', '#0F57D8'];
+/* Tons escuros da paleta preto + dourado: o avatar leva texto branco,
+   então nenhum deles pode ficar claro a ponto de perder contraste. */
+const PALETTE = ['#8A6B10', '#7A4E20', '#2B2F37', '#1F5A52', '#7A2833', '#4F5A22', '#2F4761', '#5C4A8A'];
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);

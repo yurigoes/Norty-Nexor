@@ -51,7 +51,7 @@ const RESIDENT_NAV: NavGroup[] = [
       { to: '/app/comunicados', label: 'Comunicados', icon: Megaphone, permission: 'announcements.view' },
       { to: '/app/documentos', label: 'Documentos', icon: FolderOpen, permission: 'documents.view' },
       { to: '/app/assembleias', label: 'Assembleias', icon: Gavel, permission: 'assemblies.view' },
-      { to: '/app/concierge', label: 'NEXOR AI', icon: Sparkles, permission: 'concierge.use' },
+      { to: '/app/concierge', label: 'my Home AI', icon: Sparkles, permission: 'concierge.use' },
     ],
   },
 ];
@@ -85,7 +85,7 @@ const MANAGEMENT_NAV: NavGroup[] = [
     items: [
       { to: '/gestao', label: 'Dashboard', icon: LayoutDashboard, permission: 'dashboard.view', end: true },
       { to: '/gestao/acessos', label: 'Controle de acesso', icon: DoorOpen, permission: 'access.view' },
-      { to: '/gestao/seguranca', label: 'NEXOR Security', icon: ShieldCheck, permission: 'security.view' },
+      { to: '/gestao/seguranca', label: 'my Home Security', icon: ShieldCheck, permission: 'security.view' },
       { to: '/gestao/notificacoes', label: 'Notificações', icon: Bell, badge: 'notifications' },
     ],
   },
@@ -118,7 +118,7 @@ const MANAGEMENT_NAV: NavGroup[] = [
       { to: '/gestao/documentos', label: 'Documentos', icon: FolderOpen, permission: 'documents.view' },
       { to: '/gestao/assembleias', label: 'Assembleias', icon: Gavel, permission: 'assemblies.view' },
       { to: '/gestao/auditoria', label: 'Auditoria', icon: ScrollText, permission: 'audit.view' },
-      { to: '/gestao/concierge', label: 'NEXOR AI', icon: Sparkles, permission: 'concierge.use' },
+      { to: '/gestao/concierge', label: 'my Home AI', icon: Sparkles, permission: 'concierge.use' },
     ],
   },
   {
@@ -137,7 +137,7 @@ const PORTFOLIO_NAV: NavGroup[] = [
       { to: '/portfolio', label: 'Portfólio', icon: Network, end: true },
       { to: '/portfolio/indicadores', label: 'Indicadores', icon: LayoutDashboard },
       { to: '/portfolio/condominios', label: 'Condomínios', icon: Building2 },
-      { to: '/gestao/concierge', label: 'NEXOR AI', icon: Sparkles, permission: 'concierge.use' },
+      { to: '/gestao/concierge', label: 'my Home AI', icon: Sparkles, permission: 'concierge.use' },
       { to: '/gestao/auditoria', label: 'Auditoria', icon: ScrollText, permission: 'audit.view' },
       { to: '/gestao/configuracoes', label: 'Configurações', icon: Settings, permission: 'settings.manage' },
     ],
@@ -184,7 +184,7 @@ export function bottomNavFor(user: User): NavItem[] {
       { to: '/portfolio', label: 'Portfólio', icon: Network, end: true },
       { to: '/portfolio/indicadores', label: 'Indicadores', icon: LayoutDashboard },
       { to: '/portfolio/condominios', label: 'Condomínios', icon: Building2 },
-      { to: '/gestao/concierge', label: 'NEXOR AI', icon: Sparkles },
+      { to: '/gestao/concierge', label: 'my Home AI', icon: Sparkles },
       { to: '/app/perfil', label: 'Perfil', icon: UserCog },
     ];
   }

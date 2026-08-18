@@ -1,72 +1,90 @@
 /* =========================================================
-   NEXOR by Norty — Design Tokens
+   my Home by norty — Design Tokens
    Fonte única de verdade para cores, espaçamento, tipografia,
    raios, sombras, camadas e transições.
+
+   A paleta é preto + dourado. A divisão de papéis é rígida e
+   sustenta a leitura de seriedade e segurança:
+
+     grafite (--mh-ink)   ação primária, texto, superfícies escuras
+     dourado (--mh-gold)  acento de marca, destaque, conquista
+     vermelho (--danger)  só alerta real — nunca decoração
+
+   O dourado nunca recebe texto branco por cima: sobre dourado
+   o texto é preto, o que mantém o contraste acima de 7:1.
    ========================================================= */
 
 :root {
   /* ---------- Marca ---------- */
-  --nexor-navy: #08111f;
-  --nexor-navy-700: #0d1b2f;
-  --nexor-navy-600: #12253f;
-  --nexor-navy-500: #1a3255;
-  --nexor-blue: #176bff;
-  --nexor-blue-600: #0f57d8;
-  --nexor-blue-400: #4a8bff;
-  --nexor-blue-100: #e3edff;
-  --nexor-cyan: #20d5e8;
-  --nexor-cyan-600: #0fb2c4;
-  --nexor-cyan-100: #dcf8fc;
-  --nexor-white: #ffffff;
-  --nexor-gray: #64748b;
-  --nexor-background: #f5f7fa;
+  --mh-black: #0a0b0d;
+  --mh-black-700: #101216;
+  --mh-black-600: #171a20;
+  --mh-black-500: #23272f;
+
+  /* Grafite: é ele que carrega botões, seleção e foco. */
+  --mh-ink: #1a1d24;
+  --mh-ink-600: #0e1014;
+  --mh-ink-400: #3a3f49;
+  --mh-ink-100: #ecebe8;
+
+  /* Dourado: acento. `gold-600` é o tom legível sobre fundo claro. */
+  --mh-gold: #c9a227;
+  --mh-gold-600: #8a6b10;
+  --mh-gold-400: #e3c463;
+  --mh-gold-100: #f7f0da;
+
+  --mh-white: #ffffff;
+  --mh-gray: #6b7280;
+  --mh-background: #f4f3f0;
 
   /* ---------- Superfícies ---------- */
-  --surface-app: var(--nexor-background);
+  --surface-app: var(--mh-background);
   --surface-card: #ffffff;
   --surface-raised: #ffffff;
-  --surface-sunken: #eef2f7;
-  --surface-inverse: var(--nexor-navy);
-  --surface-hover: #f2f5f9;
-  --surface-active: #e8eef7;
+  --surface-sunken: #edebe7;
+  --surface-inverse: var(--mh-black);
+  --surface-hover: #f5f4f1;
+  --surface-active: #eae8e3;
 
   /* ---------- Texto ---------- */
-  --text-strong: #0b1729;
-  --text-default: #1f2b3d;
-  --text-muted: #64748b;
-  --text-subtle: #94a3b8;
+  --text-strong: #0e1013;
+  --text-default: #23262c;
+  --text-muted: #6b7280;
+  --text-subtle: #9aa0a8;
   --text-inverse: #ffffff;
-  --text-inverse-muted: #9fb3cd;
-  --text-brand: var(--nexor-blue);
+  --text-inverse-muted: #a9aeb6;
+  --text-brand: var(--mh-gold-600);
 
   /* ---------- Bordas ---------- */
-  --border-subtle: #e6ebf2;
-  --border-default: #d9e1ec;
-  --border-strong: #c3cfdf;
-  --border-inverse: rgba(255, 255, 255, 0.09);
+  --border-subtle: #e8e6e1;
+  --border-default: #dbd9d3;
+  --border-strong: #c4c1ba;
+  --border-inverse: rgba(255, 255, 255, 0.1);
 
   /* ---------- Semântica ---------- */
-  --success: #10b981;
-  --success-bg: #e7f8f1;
-  --success-border: #a9e6cd;
-  --warning: #f59e0b;
-  --warning-bg: #fef4e2;
-  --warning-border: #f6d99a;
-  --danger: #ef4444;
-  --danger-bg: #fdecec;
-  --danger-border: #f7b7b7;
-  --info: var(--nexor-blue);
-  --info-bg: var(--nexor-blue-100);
-  --info-border: #b9d2ff;
-  --neutral: var(--nexor-gray);
-  --neutral-bg: #eef1f6;
-  --neutral-border: #dbe2ec;
+  --success: #0e8f5f;
+  --success-bg: #e6f4ee;
+  --success-border: #a4d6c1;
+  /* Âmbar deliberadamente alaranjado: se ficasse próximo do dourado,
+     um aviso passaria por acento de marca. */
+  --warning: #db6e1e;
+  --warning-bg: #fceee1;
+  --warning-border: #f2c39c;
+  --danger: #c42b2b;
+  --danger-bg: #fbeaea;
+  --danger-border: #efb4b4;
+  --info: #3a5570;
+  --info-bg: #e9eef3;
+  --info-border: #c3d0dc;
+  --neutral: var(--mh-gray);
+  --neutral-bg: #f0efec;
+  --neutral-border: #dedbd5;
 
   /* ---------- Gradientes ---------- */
-  --gradient-brand: linear-gradient(135deg, var(--nexor-blue) 0%, var(--nexor-cyan) 100%);
-  --gradient-brand-soft: linear-gradient(135deg, rgba(23, 107, 255, 0.12) 0%, rgba(32, 213, 232, 0.12) 100%);
-  --gradient-navy: linear-gradient(165deg, #0b1930 0%, var(--nexor-navy) 55%, #060d18 100%);
-  --gradient-shell: linear-gradient(180deg, #0b1729 0%, #08111f 100%);
+  --gradient-brand: linear-gradient(135deg, #b89120 0%, #e0c368 100%);
+  --gradient-brand-soft: linear-gradient(135deg, rgba(201, 162, 39, 0.14) 0%, rgba(224, 195, 104, 0.14) 100%);
+  --gradient-ink: linear-gradient(165deg, #15181e 0%, var(--mh-black) 55%, #050608 100%);
+  --gradient-shell: linear-gradient(180deg, #101216 0%, #0a0b0d 100%);
 
   /* ---------- Espaçamento (escala 4) ---------- */
   --space-0: 0;
@@ -90,13 +108,13 @@
   --radius-pill: 999px;
 
   /* ---------- Sombras ---------- */
-  --shadow-xs: 0 1px 2px rgba(8, 17, 31, 0.05);
-  --shadow-sm: 0 1px 3px rgba(8, 17, 31, 0.07), 0 1px 2px rgba(8, 17, 31, 0.04);
-  --shadow-md: 0 6px 18px rgba(8, 17, 31, 0.08);
-  --shadow-lg: 0 18px 40px rgba(8, 17, 31, 0.12);
-  --shadow-xl: 0 32px 70px rgba(8, 17, 31, 0.18);
-  --shadow-focus: 0 0 0 3px rgba(23, 107, 255, 0.22);
-  --shadow-brand: 0 10px 26px rgba(23, 107, 255, 0.28);
+  --shadow-xs: 0 1px 2px rgba(10, 11, 13, 0.06);
+  --shadow-sm: 0 1px 3px rgba(10, 11, 13, 0.08), 0 1px 2px rgba(10, 11, 13, 0.05);
+  --shadow-md: 0 6px 18px rgba(10, 11, 13, 0.1);
+  --shadow-lg: 0 18px 40px rgba(10, 11, 13, 0.14);
+  --shadow-xl: 0 32px 70px rgba(10, 11, 13, 0.2);
+  --shadow-focus: 0 0 0 3px rgba(201, 162, 39, 0.38);
+  --shadow-brand: 0 10px 26px rgba(201, 162, 39, 0.3);
 
   /* ---------- Tipografia ---------- */
   --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
@@ -153,17 +171,21 @@
 
 /* Superfície escura reutilizável (portaria, security, login) */
 .theme-dark {
-  --surface-card: #0f1c30;
-  --surface-raised: #13243c;
-  --surface-sunken: #0a1524;
-  --surface-hover: #16294a;
+  --surface-card: #14171d;
+  --surface-raised: #1a1e25;
+  --surface-sunken: #0c0e12;
+  --surface-hover: #1f242c;
   --text-strong: #ffffff;
-  --text-default: #e6edf7;
-  --text-muted: #9fb3cd;
-  --text-subtle: #6d829e;
+  --text-default: #e9e8e4;
+  --text-muted: #a5a9b0;
+  --text-subtle: #757a83;
+  --text-brand: var(--mh-gold-400);
   --border-subtle: rgba(255, 255, 255, 0.07);
-  --border-default: rgba(255, 255, 255, 0.12);
-  --border-strong: rgba(255, 255, 255, 0.2);
+  --border-default: rgba(255, 255, 255, 0.13);
+  --border-strong: rgba(255, 255, 255, 0.22);
   --neutral-bg: rgba(255, 255, 255, 0.07);
   --neutral-border: rgba(255, 255, 255, 0.14);
+  /* Sobre preto o dourado claro é o tom legível. */
+  --mh-gold-600: var(--mh-gold-400);
+  --mh-gold-100: rgba(201, 162, 39, 0.16);
 }

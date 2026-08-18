@@ -142,7 +142,7 @@ export function GateVisitors() {
       />
 
       <div className="nx-grid-auto nx-mb-4">
-        <StatCard label="Esperados hoje" value={expected.length} icon={<UserCheck size={17} />} tone="cyan" />
+        <StatCard label="Esperados hoje" value={expected.length} icon={<UserCheck size={17} />} tone="gold" />
         <StatCard label="No condomínio" value={inside.length} icon={<CheckCircle2 size={17} />} tone="success" />
         <StatCard label="Saídas registradas" value={finished.length} icon={<LogOut size={17} />} tone="neutral" />
       </div>

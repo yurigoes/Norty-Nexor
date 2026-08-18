@@ -1,5 +1,5 @@
 /* =========================================================
-   NEXOR AI — Concierge
+   my Home AI — Concierge
    ---------------------------------------------------------
    ARQUITETURA
    O concierge é definido por uma interface de provedor. No MVP
@@ -294,7 +294,7 @@ function managerAnswer(intent: Intent, ctx: ConciergeContext): ConciergeAnswer {
 }
 
 export const localConciergeProvider: ConciergeProvider = {
-  id: 'nexor-local-mvp',
+  id: 'myhome-local-mvp',
   async ask(question, context) {
     // Latência simulada para preservar a percepção de processamento.
     await new Promise((resolve) => setTimeout(resolve, 520 + Math.random() * 420));

@@ -1,5 +1,5 @@
 /* =========================================================
-   NEXOR — Banco de dados provisório (Fase 1)
+   my Home — Banco de dados provisório (Fase 1)
    ---------------------------------------------------------
    ARQUITETURA
    O dataset base é RECONSTRUÍDO deterministicamente a cada
@@ -18,11 +18,11 @@
      os services e os tipos permanecem intactos.
    ========================================================= */
 
-import type { CollectionName, NexorDatabase } from './types';
+import type { CollectionName, MyHomeDatabase } from './types';
 import { DB_VERSION, generateDatabase } from './seed/generate';
 
-const JOURNAL_KEY = 'nexor.mvp.journal.v1';
-const TRIAL_KEY = 'nexor.mvp.trial.v1';
+const JOURNAL_KEY = 'myhome.mvp.journal.v1';
+const TRIAL_KEY = 'myhome.mvp.trial.v1';
 /** Janela de teste do MVP, conforme escopo da primeira fase. */
 export const TRIAL_DAYS = 30;
 
@@ -35,7 +35,7 @@ interface Journal {
   ops: JournalOp[];
 }
 
-let cache: NexorDatabase | null = null;
+let cache: MyHomeDatabase | null = null;
 let journal: Journal = { version: DB_VERSION, ops: [] };
 const listeners = new Set<() => void>();
 
@@ -63,7 +63,7 @@ function writeJournal() {
   }
 }
 
-function applyJournal(db: NexorDatabase) {
+function applyJournal(db: MyHomeDatabase) {
   for (const op of journal.ops) {
     const collection = db[op.c] as unknown as { id: string }[];
     if (!Array.isArray(collection)) continue;
@@ -111,7 +111,7 @@ export function getTrialInfo(): TrialInfo {
 
 /* ---------------- API do banco ---------------- */
 
-export function getDatabase(): NexorDatabase {
+export function getDatabase(): MyHomeDatabase {
   if (!cache) {
     journal = readJournal();
     cache = generateDatabase();

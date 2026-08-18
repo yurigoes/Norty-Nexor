@@ -27,8 +27,8 @@ export function ConciergePage() {
     id: (seq += 1),
     role: 'assistant',
     text: isManager
-      ? `Olá, ${firstName(user.name)}. Sou o concierge do NEXOR. Posso resumir a operação do ${condominium.shortName}, detalhar chamados, inadimplência, ocorrências e movimento de acessos.`
-      : `Olá, ${firstName(user.name)}. Sou o concierge do NEXOR. Posso ajudar com encomendas, boletos, reservas, visitantes, veículos e regras do condomínio.`,
+      ? `Olá, ${firstName(user.name)}. Sou o concierge do my Home. Posso resumir a operação do ${condominium.shortName}, detalhar chamados, inadimplência, ocorrências e movimento de acessos.`
+      : `Olá, ${firstName(user.name)}. Sou o concierge do my Home. Posso ajudar com encomendas, boletos, reservas, visitantes, veículos e regras do condomínio.`,
   }]);
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
@@ -60,9 +60,9 @@ export function ConciergePage() {
     <>
       <PageHeader
         icon={<Sparkles size={22} />}
-        title="NEXOR AI · Concierge"
+        title="my Home AI · Concierge"
         subtitle="Respostas construídas a partir dos dados reais do condomínio"
-        actions={<Badge tone="cyan">Provedor local · MVP</Badge>}
+        actions={<Badge tone="gold">Provedor local · MVP</Badge>}
       />
 
       <Card padding="none">

@@ -1,7 +1,8 @@
 /**
  * Composição visual abstrata da marca — malha de conexões e módulos
- * arquitetônicos. Usada como fundo do login e das telas de destaque.
- * Deliberadamente não figurativa: nenhuma fotografia de prédio.
+ * arquitetônicos em dourado sobre preto. Usada como fundo do login e das
+ * telas de destaque. Deliberadamente não figurativa: nenhuma fotografia
+ * de prédio.
  */
 export function BrandCanvas({ className = '' }: { className?: string }) {
   const nodes = [
@@ -17,16 +18,16 @@ export function BrandCanvas({ className = '' }: { className?: string }) {
     <svg viewBox="0 0 560 640" className={className} preserveAspectRatio="xMidYMid slice" aria-hidden="true">
       <defs>
         <linearGradient id="bc-line" x1="0" y1="0" x2="560" y2="640" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#176BFF" stopOpacity="0.85" />
-          <stop offset="1" stopColor="#20D5E8" stopOpacity="0.55" />
+          <stop stopColor="#C9A227" stopOpacity="0.8" />
+          <stop offset="1" stopColor="#E0C368" stopOpacity="0.45" />
         </linearGradient>
         <radialGradient id="bc-glow" cx="0.32" cy="0.28" r="0.75">
-          <stop stopColor="#176BFF" stopOpacity="0.42" />
-          <stop offset="1" stopColor="#08111F" stopOpacity="0" />
+          <stop stopColor="#C9A227" stopOpacity="0.24" />
+          <stop offset="1" stopColor="#0A0B0D" stopOpacity="0" />
         </radialGradient>
         <radialGradient id="bc-glow2" cx="0.78" cy="0.82" r="0.6">
-          <stop stopColor="#20D5E8" stopOpacity="0.3" />
-          <stop offset="1" stopColor="#08111F" stopOpacity="0" />
+          <stop stopColor="#E0C368" stopOpacity="0.16" />
+          <stop offset="1" stopColor="#0A0B0D" stopOpacity="0" />
         </radialGradient>
         <pattern id="bc-grid" width="40" height="40" patternUnits="userSpaceOnUse">
           <path d="M40 0H0V40" fill="none" stroke="rgba(255,255,255,0.045)" strokeWidth="1" />
@@ -58,8 +59,8 @@ export function BrandCanvas({ className = '' }: { className?: string }) {
 
       {nodes.map(([x, y], i) => (
         <g key={i}>
-          <circle cx={x} cy={y} r={i % 4 === 0 ? 5.5 : 3.5} fill={i % 3 === 0 ? '#20D5E8' : '#176BFF'} />
-          {i % 4 === 0 && <circle cx={x} cy={y} r="13" fill="none" stroke="#20D5E8" strokeOpacity="0.28" strokeWidth="1" />}
+          <circle cx={x} cy={y} r={i % 4 === 0 ? 5.5 : 3.5} fill={i % 3 === 0 ? '#E0C368' : '#C9A227'} />
+          {i % 4 === 0 && <circle cx={x} cy={y} r="13" fill="none" stroke="#C9A227" strokeOpacity="0.3" strokeWidth="1" />}
         </g>
       ))}
     </svg>

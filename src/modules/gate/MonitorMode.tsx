@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Car, DoorOpen, LogOut, Package, UserCheck, Users } from 'lucide-react';
 import { useAuthenticated } from '../../app/SessionContext';
-import { NexorLogo } from '../../brand/NexorLogo';
+import { HomeLogo } from '../../brand/HomeLogo';
 import { expectedToday, onSite } from '../../services/visitors';
 import { accessesToday, gates, recentAccesses } from '../../services/access';
 import { pendingDeliveries } from '../../services/deliveries';
@@ -46,7 +46,7 @@ export function MonitorMode() {
   return (
     <div className="nx-monitor theme-dark">
       <header className="nx-monitor__top">
-        <NexorLogo size="md" tone="light" />
+        <HomeLogo size="md" tone="light" />
         <div className="nx-monitor__title">
           <span>PORTARIA PRINCIPAL</span>
           <strong>{condominium.name}</strong>
@@ -142,7 +142,7 @@ export function MonitorMode() {
             <span className="nx-cam__live">● AO VIVO</span>
             <div className="nx-cam__meta">
               <span className="nx-cam__name">{camera.location}</span>
-              {camera.hasMotion && <Car size={14} color="#20D5E8" />}
+              {camera.hasMotion && <Car size={14} color="#C9A227" />}
             </div>
           </div>
         ))}

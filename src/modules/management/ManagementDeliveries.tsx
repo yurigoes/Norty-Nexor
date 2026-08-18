@@ -61,7 +61,7 @@ export function ManagementDeliveries() {
 
       <div className="nx-grid-auto nx-mb-4">
         <StatCard label="Aguardando retirada" value={number(pending.length)} icon={<Package size={17} />} tone="warning" />
-        <StatCard label="Recebidas hoje" value={number(all.filter((d) => d.receivedAt.slice(0, 10) === today).length)} icon={<Truck size={17} />} tone="cyan" />
+        <StatCard label="Recebidas hoje" value={number(all.filter((d) => d.receivedAt.slice(0, 10) === today).length)} icon={<Truck size={17} />} tone="gold" />
         <StatCard label="Retiradas hoje" value={number(all.filter((d) => d.pickedUpAt?.slice(0, 10) === today).length)} icon={<PackageCheck size={17} />} tone="success" />
         <StatCard label="Tempo médio de retirada" value={`${avgPickupHours} h`} icon={<Package size={17} />} tone="brand" hint="Da chegada à retirada" />
       </div>
@@ -91,7 +91,7 @@ export function ManagementDeliveries() {
           empty={<EmptyState icon={<Package size={24} />} title="Nenhuma encomenda encontrada" description="Ajuste os filtros para ampliar a busca." />}
           mobileCard={(d) => (
             <div className="nx-row nx-gap-3">
-              <span className="nx-list__icon nx-list__icon--cyan"><Package size={16} /></span>
+              <span className="nx-list__icon nx-list__icon--gold"><Package size={16} /></span>
               <div className="nx-stack nx-grow nx-gap-1">
                 <span className="nx-medium">{unitLabel(d.unitId)}</span>
                 <span className="nx-text-xs nx-text-subtle">{d.carrier} · {timeAgo(d.receivedAt)}</span>

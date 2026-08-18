@@ -24,7 +24,7 @@ import './resident.css';
 
 const QUICK_ACTIONS = [
   { to: '/app/visitantes?novo=1', label: 'Autorizar visitante', icon: UserPlus, tone: 'brand' },
-  { to: '/app/reservas', label: 'Reservar área', icon: CalendarPlus, tone: 'cyan' },
+  { to: '/app/reservas', label: 'Reservar área', icon: CalendarPlus, tone: 'gold' },
   { to: '/app/encomendas', label: 'Encomendas', icon: Package, tone: 'brand' },
   { to: '/app/financeiro', label: 'Boletos', icon: Wallet, tone: 'success' },
   { to: '/app/chamados?novo=1', label: 'Abrir chamado', icon: Wrench, tone: 'warning' },
@@ -201,7 +201,7 @@ export function ResidentHome() {
             <ul className="nx-list">
               {data.deliveries.slice(0, 4).map((d) => (
                 <li key={d.id} className="nx-list__item">
-                  <span className="nx-list__icon nx-list__icon--cyan"><Package size={16} /></span>
+                  <span className="nx-list__icon nx-list__icon--gold"><Package size={16} /></span>
                   <span className="nx-stack nx-grow">
                     <span className="nx-medium">{d.carrier}</span>
                     <span className="nx-text-xs nx-text-subtle">Prateleira {d.shelf} · {timeAgo(d.receivedAt)}</span>
@@ -325,7 +325,7 @@ export function ResidentHome() {
             <ul className="nx-list">
               {data.professionals.map((p) => (
                 <li key={p.id} className="nx-list__item">
-                  <span className="nx-list__icon nx-list__icon--cyan"><Hammer size={16} /></span>
+                  <span className="nx-list__icon nx-list__icon--gold"><Hammer size={16} /></span>
                   <span className="nx-stack nx-grow">
                     <span className="nx-medium nx-truncate">{p.name}</span>
                     <span className="nx-text-xs nx-text-subtle">{CATEGORY_LABEL[p.category]} · {p.jobsInCondo} atendimentos aqui</span>
@@ -345,7 +345,7 @@ export function ResidentHome() {
       <Link to="/app/concierge" className="nx-concierge-cta">
         <span className="nx-concierge-cta__icon"><Sparkles size={22} /></span>
         <span className="nx-stack nx-grow">
-          <strong>NEXOR AI · Concierge</strong>
+          <strong>my Home AI · Concierge</strong>
           <span>Pergunte sobre boletos, encomendas, reservas e regras do condomínio.</span>
         </span>
         <ArrowRight size={18} />

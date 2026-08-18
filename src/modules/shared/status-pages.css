@@ -18,7 +18,7 @@
   height: 66px;
   border-radius: var(--radius-lg);
   background: var(--gradient-brand-soft);
-  color: var(--nexor-blue);
+  color: var(--mh-ink);
   margin-top: var(--space-5);
 }
 .nx-status-page__icon.is-danger { background: var(--danger-bg); color: var(--danger); }

@@ -106,7 +106,7 @@ export function ManagementReservations() {
 
       <div className="nx-grid-auto nx-mb-4">
         <StatCard label="Aguardando aprovação" value={number(pending.length)} icon={<CalendarDays size={17} />} tone="warning" />
-        <StatCard label="Reservas hoje" value={number(reservationsOn(condominium.id, today).length)} icon={<CalendarDays size={17} />} tone="cyan" />
+        <StatCard label="Reservas hoje" value={number(reservationsOn(condominium.id, today).length)} icon={<CalendarDays size={17} />} tone="gold" />
         <StatCard label="Confirmadas futuras" value={number(upcoming.length)} icon={<Check size={17} />} tone="success" />
         <StatCard
           label="Receita de reservas"

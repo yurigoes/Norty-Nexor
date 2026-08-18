@@ -79,7 +79,7 @@ export function ManagementAudit() {
 
       <div className="nx-grid-auto nx-mb-4">
         <StatCard label="Registros na trilha" value={number(all.length)} icon={<ScrollText size={17} />} tone="brand" />
-        <StatCard label="Ações hoje" value={number(all.filter((a) => a.at.slice(0, 10) === today).length)} icon={<ShieldCheck size={17} />} tone="cyan" />
+        <StatCard label="Ações hoje" value={number(all.filter((a) => a.at.slice(0, 10) === today).length)} icon={<ShieldCheck size={17} />} tone="gold" />
         <StatCard label="Módulos monitorados" value={modules.length} icon={<ScrollText size={17} />} tone="neutral" />
         <StatCard label="Autores distintos" value={number(new Set(all.map((a) => a.actorName)).size)} icon={<ShieldCheck size={17} />} tone="success" />
       </div>

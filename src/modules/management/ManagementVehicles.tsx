@@ -71,7 +71,7 @@ export function ManagementVehicles() {
 
       <div className="nx-grid-auto nx-mb-4">
         <StatCard label="Total cadastrado" value={number(all.length)} icon={<Car size={17} />} tone="brand" />
-        <StatCard label="Carros" value={number(all.filter((v) => v.kind === 'carro').length)} icon={<Car size={17} />} tone="cyan" />
+        <StatCard label="Carros" value={number(all.filter((v) => v.kind === 'carro').length)} icon={<Car size={17} />} tone="gold" />
         <StatCard label="Motos" value={number(all.filter((v) => v.kind === 'moto').length)} icon={<Car size={17} />} tone="neutral" />
         <StatCard label="Suspensos" value={number(all.filter((v) => !v.authorized).length)} icon={<ShieldOff size={17} />} tone="danger" />
       </div>

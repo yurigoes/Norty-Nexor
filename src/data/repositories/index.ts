@@ -1,5 +1,5 @@
 /* =========================================================
-   NEXOR — Repositories
+   my Home — Repositories
    ---------------------------------------------------------
    Única porta de entrada da aplicação para os dados. Nenhum
    componente importa `db.ts` diretamente: eles conversam com
@@ -10,9 +10,9 @@
    ========================================================= */
 
 import { commit, getDatabase, nextId, remove } from '../db';
-import type { CollectionName, NexorDatabase } from '../types';
+import type { CollectionName, MyHomeDatabase } from '../types';
 
-type Entity<K extends CollectionName> = NexorDatabase[K][number];
+type Entity<K extends CollectionName> = MyHomeDatabase[K][number];
 
 export function all<K extends CollectionName>(collection: K): Entity<K>[] {
   return getDatabase()[collection] as Entity<K>[];

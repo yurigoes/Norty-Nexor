@@ -21,10 +21,10 @@ interface Gear {
 }
 
 const GEARS: Gear[] = [
-  { cx: 668, cy: 132, teeth: 16, radius: 86, color: '#176BFF', spin: 26 },
-  { cx: 800, cy: 76, teeth: 11, radius: 56, color: '#20D5E8', spin: -17 },
-  { cx: 794, cy: 200, teeth: 10, radius: 54, color: '#7C5CFF', spin: -16 },
-  { cx: 564, cy: 204, teeth: 8, radius: 40, color: '#10B981', spin: -12 },
+  { cx: 668, cy: 132, teeth: 16, radius: 86, color: '#C9A227', spin: 26 },
+  { cx: 800, cy: 76, teeth: 11, radius: 56, color: '#E0C368', spin: -17 },
+  { cx: 794, cy: 200, teeth: 10, radius: 54, color: '#B98A3E', spin: -16 },
+  { cx: 564, cy: 204, teeth: 8, radius: 40, color: '#8A8F98', spin: -12 },
 ];
 
 /** Perfil de um dente: fração do passo em raiz, subida, topo e descida. */
@@ -76,15 +76,15 @@ export function OperationsScene({ className = '' }: { className?: string }) {
           </linearGradient>
         ))}
         <radialGradient id={`${uid}-glow`} cx="0.76" cy="0.5" r="0.55">
-          <stop stopColor="#176BFF" stopOpacity="0.26" />
-          <stop offset="1" stopColor="#176BFF" stopOpacity="0" />
+          <stop stopColor="#C9A227" stopOpacity="0.22" />
+          <stop offset="1" stopColor="#C9A227" stopOpacity="0" />
         </radialGradient>
       </defs>
 
       <rect width="900" height="260" fill={`url(#${uid}-glow)`} />
 
       {/* Ligações entre a carteira e o mecanismo */}
-      <g stroke="#20D5E8" strokeOpacity="0.3" strokeWidth="1" fill="none">
+      <g stroke="#C9A227" strokeOpacity="0.28" strokeWidth="1" fill="none">
         <path d="M516 108 L584 118 M538 168 L590 148 M494 206 L564 204 M560 62 L612 92" />
         <path d="M452 74 L516 108 M452 74 L560 62 M470 156 L516 108 M470 156 L538 168 M420 122 L452 74 M420 122 L470 156 M432 196 L494 206 M494 206 L538 168" />
       </g>
@@ -94,7 +94,7 @@ export function OperationsScene({ className = '' }: { className?: string }) {
           key={i}
           className="nx-scene__node"
           cx={x} cy={y} r={r}
-          fill={i % 3 === 0 ? '#20D5E8' : '#4A8BFF'}
+          fill={i % 3 === 0 ? '#E0C368' : '#C9A227'}
           style={{ animationDelay: `${(i % 5) * 0.6}s` }}
         />
       ))}
@@ -107,7 +107,7 @@ export function OperationsScene({ className = '' }: { className?: string }) {
             style={{ animationDuration: `${Math.abs(g.spin)}s`, animationDirection: g.spin < 0 ? 'reverse' : 'normal' }}
           >
             <path d={gearPath(g.teeth, g.radius)} fill={`url(#${uid}-g${i})`} />
-            <circle r={g.radius * 0.5} fill="#08111F" opacity="0.55" />
+            <circle r={g.radius * 0.5} fill="#0A0B0D" opacity="0.55" />
             <circle r={g.radius * 0.5} fill="none" stroke={g.color} strokeWidth="2.5" strokeOpacity="0.8" />
             {/* Raios do cubo */}
             {[0, 1, 2, 3].map((k) => (

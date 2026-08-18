@@ -63,12 +63,12 @@ export function ManagementDashboard() {
       {/* ---------- Indicadores principais ---------- */}
       <div className="nx-dash-stats">
         <StatCard label="Moradores" value={number(snapshot.residents)} icon={<Users size={17} />} tone="brand" hint={`${percent(snapshot.occupancyRate)} de ocupação`} />
-        <StatCard label="Acessos hoje" value={number(snapshot.accessesToday)} icon={<DoorOpen size={17} />} tone="cyan" trend={{ value: '+8,2%', direction: 'up' }} />
+        <StatCard label="Acessos hoje" value={number(snapshot.accessesToday)} icon={<DoorOpen size={17} />} tone="gold" trend={{ value: '+8,2%', direction: 'up' }} />
         <StatCard label="Visitantes esperados" value={number(snapshot.expectedVisitors)} icon={<UserCheck size={17} />} tone="brand" hint={`${snapshot.onSiteVisitors} no condomínio`} />
         <StatCard label="Encomendas" value={number(snapshot.pendingDeliveries)} icon={<Package size={17} />} tone="warning" hint="Aguardando retirada" />
         <StatCard label="Chamados abertos" value={number(snapshot.openTickets)} icon={<Wrench size={17} />} tone="warning" />
         <StatCard label="Inadimplência" value={percent(finance.delinquencyRate)} icon={<Receipt size={17} />} tone={finance.delinquencyRate > 6 ? 'danger' : 'success'} trend={{ value: '-0,4 p.p.', direction: 'down', positive: true }} />
-        <StatCard label="Reservas hoje" value={number(snapshot.reservationsToday)} icon={<CalendarDays size={17} />} tone="cyan" />
+        <StatCard label="Reservas hoje" value={number(snapshot.reservationsToday)} icon={<CalendarDays size={17} />} tone="gold" />
         <StatCard label="Ocorrências" value={number(snapshot.openIncidents)} icon={<AlertTriangle size={17} />} tone={snapshot.openIncidents > 5 ? 'danger' : 'neutral'} hint="Em aberto" />
       </div>
 
@@ -83,8 +83,8 @@ export function ManagementDashboard() {
           <AreaChart
             height={240}
             series={[
-              { name: 'Entradas', color: 'var(--nexor-blue)', points: data.byHour.map((h) => ({ label: h.label, value: h.entradas })) },
-              { name: 'Saídas', color: 'var(--nexor-cyan)', points: data.byHour.map((h) => ({ label: h.label, value: h.saidas })) },
+              { name: 'Entradas', color: 'var(--mh-ink)', points: data.byHour.map((h) => ({ label: h.label, value: h.entradas })) },
+              { name: 'Saídas', color: 'var(--mh-gold)', points: data.byHour.map((h) => ({ label: h.label, value: h.saidas })) },
             ]}
           />
         </Card>
@@ -96,7 +96,7 @@ export function ManagementDashboard() {
             formatValue={(v) => currencyCompact(v)}
             series={[
               { name: 'Receitas', color: 'var(--success)', points: data.series.map((s) => ({ label: s.label, value: s.revenue })) },
-              { name: 'Despesas', color: 'var(--nexor-blue)', points: data.series.map((s) => ({ label: s.label, value: s.expenses })) },
+              { name: 'Despesas', color: 'var(--mh-ink)', points: data.series.map((s) => ({ label: s.label, value: s.expenses })) },
             ]}
           />
         </Card>
@@ -107,7 +107,7 @@ export function ManagementDashboard() {
           <CardHeader title="Volume diário de acessos" subtitle="Últimos dias registrados" />
           <AreaChart
             height={200}
-            series={[{ name: 'Acessos', color: 'var(--nexor-blue)', points: data.byDay }]}
+            series={[{ name: 'Acessos', color: 'var(--mh-ink)', points: data.byDay }]}
           />
         </Card>
 
@@ -195,8 +195,8 @@ export function ManagementDashboard() {
               centerValue={percent(snapshot.occupancyRate, 0)}
               centerLabel="ocupação"
               data={[
-                { label: 'Ocupadas', value: data.allUnits.filter((u) => u.status === 'ocupada').length, color: 'var(--nexor-blue)' },
-                { label: 'Alugadas', value: data.allUnits.filter((u) => u.status === 'alugada').length, color: 'var(--nexor-cyan)' },
+                { label: 'Ocupadas', value: data.allUnits.filter((u) => u.status === 'ocupada').length, color: 'var(--mh-ink)' },
+                { label: 'Alugadas', value: data.allUnits.filter((u) => u.status === 'alugada').length, color: 'var(--mh-gold)' },
                 { label: 'Vagas', value: data.allUnits.filter((u) => u.status === 'vaga').length, color: 'var(--border-strong)' },
                 { label: 'Reformando', value: data.allUnits.filter((u) => u.status === 'reformando').length, color: 'var(--warning)' },
               ]}
@@ -272,7 +272,7 @@ export function ManagementDashboard() {
             <ul className="nx-list">
               {data.reservations.map((r) => (
                 <li key={r.id} className="nx-list__item">
-                  <span className="nx-list__icon nx-list__icon--cyan"><CalendarDays size={16} /></span>
+                  <span className="nx-list__icon nx-list__icon--gold"><CalendarDays size={16} /></span>
                   <span className="nx-stack nx-grow">
                     <span className="nx-medium nx-truncate">{areaName(r.areaId)}</span>
                     <span className="nx-text-xs nx-text-subtle">{r.slot} · {unitLabel(r.unitId)}</span>

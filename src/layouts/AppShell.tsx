@@ -4,7 +4,7 @@ import {
   Bell, ChevronDown, LogOut, Menu, PanelLeftClose, PanelLeft, Search, Settings, Sparkles,
   UserCog, X, Building2, RotateCcw,
 } from 'lucide-react';
-import { NexorLogo } from '../brand/NexorLogo';
+import { HomeLogo } from '../brand/HomeLogo';
 import { useAuthenticated } from '../app/SessionContext';
 import { bottomNavFor, navigationFor, type NavItem } from '../app/navigation';
 import { ROLE_LABEL } from '../services/permissions';
@@ -78,7 +78,7 @@ export function AppShell() {
       <aside className={`nx-sidebar ${mobileNavOpen ? 'is-open' : ''}`}>
         <div className="nx-sidebar__head">
           <NavLink to="/" className="nx-sidebar__brand">
-            {collapsed ? <NexorLogo variant="mark" size="sm" tone="light" /> : <NexorLogo size="sm" tone="light" />}
+            {collapsed ? <HomeLogo variant="mark" size="sm" tone="light" /> : <HomeLogo size="sm" tone="light" />}
           </NavLink>
           <button className="nx-sidebar__collapse nx-hide-mobile" onClick={toggleCollapsed} aria-label="Recolher menu">
             {collapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
@@ -216,7 +216,7 @@ export function AppShell() {
                       <UserCog size={16} /><span>Meu perfil</span>
                     </button>
                     <button className="nx-dropdown__item" onClick={() => navigate('/app/concierge')}>
-                      <Sparkles size={16} /><span>NEXOR AI</span>
+                      <Sparkles size={16} /><span>my Home AI</span>
                     </button>
                     <button className="nx-dropdown__item" onClick={() => navigate('/gestao/configuracoes')}>
                       <Settings size={16} /><span>Configurações</span>

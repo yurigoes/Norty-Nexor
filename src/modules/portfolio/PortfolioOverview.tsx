@@ -7,7 +7,7 @@ import { useAuthenticated } from '../../app/SessionContext';
 import { portfolioSnapshot } from '../../services/analytics';
 import { byId } from '../../data/repositories';
 import type { Condominium, Tenant } from '../../data/types';
-import { NexorMark } from '../../brand/NexorMark';
+import { HomeMark } from '../../brand/HomeMark';
 import {
   Badge, Button, Card, CardHeader, EmptyState, PageHeader, ProgressBar, SearchInput, StatCard,
 } from '../../components/ui';
@@ -62,9 +62,9 @@ export function PortfolioOverview() {
         <OperationsScene className="nx-portfolio-hero__scene" />
         <span className="nx-portfolio-hero__veil" />
         <div className="nx-portfolio-hero__brand">
-          <NexorMark size={44} variant="light" />
+          <HomeMark size={44} variant="light" />
           <div>
-            <p className="nx-uppercase" style={{ color: 'var(--nexor-cyan)' }}>Minha administradora</p>
+            <p className="nx-uppercase" style={{ color: 'var(--mh-gold)' }}>Minha administradora</p>
             <h2>{tenant.legalName}</h2>
             <p className="nx-text-sm" style={{ color: 'rgba(255,255,255,0.55)' }}>
               {tenant.document} · {tenant.city}/{tenant.state} · plano {tenant.plan}
@@ -91,7 +91,7 @@ export function PortfolioOverview() {
         />
         <StatCard label="Inadimplência média" value={percent(snapshot.averageDelinquency)} icon={<TrendingUp size={17} />} tone={snapshot.averageDelinquency > 6 ? 'danger' : 'brand'} />
         <StatCard label="Chamados abertos" value={number(snapshot.openTickets)} icon={<Wrench size={17} />} tone="warning" hint="Somatório da carteira" />
-        <StatCard label="Unidades por condomínio" value={number(Math.round(snapshot.units / snapshot.condominiums))} icon={<Building2 size={17} />} tone="cyan" hint="Média" />
+        <StatCard label="Unidades por condomínio" value={number(Math.round(snapshot.units / snapshot.condominiums))} icon={<Building2 size={17} />} tone="gold" hint="Média" />
       </div>
 
       <div className="nx-portfolio-grid">

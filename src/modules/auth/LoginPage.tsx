@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { ArrowRight, Building2, KeyRound, LayoutDashboard, Lock, Mail, ShieldCheck, User } from 'lucide-react';
-import { NexorLogo } from '../../brand/NexorLogo';
+import { HomeLogo } from '../../brand/HomeLogo';
 import { BrandCanvas } from '../../brand/BrandCanvas';
 import { useSession } from '../../app/SessionContext';
 import { homeRouteFor } from '../../app/navigation';
@@ -11,11 +11,11 @@ import { Button, Input, Modal } from '../../components/ui';
 import './login.css';
 
 const DEMO_ACCOUNTS = [
-  { email: 'morador@nexor.test', role: 'morador' as const, icon: User, detail: 'Carlos Almeida · Torre A · Apto 1204' },
-  { email: 'portaria@nexor.test', role: 'portaria' as const, icon: ShieldCheck, detail: 'Marcos Vieira · Portaria Principal' },
-  { email: 'sindico@nexor.test', role: 'sindico' as const, icon: LayoutDashboard, detail: 'Helena Duarte · Mandato 2025–2027' },
-  { email: 'admin@nexor.test', role: 'administrador' as const, icon: KeyRound, detail: 'Ricardo Monteiro · Meridian Administração' },
-  { email: 'administradora@nexor.test', role: 'administradora' as const, icon: Building2, detail: 'Beatriz Salgado · 24 condomínios' },
+  { email: 'morador@myhome.test', role: 'morador' as const, icon: User, detail: 'Carlos Almeida · Torre A · Apto 1204' },
+  { email: 'portaria@myhome.test', role: 'portaria' as const, icon: ShieldCheck, detail: 'Marcos Vieira · Portaria Principal' },
+  { email: 'sindico@myhome.test', role: 'sindico' as const, icon: LayoutDashboard, detail: 'Helena Duarte · Mandato 2025–2027' },
+  { email: 'admin@myhome.test', role: 'administrador' as const, icon: KeyRound, detail: 'Ricardo Monteiro · Meridian Administração' },
+  { email: 'administradora@myhome.test', role: 'administradora' as const, icon: Building2, detail: 'Beatriz Salgado · 24 condomínios' },
 ];
 
 export function LoginPage() {
@@ -57,7 +57,7 @@ export function LoginPage() {
       <section className="nx-login__hero">
         <BrandCanvas className="nx-login__canvas" />
         <div className="nx-login__hero-content">
-          <NexorLogo size="xl" tone="light" />
+          <HomeLogo size="xl" tone="light" />
           <h1 className="nx-login__headline">O sistema operacional do condomínio.</h1>
           <p className="nx-login__lead">
             Moradores, portaria, segurança, financeiro e administração conectados
@@ -72,15 +72,15 @@ export function LoginPage() {
           </ul>
         </div>
         <footer className="nx-login__hero-foot">
-          <span>NEXOR · Plataforma de gestão condominial</span>
-          <span>by Norty</span>
+          <span>my Home · Plataforma de gestão condominial</span>
+          <span>by norty</span>
         </footer>
       </section>
 
       <section className="nx-login__panel">
         <div className="nx-login__panel-inner">
           <div className="nx-login__mobile-brand">
-            <NexorLogo size="lg" />
+            <HomeLogo size="lg" />
           </div>
 
           <header className="nx-login__header">

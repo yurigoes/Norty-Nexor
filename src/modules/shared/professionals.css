@@ -32,15 +32,15 @@
   color: var(--text-subtle);
 }
 
-.nx-prof-chip:hover { border-color: var(--nexor-blue); color: var(--text-default); }
+.nx-prof-chip:hover { border-color: var(--mh-ink); color: var(--text-default); }
 
 .nx-prof-chip.is-active {
-  background: var(--info-bg);
-  border-color: var(--nexor-blue);
-  color: var(--nexor-blue-600);
+  background: var(--mh-gold-100);
+  border-color: var(--mh-gold);
+  color: var(--mh-gold-600);
 }
 
-.nx-prof-chip.is-active span { color: var(--nexor-blue-600); }
+.nx-prof-chip.is-active span { color: var(--mh-ink-600); }
 
 .nx-prof-toggle {
   display: inline-flex;
@@ -59,12 +59,12 @@
   transition: all var(--duration-fast);
 }
 
-.nx-prof-toggle:hover { border-color: var(--nexor-blue); color: var(--text-default); }
+.nx-prof-toggle:hover { border-color: var(--mh-ink); color: var(--text-default); }
 
 .nx-prof-toggle.is-active {
-  background: var(--info-bg);
-  border-color: var(--nexor-blue);
-  color: var(--nexor-blue-600);
+  background: var(--mh-gold-100);
+  border-color: var(--mh-gold);
+  color: var(--mh-gold-600);
 }
 
 .nx-prof-grid {
@@ -80,7 +80,7 @@
   color: var(--text-default);
 }
 
-.nx-prof-verified { color: var(--nexor-blue); flex: 0 0 auto; }
+.nx-prof-verified { color: var(--mh-ink); flex: 0 0 auto; }
 
 .nx-prof-card__specialties {
   margin: var(--space-3) 0 0;

@@ -17,18 +17,18 @@
   inset: 0;
   background:
     radial-gradient(circle at 78% 22%, rgba(255, 255, 255, 0.3), transparent 52%),
-    linear-gradient(120deg, rgba(8, 17, 31, 0.28), transparent 62%);
+    linear-gradient(120deg, rgba(10, 11, 13, 0.28), transparent 62%);
 }
-.nx-area__cover--salao_festas { background: linear-gradient(135deg, #176BFF, #7C5CFF); }
-.nx-area__cover--salao_gourmet { background: linear-gradient(135deg, #F59E0B, #EC4899); }
-.nx-area__cover--churrasqueira { background: linear-gradient(135deg, #EF4444, #F59E0B); }
-.nx-area__cover--academia { background: linear-gradient(135deg, #0FB2C4, #176BFF); }
-.nx-area__cover--piscina { background: linear-gradient(135deg, #20D5E8, #0FB2C4); }
-.nx-area__cover--brinquedoteca { background: linear-gradient(135deg, #EC4899, #F59E0B); }
-.nx-area__cover--quadra { background: linear-gradient(135deg, #10B981, #20D5E8); }
-.nx-area__cover--coworking { background: linear-gradient(135deg, #64748B, #176BFF); }
-.nx-area__cover--espaco_pet { background: linear-gradient(135deg, #7C5CFF, #20D5E8); }
-.nx-area__cover--cinema { background: linear-gradient(135deg, #08111F, #176BFF); }
+.nx-area__cover--salao_festas { background: linear-gradient(135deg, #8A6B10, #C9A227); }
+.nx-area__cover--salao_gourmet { background: linear-gradient(135deg, #7A4E20, #B98A3E); }
+.nx-area__cover--churrasqueira { background: linear-gradient(135deg, #7A2833, #B4562F); }
+.nx-area__cover--academia { background: linear-gradient(135deg, #23272F, #4F5A6B); }
+.nx-area__cover--piscina { background: linear-gradient(135deg, #1F5A52, #2F8377); }
+.nx-area__cover--brinquedoteca { background: linear-gradient(135deg, #5C4A8A, #8A76B8); }
+.nx-area__cover--quadra { background: linear-gradient(135deg, #4F5A22, #7E8C3C); }
+.nx-area__cover--coworking { background: linear-gradient(135deg, #2F4761, #5A7794); }
+.nx-area__cover--espaco_pet { background: linear-gradient(135deg, #8A5A24, #C9A227); }
+.nx-area__cover--cinema { background: linear-gradient(135deg, #0A0B0D, #3A3F49); }
 
 .nx-area__badge {
   position: absolute;
@@ -40,7 +40,7 @@
   padding: 4px 9px;
   border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.92);
-  color: var(--nexor-navy);
+  color: var(--mh-black);
 }
 
 .nx-reserve {
@@ -77,8 +77,8 @@
   color: var(--text-default);
   transition: all var(--duration-fast);
 }
-.nx-slot:hover:not(:disabled) { border-color: var(--nexor-blue); }
-.nx-slot.is-selected { background: var(--nexor-blue); border-color: var(--nexor-blue); color: #fff; }
+.nx-slot:hover:not(:disabled) { border-color: var(--mh-ink); }
+.nx-slot.is-selected { background: var(--mh-ink); border-color: var(--mh-ink); color: #fff; }
 .nx-slot.is-taken { opacity: 0.5; cursor: not-allowed; background: var(--surface-sunken); }
 .nx-slot__status { font-size: var(--text-2xs); color: var(--text-subtle); font-weight: var(--weight-regular); }
 .nx-slot.is-selected .nx-slot__status { color: rgba(255, 255, 255, 0.75); }
@@ -104,7 +104,7 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--nexor-blue);
+  background: var(--mh-ink);
 }
 
 .nx-confirm-row {

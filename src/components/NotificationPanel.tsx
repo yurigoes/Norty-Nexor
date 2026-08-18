@@ -29,12 +29,12 @@ const ICONS: Record<NotificationKind, typeof Bell> = {
 
 const TONES: Partial<Record<NotificationKind, string>> = {
   visitante_chegou: 'brand',
-  encomenda: 'cyan',
+  encomenda: 'gold',
   veiculo: 'brand',
   aviso: 'warning',
   boleto: 'success',
   ocorrencia: 'danger',
-  servico: 'cyan',
+  servico: 'gold',
 };
 
 export function NotificationPanel({ open, onClose }: { open: boolean; onClose: () => void }) {

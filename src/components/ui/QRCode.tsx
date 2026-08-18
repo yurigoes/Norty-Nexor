@@ -53,7 +53,7 @@ export function QRCode({ value, size = 148, className = '' }: { value: string; s
             width={unit * 0.92}
             height={unit * 0.92}
             rx={unit * 0.24}
-            fill="#08111F"
+            fill="#0A0B0D"
           />
         );
       })}

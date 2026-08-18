@@ -78,7 +78,7 @@ export function ManagementStaff() {
 
       <div className="nx-grid-auto nx-mb-4">
         <StatCard label="Equipe do condomínio" value={number(all.filter((s) => s.kind === 'funcionario_condominio').length)} icon={<HardHat size={17} />} tone="brand" />
-        <StatCard label="Funcionários de unidades" value={number(all.filter((s) => s.kind === 'funcionario_unidade').length)} icon={<Users size={17} />} tone="cyan" />
+        <StatCard label="Funcionários de unidades" value={number(all.filter((s) => s.kind === 'funcionario_unidade').length)} icon={<Users size={17} />} tone="gold" />
         <StatCard label="Prestadores ativos" value={number(all.filter((s) => s.kind === 'prestador' && s.active).length)} icon={<HardHat size={17} />} tone="success" />
         <StatCard label="Cadastros inativos" value={number(all.filter((s) => !s.active).length)} icon={<HardHat size={17} />} tone="warning" />
       </div>

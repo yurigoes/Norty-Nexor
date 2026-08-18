@@ -14,7 +14,7 @@
   transition: all var(--duration-fast);
 }
 .nx-notification:hover { border-color: var(--border-default); box-shadow: var(--shadow-sm); }
-.nx-notification.is-unread { background: rgba(23, 107, 255, 0.04); border-color: rgba(23, 107, 255, 0.18); }
+.nx-notification.is-unread { background: rgba(201, 162, 39, 0.04); border-color: rgba(201, 162, 39, 0.18); }
 
 .nx-notification__icon {
   display: flex;
@@ -27,8 +27,8 @@
   background: var(--neutral-bg);
   color: var(--text-muted);
 }
-.nx-notification__icon--brand { background: var(--info-bg); color: var(--nexor-blue); }
-.nx-notification__icon--cyan { background: var(--nexor-cyan-100); color: var(--nexor-cyan-600); }
+.nx-notification__icon--brand { background: var(--mh-ink-100); color: var(--mh-ink); }
+.nx-notification__icon--gold { background: var(--mh-gold-100); color: var(--mh-gold-600); }
 .nx-notification__icon--success { background: var(--success-bg); color: var(--success); }
 .nx-notification__icon--warning { background: var(--warning-bg); color: #b97706; }
 .nx-notification__icon--danger { background: var(--danger-bg); color: var(--danger); }
@@ -50,5 +50,5 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--nexor-blue);
+  background: var(--mh-ink);
 }

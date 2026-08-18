@@ -1,5 +1,5 @@
 /* =========================================================
-   NEXOR — Autenticação (provisória)
+   my Home — Autenticação (provisória)
    ---------------------------------------------------------
    Fase 1: validação contra o dataset de demonstração e
    sessão persistida no navegador.
@@ -10,7 +10,7 @@
 import { all, find } from '../data/repositories';
 import type { User } from '../data/types';
 
-const SESSION_KEY = 'nexor.mvp.session.v1';
+const SESSION_KEY = 'myhome.mvp.session.v1';
 
 export interface Session {
   userId: string;

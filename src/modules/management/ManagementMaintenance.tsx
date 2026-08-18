@@ -94,7 +94,7 @@ export function ManagementMaintenance() {
 
       <div className="nx-grid-auto nx-mb-4">
         <StatCard label="Ordens ativas" value={number(all.filter((m) => m.status !== 'concluida').length)} icon={<ClipboardList size={17} />} tone="brand" />
-        <StatCard label="Em execução" value={number(all.filter((m) => m.status === 'em_execucao').length)} icon={<PlayCircle size={17} />} tone="cyan" />
+        <StatCard label="Em execução" value={number(all.filter((m) => m.status === 'em_execucao').length)} icon={<PlayCircle size={17} />} tone="gold" />
         <StatCard label="Atrasadas" value={number(all.filter((m) => m.status === 'atrasada').length)} icon={<CalendarClock size={17} />} tone="danger" />
         <StatCard label="Custo planejado" value={currency(totalCost)} icon={<ClipboardList size={17} />} tone="neutral" hint="Ciclo completo" />
       </div>

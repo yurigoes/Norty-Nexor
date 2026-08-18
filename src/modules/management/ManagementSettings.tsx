@@ -22,7 +22,7 @@ const ROADMAP = [
   ['Fase 2', 'Produção', 'Banco definitivo, autenticação real, API, permissões persistidas, logs e backup.', false],
   ['Fase 3', 'Financeiro', 'Boletos, PIX, integração bancária e conciliação automática.', false],
   ['Fase 4', 'Portaria e segurança', 'Controle de acesso físico, CFTV (ONVIF/RTSP), LPR e integração com equipamentos.', false],
-  ['Fase 5', 'NEXOR AI', 'Concierge conectado a modelo de linguagem sobre os dados reais.', false],
+  ['Fase 5', 'my Home AI', 'Concierge conectado a modelo de linguagem sobre os dados reais.', false],
   ['Fase 6', 'Marketplace', 'Prestadores, serviços e parceiros dentro da plataforma.', false],
 ] as const;
 
@@ -148,7 +148,7 @@ export function ManagementSettings() {
               <Switch checked={flags.plateRecognition} onChange={(v) => setFlags((f) => ({ ...f, plateRecognition: v }))} label="Reconhecimento de placa" description="Liberação automática de veículos cadastrados na garagem." />
               <Switch checked={flags.autoApprove} onChange={(v) => setFlags((f) => ({ ...f, autoApprove: v }))} label="Aprovação automática de reservas" description="Aplica a todas as áreas, ignorando a regra individual." />
               <Switch checked={flags.pushNotifications} onChange={(v) => setFlags((f) => ({ ...f, pushNotifications: v }))} label="Notificações push (PWA)" description="Alertas no celular para moradores e portaria." />
-              <Switch checked={flags.concierge} onChange={(v) => setFlags((f) => ({ ...f, concierge: v }))} label="NEXOR AI · Concierge" description="Assistente disponível para moradores e gestão." />
+              <Switch checked={flags.concierge} onChange={(v) => setFlags((f) => ({ ...f, concierge: v }))} label="my Home AI · Concierge" description="Assistente disponível para moradores e gestão." />
               <Switch checked={flags.auditRetention} onChange={(v) => setFlags((f) => ({ ...f, auditRetention: v }))} label="Retenção estendida de auditoria" description="Mantém a trilha completa por 5 anos." />
             </div>
           </Card>

@@ -64,7 +64,7 @@ export function ManagementVisitors() {
       />
 
       <div className="nx-grid-auto nx-mb-4">
-        <StatCard label="Esperados hoje" value={number(all.filter((v) => v.expectedDate === today && v.status === 'aguardando').length)} icon={<UserCheck size={17} />} tone="cyan" />
+        <StatCard label="Esperados hoje" value={number(all.filter((v) => v.expectedDate === today && v.status === 'aguardando').length)} icon={<UserCheck size={17} />} tone="gold" />
         <StatCard label="No condomínio" value={number(all.filter((v) => v.status === 'no_local').length)} icon={<Users size={17} />} tone="success" />
         <StatCard label="Autorizações recorrentes" value={number(all.filter((v) => v.kind === 'recorrente' || v.kind === 'permanente').length)} icon={<UserCheck size={17} />} tone="brand" />
         <StatCard label="Revogadas / recusadas" value={number(all.filter((v) => v.status === 'revogado' || v.status === 'recusado').length)} icon={<UserCheck size={17} />} tone="warning" />

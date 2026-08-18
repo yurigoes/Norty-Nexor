@@ -13,7 +13,7 @@ import { readFileSync, writeFileSync, readdirSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const DIST = 'dist-standalone';
-const OUT = 'dist-standalone/nexor-demo.html';
+const OUT = 'dist-standalone/myhome-demo.html';
 
 execSync('vite build --mode standalone', { stdio: 'inherit' });
 
@@ -31,7 +31,7 @@ const script = readFileSync(join(DIST, 'assets', js[0]), 'utf8');
  * então o arquivo carrega apenas conteúdo: título, estilos, raiz e bundle.
  * O <title> vem primeiro porque o host o procura no início do arquivo.
  */
-const html = `<title>NEXOR by Norty</title>
+const html = `<title>my Home by norty</title>
 <meta name="theme-color" content="#08111F" />
 
 <style>

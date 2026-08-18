@@ -1,5 +1,5 @@
 /* =========================================================
-   NEXOR — Modelo de domínio
+   my Home — Modelo de domínio
    Estes tipos são a fronteira entre a UI e a persistência.
    A troca do banco provisório pelo definitivo (Fase 2) não
    deve alterar nada aqui: apenas a implementação dos
@@ -604,7 +604,7 @@ export interface ServiceRequest {
 
 /* ---------- Estado completo do banco provisório ---------- */
 
-export interface NexorDatabase {
+export interface MyHomeDatabase {
   version: number;
   createdAt: string;
   tenants: Tenant[];
@@ -640,5 +640,5 @@ export interface NexorDatabase {
 }
 
 export type CollectionName = {
-  [K in keyof NexorDatabase]: NexorDatabase[K] extends Array<infer _T> ? K : never;
-}[keyof NexorDatabase];
+  [K in keyof MyHomeDatabase]: MyHomeDatabase[K] extends Array<infer _T> ? K : never;
+}[keyof MyHomeDatabase];

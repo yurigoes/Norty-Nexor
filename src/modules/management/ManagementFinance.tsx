@@ -22,8 +22,8 @@ import './management.css';
 const PAGE_SIZE = 15;
 
 const CATEGORY_COLORS = [
-  'var(--nexor-blue)', 'var(--nexor-cyan)', '#7C5CFF', 'var(--success)', 'var(--warning)',
-  '#EC4899', 'var(--danger)', '#0FB2C4', 'var(--text-subtle)', '#F59E0B', '#10B981', '#64748B',
+  'var(--mh-gold)', 'var(--mh-ink)', '#7A4E20', 'var(--success)', 'var(--warning)',
+  '#2F4761', 'var(--danger)', '#1F5A52', 'var(--text-subtle)', '#B98A3E', '#4F5A22', '#5C4A8A',
 ];
 
 export function ManagementFinance() {
@@ -134,7 +134,7 @@ export function ManagementFinance() {
         <StatCard label="Receitas do mês" value={currency(summary.revenue)} icon={<TrendingUp size={17} />} tone="success" trend={{ value: '+3,1%', direction: 'up' }} />
         <StatCard label="Despesas do mês" value={currency(summary.expenses)} icon={<TrendingDown size={17} />} tone="danger" trend={{ value: '+1,8%', direction: 'up', positive: false }} />
         <StatCard label="Saldo" value={currency(summary.balance)} icon={<Wallet size={17} />} tone={summary.balance >= 0 ? 'brand' : 'danger'} />
-        <StatCard label="Fundo de reserva" value={currency(summary.reserveFund)} icon={<PiggyBank size={17} />} tone="cyan" hint="Acumulado" />
+        <StatCard label="Fundo de reserva" value={currency(summary.reserveFund)} icon={<PiggyBank size={17} />} tone="gold" hint="Acumulado" />
       </div>
 
       {tab === 'visao' && (
@@ -147,7 +147,7 @@ export function ManagementFinance() {
                 formatValue={currencyCompact}
                 series={[
                   { name: 'Receitas', color: 'var(--success)', points: data.series.map((s) => ({ label: s.label, value: s.revenue })) },
-                  { name: 'Despesas', color: 'var(--nexor-blue)', points: data.series.map((s) => ({ label: s.label, value: s.expenses })) },
+                  { name: 'Despesas', color: 'var(--mh-ink)', points: data.series.map((s) => ({ label: s.label, value: s.expenses })) },
                 ]}
               />
             </Card>
@@ -159,7 +159,7 @@ export function ManagementFinance() {
                 formatValue={currencyCompact}
                 series={[{
                   name: 'Saldo',
-                  color: 'var(--nexor-cyan)',
+                  color: 'var(--mh-gold)',
                   points: data.series.map((s) => ({ label: s.label, value: Math.max(0, s.revenue - s.expenses) })),
                 }]}
               />

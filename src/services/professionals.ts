@@ -1,5 +1,5 @@
 /* =========================================================
-   NEXOR — Profissionais recomendados do condomínio
+   my Home — Profissionais recomendados do condomínio
    ---------------------------------------------------------
    Catálogo de prestadores indicados pela administração e pelos
    próprios moradores, com avaliações e pedidos de orçamento.

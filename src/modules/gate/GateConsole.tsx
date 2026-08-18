@@ -192,7 +192,7 @@ export function GateConsole() {
       {/* ---------- Indicadores ---------- */}
       <div className="nx-grid-auto">
         <StatCard label="Acessos hoje" value={number(data.accesses.length)} icon={<DoorOpen size={17} />} tone="brand" hint="Entradas e saídas" />
-        <StatCard label="Visitantes esperados" value={data.expected.length} icon={<UserCheck size={17} />} tone="cyan" onClick={() => navigate('/portaria/visitantes')} />
+        <StatCard label="Visitantes esperados" value={data.expected.length} icon={<UserCheck size={17} />} tone="gold" onClick={() => navigate('/portaria/visitantes')} />
         <StatCard label="Visitantes no local" value={data.inside.length} icon={<Users size={17} />} tone="success" />
         <StatCard label="Encomendas na portaria" value={data.deliveries.length} icon={<Package size={17} />} tone="warning" onClick={() => navigate('/portaria/encomendas')} />
       </div>

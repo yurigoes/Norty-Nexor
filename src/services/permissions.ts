@@ -1,5 +1,5 @@
 /* =========================================================
-   NEXOR — Matriz de permissões (RBAC)
+   my Home — Matriz de permissões (RBAC)
    ---------------------------------------------------------
    O papel define o conjunto base; o usuário pode receber
    permissões extras. A UI nunca decide sozinha o que exibir:

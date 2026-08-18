@@ -39,9 +39,9 @@ export function PortfolioIndicators() {
         return [...map.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
       })(),
       bySize: [
-        { label: 'Até 300 unidades', value: condominiums.filter((c) => c.unitsCount <= 300).length, color: 'var(--nexor-blue)' },
-        { label: '301 a 600', value: condominiums.filter((c) => c.unitsCount > 300 && c.unitsCount <= 600).length, color: 'var(--nexor-cyan)' },
-        { label: '601 a 900', value: condominiums.filter((c) => c.unitsCount > 600 && c.unitsCount <= 900).length, color: '#7C5CFF' },
+        { label: 'Até 300 unidades', value: condominiums.filter((c) => c.unitsCount <= 300).length, color: 'var(--mh-ink)' },
+        { label: '301 a 600', value: condominiums.filter((c) => c.unitsCount > 300 && c.unitsCount <= 600).length, color: 'var(--mh-gold)' },
+        { label: '601 a 900', value: condominiums.filter((c) => c.unitsCount > 600 && c.unitsCount <= 900).length, color: '#7A4E20' },
         { label: 'Acima de 900', value: condominiums.filter((c) => c.unitsCount > 900).length, color: 'var(--success)' },
       ],
       topRevenue: [...condominiums]
@@ -67,7 +67,7 @@ export function PortfolioIndicators() {
 
       <div className="nx-dash-stats">
         <StatCard label="Condomínios" value={number(snapshot.condominiums)} icon={<Building2 size={17} />} tone="brand" />
-        <StatCard label="Unidades" value={number(snapshot.units)} icon={<Building2 size={17} />} tone="cyan" />
+        <StatCard label="Unidades" value={number(snapshot.units)} icon={<Building2 size={17} />} tone="gold" />
         <StatCard label="Moradores" value={number(snapshot.residents)} icon={<Users size={17} />} tone="success" />
         <StatCard label="Veículos" value={number(snapshot.vehicles)} icon={<Car size={17} />} tone="neutral" />
         <StatCard label="Acessos hoje" value={number(snapshot.accessesToday)} icon={<DoorOpen size={17} />} tone="brand" trend={{ value: '+5,7%', direction: 'up' }} />

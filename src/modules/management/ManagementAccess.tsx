@@ -10,9 +10,9 @@ import { number } from '../../lib/format';
 import './management.css';
 
 const TYPE_COLORS: Record<string, string> = {
-  morador: 'var(--nexor-blue)',
-  veiculo: 'var(--nexor-cyan)',
-  visitante: '#7C5CFF',
+  morador: 'var(--mh-ink)',
+  veiculo: 'var(--mh-gold)',
+  visitante: '#7A4E20',
   funcionario: 'var(--success)',
   prestador: 'var(--warning)',
   entrega: 'var(--text-subtle)',
@@ -58,7 +58,7 @@ export function ManagementAccess() {
       <div className="nx-grid-auto nx-mb-4">
         <StatCard label="Acessos hoje" value={number(data.snapshot.accessesToday)} icon={<DoorOpen size={17} />} tone="brand" />
         <StatCard label="Entradas" value={number(entries)} icon={<LogIn size={17} />} tone="success" />
-        <StatCard label="Saídas" value={number(exits)} icon={<LogOut size={17} />} tone="cyan" />
+        <StatCard label="Saídas" value={number(exits)} icon={<LogOut size={17} />} tone="gold" />
         <StatCard label="Visitantes no local" value={number(data.snapshot.onSiteVisitors)} icon={<Users size={17} />} tone="warning" />
       </div>
 
@@ -68,8 +68,8 @@ export function ManagementAccess() {
           <AreaChart
             height={230}
             series={[
-              { name: 'Entradas', color: 'var(--nexor-blue)', points: data.byHour.map((h) => ({ label: h.label, value: h.entradas })) },
-              { name: 'Saídas', color: 'var(--nexor-cyan)', points: data.byHour.map((h) => ({ label: h.label, value: h.saidas })) },
+              { name: 'Entradas', color: 'var(--mh-ink)', points: data.byHour.map((h) => ({ label: h.label, value: h.entradas })) },
+              { name: 'Saídas', color: 'var(--mh-gold)', points: data.byHour.map((h) => ({ label: h.label, value: h.saidas })) },
             ]}
           />
         </Card>

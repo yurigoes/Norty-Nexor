@@ -16,7 +16,7 @@ export function StatCard({
   hint?: ReactNode;
   icon?: ReactNode;
   trend?: { value: string; direction: 'up' | 'down'; positive?: boolean };
-  tone?: 'brand' | 'cyan' | 'success' | 'warning' | 'danger' | 'neutral';
+  tone?: 'brand' | 'gold' | 'success' | 'warning' | 'danger' | 'neutral';
   onClick?: () => void;
   footer?: ReactNode;
 }) {

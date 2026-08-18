@@ -74,7 +74,7 @@ export function ResidentDeliveries() {
           label="Última chegada"
           value={all[0] ? timeAgo(all[0].receivedAt) : '—'}
           icon={<Truck size={17} />}
-          tone="cyan"
+          tone="gold"
           hint={all[0]?.carrier}
         />
       </div>
@@ -97,7 +97,7 @@ export function ResidentDeliveries() {
           }
           mobileCard={(d) => (
             <div className="nx-row nx-gap-3">
-              <span className="nx-list__icon nx-list__icon--cyan"><Package size={16} /></span>
+              <span className="nx-list__icon nx-list__icon--gold"><Package size={16} /></span>
               <div className="nx-stack nx-grow nx-gap-1">
                 <span className="nx-medium">{d.carrier}</span>
                 <span className="nx-text-xs nx-text-subtle">{d.trackingCode} · prateleira {d.shelf}</span>

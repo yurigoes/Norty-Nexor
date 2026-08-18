@@ -1,6 +1,6 @@
 <div align="center">
 
-# NEXOR · by Norty
+# my Home · by norty
 
 **O sistema operacional do condomínio.**
 
@@ -12,7 +12,7 @@ MVP navegável — Fase 1
 
 ## O que é esta entrega
 
-Um **MVP evolutivo** do NEXOR: uma aplicação navegável, com identidade visual
+Um **MVP evolutivo** do my Home: uma aplicação navegável, com identidade visual
 definitiva, arquitetura de produto real e todos os fluxos principais funcionando
 ponta a ponta sobre um banco de dados provisório.
 
@@ -41,7 +41,7 @@ Aplicação em `http://localhost:5173`.
 ### Demonstração em arquivo único
 
 ```bash
-npm run build:standalone   # gera dist-standalone/nexor-demo.html
+npm run build:standalone   # gera dist-standalone/myhome-demo.html
 ```
 
 Empacota a aplicação inteira — código, estilos e tipografia — em um único
@@ -61,11 +61,11 @@ Todas usam a senha **`123456`**.
 
 | Perfil | E-mail | Contexto |
 |---|---|---|
-| Morador | `morador@nexor.test` | Carlos Almeida · Torre A · Apto 1204 |
-| Portaria | `portaria@nexor.test` | Marcos Vieira · Portaria Principal |
-| Síndico(a) | `sindico@nexor.test` | Helena Duarte · mandato 2025–2027 |
-| Administrador | `admin@nexor.test` | Ricardo Monteiro · acesso amplo + portfólio |
-| Administradora | `administradora@nexor.test` | Beatriz Salgado · 24 condomínios |
+| Morador | `morador@myhome.test` | Carlos Almeida · Torre A · Apto 1204 |
+| Portaria | `portaria@myhome.test` | Marcos Vieira · Portaria Principal |
+| Síndico(a) | `sindico@myhome.test` | Helena Duarte · mandato 2025–2027 |
+| Administrador | `admin@myhome.test` | Ricardo Monteiro · acesso amplo + portfólio |
+| Administradora | `administradora@myhome.test` | Beatriz Salgado · 24 condomínios |
 
 Na tela de login, clicar em uma das contas preenche as credenciais.
 
@@ -75,7 +75,7 @@ Na tela de login, clicar em uma das contas preenche as credenciais.
 
 O caminho abaixo percorre os cinco fluxos completos exigidos pelo escopo.
 
-### 1. Morador — `morador@nexor.test`
+### 1. Morador — `morador@myhome.test`
 
 1. **Home** — identidade condominial digital: unidade, veículos, autorizados,
    funcionários, encomendas e acessos.
@@ -88,9 +88,9 @@ O caminho abaixo percorre os cinco fluxos completos exigidos pelo escopo.
 7. **Financeiro → Pagar boleto** — pagamento simulado com baixa registrada.
 8. **Profissionais** — catálogo de prestadores indicados pelo condomínio, com
    nota, avaliações dos vizinhos, pedido de orçamento e histórico dos pedidos.
-9. **NEXOR AI** — perguntar "Tenho alguma encomenda?" ou "Quando vence meu boleto?".
+9. **my Home AI** — perguntar "Tenho alguma encomenda?" ou "Quando vence meu boleto?".
 
-### 2. Portaria — `portaria@nexor.test`
+### 2. Portaria — `portaria@myhome.test`
 
 1. **Console** — busca única resolve visitante, morador, unidade, placa e funcionário.
 2. **Visitantes** — localizar o visitante criado no passo anterior e **Liberar**.
@@ -101,14 +101,14 @@ O caminho abaixo percorre os cinco fluxos completos exigidos pelo escopo.
 6. **Portões** — acionamento simulado com registro em auditoria.
 7. **Modo monitor** — layout de tela cheia para o painel da guarita.
 
-### 3. Síndico(a) — `sindico@nexor.test`
+### 3. Síndico(a) — `sindico@myhome.test`
 
 Dashboard com indicadores e gráficos, controle de acesso, financeiro
 administrativo, chamados, ocorrências, manutenção, comunicados, documentos,
 assembleias com votação, catálogo de profissionais indicados, central de
 segurança e trilha de auditoria.
 
-### 4. Administradora — `administradora@nexor.test`
+### 4. Administradora — `administradora@myhome.test`
 
 Portfólio consolidado de 24 condomínios, indicadores agregados e troca de
 contexto para a gestão de qualquer condomínio da carteira.
@@ -123,7 +123,7 @@ contexto para a gestão de qualquer condomínio da carteira.
 ```
 src/
 ├── app/            Sessão, navegação, guards de rota e PWA
-├── brand/          Identidade NEXOR (símbolo, lockup, composição visual)
+├── brand/          Identidade my Home (símbolo, lockup, composição visual)
 ├── components/
 │   ├── ui/         Design system (24 componentes + tokens aplicados)
 │   ├── charts/     Gráficos SVG próprios (área, barras, rosca, ranking)
@@ -175,7 +175,7 @@ Tenant (administradora)
       └── Financeiro · Documentos · Governança
 ```
 
-### Concierge (NEXOR AI)
+### Concierge (my Home AI)
 
 Definido por uma interface de provedor. O provedor local interpreta a intenção
 da pergunta e responde consultando os **mesmos serviços** do restante da
@@ -238,7 +238,7 @@ Todos aparecem na arquitetura e no roadmap, com a experiência de uso completa.
 | 2 | Banco definitivo, autenticação real, API, logs, segurança e backup |
 | 3 | Financeiro real: boletos, PIX, integração bancária e conciliação |
 | 4 | Portaria real: controle de acesso, CFTV (ONVIF/RTSP), LPR e equipamentos |
-| 5 | NEXOR AI conectado aos dados reais |
+| 5 | my Home AI conectado aos dados reais |
 | 6 | Marketplace de prestadores, serviços e parceiros |
 
 ---
@@ -249,10 +249,10 @@ React 19 · TypeScript · Vite · React Router · CSS com design tokens ·
 gráficos SVG próprios · lucide-react.
 
 Sem dependência de UI kit: o design system é próprio, o que mantém o controle
-total da identidade NEXOR e o bundle enxuto.
+total da identidade my Home e o bundle enxuto.
 
 ---
 
 <div align="center">
-<sub><b>NEXOR</b> · by Norty · Plataforma operacional para condomínios</sub>
+<sub><b>my Home</b> · by norty · Plataforma operacional para condomínios</sub>
 </div>

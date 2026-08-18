@@ -38,7 +38,7 @@ async function fetchDataUri(url) {
 
 const out = [
   '/* =========================================================',
-  '   NEXOR — tipografia embutida (gerado por scripts/embed-fonts.mjs)',
+  '   my Home — tipografia embutida (gerado por scripts/embed-fonts.mjs)',
   '   Não edite à mão: rode o script novamente para atualizar.',
   '   ========================================================= */',
   '',

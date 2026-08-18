@@ -75,7 +75,7 @@ export function ManagementResidents() {
 
       <div className="nx-grid-auto nx-mb-4">
         <StatCard label="Total de moradores" value={number(all.length)} icon={<Users size={17} />} tone="brand" />
-        <StatCard label="Proprietários" value={number(all.filter((r) => r.type === 'proprietario').length)} icon={<Users size={17} />} tone="cyan" />
+        <StatCard label="Proprietários" value={number(all.filter((r) => r.type === 'proprietario').length)} icon={<Users size={17} />} tone="gold" />
         <StatCard label="Inquilinos" value={number(all.filter((r) => r.type === 'inquilino').length)} icon={<Users size={17} />} tone="neutral" />
         <StatCard label="Cadastros inativos" value={number(all.filter((r) => !r.active).length)} icon={<Users size={17} />} tone="warning" />
       </div>
@@ -124,7 +124,7 @@ export function ManagementResidents() {
                 <div className="nx-row nx-gap-2 nx-wrap" style={{ marginTop: 'var(--space-2)' }}>
                   <Badge tone="brand" size="sm">{TYPE_LABEL[selected.type]}</Badge>
                   <Badge tone={selected.active ? 'success' : 'neutral'} size="sm">{selected.active ? 'Ativo' : 'Inativo'}</Badge>
-                  {selected.isMainContact && <Badge tone="cyan" size="sm">Contato principal</Badge>}
+                  {selected.isMainContact && <Badge tone="gold" size="sm">Contato principal</Badge>}
                 </div>
               </div>
             </div>

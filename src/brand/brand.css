@@ -11,13 +11,23 @@
   line-height: 1;
 }
 
+/* O nome mistura dois pesos: "my" recuado, "Home" firme. */
 .nx-logo__name {
-  font-weight: var(--weight-bold);
-  letter-spacing: 0.16em;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.16em;
+  letter-spacing: var(--tracking-tight);
   color: var(--text-strong);
 }
 
-.nx-logo--light .nx-logo__name { color: var(--nexor-white); }
+.nx-logo__my {
+  font-weight: var(--weight-regular);
+  opacity: 0.72;
+}
+
+.nx-logo__home { font-weight: var(--weight-bold); }
+
+.nx-logo--light .nx-logo__name { color: var(--mh-white); }
 
 .nx-logo__by {
   font-size: var(--text-2xs);
@@ -25,16 +35,16 @@
   letter-spacing: 0.26em;
   text-transform: lowercase;
   color: var(--text-subtle);
-  margin-top: 5px;
+  margin-top: 6px;
 }
 
-.nx-logo--light .nx-logo__by { color: rgba(255, 255, 255, 0.5); }
+.nx-logo--light .nx-logo__by { color: var(--mh-gold-400); opacity: 0.72; }
 
 .nx-logo--sm .nx-logo__name { font-size: var(--text-md); }
 .nx-logo--md .nx-logo__name { font-size: var(--text-lg); }
-.nx-logo--lg .nx-logo__name { font-size: var(--text-2xl); letter-spacing: 0.18em; }
-.nx-logo--xl .nx-logo__name { font-size: var(--text-4xl); letter-spacing: 0.2em; }
+.nx-logo--lg .nx-logo__name { font-size: var(--text-2xl); }
+.nx-logo--xl .nx-logo__name { font-size: var(--text-4xl); }
 
-.nx-logo--sm .nx-logo__by { font-size: 8px; letter-spacing: 0.22em; }
+.nx-logo--sm .nx-logo__by { font-size: 8px; letter-spacing: 0.22em; margin-top: 4px; }
 .nx-logo--lg .nx-logo__by { font-size: var(--text-xs); }
-.nx-logo--xl .nx-logo__by { font-size: var(--text-sm); letter-spacing: 0.34em; margin-top: 8px; }
+.nx-logo--xl .nx-logo__by { font-size: var(--text-sm); letter-spacing: 0.34em; margin-top: 9px; }

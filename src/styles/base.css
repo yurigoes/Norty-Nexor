@@ -1,5 +1,5 @@
 /* =========================================================
-   NEXOR — Reset + base global
+   my Home — Reset + base global
    ========================================================= */
 
 *,
@@ -72,13 +72,13 @@ ul, ol { list-style: none; }
 table { border-collapse: collapse; width: 100%; }
 
 :focus-visible {
-  outline: 2px solid var(--nexor-blue);
+  outline: 2px solid var(--mh-ink);
   outline-offset: 2px;
   border-radius: var(--radius-xs);
 }
 
 ::selection {
-  background: rgba(23, 107, 255, 0.18);
+  background: rgba(201, 162, 39, 0.18);
 }
 
 /* Scrollbars discretas */
@@ -133,9 +133,9 @@ table { border-collapse: collapse; width: 100%; }
 }
 
 @keyframes nx-pulse-ring {
-  0% { box-shadow: 0 0 0 0 rgba(23, 107, 255, 0.45); }
-  70% { box-shadow: 0 0 0 12px rgba(23, 107, 255, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(23, 107, 255, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(201, 162, 39, 0.45); }
+  70% { box-shadow: 0 0 0 12px rgba(201, 162, 39, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(201, 162, 39, 0); }
 }
 
 @keyframes nx-draw {

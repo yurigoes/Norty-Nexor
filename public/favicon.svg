@@ -1,13 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40">
   <defs>
-    <linearGradient id="s" x1="10" y1="31" x2="30" y2="9" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#176BFF"/><stop offset="1" stop-color="#20D5E8"/>
+    <linearGradient id="s" x1="9" y1="7" x2="31" y2="33" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E0C368"/><stop offset="0.55" stop-color="#C9A227"/><stop offset="1" stop-color="#8A6B10"/>
     </linearGradient>
     <linearGradient id="b" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#12233C"/><stop offset="1" stop-color="#08111F"/>
+      <stop stop-color="#1A1D24"/><stop offset="1" stop-color="#0A0B0D"/>
     </linearGradient>
   </defs>
   <rect width="40" height="40" rx="11" fill="url(#b)"/>
-  <path d="M12 29V13L28 27V11" stroke="url(#s)" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="28" cy="11" r="3.1" fill="#20D5E8"/>
+  <rect x="0.6" y="0.6" width="38.8" height="38.8" rx="10.4" fill="none" stroke="rgba(201,162,39,0.28)" stroke-width="1.2"/>
+  <path d="M20 7.52 L30.53 14.54 L30.53 22.73 C30.53 27.8 25.85 30.92 20 32.87 C14.15 30.92 9.47 27.8 9.47 22.73 L9.47 14.54 Z"
+        fill="none" stroke="url(#s)" stroke-width="2.03" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M14.85 24.06 L20 18.75 L25.15 24.06"
+        fill="none" stroke="#C9A227" stroke-width="2.42" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

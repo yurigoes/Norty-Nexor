@@ -1,4 +1,4 @@
-# NEXOR by Norty — Guia do repositório
+# my Home by norty — Guia do repositório
 
 Plataforma de gestão condominial. Esta é a **Fase 1**: MVP navegável com
 arquitetura de produto real e banco de dados provisório.
@@ -27,6 +27,10 @@ npm run preview  # serve o build
 3. **Estilo vem de tokens.**
    Cores, espaçamento, tipografia, raios e sombras estão em `styles/tokens.css`.
    Não introduza valores literais em CSS de módulo; use as variáveis.
+   A paleta é preto + dourado e os papéis são fixos: grafite (`--mh-ink`)
+   carrega ação primária e texto, dourado (`--mh-gold`) é acento, vermelho
+   (`--danger`) é só alerta real. Sobre dourado o texto é **preto** — nunca
+   branco, que não atinge contraste.
    Componentes reutilizáveis moram em `components/ui` e são estilizados em
    `components/ui/ui.css` — evite duplicar CSS nos módulos.
 
@@ -54,7 +58,7 @@ npm run preview  # serve o build
 | administradora | `/portfolio` | `/portfolio/*` |
 
 Contas de demonstração: `morador@`, `portaria@`, `sindico@`, `admin@`,
-`administradora@` `nexor.test` — senha `123456`.
+`administradora@` `myhome.test` — senha `123456`.
 
 ## Idioma
 
