@@ -189,7 +189,11 @@ esta forma — a senha é a que você já guardou:
 
 Se ela se perdeu, defina outra (isto derruba quem estiver usando a antiga):
 
-  pct exec ${CT_PG} -- su postgres -c "psql -tAc \\"ALTER ROLE ${PAPEL} WITH PASSWORD 'nova'\\""
+$(if [[ "$MODO" == "docker" ]]; then
+    echo "  pct exec ${CT_PG} -- bash -c \"docker exec -i ${CONTAINER_PG} psql -U postgres -tAc \\\"ALTER ROLE ${PAPEL} WITH PASSWORD 'nova'\\\"\""
+  else
+    echo "  pct exec ${CT_PG} -- bash -c \"su postgres -c 'psql -tAc \\\"ALTER ROLE ${PAPEL} WITH PASSWORD '\\''nova'\\''\\\"'\""
+  fi)
 FIM
 fi
 
