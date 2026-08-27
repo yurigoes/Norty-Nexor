@@ -1,0 +1,1004 @@
+<title>Nexor Licitações</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Instrument+Sans:wght@400..700&family=Azeret+Mono:wght@400..600&display=swap">
+
+<style>
+  /* =========================================================
+     Nexor Licitações — prévia da interface
+
+     Mundo visual único e deliberado: fundo noturno com as cores
+     da bandeira levadas para um registro escuro. Não há tema
+     claro — a identidade é essa — então tudo é pintado
+     explicitamente, sem herdar fundo do hospedeiro.
+
+     A geometria da bandeira carrega a estrutura: losango para a
+     nota, círculo para status, faixa para divisor. As cores
+     semânticas ficam FORA da paleta da bandeira, senão verde e
+     amarelo teriam que significar identidade e severidade ao
+     mesmo tempo.
+     ========================================================= */
+
+  :root {
+    /* Fundos — azul da bandeira levado à noite */
+    --nx-breu:        #050B14;
+    --nx-noite:       #0A1628;
+    --nx-noite-alta:  #10203A;
+    --nx-borda:       #1C3252;
+
+    /* Bandeira */
+    --nx-verde:       #00A651;
+    --nx-verde-fundo: #003D1F;
+    --nx-ouro:        #FFCB2E;
+    --nx-ouro-claro:  #FFE694;
+    --nx-azul:        #1B3A6B;
+    --nx-azul-claro:  #3E6DB5;
+
+    /* Texto — branco da faixa, com viés frio */
+    --nx-marfim:      #EEF3FA;
+    --nx-cinza:       #9DB0CC;
+    --nx-cinza-fundo: #64789A;
+
+    /* Semântica — fora da paleta da bandeira, de propósito */
+    --nx-critico:     #FF6B6B;
+    --nx-atencao:     #7FA8D9;
+
+    --nx-display: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+    --nx-corpo:   'Instrument Sans', 'Helvetica Neue', Arial, sans-serif;
+    --nx-dado:    'Azeret Mono', 'SFMono-Regular', Consolas, monospace;
+
+    --nx-raio:    14px;
+    --nx-medida:  1140px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    /* O hospedeiro pinta o fundo no tema do leitor — sem isto a
+       página emprestaria o chão dele e a identidade se perderia. */
+    background: var(--nx-breu);
+    color: var(--nx-marfim);
+    font-family: var(--nx-corpo);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* Malha de gradiente ambiente: verde, ouro e azul sangrando
+     por trás do topo. Fica atrás de tudo e não intercepta clique. */
+  .ambiente {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(58rem 30rem at 12% -6%,  rgba(0, 166, 81, .30), transparent 62%),
+      radial-gradient(46rem 26rem at 88% 2%,   rgba(255, 203, 46, .17), transparent 60%),
+      radial-gradient(64rem 40rem at 50% 108%, rgba(62, 109, 181, .22), transparent 65%);
+  }
+
+  .folha {
+    position: relative;
+    z-index: 1;
+    max-width: var(--nx-medida);
+    margin: 0 auto;
+    padding: 0 28px 96px;
+  }
+
+  /* ---------- Topo ---------- */
+
+  .topo {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 28px;
+    padding: 72px 0 40px;
+  }
+
+  .marca { display: flex; align-items: center; gap: 18px; }
+
+  .marca-nome {
+    font-family: var(--nx-display);
+    font-variation-settings: 'wdth' 118, 'wght' 800;
+    font-size: clamp(1.9rem, 4.4vw, 2.9rem);
+    letter-spacing: -.022em;
+    line-height: 1;
+    margin: 0;
+    text-wrap: balance;
+    background: linear-gradient(104deg, var(--nx-verde) 4%, var(--nx-ouro-claro) 48%, var(--nx-azul-claro) 96%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .marca-sub {
+    font-family: var(--nx-dado);
+    font-size: .69rem;
+    letter-spacing: .17em;
+    text-transform: uppercase;
+    color: var(--nx-cinza-fundo);
+    margin: 7px 0 0;
+  }
+
+  .selo-demo {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 15px;
+    border: 1px solid var(--nx-borda);
+    border-radius: 999px;
+    background: rgba(16, 32, 58, .7);
+    font-family: var(--nx-dado);
+    font-size: .68rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--nx-cinza);
+  }
+
+  .selo-demo::before {
+    content: '';
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--nx-ouro);
+    box-shadow: 0 0 11px var(--nx-ouro);
+  }
+
+  /* Faixa divisora — a banda da bandeira virando régua */
+  .faixa {
+    height: 2px;
+    border: 0;
+    margin: 0;
+    background: linear-gradient(90deg,
+      var(--nx-verde) 0%, var(--nx-ouro) 34%,
+      var(--nx-azul-claro) 68%, transparent 100%);
+    opacity: .55;
+  }
+
+  /* ---------- Resumo do dia ---------- */
+
+  .resumo {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 14px;
+    margin: 32px 0 12px;
+  }
+
+  .bloco {
+    padding: 22px 24px;
+    border: 1px solid var(--nx-borda);
+    border-radius: var(--nx-raio);
+    background: linear-gradient(168deg, var(--nx-noite-alta), var(--nx-noite));
+  }
+
+  .bloco-num {
+    font-family: var(--nx-display);
+    font-variation-settings: 'wdth' 112, 'wght' 700;
+    font-size: 2.5rem;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.03em;
+  }
+
+  .bloco-num.-ouro { color: var(--nx-ouro); }
+  .bloco-num.-verde { color: var(--nx-verde); }
+  .bloco-num.-cinza { color: var(--nx-cinza-fundo); }
+
+  .bloco-rot {
+    font-family: var(--nx-dado);
+    font-size: .68rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--nx-cinza);
+    margin-top: 9px;
+  }
+
+  /* ---------- Cabeçalho de seção ---------- */
+
+  .secao-topo {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 20px;
+    margin: 60px 0 18px;
+    flex-wrap: wrap;
+  }
+
+  .secao-tit {
+    font-family: var(--nx-display);
+    font-variation-settings: 'wdth' 108, 'wght' 700;
+    font-size: 1.42rem;
+    letter-spacing: -.015em;
+    margin: 0;
+  }
+
+  .secao-nota {
+    font-size: .87rem;
+    color: var(--nx-cinza);
+    max-width: 46ch;
+  }
+
+  /* ---------- Cartão de oportunidade ---------- */
+
+  .lista { display: flex; flex-direction: column; gap: 14px; }
+
+  .cartao {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 24px;
+    padding: 26px 28px;
+    border: 1px solid var(--nx-borda);
+    border-radius: var(--nx-raio);
+    background: linear-gradient(158deg, var(--nx-noite-alta), var(--nx-noite) 62%);
+    overflow: hidden;
+    transition: border-color .25s ease, transform .25s ease;
+  }
+
+  .cartao:hover { border-color: var(--nx-azul-claro); transform: translateY(-2px); }
+
+  /* Régua de severidade na borda esquerda: estado legível de relance */
+  .cartao::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--nx-verde);
+  }
+
+  .cartao.-urgente::before { background: var(--nx-critico); }
+  .cartao.-morno::before   { background: var(--nx-atencao); }
+
+  /* Losango da nota — a forma da bandeira virando indicador */
+  .nota {
+    width: 58px; height: 58px;
+    margin: 5px 6px 0;
+    display: grid;
+    place-items: center;
+    transform: rotate(45deg);
+    border-radius: 9px;
+    background: linear-gradient(135deg, var(--nx-ouro-claro), var(--nx-ouro) 58%, #E0A200);
+    box-shadow: 0 0 26px rgba(255, 203, 46, .26);
+  }
+
+  .nota span {
+    transform: rotate(-45deg);
+    font-family: var(--nx-display);
+    font-variation-settings: 'wdth' 106, 'wght' 800;
+    font-size: 1.42rem;
+    font-variant-numeric: tabular-nums;
+    /* Sobre ouro o texto é preto — branco não atinge contraste */
+    color: var(--nx-breu);
+  }
+
+  .corpo { min-width: 0; }
+
+  .objeto {
+    font-family: var(--nx-display);
+    font-variation-settings: 'wdth' 100, 'wght' 600;
+    font-size: 1.09rem;
+    line-height: 1.42;
+    letter-spacing: -.008em;
+    margin: 0 0 12px;
+    text-wrap: balance;
+  }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px 16px;
+    font-family: var(--nx-dado);
+    font-size: .755rem;
+    color: var(--nx-cinza);
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 13px;
+  }
+
+  .meta b { color: var(--nx-marfim); font-weight: 500; }
+  .meta .-prazo-curto { color: var(--nx-critico); font-weight: 600; }
+  .meta .-prazo-ok    { color: var(--nx-verde); font-weight: 600; }
+
+  .linhas { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
+
+  .chip {
+    padding: 4px 11px;
+    border: 1px solid rgba(0, 166, 81, .42);
+    border-radius: 999px;
+    background: rgba(0, 166, 81, .11);
+    font-family: var(--nx-dado);
+    font-size: .68rem;
+    letter-spacing: .04em;
+    color: #6EE39E;
+  }
+
+  .alertas { display: flex; flex-direction: column; gap: 7px; margin-bottom: 15px; }
+
+  .alerta {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: .855rem;
+    line-height: 1.45;
+    color: var(--nx-cinza);
+  }
+
+  /* Marcadores geométricos: triângulo para crítico, círculo para
+     atenção. Forma e cor juntas — a forma sobrevive ao daltonismo. */
+  .alerta::before {
+    content: '';
+    flex: none;
+    margin-top: 6px;
+  }
+
+  .alerta.-critico::before {
+    width: 0; height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-bottom: 9px solid var(--nx-critico);
+  }
+
+  .alerta.-atencao::before {
+    width: 8px; height: 8px;
+    margin-top: 7px;
+    border-radius: 50%;
+    background: var(--nx-atencao);
+  }
+
+  .alerta.-critico { color: #FFB4B4; }
+
+  .acoes { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+  .link {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 15px;
+    border: 1px solid var(--nx-borda);
+    border-radius: 8px;
+    background: rgba(5, 11, 20, .5);
+    color: var(--nx-marfim);
+    font-family: var(--nx-dado);
+    font-size: .715rem;
+    letter-spacing: .05em;
+    text-decoration: none;
+    transition: border-color .2s ease, background .2s ease;
+  }
+
+  .link:hover { border-color: var(--nx-ouro); background: rgba(255, 203, 46, .09); }
+  .link.-fantasma { border-style: dashed; color: var(--nx-cinza-fundo); }
+
+  /* ---------- Composição da nota ---------- */
+
+  .porque {
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px solid var(--nx-borda);
+  }
+
+  .porque-tit {
+    font-family: var(--nx-dado);
+    font-size: .68rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--nx-cinza-fundo);
+    margin-bottom: 13px;
+  }
+
+  .barra-linha {
+    display: grid;
+    grid-template-columns: 118px 1fr 34px;
+    align-items: center;
+    gap: 13px;
+    margin-bottom: 8px;
+    font-family: var(--nx-dado);
+    font-size: .715rem;
+    color: var(--nx-cinza);
+  }
+
+  .barra-trilho {
+    display: block;
+    height: 7px;
+    border-radius: 4px;
+    background: rgba(28, 50, 82, .8);
+    overflow: hidden;
+  }
+
+  /* `display: block` não é opcional: um span segue inline e ignora
+     width e height, e as barras saíam todas cheias e iguais. */
+  .barra-fill {
+    display: block;
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--nx-verde), var(--nx-ouro));
+  }
+
+  .barra-val {
+    text-align: right;
+    color: var(--nx-marfim);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .porque-txt {
+    font-family: var(--nx-corpo);
+    font-size: .83rem;
+    color: var(--nx-cinza-fundo);
+    margin-top: 12px;
+    line-height: 1.55;
+  }
+
+  /* ---------- Descartes ---------- */
+
+  .descartes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 22px 26px;
+    border: 1px dashed var(--nx-borda);
+    border-radius: var(--nx-raio);
+    background: rgba(10, 22, 40, .5);
+  }
+
+  .descarte {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 15px;
+    border-radius: 8px;
+    background: rgba(5, 11, 20, .55);
+    font-family: var(--nx-dado);
+    font-size: .73rem;
+    color: var(--nx-cinza);
+  }
+
+  .descarte b {
+    color: var(--nx-marfim);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- Rodapé de honestidade ---------- */
+
+  .aviso {
+    margin-top: 60px;
+    padding: 28px 32px;
+    border: 1px solid rgba(255, 203, 46, .26);
+    border-radius: var(--nx-raio);
+    background: linear-gradient(140deg, rgba(255, 203, 46, .07), rgba(10, 22, 40, .5));
+  }
+
+  .aviso-tit {
+    font-family: var(--nx-display);
+    font-variation-settings: 'wdth' 106, 'wght' 700;
+    font-size: 1.06rem;
+    color: var(--nx-ouro);
+    margin: 0 0 9px;
+  }
+
+  .aviso p {
+    margin: 0;
+    font-size: .91rem;
+    color: var(--nx-cinza);
+    max-width: 68ch;
+    line-height: 1.62;
+  }
+
+  /* ---------- Botão de replay ---------- */
+
+  .replay {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 26px;
+    padding: 13px 24px;
+    border: 0;
+    border-radius: 10px;
+    background: linear-gradient(120deg, var(--nx-verde-fundo), var(--nx-azul) 70%);
+    border: 1px solid var(--nx-borda);
+    color: var(--nx-marfim);
+    font-family: var(--nx-dado);
+    font-size: .75rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: border-color .2s ease, transform .2s ease;
+  }
+
+  .replay:hover { border-color: var(--nx-ouro); transform: translateY(-1px); }
+  .replay:focus-visible { outline: 2px solid var(--nx-ouro); outline-offset: 3px; }
+
+  .replay::before {
+    content: '';
+    width: 10px; height: 10px;
+    transform: rotate(45deg);
+    border-radius: 2px;
+    background: linear-gradient(135deg, var(--nx-ouro-claro), var(--nx-ouro));
+  }
+
+  /* =========================================================
+     Modal de carregamento — a bandeira se montando
+     ---------------------------------------------------------
+     Cada peça entra no seu tempo: campo, losango, círculo,
+     faixa, estrelas. É uma interpretação geométrica, não uma
+     reprodução — sem lema e sem o mapa real de estrelas.
+     ========================================================= */
+
+  .cortina {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: grid;
+    place-items: center;
+    background: radial-gradient(72rem 46rem at 50% 44%, #0A1628, #02070E 78%);
+    transition: opacity .7s ease, visibility .7s ease;
+  }
+
+  .cortina[hidden] { display: none; }
+  .cortina.-saindo { opacity: 0; visibility: hidden; }
+
+  .palco { display: grid; justify-items: center; gap: 34px; padding: 24px; }
+
+  .bandeira-caixa {
+    position: relative;
+    display: inline-block;
+    line-height: 0;
+    border-radius: 18px;
+    overflow: hidden;
+  }
+
+  .bandeira { width: min(310px, 74vw); height: auto; display: block; }
+
+  /* Lâmina de luz que atravessa a bandeira depois de montada. */
+  .brilho {
+    position: absolute;
+    top: -12%;
+    bottom: -12%;
+    left: 0;
+    width: 38%;
+    opacity: 0;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .3), transparent);
+  }
+
+  /* As peças partem invisíveis e são montadas pela animação. */
+  .peca { opacity: 0; transform-box: fill-box; transform-origin: center; }
+
+  .-anima .campo   { animation: entra-campo   .72s cubic-bezier(.22,.9,.3,1) .05s forwards; }
+  .-anima .losango { animation: entra-losango .78s cubic-bezier(.22,.9,.3,1) .42s forwards; }
+  .-anima .globo   { animation: entra-globo   .66s cubic-bezier(.3,1.5,.5,1)  .86s forwards; }
+  .-anima .banda   { animation: entra-banda   .82s cubic-bezier(.4,0,.2,1)   1.16s forwards; }
+  .-anima .astro   { animation: entra-astro   .5s  ease-out forwards; }
+  .-anima .brilho  { animation: varre         2.6s linear 1.5s infinite; }
+
+  .-anima .astro:nth-of-type(1) { animation-delay: 1.42s; }
+  .-anima .astro:nth-of-type(2) { animation-delay: 1.54s; }
+  .-anima .astro:nth-of-type(3) { animation-delay: 1.66s; }
+  .-anima .astro:nth-of-type(4) { animation-delay: 1.60s; }
+  .-anima .astro:nth-of-type(5) { animation-delay: 1.48s; }
+  .-anima .astro:nth-of-type(6) { animation-delay: 1.72s; }
+
+  @keyframes entra-campo {
+    from { opacity: 0; transform: scale(.62) translateY(16px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  @keyframes entra-losango {
+    from { opacity: 0; transform: rotate(-108deg) scale(.28); }
+    to   { opacity: 1; transform: rotate(0deg) scale(1); }
+  }
+
+  @keyframes entra-globo {
+    from { opacity: 0; transform: scale(0); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes entra-banda {
+    from { opacity: 0; stroke-dashoffset: 190; }
+    to   { opacity: 1; stroke-dashoffset: 0; }
+  }
+
+  @keyframes entra-astro {
+    from { opacity: 0; transform: scale(.2); }
+    to   { opacity: .95; transform: scale(1); }
+  }
+
+  @keyframes varre {
+    0%   { opacity: 0; transform: translateX(-115%) skewX(-18deg); }
+    18%  { opacity: .5; }
+    52%  { opacity: 0; transform: translateX(215%) skewX(-18deg); }
+    100% { opacity: 0; transform: translateX(215%) skewX(-18deg); }
+  }
+
+  .assinatura { display: grid; justify-items: center; gap: 10px; }
+
+  .assinatura-sub {
+    margin: 0;
+    font-family: var(--nx-dado);
+    font-size: .68rem;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--nx-cinza-fundo);
+    opacity: 0;
+    transition: opacity .6s ease 2.1s;
+  }
+
+  .-anima .assinatura-sub { opacity: 1; }
+
+  .palavra {
+    font-family: var(--nx-display);
+    font-variation-settings: 'wdth' 122, 'wght' 800;
+    font-size: clamp(1.5rem, 5.6vw, 2.3rem);
+    letter-spacing: .13em;
+    display: flex;
+    gap: .06em;
+  }
+
+  .palavra i {
+    font-style: normal;
+    opacity: 0;
+    display: inline-block;
+    background: linear-gradient(122deg, var(--nx-verde), var(--nx-ouro) 52%, var(--nx-azul-claro));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .-anima .palavra i { animation: monta-letra .58s cubic-bezier(.2,.9,.3,1) forwards; }
+  .-anima .palavra i:nth-child(1) { animation-delay: 1.50s; }
+  .-anima .palavra i:nth-child(2) { animation-delay: 1.58s; }
+  .-anima .palavra i:nth-child(3) { animation-delay: 1.66s; }
+  .-anima .palavra i:nth-child(4) { animation-delay: 1.74s; }
+  .-anima .palavra i:nth-child(5) { animation-delay: 1.82s; }
+  .-anima .palavra i:nth-child(6) { animation-delay: 1.90s; }
+
+  @keyframes monta-letra {
+    from { opacity: 0; transform: translateY(20px) rotate(-24deg) scale(.6); }
+    to   { opacity: 1; transform: translateY(0) rotate(0) scale(1); }
+  }
+
+  .progresso { display: grid; justify-items: center; gap: 15px; width: min(360px, 78vw); }
+
+  .trilho {
+    width: 100%;
+    height: 3px;
+    border-radius: 3px;
+    background: rgba(28, 50, 82, .9);
+    overflow: hidden;
+  }
+
+  .avanco {
+    width: 0%;
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--nx-verde), var(--nx-ouro) 55%, var(--nx-azul-claro));
+    transition: width .5s cubic-bezier(.3,.8,.4,1);
+  }
+
+  .etapa {
+    font-family: var(--nx-dado);
+    font-size: .72rem;
+    letter-spacing: .09em;
+    color: var(--nx-cinza);
+    text-align: center;
+    min-height: 1.3em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- Movimento reduzido ---------- */
+
+  @media (prefers-reduced-motion: reduce) {
+    /* Nada se monta: as peças já chegam prontas e só o texto de
+       etapa muda. A informação é a mesma, sem o movimento. */
+    .peca, .palavra i { opacity: 1 !important; transform: none !important; animation: none !important; }
+    .assinatura-sub { opacity: 1; transition: none; }
+    .brilho { display: none; }
+    .cartao { transition: none; }
+    .cartao:hover { transform: none; }
+    .avanco { transition: none; }
+  }
+
+  /* ---------- Telas estreitas ---------- */
+
+  @media (max-width: 620px) {
+    .folha { padding: 0 18px 72px; }
+    .topo { padding: 48px 0 32px; }
+    .cartao { grid-template-columns: 1fr; gap: 16px; padding: 22px; }
+    .nota { margin: 0 0 4px 8px; }
+    .barra-linha { grid-template-columns: 92px 1fr 30px; gap: 10px; }
+  }
+</style>
+
+<div class="ambiente" aria-hidden="true"></div>
+
+<!-- =========================================================
+     Cortina de carregamento
+     ========================================================= -->
+<div class="cortina -anima" id="cortina" role="status" aria-live="polite" aria-label="Consultando o PNCP">
+  <div class="palco">
+
+    <div class="bandeira-caixa">
+    <svg class="bandeira" viewBox="0 0 300 210" role="img" aria-label="Interpretação geométrica da bandeira do Brasil sendo montada">
+      <defs>
+        <linearGradient id="gVerde" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%"   stop-color="#00C463"/>
+          <stop offset="55%"  stop-color="#00A651"/>
+          <stop offset="100%" stop-color="#00602F"/>
+        </linearGradient>
+        <linearGradient id="gOuro" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%"   stop-color="#FFE694"/>
+          <stop offset="48%"  stop-color="#FFCB2E"/>
+          <stop offset="100%" stop-color="#D69A00"/>
+        </linearGradient>
+        <radialGradient id="gAzul" cx="36%" cy="30%" r="78%">
+          <stop offset="0%"   stop-color="#4A7FCC"/>
+          <stop offset="58%"  stop-color="#1B3A6B"/>
+          <stop offset="100%" stop-color="#0B1E3D"/>
+        </radialGradient>
+        <clipPath id="cGlobo"><circle cx="150" cy="105" r="46"/></clipPath>
+      </defs>
+
+      <rect class="peca campo" x="4" y="6" width="292" height="198" rx="16" fill="url(#gVerde)"/>
+      <polygon class="peca losango" points="150,26 272,105 150,184 28,105" fill="url(#gOuro)"/>
+      <circle class="peca globo" cx="150" cy="105" r="46" fill="url(#gAzul)"/>
+
+      <g clip-path="url(#cGlobo)">
+        <path class="peca banda"
+              d="M104 124 Q150 96 196 118"
+              fill="none" stroke="#EEF3FA" stroke-width="13"
+              stroke-linecap="round" stroke-dasharray="190"/>
+      </g>
+
+      <g clip-path="url(#cGlobo)">
+        <circle class="peca astro" cx="128" cy="90"  r="2.6" fill="#EEF3FA"/>
+        <circle class="peca astro" cx="158" cy="80"  r="2.0" fill="#EEF3FA"/>
+        <circle class="peca astro" cx="176" cy="97"  r="2.9" fill="#EEF3FA"/>
+        <circle class="peca astro" cx="139" cy="103" r="1.8" fill="#EEF3FA"/>
+        <circle class="peca astro" cx="119" cy="112" r="2.2" fill="#EEF3FA"/>
+        <circle class="peca astro" cx="167" cy="140" r="2.4" fill="#EEF3FA"/>
+      </g>
+    </svg>
+      <span class="brilho" aria-hidden="true"></span>
+    </div>
+
+    <div class="assinatura">
+      <div class="palavra" aria-hidden="true">
+        <i>B</i><i>R</i><i>A</i><i>S</i><i>I</i><i>L</i>
+      </div>
+      <p class="assinatura-sub">Nexor Licitações · radar do PNCP</p>
+    </div>
+
+    <div class="progresso">
+      <div class="trilho"><div class="avanco" id="avanco"></div></div>
+      <div class="etapa" id="etapa">Conectando ao Portal Nacional de Contratações Públicas…</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- =========================================================
+     Página
+     ========================================================= -->
+<div class="folha">
+
+  <header class="topo">
+    <div class="marca">
+      <div>
+        <h1 class="marca-nome">Nexor Licitações</h1>
+        <p class="marca-sub">Radar do PNCP · 27 ago 2026, 07:00</p>
+      </div>
+    </div>
+    <div class="selo-demo">Prévia · dados de demonstração</div>
+  </header>
+
+  <hr class="faixa">
+
+  <section class="resumo" aria-label="Resumo da varredura">
+    <div class="bloco">
+      <div class="bloco-num">6</div>
+      <div class="bloco-rot">Contratações consultadas</div>
+    </div>
+    <div class="bloco">
+      <div class="bloco-num -ouro">3</div>
+      <div class="bloco-rot">Aderentes ao seu perfil</div>
+    </div>
+    <div class="bloco">
+      <div class="bloco-num -cinza">3</div>
+      <div class="bloco-rot">Descartadas</div>
+    </div>
+    <div class="bloco">
+      <div class="bloco-num -verde">1</div>
+      <div class="bloco-rot">Fecha em menos de 48 h</div>
+    </div>
+  </section>
+
+  <div class="secao-topo">
+    <h2 class="secao-tit">O que vale olhar hoje</h2>
+    <p class="secao-nota">Ordenado por nota. Entre duas oportunidades igualmente boas, a que fecha antes vem primeiro — é a que se perde se ficar para amanhã.</p>
+  </div>
+
+  <div class="lista">
+
+    <!-- 1 -->
+    <article class="cartao">
+      <div class="nota"><span>89</span></div>
+      <div class="corpo">
+        <h3 class="objeto">Aquisição de equipamentos de informática (notebook e monitor) para as unidades da Secretaria Municipal de Educação</h3>
+        <div class="meta">
+          <span><b>São Paulo/SP</b></span>
+          <span>Dispensa de Licitação</span>
+          <span><b>R$ 48.750,00</b></span>
+          <span class="-prazo-ok">8 dias restantes</span>
+        </div>
+        <div class="linhas"><span class="chip">Informática e equipamentos</span></div>
+        <div class="acoes">
+          <a class="link" href="https://pncp.gov.br/app/editais/46392130000180/2026/188" target="_blank" rel="noopener">Ver edital no PNCP</a>
+          <a class="link" href="https://www.gov.br/compras/pt-br" target="_blank" rel="noopener">Enviar no Compras.gov.br</a>
+        </div>
+
+        <div class="porque">
+          <div class="porque-tit">Por que 89</div>
+
+          <div class="barra-linha">
+            <span>Aderência</span>
+            <span class="barra-trilho"><span class="barra-fill" style="width:75.6%"></span></span>
+            <span class="barra-val">34</span>
+          </div>
+          <div class="barra-linha">
+            <span>Geografia</span>
+            <span class="barra-trilho"><span class="barra-fill" style="width:100%"></span></span>
+            <span class="barra-val">20</span>
+          </div>
+          <div class="barra-linha">
+            <span>Valor</span>
+            <span class="barra-trilho"><span class="barra-fill" style="width:100%"></span></span>
+            <span class="barra-val">15</span>
+          </div>
+          <div class="barra-linha">
+            <span>Modalidade</span>
+            <span class="barra-trilho"><span class="barra-fill" style="width:100%"></span></span>
+            <span class="barra-val">10</span>
+          </div>
+          <div class="barra-linha">
+            <span>Exclusividade</span>
+            <span class="barra-trilho"><span class="barra-fill" style="width:100%"></span></span>
+            <span class="barra-val">10</span>
+          </div>
+
+          <p class="porque-txt">Casou com <b>Informática e equipamentos</b> por “notebook”, “informática” e “monitor”. No seu município, dentro da sua faixa de valor, e abaixo dos R$ 80 mil da cota exclusiva ME/EPP.</p>
+        </div>
+      </div>
+    </article>
+
+    <!-- 2 -->
+    <article class="cartao -urgente">
+      <div class="nota"><span>79</span></div>
+      <div class="corpo">
+        <h3 class="objeto">Registro de preços para aquisição de material de escritório e papel A4</h3>
+        <div class="meta">
+          <span><b>Santo André/SP</b></span>
+          <span>Pregão — Eletrônico</span>
+          <span><b>R$ 62.000,00</b></span>
+          <span class="-prazo-curto">1 dia restante</span>
+        </div>
+        <div class="linhas"><span class="chip">Material de escritório</span></div>
+        <div class="alertas">
+          <div class="alerta -critico">Prazo apertado: menos da metade dos 3 dias que você precisa para preparar</div>
+          <div class="alerta -atencao">Disputa aberta: os lances são ao vivo e você precisa estar na sessão</div>
+          <div class="alerta -atencao">Registro de preços: ganhar gera ata, não garante compra — não estoque por conta</div>
+          <div class="alerta -atencao">Plataforma de envio não informada — descubra no edital onde cadastrar</div>
+        </div>
+        <div class="acoes">
+          <a class="link" href="https://pncp.gov.br/app/editais/46522942000165/2026/44" target="_blank" rel="noopener">Ver edital no PNCP</a>
+          <span class="link -fantasma">Plataforma não informada</span>
+        </div>
+      </div>
+    </article>
+
+    <!-- 3 -->
+    <article class="cartao -morno">
+      <div class="nota"><span>74</span></div>
+      <div class="corpo">
+        <h3 class="objeto">Contratação de licença de uso de sistema de gestão escolar com suporte técnico</h3>
+        <div class="meta">
+          <span><b>São Paulo/SP</b></span>
+          <span>Dispensa de Licitação</span>
+          <span>valor sigiloso</span>
+          <span class="-prazo-curto">2 dias restantes</span>
+        </div>
+        <div class="linhas"><span class="chip">Software e serviços de TI</span></div>
+        <div class="alertas">
+          <div class="alerta -atencao">Prazo abaixo do seu tempo habitual de preparo — priorize hoje</div>
+          <div class="alerta -atencao">Orçamento sigiloso: o valor de referência só aparece durante a disputa</div>
+        </div>
+        <div class="acoes">
+          <a class="link" href="https://pncp.gov.br/app/editais/46392130000180/2026/190" target="_blank" rel="noopener">Ver edital no PNCP</a>
+          <a class="link" href="https://www.gov.br/compras/pt-br" target="_blank" rel="noopener">Enviar no Compras.gov.br</a>
+        </div>
+      </div>
+    </article>
+
+  </div>
+
+  <div class="secao-topo">
+    <h2 class="secao-tit">O que ficou de fora</h2>
+    <p class="secao-nota">Descarte é diferente de nota baixa. Se quase tudo cair em “não bate com nenhuma linha”, faltam palavras-chave no seu perfil — não oportunidades no mercado.</p>
+  </div>
+
+  <div class="descartes">
+    <div class="descarte"><b>1</b> Contém termo excluído — “locação”</div>
+    <div class="descarte"><b>1</b> Objeto não bate com nenhuma linha</div>
+    <div class="descarte"><b>1</b> Contratação revogada</div>
+  </div>
+
+  <section class="aviso">
+    <h2 class="aviso-tit">O radar não envia proposta</h2>
+    <p>Ele acha, lê, pontua e avisa. Enviar proposta é ato jurídico vinculante: exige certificado digital, e se o preço estiver errado você é obrigado a entregar naquele valor. O clique final é seu, com o edital lido e o dossiê na tela ao lado.</p>
+    <button class="replay" id="replay" type="button">Ver a tela de carregamento</button>
+  </section>
+
+</div>
+
+<script>
+  /* =========================================================
+     Sequência de carregamento
+     ---------------------------------------------------------
+     As etapas são as reais do radar — consulta por modalidade,
+     normalização, triagem — para a espera dizer o que está
+     acontecendo em vez de girar um spinner mudo.
+     ========================================================= */
+  (function () {
+    var cortina = document.getElementById('cortina');
+    var avanco  = document.getElementById('avanco');
+    var etapa   = document.getElementById('etapa');
+    var replay  = document.getElementById('replay');
+
+    var ETAPAS = [
+      { t: 'Conectando ao Portal Nacional de Contratações Públicas…', p: 8,   ms: 900 },
+      { t: 'Modalidade 8 · Dispensa de Licitação',                    p: 30,  ms: 800 },
+      { t: 'Modalidade 6 · Pregão Eletrônico',                        p: 52,  ms: 750 },
+      { t: 'Modalidade 12 · Credenciamento',                          p: 68,  ms: 650 },
+      { t: 'Triando 6 contratações contra o seu perfil…',             p: 86,  ms: 800 },
+      { t: '3 oportunidades aderentes',                               p: 100, ms: 700 }
+    ];
+
+    var reduzido = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var timers = [];
+
+    function limpar() {
+      timers.forEach(clearTimeout);
+      timers = [];
+    }
+
+    function rodar() {
+      limpar();
+      cortina.hidden = false;
+      cortina.classList.remove('-saindo');
+      avanco.style.width = '0%';
+      etapa.textContent = ETAPAS[0].t;
+
+      // Reinicia as animações: sem o reflow o navegador reaproveita
+      // o estado final e nada se monta de novo.
+      cortina.classList.remove('-anima');
+      void cortina.offsetWidth;
+      cortina.classList.add('-anima');
+
+      var t = reduzido ? 0 : 500;
+      ETAPAS.forEach(function (passo) {
+        timers.push(setTimeout(function () {
+          etapa.textContent = passo.t;
+          avanco.style.width = passo.p + '%';
+        }, t));
+        t += reduzido ? 260 : passo.ms;
+      });
+
+      timers.push(setTimeout(function () {
+        cortina.classList.add('-saindo');
+        timers.push(setTimeout(function () { cortina.hidden = true; }, 750));
+      }, t + 350));
+    }
+
+    replay.addEventListener('click', rodar);
+    rodar();
+  })();
+</script>
