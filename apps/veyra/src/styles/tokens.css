@@ -157,8 +157,11 @@
   /* ---------- Camadas ---------- */
   --z-base: 0;
   --z-sticky: 100;
-  --z-drawer: 300;
-  --z-overlay: 400;
+  /* O véu escurece o que está atrás dele, então precisa vir antes da
+     gaveta e do modal. Com o véu acima, a gaveta abria esmaecida — ela
+     estava sendo pintada por baixo do próprio escurecimento. */
+  --z-overlay: 300;
+  --z-drawer: 400;
   --z-modal: 500;
   --z-toast: 600;
   --z-tooltip: 700;

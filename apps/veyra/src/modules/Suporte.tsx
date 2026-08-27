@@ -1,18 +1,19 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, BookOpen, CheckCircle2, Clock, LifeBuoy, Plus, Star, ThumbsDown, Timer } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock, LifeBuoy, Plus, Star, ThumbsDown, Timer } from 'lucide-react';
 import { SLA_MINUTOS, type Ticket, type TicketPriority } from '@veyra/core';
 import { Abas, Botao, Cartao, CartaoCabecalho, CartaoCorpo, EstadoVazio, Progresso, Selo, useAvisos } from '../components';
 import { GraficoArea, GraficoBarras, Indicador, formatarNumero, formatarPercentual } from '../components/Charts';
 import { Pagina, formatarData, tempoRelativo } from './Pagina';
 import { useSessao } from '../app/sessao';
 import { ROTULO_PRIORIDADE } from '../app/rotulos';
-import { CHAMADOS, CONHECIMENTO, CSAT, clientePorId, usuarioPorId } from '../data/base';
+import { CHAMADOS, CSAT, clientePorId, usuarioPorId } from '../data/base';
 
 function tomDaPrioridade(p: TicketPriority) {
   return p === 'critica' ? ('perigo' as const) : p === 'alta' ? ('atencao' as const) : ('neutro' as const);
 }
 
-type AbaSuporte = 'chamados' | 'sla' | 'csat' | 'conhecimento';
+type AbaSuporte = 'chamados' | 'sla' | 'csat';
 
 /**
  * Suporte
@@ -52,11 +53,21 @@ export function Suporte() {
       titulo="VEYRA Support"
       subtitulo="Protocolo, SLA por prioridade e avaliação ao encerrar. O pós-venda deixa de ser conversa solta e vira registro."
       acoes={
-        pode('suporte.criar') ? (
-          <Botao variante="primario" icone={Plus} onClick={() => avisar({ tom: 'info', titulo: 'Novo chamado', texto: 'O protocolo é gerado na abertura.' })}>
-            Abrir chamado
-          </Botao>
-        ) : undefined
+        <>
+          {/* A base de conhecimento é módulo próprio, não uma aba daqui:
+              quem escreve artigo e quem atende chamado fazem trabalhos
+              diferentes, ainda que leiam o mesmo acervo. */}
+          <Link to="/app/conhecimento">
+            <Botao variante="secundario">
+              Base de conhecimento <ArrowRight size={14} />
+            </Botao>
+          </Link>
+          {pode('suporte.criar') && (
+            <Botao variante="primario" icone={Plus} onClick={() => avisar({ tom: 'info', titulo: 'Novo chamado', texto: 'O protocolo é gerado na abertura.' })}>
+              Abrir chamado
+            </Botao>
+          )}
+        </>
       }
     >
       <div className="vy-grid" style={{ marginBottom: 'var(--space-5)' }}>
@@ -71,7 +82,6 @@ export function Suporte() {
           { valor: 'chamados' as const, rotulo: 'Chamados' },
           { valor: 'sla' as const, rotulo: 'SLA' },
           { valor: 'csat' as const, rotulo: 'CSAT' },
-          { valor: 'conhecimento' as const, rotulo: 'Base de conhecimento' },
         ]}
         valor={aba}
         aoMudar={setAba}
@@ -81,7 +91,6 @@ export function Suporte() {
         {aba === 'chamados' && <ListaChamados />}
         {aba === 'sla' && <PainelSla />}
         {aba === 'csat' && <PainelCsat metricas={metricas} />}
-        {aba === 'conhecimento' && <PainelConhecimento />}
       </div>
     </Pagina>
   );
@@ -317,32 +326,3 @@ function PainelCsat({ metricas }: { metricas: { csatMedio: number; satisfeitos: 
   );
 }
 
-function PainelConhecimento() {
-  return (
-    <div className="vy-grid-2">
-      {CONHECIMENTO.map((artigo) => (
-        <Cartao key={artigo.id} preenchido>
-          <div className="vy-row-between" style={{ alignItems: 'flex-start', gap: 'var(--space-3)' }}>
-            <div>
-              <div className="vy-row" style={{ gap: 'var(--space-2)' }}>
-                <BookOpen size={14} color="var(--text-subtle)" />
-                <strong style={{ fontSize: 'var(--text-sm)', color: 'var(--text-strong)' }}>{artigo.titulo}</strong>
-              </div>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 4 }}>
-                {artigo.categoria} · {artigo.autor} · atualizado {tempoRelativo(artigo.atualizadoEm)}
-              </div>
-            </div>
-            <Selo tom={artigo.aprovado ? 'sucesso' : 'atencao'}>{artigo.aprovado ? 'aprovado' : 'rascunho'}</Selo>
-          </div>
-          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 'var(--space-3)' }}>{artigo.conteudo}</p>
-          <div className="vy-row-between" style={{ marginTop: 'var(--space-4)', paddingTop: 'var(--space-3)', borderTop: '1px solid var(--border-subtle)' }}>
-            <span className="vy-eyebrow">Consultado pela IA</span>
-            <strong className="vy-numeric" style={{ color: 'var(--vy-violet-400)' }}>
-              {formatarNumero(artigo.usosPelaIa)}×
-            </strong>
-          </div>
-        </Cartao>
-      ))}
-    </div>
-  );
-}

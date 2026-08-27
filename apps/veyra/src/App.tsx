@@ -21,12 +21,13 @@ const Contratos = lazy(() => import('./modules/Comercial').then((m) => ({ defaul
 const Produtos = lazy(() => import('./modules/Comercial').then((m) => ({ default: m.Produtos })));
 const Campanhas = lazy(() => import('./modules/Crescimento').then((m) => ({ default: m.Campanhas })));
 const Automacoes = lazy(() => import('./modules/Crescimento').then((m) => ({ default: m.Automacoes })));
-const Tarefas = lazy(() => import('./modules/Crescimento').then((m) => ({ default: m.Tarefas })));
-const Agenda = lazy(() => import('./modules/Crescimento').then((m) => ({ default: m.Agenda })));
+const Tarefas = lazy(() => import('./modules/Trabalho').then((m) => ({ default: m.Tarefas })));
+const Agenda = lazy(() => import('./modules/Trabalho').then((m) => ({ default: m.Agenda })));
 const Financeiro = lazy(() => import('./modules/Financeiro').then((m) => ({ default: m.Financeiro })));
 const Comissoes = lazy(() => import('./modules/Financeiro').then((m) => ({ default: m.Comissoes })));
 const Partners = lazy(() => import('./modules/Financeiro').then((m) => ({ default: m.Partners })));
 const Suporte = lazy(() => import('./modules/Suporte').then((m) => ({ default: m.Suporte })));
+const Conhecimento = lazy(() => import('./modules/Conhecimento').then((m) => ({ default: m.Conhecimento })));
 const Relatorios = lazy(() => import('./modules/Plataforma').then((m) => ({ default: m.Relatorios })));
 const Integracoes = lazy(() => import('./modules/Plataforma').then((m) => ({ default: m.Integracoes })));
 const Configuracoes = lazy(() => import('./modules/Plataforma').then((m) => ({ default: m.Configuracoes })));
@@ -93,7 +94,7 @@ export function App() {
               <Route path="comissoes" element={<Comissoes />} />
               <Route path="partners" element={<Partners />} />
               <Route path="suporte" element={<Suporte />} />
-              <Route path="conhecimento" element={<Suporte />} />
+              <Route path="conhecimento" element={<Conhecimento />} />
               <Route path="relatorios" element={<Relatorios />} />
               <Route path="integracoes" element={<Integracoes />} />
               <Route path="configuracoes" element={<Configuracoes />} />

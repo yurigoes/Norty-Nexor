@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import {
   ArrowRight,
   Ban,
-  Calendar,
   CheckSquare,
   Clock,
   GitBranch,
@@ -17,11 +16,11 @@ import {
   Zap,
 } from 'lucide-react';
 import type { Automation, AutomationNode } from '@veyra/core';
-import { Abas, Botao, Cartao, CartaoCabecalho, CartaoCorpo, EstadoVazio, Progresso, Segmentado, Selo, useAvisos } from '../components';
-import { GraficoBarras, Indicador, formatarMoeda, formatarNumero, formatarPercentual } from '../components/Charts';
-import { Pagina, formatarData, tempoRelativo } from './Pagina';
+import { Abas, Botao, Cartao, CartaoCabecalho, CartaoCorpo, Progresso, Selo, useAvisos } from '../components';
+import { Indicador, formatarMoeda, formatarNumero, formatarPercentual } from '../components/Charts';
+import { Pagina, formatarData } from './Pagina';
 import { useSessao } from '../app/sessao';
-import { AUTOMACOES, BLACKLIST, CAMPANHAS, TAREFAS, clientePorId, leadPorId, usuarioPorId } from '../data/base';
+import { AUTOMACOES, BLACKLIST, CAMPANHAS } from '../data/base';
 
 /* =========================================================
    Campanhas
@@ -354,160 +353,6 @@ export function Automacoes() {
                   </li>
                 );
               })}
-            </ol>
-          </CartaoCorpo>
-        </Cartao>
-      </div>
-    </Pagina>
-  );
-}
-
-/* =========================================================
-   Tarefas e agenda
-   ========================================================= */
-
-export function Tarefas() {
-  const { versaoDados } = useSessao();
-  const [filtro, setFiltro] = useState<'abertas' | 'atrasadas' | 'todas'>('abertas');
-  const agora = new Date('2026-08-27T09:00:00-03:00');
-
-  const filtradas = useMemo(
-    () =>
-      TAREFAS.filter((t) => {
-        if (filtro === 'abertas') return !t.concluida;
-        if (filtro === 'atrasadas') return !t.concluida && new Date(t.vence) < agora;
-        return true;
-      }).sort((a, b) => (a.vence < b.vence ? -1 : 1)),
-    [filtro, versaoDados],
-  );
-
-  const atrasadas = TAREFAS.filter((t) => !t.concluida && new Date(t.vence) < agora).length;
-
-  return (
-    <Pagina
-      titulo="Tarefas"
-      subtitulo="O que não tem próxima ação com dono e prazo não acontece. Esta é a lista que impede o lead de morrer de esquecimento."
-      acoes={
-        <Segmentado
-          opcoes={[
-            { valor: 'abertas' as const, rotulo: 'Abertas' },
-            { valor: 'atrasadas' as const, rotulo: `Atrasadas (${atrasadas})` },
-            { valor: 'todas' as const, rotulo: 'Todas' },
-          ]}
-          valor={filtro}
-          aoMudar={setFiltro}
-        />
-      }
-    >
-      {filtradas.length === 0 ? (
-        <Cartao>
-          <EstadoVazio icone={CheckSquare} titulo="Nada pendente" texto="Nenhuma tarefa neste recorte. Vale conferir se as automações estão criando follow-up." />
-        </Cartao>
-      ) : (
-        <Cartao>
-          <ul>
-            {filtradas.map((tarefa) => {
-              const atrasada = !tarefa.concluida && new Date(tarefa.vence) < agora;
-              const alvo = clientePorId(tarefa.clienteId)?.nome ?? leadPorId(tarefa.leadId)?.nome;
-              return (
-                <li
-                  key={tarefa.id}
-                  className="vy-row"
-                  style={{
-                    gap: 'var(--space-3)',
-                    padding: 'var(--space-3) var(--space-4)',
-                    borderBottom: '1px solid var(--border-subtle)',
-                    alignItems: 'flex-start',
-                  }}
-                >
-                  <span
-                    style={{
-                      marginTop: 3,
-                      width: 15,
-                      height: 15,
-                      borderRadius: 4,
-                      flexShrink: 0,
-                      border: '1.5px solid var(--border-strong)',
-                      background: tarefa.concluida ? 'var(--success)' : 'transparent',
-                    }}
-                  />
-                  <div className="vy-grow" style={{ minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontSize: 'var(--text-sm)',
-                        color: tarefa.concluida ? 'var(--text-subtle)' : 'var(--text-default)',
-                        textDecoration: tarefa.concluida ? 'line-through' : 'none',
-                      }}
-                    >
-                      {tarefa.titulo}
-                    </div>
-                    <div className="vy-row vy-wrap" style={{ gap: 'var(--space-3)', marginTop: 4 }}>
-                      <span style={{ fontSize: 'var(--text-2xs)', color: atrasada ? 'var(--danger)' : 'var(--text-subtle)' }}>
-                        {atrasada ? 'Atrasada · ' : ''}
-                        {tempoRelativo(tarefa.vence)}
-                      </span>
-                      <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)' }}>
-                        {usuarioPorId(tarefa.responsavelId)?.nome}
-                      </span>
-                      {alvo && <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)' }}>{alvo}</span>}
-                    </div>
-                  </div>
-                  <span className="vy-row" style={{ gap: 'var(--space-2)', flexShrink: 0 }}>
-                    <Selo tom="neutro">{tarefa.tipo}</Selo>
-                    {tarefa.prioridade === 'critica' && <Selo tom="perigo">crítica</Selo>}
-                    {tarefa.prioridade === 'alta' && <Selo tom="atencao">alta</Selo>}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </Cartao>
-      )}
-    </Pagina>
-  );
-}
-
-export function Agenda() {
-  const dias = ['Seg 24', 'Ter 25', 'Qua 26', 'Qui 27', 'Sex 28', 'Sáb 29', 'Dom 30'];
-  const compromissos = TAREFAS.filter((t) => !t.concluida).slice(0, 7);
-
-  return (
-    <Pagina titulo="Agenda" subtitulo="Compromissos, follow-ups e lembretes da semana, ligados ao cliente que os originou.">
-      <div className="vy-grid" style={{ marginBottom: 'var(--space-5)' }}>
-        <Indicador rotulo="Compromissos na semana" valor={formatarNumero(compromissos.length)} icone={Calendar} />
-        <Indicador rotulo="Follow-ups automáticos" valor="42" contexto="criados por automação" icone={Zap} />
-        <Indicador rotulo="Reuniões marcadas" valor="6" icone={Clock} />
-        <Indicador rotulo="Taxa de comparecimento" valor={formatarPercentual(78, 0)} delta={4.2} icone={CheckSquare} />
-      </div>
-
-      <Cartao>
-        <CartaoCabecalho titulo="Semana de 24 a 30 de agosto" descricao="Distribuição de compromissos por dia." />
-        <CartaoCorpo>
-          <GraficoBarras
-            dados={dias.map((dia, i) => ({ rotulo: dia, valor: [3, 5, 4, 7, 6, 1, 0][i] }))}
-            formatar={(v) => `${v} compromissos`}
-            altura={180}
-          />
-        </CartaoCorpo>
-      </Cartao>
-
-      <div style={{ marginTop: 'var(--space-4)' }}>
-        <Cartao>
-          <CartaoCabecalho titulo="Hoje" descricao="27 de agosto de 2026" />
-          <CartaoCorpo>
-            <ol className="vy-timeline">
-              {compromissos.map((c) => (
-                <li key={c.id} className="vy-timeline__item">
-                  <span className="vy-timeline__ponto" />
-                  <div className="vy-row-between" style={{ gap: 'var(--space-3)' }}>
-                    <strong style={{ fontSize: 'var(--text-sm)', color: 'var(--text-strong)' }}>{c.titulo}</strong>
-                    <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', flexShrink: 0 }}>{tempoRelativo(c.vence)}</span>
-                  </div>
-                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
-                    {usuarioPorId(c.responsavelId)?.nome} · {c.tipo}
-                  </span>
-                </li>
-              ))}
             </ol>
           </CartaoCorpo>
         </Cartao>

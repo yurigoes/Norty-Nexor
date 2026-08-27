@@ -451,6 +451,25 @@ export interface Invoice extends TenantScoped {
   linkPagamento?: string;
 }
 
+/**
+ * Recebimento registrado contra uma fatura.
+ *
+ * A fatura pode ser quitada de uma vez ou em vários registros — parte em
+ * PIX hoje, parte em boleto na semana que vem. Guardar cada recebimento
+ * em vez de só marcar a fatura como paga é o que permite conciliar
+ * depois: sem isso, "quanto entrou por PIX em agosto" não tem resposta.
+ */
+export interface PaymentRecord extends TenantScoped {
+  invoiceId: Id;
+  metodo: PaymentMethod;
+  valor: Money;
+  recebidoEm: IsoDate;
+  observacao?: string;
+  /** Identificador no provedor. Nunca a chave do provedor. */
+  referenciaExterna?: string;
+  registradoPor: string;
+}
+
 export interface Payable extends TenantScoped {
   fornecedor: string;
   categoria: string;
@@ -498,6 +517,13 @@ export interface Commission extends TenantScoped {
   percentual?: number;
   valor: Money;
   competencia: string;
+  /**
+   * Parcela da recorrência. Comissão de pagamento único é sempre 1; a
+   * recorrente gera uma linha por competência enquanto o contrato durar.
+   * É este campo que compõe a chave única no banco e impede que
+   * reprocessar o fechamento pague duas vezes a mesma parcela.
+   */
+  parcela?: number;
   status: CommissionStatus;
   pagaEm?: IsoDate;
 }
@@ -681,6 +707,23 @@ export interface Task extends TenantScoped {
   concluidaEm?: IsoDate;
   prioridade: TicketPriority;
   tipo: 'ligacao' | 'whatsapp' | 'email' | 'reuniao' | 'documento' | 'outro';
+}
+
+export type AppointmentKind = 'reuniao' | 'ligacao' | 'visita' | 'assembleia' | 'interno';
+
+export interface Appointment extends TenantScoped {
+  titulo: string;
+  descricao?: string;
+  tipo: AppointmentKind;
+  responsavelId: Id;
+  clienteId?: Id;
+  leadId?: Id;
+  inicia: IsoDate;
+  termina: IsoDate;
+  local?: string;
+  /** Compromisso criado por automação, não por pessoa. */
+  automatico?: boolean;
+  cancelado?: boolean;
 }
 
 /* =========================================================

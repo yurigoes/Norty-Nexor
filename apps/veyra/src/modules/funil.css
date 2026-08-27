@@ -11,8 +11,12 @@
 .vy-funil__coluna {
   display: flex;
   flex-direction: column;
-  flex: 0 0 264px;
-  max-height: calc(100dvh - 320px);
+  flex: 0 0 300px;
+  /* A altura anterior descontava 320px e sobrava pouco mais de dois
+     cartões visíveis. O quadro é a tela principal de quem trabalha no
+     funil: ele ocupa o que a janela tiver. */
+  max-height: calc(100dvh - var(--topbar-height) - 190px);
+  min-height: 420px;
   background: var(--surface-sunken);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
@@ -50,7 +54,7 @@
 }
 
 .vy-funil__cartao {
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-4);
   background: var(--surface-raised);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -76,4 +80,112 @@
   text-align: center;
   font-size: var(--text-xs);
   color: var(--text-subtle);
+}
+
+/* =========================================================
+   Agenda — semana em sete colunas
+   Rola na horizontal dentro do próprio contêiner, como o funil.
+   ========================================================= */
+
+.vy-agenda {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  padding-bottom: var(--space-3);
+}
+
+.vy-agenda__dia {
+  display: flex;
+  flex-direction: column;
+  /* Sete colunas precisam caber numa janela de notebook sem rolagem:
+     elas dividem o espaço e só encolhem até 150px. */
+  flex: 1 1 150px;
+  min-width: 150px;
+  min-height: 340px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+/* O dia corrente ganha a borda da marca. É a referência que faz a
+   semana ser lida sem procurar a data. */
+.vy-agenda__dia[data-hoje='true'] {
+  border-color: rgb(24 216 232 / 0.4);
+  background: rgb(24 216 232 / 0.04);
+}
+
+.vy-agenda__cabecalho {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.vy-agenda__lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  flex: 1;
+}
+
+.vy-agenda__item {
+  position: relative;
+  padding: var(--space-3);
+  padding-left: var(--space-4);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  cursor: default;
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.vy-agenda__item:hover {
+  box-shadow: var(--shadow-sm);
+}
+
+/* As ações só aparecem no ponteiro ou no foco do teclado: quatro ícones
+   fixos por compromisso transformariam a semana em uma barra de botões. */
+.vy-agenda__acoes {
+  display: none;
+  gap: 2px;
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.vy-agenda__item:hover .vy-agenda__acoes,
+.vy-agenda__item:focus-within .vy-agenda__acoes {
+  display: flex;
+}
+
+.vy-agenda__vazio {
+  flex: 1;
+  min-height: 72px;
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-subtle);
+  font-size: var(--text-2xs);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.vy-agenda__vazio:hover:not(:disabled) {
+  border-color: var(--vy-cyan);
+  color: var(--vy-cyan-300);
+}
+
+.vy-agenda__vazio:disabled {
+  cursor: default;
+}
+
+@media (max-width: 860px) {
+  .vy-agenda__dia {
+    flex: 0 0 200px;
+  }
 }

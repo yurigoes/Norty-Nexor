@@ -2,9 +2,6 @@ import { useMemo, useState } from 'react';
 import {
   Download,
   Filter,
-  Flame,
-  MessageSquare,
-  Phone,
   Plus,
   UserPlus,
 } from 'lucide-react';
@@ -25,15 +22,9 @@ import { formatarMoeda, formatarNumero } from '../components/Charts';
 import { BarraFiltros, Pagina, tempoRelativo } from './Pagina';
 import { useSessao } from '../app/sessao';
 import { ROTULO_ORIGEM, ROTULO_STATUS_LEAD, ROTULO_TEMPERATURA } from '../app/rotulos';
-import { LEADS, PIPELINES, produtoPorId, usuarioPorId } from '../data/base';
-
-function tomDoStatus(status: LeadStatus) {
-  if (status === 'venda') return 'sucesso' as const;
-  if (status === 'perdido' || status === 'desistente') return 'perigo' as const;
-  if (status === 'quente' || status === 'em_negociacao') return 'atencao' as const;
-  if (status === 'sem_resposta' || status === 'nutricao') return 'neutro' as const;
-  return 'info' as const;
-}
+import { FichaLead, tomDoStatus } from './FichaLead';
+import { FormularioLead } from './FormularioLead';
+import { LEADS, produtoPorId, usuarioPorId } from '../data/base';
 
 /**
  * Leads
@@ -51,6 +42,7 @@ export function Leads() {
   const [temperatura, setTemperatura] = useState<'todas' | Lead['temperatura']>('todas');
   const [responsavel, setResponsavel] = useState('todos');
   const [selecionado, setSelecionado] = useState<Lead | null>(null);
+  const [formularioAberto, setFormularioAberto] = useState(false);
 
   const filtrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -79,7 +71,7 @@ export function Leads() {
             </Botao>
           )}
           {pode('leads.criar') && (
-            <Botao variante="primario" icone={Plus} onClick={() => avisar({ tom: 'sucesso', titulo: 'Formulário de lead aberto' })}>
+            <Botao variante="primario" icone={Plus} onClick={() => setFormularioAberto(true)}>
               Novo lead
             </Botao>
           )}
@@ -199,76 +191,15 @@ export function Leads() {
       </Cartao>
 
       <Gaveta aberta={!!selecionado} aoFechar={() => setSelecionado(null)} titulo={selecionado?.nome ?? ''} largura={480}>
-        {selecionado && <DetalheLead lead={selecionado} />}
+        {selecionado && (
+          <div className="vy-card__corpo">
+            <FichaLead lead={selecionado} />
+          </div>
+        )}
       </Gaveta>
+
+      <FormularioLead aberto={formularioAberto} aoFechar={() => setFormularioAberto(false)} />
     </Pagina>
   );
 }
 
-function DetalheLead({ lead }: { lead: Lead }) {
-  const pipeline = PIPELINES.find((p) => p.id === lead.pipelineId);
-  const etapa = pipeline?.etapas.find((e) => e.id === lead.etapaId);
-  const responsavel = usuarioPorId(lead.responsavelId);
-
-  return (
-    <div className="vy-card__corpo vy-stack" style={{ gap: 'var(--space-5)' }}>
-      <div className="vy-row" style={{ gap: 'var(--space-4)' }}>
-        <AnelScore valor={lead.score} tamanho={62} />
-        <div>
-          <div className="vy-row" style={{ gap: 'var(--space-2)' }}>
-            <Selo tom={tomDoStatus(lead.status)}>{ROTULO_STATUS_LEAD[lead.status]}</Selo>
-            {(lead.temperatura === 'fervendo' || lead.temperatura === 'quente') && (
-              <Selo tom="atencao">
-                <Flame size={10} /> {ROTULO_TEMPERATURA[lead.temperatura]}
-              </Selo>
-            )}
-          </div>
-          <div style={{ marginTop: 6, fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
-            {pipeline?.nome} · {etapa?.nome} · {formatarMoeda(lead.valorEstimado ?? 0)}
-          </div>
-        </div>
-      </div>
-
-      <div className="vy-row" style={{ gap: 'var(--space-2)' }}>
-        <Botao variante="primario" icone={MessageSquare} bloco>
-          Abrir conversa
-        </Botao>
-        <Botao variante="secundario" icone={Phone}>
-          Ligar
-        </Botao>
-      </div>
-
-      <Definicoes
-        itens={[
-          ['Telefone', lead.telefone],
-          ['E-mail', lead.email ?? '—'],
-          ['Cidade', `${lead.cidade}/${lead.uf}`],
-          ['Origem', ROTULO_ORIGEM[lead.origem]],
-          ['Campanha', lead.utm?.campaign ?? '—'],
-          ['UTM', lead.utm ? `${lead.utm.source} · ${lead.utm.medium} · ${lead.utm.content}` : '—'],
-          ['Produto', produtoPorId(lead.produtoId)?.nome ?? '—'],
-          ['Responsável', responsavel?.nome ?? 'sem dono'],
-          ['Criado', tempoRelativo(lead.createdAt)],
-          ['Última interação', tempoRelativo(lead.ultimaInteracaoEm)],
-          ['Próxima atividade', tempoRelativo(lead.proximaAtividadeEm)],
-          ...(lead.motivoPerda ? ([['Motivo da perda', lead.motivoPerda]] as [string, string][]) : []),
-        ]}
-      />
-    </div>
-  );
-}
-
-export function Definicoes({ itens }: { itens: [string, string][] }) {
-  return (
-    <dl className="vy-stack" style={{ gap: 'var(--space-3)' }}>
-      {itens.map(([rotulo, valor]) => (
-        <div key={rotulo} className="vy-row-between" style={{ gap: 'var(--space-4)', alignItems: 'baseline' }}>
-          <dt style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', flexShrink: 0 }}>{rotulo}</dt>
-          <dd style={{ fontSize: 'var(--text-sm)', color: 'var(--text-default)', textAlign: 'right' }}>
-            {valor}
-          </dd>
-        </div>
-      ))}
-    </dl>
-  );
-}

@@ -6,6 +6,8 @@ import { formatarMoeda, formatarNumero } from '../components/Charts';
 import { Pagina, tempoRelativo } from './Pagina';
 import { useSessao } from '../app/sessao';
 import { LEADS, PIPELINES, usuarioPorId } from '../data/base';
+import { moverLead } from '../data/acoes';
+import { ModalLead } from './FichaLead';
 import './funil.css';
 
 /**
@@ -21,12 +23,11 @@ import './funil.css';
  * da etapa — é o que transforma a coluna em previsão, não em pilha.
  */
 export function Funil() {
-  const { pode, versaoDados } = useSessao();
+  const { pode, versaoDados, invalidar } = useSessao();
   const { avisar } = useAvisos();
   const [pipelineId, setPipelineId] = useState(PIPELINES[0].id);
   const [arrastando, setArrastando] = useState<string | null>(null);
-  /* Movimentações locais da demonstração: leadId → etapaId. */
-  const [movidos, setMovidos] = useState<Record<string, string>>({});
+  const [aberto, setAberto] = useState<Lead | null>(null);
 
   const pipeline = PIPELINES.find((p) => p.id === pipelineId) as Pipeline;
 
@@ -36,12 +37,11 @@ export function Funil() {
     for (const lead of LEADS) {
       if (lead.pipelineId !== pipeline.id) continue;
       if (['perdido', 'desistente'].includes(lead.status)) continue;
-      const etapaId = movidos[lead.id] ?? lead.etapaId;
-      mapa.get(etapaId)?.push(lead);
+      mapa.get(lead.etapaId)?.push(lead);
     }
     for (const lista of mapa.values()) lista.sort((a, b) => b.score - a.score);
     return mapa;
-  }, [pipeline, movidos, versaoDados]);
+  }, [pipeline, versaoDados]);
 
   const previsao = useMemo(
     () =>
@@ -59,11 +59,15 @@ export function Funil() {
       setArrastando(null);
       return;
     }
-    const lead = LEADS.find((l) => l.id === arrastando);
     const etapa = pipeline.etapas.find((e) => e.id === etapaId);
-    setMovidos((atual) => ({ ...atual, [arrastando]: etapaId }));
+    const lead = moverLead(arrastando, etapaId);
     setArrastando(null);
-    avisar({ tom: 'sucesso', titulo: `${lead?.nome} → ${etapa?.nome}`, texto: 'Automação de mudança de etapa acionada.' });
+    invalidar();
+    avisar({
+      tom: 'sucesso',
+      titulo: `${lead?.nome} → ${etapa?.nome}`,
+      texto: 'Status atualizado e automação de mudança de etapa acionada.',
+    });
   }
 
   return (
@@ -94,6 +98,9 @@ export function Funil() {
           <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 4, maxWidth: '60ch' }}>
             Soma do valor de cada lead multiplicado pela probabilidade histórica da etapa em que ele está. Não é o total do
             funil — é o que ele tende a virar receita.
+          </p>
+          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginTop: 'var(--space-2)' }}>
+            Arraste o cartão para mudar de etapa. Dois cliques abrem a ficha do contato.
           </p>
         </div>
         <div className="vy-row" style={{ gap: 'var(--space-6)' }}>
@@ -151,6 +158,13 @@ export function Funil() {
                     draggable={pode('funil.editar')}
                     onDragStart={() => setArrastando(lead.id)}
                     onDragEnd={() => setArrastando(null)}
+                    onDoubleClick={() => setAberto(lead)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') setAberto(lead);
+                    }}
+                    tabIndex={0}
+                    role="button"
+                    title="Arraste para mover de etapa · dois cliques abrem a ficha"
                     data-arrastando={arrastando === lead.id}
                   >
                     <div className="vy-row-between" style={{ gap: 'var(--space-2)' }}>
@@ -186,6 +200,8 @@ export function Funil() {
           );
         })}
       </div>
+
+      <ModalLead lead={aberto} aoFechar={() => setAberto(null)} />
     </Pagina>
   );
 }

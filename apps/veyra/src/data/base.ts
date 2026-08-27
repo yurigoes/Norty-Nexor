@@ -4,11 +4,13 @@ import type {
   BlacklistEntry,
   Campaign,
   CashFlowPoint,
+  Appointment,
   Commission,
   CommissionRule,
   LeadPrediction,
   Notification,
   Payable,
+  PaymentRecord,
   Team,
   Contract,
   Conversation,
@@ -57,6 +59,21 @@ function ha(dias: number, horas = 0): string {
 
 function em(dias: number): string {
   return ha(-dias);
+}
+
+/**
+ * Data e hora exatas, relativas ao dia da demonstração.
+ *
+ * `ha()` desloca por dias inteiros — `setDate` trunca a fração, então
+ * meio dia vira dia nenhum e todos os compromissos caíam no mesmo
+ * horário. Aqui a hora é construída explicitamente, no fuso de Brasília,
+ * para o calendário mostrar a semana como ela realmente seria.
+ */
+function diaHora(offsetDias: number, hora: number, minuto = 0): string {
+  const d = new Date(hoje);
+  d.setDate(d.getDate() + offsetDias);
+  const data = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return new Date(`${data}T${String(hora).padStart(2, '0')}:${String(minuto).padStart(2, '0')}:00-03:00`).toISOString();
 }
 
 export const AGORA = hoje.toISOString();
@@ -730,6 +747,17 @@ export const COMISSOES: Commission[] = [
   { id: 'com-006', organizationId: ORG, createdAt: ha(12), contratoId: 'con-007', beneficiarioId: 'af-001', beneficiarioNome: 'Vitor Klein (afiliado)', beneficiarioTipo: 'afiliado', regraId: 'reg-afiliado', baseCalculo: 790, percentual: 55, valor: 434.5, competencia: '2026-08', status: 'pendente' },
   { id: 'com-007', organizationId: ORG, createdAt: ha(10), contratoId: 'con-001', beneficiarioId: 'u-marcos', beneficiarioNome: 'Marcos Ribeiro', beneficiarioTipo: 'supervisor', regraId: 'reg-override', baseCalculo: 128000, percentual: 0.5, valor: 640, competencia: '2026-08', status: 'aprovada' },
   { id: 'com-008', organizationId: ORG, createdAt: ha(40), contratoId: 'con-008', beneficiarioId: 'u-pedro', beneficiarioNome: 'Pedro Almeida', beneficiarioTipo: 'vendedor', regraId: 'reg-resid', baseCalculo: 1680, percentual: 22, valor: 369.6, competencia: '2026-07', status: 'estornada' },
+  /* A comissão recorrente do plano de saúde gera uma parcela por mês
+     enquanto o contrato durar — é o que o extrato precisa mostrar para
+     o vendedor entender de onde vem o valor de cada competência. */
+  { id: 'com-009', organizationId: ORG, createdAt: ha(50), contratoId: 'con-003', beneficiarioId: 'u-bianca', beneficiarioNome: 'Bianca Rocha', beneficiarioTipo: 'vendedor', regraId: 'reg-saude-rec', baseCalculo: 38640, percentual: 2, valor: 772.8, competencia: '2026-06', parcela: 1, status: 'paga', pagaEm: ha(40) },
+  { id: 'com-010', organizationId: ORG, createdAt: ha(20), contratoId: 'con-003', beneficiarioId: 'u-bianca', beneficiarioNome: 'Bianca Rocha', beneficiarioTipo: 'vendedor', regraId: 'reg-saude-rec', baseCalculo: 38640, percentual: 2, valor: 772.8, competencia: '2026-07', parcela: 2, status: 'paga', pagaEm: ha(7) },
+  { id: 'com-011', organizationId: ORG, createdAt: ha(2), contratoId: 'con-003', beneficiarioId: 'u-bianca', beneficiarioNome: 'Bianca Rocha', beneficiarioTipo: 'vendedor', regraId: 'reg-saude-rec', baseCalculo: 38640, percentual: 2, valor: 772.8, competencia: '2026-08', parcela: 3, status: 'pendente' },
+  { id: 'com-012', organizationId: ORG, createdAt: ha(88), contratoId: 'con-001', beneficiarioId: 'u-julia', beneficiarioNome: 'Júlia Campos', beneficiarioTipo: 'vendedor', regraId: 'reg-cons', baseCalculo: 128000, percentual: 3.2, valor: 4096, competencia: '2026-05', status: 'paga', pagaEm: ha(80) },
+  { id: 'com-013', organizationId: ORG, createdAt: ha(60), contratoId: 'con-005', beneficiarioId: 'u-marcos', beneficiarioNome: 'Marcos Ribeiro', beneficiarioTipo: 'supervisor', regraId: 'reg-override', baseCalculo: 420000, percentual: 0.5, valor: 2100, competencia: '2026-07', status: 'paga', pagaEm: ha(7) },
+  { id: 'com-014', organizationId: ORG, createdAt: ha(30), contratoId: 'con-007', beneficiarioId: 'u-bianca', beneficiarioNome: 'Bianca Rocha', beneficiarioTipo: 'vendedor', regraId: 'reg-saude', baseCalculo: 790, percentual: 110, valor: 869, competencia: '2026-06', status: 'paga', pagaEm: ha(25) },
+  { id: 'com-015', organizationId: ORG, createdAt: ha(15), contratoId: 'con-006', beneficiarioId: 'u-marcos', beneficiarioNome: 'Marcos Ribeiro', beneficiarioTipo: 'supervisor', regraId: 'reg-override', baseCalculo: 380000, percentual: 0.5, valor: 1900, competencia: '2026-08', status: 'aprovada' },
+  { id: 'com-016', organizationId: ORG, createdAt: ha(10), contratoId: 'con-002', beneficiarioId: 'af-002', beneficiarioNome: 'Consultoria Meridiano (afiliado)', beneficiarioTipo: 'afiliado', regraId: 'reg-afiliado', baseCalculo: 4820, percentual: 55, valor: 477.18, competencia: '2026-08', status: 'aprovada' },
 ];
 
 export const REGRAS_COMISSAO: CommissionRule[] = [
@@ -905,6 +933,36 @@ export const TAREFAS: Task[] = [
   { id: 'tar-008', organizationId: ORG, createdAt: ha(6), titulo: 'Fechar comissões da competência 08/2026', responsavelId: 'u-tiago', vence: em(4), concluida: false, prioridade: 'normal', tipo: 'outro' },
   { id: 'tar-009', organizationId: ORG, createdAt: ha(8), titulo: 'Revisar público da campanha PME', responsavelId: 'u-lucas', vence: em(1), concluida: false, prioridade: 'normal', tipo: 'outro' },
   { id: 'tar-010', organizationId: ORG, createdAt: ha(9), titulo: 'Enviar apólice renovada para Marina', responsavelId: 'u-pedro', clienteId: 'cli-002', vence: ha(2), concluida: true, concluidaEm: ha(2), prioridade: 'normal', tipo: 'email' },
+];
+
+/* ---------- Agenda ---------- */
+
+export const COMPROMISSOS: Appointment[] = [
+  { id: 'ag-001', organizationId: ORG, createdAt: ha(4), titulo: 'Alinhamento semanal do comercial', tipo: 'interno', responsavelId: 'u-carla', inicia: diaHora(-3, 9), termina: diaHora(-3, 10), local: 'Sala 1204' },
+  { id: 'ag-002', organizationId: ORG, createdAt: ha(4), titulo: 'Treinamento — objeções de consórcio', tipo: 'interno', responsavelId: 'u-marcos', inicia: diaHora(-2, 14), termina: diaHora(-2, 15, 30), local: 'Sala 1204' },
+  { id: 'ag-003', organizationId: ORG, createdAt: ha(5), titulo: 'Visita técnica — Transportes Ferrari', tipo: 'visita', responsavelId: 'u-julia', clienteId: 'cli-006', inicia: diaHora(-1, 9, 30), termina: diaHora(-1, 12), local: 'Porto Alegre/RS' },
+  { id: 'ag-004', organizationId: ORG, createdAt: ha(1), titulo: 'Retenção — Roberto Nakamura', tipo: 'ligacao', responsavelId: 'u-sofia', clienteId: 'cli-004', inicia: diaHora(0, 9, 30), termina: diaHora(0, 9, 45), automatico: true },
+  { id: 'ag-005', organizationId: ORG, createdAt: ha(1), titulo: 'Ligar para Gustavo Peixoto', tipo: 'ligacao', responsavelId: 'u-julia', leadId: 'lead-007', inicia: diaHora(0, 11), termina: diaHora(0, 11, 15), automatico: true },
+  { id: 'ag-006', organizationId: ORG, createdAt: ha(2), titulo: 'Apresentação de plano PME — Alvorada', tipo: 'reuniao', responsavelId: 'u-bianca', clienteId: 'cli-003', inicia: diaHora(0, 16), termina: diaHora(0, 17), local: 'Escritório do cliente' },
+  { id: 'ag-007', organizationId: ORG, createdAt: ha(1), titulo: 'Assembleia do grupo 4172', tipo: 'assembleia', responsavelId: 'u-julia', clienteId: 'cli-001', inicia: diaHora(1, 10), termina: diaHora(1, 11), local: 'Rodobens · online' },
+  { id: 'ag-008', organizationId: ORG, createdAt: ha(3), titulo: 'Reunião de renovação — Marina Duarte', tipo: 'reuniao', responsavelId: 'u-pedro', clienteId: 'cli-002', inicia: diaHora(1, 14), termina: diaHora(1, 15), local: 'Google Meet' },
+  { id: 'ag-009', organizationId: ORG, createdAt: ha(2), titulo: 'Fechamento de comissões — competência 08', tipo: 'interno', responsavelId: 'u-tiago', inicia: diaHora(1, 17), termina: diaHora(1, 18) },
+  { id: 'ag-010', organizationId: ORG, createdAt: ha(6), titulo: 'Plantão de vendas — feirão de consórcio', tipo: 'visita', responsavelId: 'u-julia', inicia: diaHora(2, 9), termina: diaHora(2, 13), local: 'Shopping Anália Franco' },
+];
+
+/* ---------- Recebimentos ----------
+   As faturas já pagas trazem o recebimento correspondente, para que o
+   histórico do modal não comece vazio em cima de uma fatura quitada. */
+
+export const PAGAMENTOS: PaymentRecord[] = [
+  { id: 'pg-001', organizationId: ORG, createdAt: ha(4), invoiceId: 'fat-002', metodo: 'pix', valor: 401.67, recebidoEm: ha(4), registradoPor: 'Baixa automática', referenciaExterna: 'E18236120260823' },
+  { id: 'pg-002', organizationId: ORG, createdAt: ha(6), invoiceId: 'fat-007', metodo: 'cartao', valor: 790, recebidoEm: ha(6), registradoPor: 'Baixa automática', referenciaExterna: 'ch_3PqL29KcM' },
+  { id: 'pg-003', organizationId: ORG, createdAt: ha(31), invoiceId: 'fat-009', metodo: 'boleto', valor: 1842.4, recebidoEm: ha(31), registradoPor: 'Tiago Ferraz' },
+  { id: 'pg-004', organizationId: ORG, createdAt: ha(27), invoiceId: 'fat-010', metodo: 'boleto', valor: 38640, recebidoEm: ha(27), registradoPor: 'Baixa automática', referenciaExterna: '34191790010104351004791020150008' },
+  { id: 'pg-005', organizationId: ORG, createdAt: ha(24), invoiceId: 'fat-012', metodo: 'debito_automatico', valor: 2604, recebidoEm: ha(24), registradoPor: 'Baixa automática' },
+  /* A parcela do consórcio do João foi paga pela metade: é o caso que
+     mostra o recebimento parcial no modal do financeiro. */
+  { id: 'pg-006', organizationId: ORG, createdAt: ha(1), invoiceId: 'fat-001', metodo: 'pix', valor: 900, recebidoEm: ha(1), registradoPor: 'Tiago Ferraz', observacao: 'Cliente pediu para dividir em duas entradas.' },
 ];
 
 /* ---------- Integrações ---------- */
