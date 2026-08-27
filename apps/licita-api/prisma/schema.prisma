@@ -353,7 +353,9 @@ model ExecucaoIngestao {
   id            String   @id @default(cuid())
   iniciadaEm    DateTime @default(now())
   concluidaEm   DateTime?
-  uf            String?  @db.Char(2)
+  /// Lista, não sigla: uma varredura cobre vários estados de uma
+  /// vez. Guardar só o primeiro esconderia metade do que rodou.
+  ufs           String[] @default([])
   modalidades   Int[]    @default([])
   consultadas   Int      @default(0)
   novas         Int      @default(0)

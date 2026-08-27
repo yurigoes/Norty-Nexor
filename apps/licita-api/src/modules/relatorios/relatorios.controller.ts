@@ -47,12 +47,19 @@ export class RelatoriosController {
     return { serieMensal, porEstado, porCategoria, participacoes, indicadores };
   }
 
-  /** Quantas oportunidades entraram por mês nos últimos 12 meses. */
+  /**
+   * Quantas oportunidades entraram por mês nos últimos 12 meses.
+   *
+   * SQL cru usa o nome da TABELA, não o do model: os modelos têm
+   * `@@map`, e escrever "Avaliacao" aqui produz um 500 que só
+   * aparece contra um banco de verdade — o typecheck não alcança
+   * o interior de uma template string.
+   */
   private async serieMensal(empresaId: string) {
     const linhas = await this.prisma.$queryRaw<LinhaMes[]>(Prisma.sql`
       SELECT date_trunc('month', l."vistaEm") AS mes, COUNT(*)::bigint AS total
-      FROM "Avaliacao" a
-      JOIN "Licitacao" l ON l.id = a."licitacaoId"
+      FROM "avaliacoes" a
+      JOIN "licitacoes" l ON l.id = a."licitacaoId"
       WHERE a."empresaId" = ${empresaId}
         AND l."vistaEm" >= date_trunc('month', now()) - interval '11 months'
       GROUP BY 1

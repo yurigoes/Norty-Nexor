@@ -3,16 +3,22 @@
 # ---------------------------------------------------------
 #  Segue a convenção da infra Norty: o código mora no host em
 #  /srv/apps-fase<N>/licita-mais e entra no CT por bind-mount em
-#  /opt/fase<N>/licita-mais. Edita-se no host, reconstrói-se
-#  dentro do container.
+#  /opt/licita-mais. Edita-se no host, reconstrói-se dentro do
+#  container.
+#
+#  Dois serviços, uma pasta só. A API viaja dentro do diretório
+#  do front, em `servidor/`, e o domínio compartilhado em
+#  `compartilhado/`. O motivo é o CT 103: lá o bind-mount é por
+#  app, e criar um mount novo exige reiniciar o container — o que
+#  derrubaria Bolão, Central de Leads e Sorva junto. Uma pasta a
+#  mais aqui evita uma janela de manutenção lá.
 #
 #  Publica só uma porta alta no CT, nunca 80 ou 443: quem termina
 #  TLS e resolve o domínio é o ingress da Norty, não este
-#  compose. Um serviço tomando a 443 aqui brigaria com tudo o que
-#  já serve domínio no Thor.
-#
-#  Roda no CT 103 (Vanaheim, fase1), onde o bind-mount é por app:
-#    /srv/apps-fase1/licita-mais → /opt/licita-mais
+#  compose. A API **não publica porta nenhuma** — ela só é
+#  alcançável pelo nginx, pela rede interna do compose. É o que
+#  garante que não exista um caminho até a API que não passe pelo
+#  mesmo domínio (e, portanto, pelo cookie de sessão).
 #
 #  Subir:
 #    pct exec 103 -- bash -c \
@@ -28,6 +34,13 @@ services:
       dockerfile: deploy.Dockerfile
     container_name: licita-web
     restart: unless-stopped
+    depends_on:
+      # Só `started`, não `healthy`: o front precisa subir mesmo
+      # com a API fora do ar. Ele detecta a ausência dela e exibe
+      # a faixa de demonstração, em vez de a página inteira ficar
+      # indisponível por causa do banco.
+      licita-api:
+        condition: service_started
     ports:
       # Só no loopback do CT seria o ideal, mas o ingress vem de
       # outro host — então escuta em todas as interfaces do CT e
@@ -43,6 +56,62 @@ services:
       start_period: 5s
     logging:
       # Sem limite, o json-file cresce até encher o disco do CT.
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  licita-api:
+    build:
+      context: .
+      dockerfile: servidor/deploy.Dockerfile
+    container_name: licita-api
+    restart: unless-stopped
+    # Nenhuma porta publicada — ver o cabeçalho.
+    expose:
+      - "3501"
+    environment:
+      NODE_ENV: production
+      TZ: America/Bahia
+      PORT: 3501
+
+      # Todo segredo vem do .env ao lado deste arquivo, que fica
+      # no host e nunca no repositório. Sem valor padrão de
+      # propósito: uma API que sobe com JWT_SECRET vazio é pior
+      # do que uma que não sobe.
+      DATABASE_URL: ${DATABASE_URL:?defina DATABASE_URL no .env}
+      JWT_SECRET: ${JWT_SECRET:?gere com openssl rand -base64 48 e ponha no .env}
+
+      APP_URL: ${APP_URL:-https://licita.norty.com.br}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://licita.norty.com.br}
+      # Vazio: o cookie fica preso ao host que o emitiu, que é o
+      # comportamento mais restrito. Só vale preencher se algum dia
+      # houver um segundo subdomínio precisando da mesma sessão.
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+      JWT_REFRESH_TTL_DAYS: ${JWT_REFRESH_TTL_DAYS:-30}
+
+      # Sem SMTP_HOST o envio não falha: registra no log e segue.
+      # É o que permite subir antes do SMTP estar pronto — mas
+      # ninguém consegue confirmar a conta até ele existir.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-LICITA+ <nao-responda@norty.com.br>}
+
+      PNCP_UFS: ${PNCP_UFS:-BA,SE,PE}
+      PNCP_JANELA_DIAS: ${PNCP_JANELA_DIAS:-30}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:3501/v1/saude"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # A primeira subida roda a migração antes de servir.
+      start_period: 40s
+    logging:
       driver: json-file
       options:
         max-size: "10m"

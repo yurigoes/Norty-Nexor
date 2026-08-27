@@ -72,7 +72,7 @@ export class IngestaoService {
     this.rodando = true;
 
     const execucao = await this.prisma.execucaoIngestao.create({
-      data: { uf: ufs.join(','), modalidades: MODALIDADES },
+      data: { ufs, modalidades: MODALIDADES },
     });
 
     const resumo: ResumoIngestao = {

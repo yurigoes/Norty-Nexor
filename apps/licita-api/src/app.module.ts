@@ -5,6 +5,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { Controller, Get } from '@nestjs/common';
 
 import { PrismaService } from './common/prisma/prisma.service';
+import { PrismaModule } from './common/prisma/prisma.module';
 import { JwtAuthGuard } from './common/jwt-auth.guard';
 import { Publica } from './common/decorators';
 import { AuthModule } from './modules/auth/auth.module';
@@ -36,6 +37,7 @@ class SaudeController {
 
 @Module({
   imports: [
+    PrismaModule,
     AuthModule,
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
@@ -50,7 +52,6 @@ class SaudeController {
     RelatoriosController,
   ],
   providers: [
-    PrismaService,
     EmailService,
     IngestaoService,
     // Autenticação é o padrão: uma rota nova nasce protegida, e

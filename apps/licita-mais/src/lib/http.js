@@ -136,7 +136,12 @@ export function renovarAcesso() {
 export async function pedir(caminho, opcoes = {}) {
   let resposta = await enviar(caminho, opcoes);
 
-  if (resposta.status === 401 && !opcoes.semRenovar) {
+  // Sem token em memória, um 401 não pode ser expiração — não
+  // havia o que expirar. É o caso do login com senha errada, e
+  // sem esta condição a tela trocaria "E-mail ou senha
+  // incorretos" por "Sua sessão expirou": a mensagem mais
+  // confusa possível para quem só errou a senha.
+  if (resposta.status === 401 && !opcoes.semRenovar && temAcesso()) {
     const renovado = await renovarAcesso();
 
     if (!renovado) {

@@ -1,0 +1,16 @@
+# O contexto é a pasta inteira do app, que no host carrega também
+# a API e o domínio compartilhado. Sem esta lista, cada build
+# enviaria node_modules e dist ao daemon — minutos de espera para
+# copiar o que os Dockerfiles descartam em seguida.
+node_modules
+**/node_modules
+dist
+**/dist
+gerado
+**/gerado
+.env
+.env.*
+!.env.example
+*.log
+.git
+perfil.json

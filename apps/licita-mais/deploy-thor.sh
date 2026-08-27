@@ -151,13 +151,63 @@ else
   git clone --branch "$BRANCH" --depth 1 "$REPO" "$CLONE_HOST"
 fi
 
-# Só o diretório do app vai para /srv. O resto do monorepo fica no
-# clone auxiliar — o CT não precisa dele.
+# Três pastas viajam, não uma: o aplicativo, a API e o domínio
+# compartilhado. Elas vão para dentro do MESMO diretório porque o
+# bind-mount do CT 103 é por app — criar um mount novo exigiria
+# reiniciar o container, derrubando Bolão, Central de Leads e
+# Sorva junto.
+#
+# `--delete` limpa o que saiu do repositório, mas `--exclude .env`
+# é o que impede o deploy de apagar os segredos do host. Sem essa
+# linha, cada deploy derrubaria a API por falta de DATABASE_URL.
 rsync -a --delete \
   --exclude 'dist/' --exclude 'node_modules/' --exclude 'perfil.json' \
+  --exclude '.env' --exclude 'servidor/' --exclude 'compartilhado/' \
   "$CLONE_HOST/apps/licita-mais/" "$APP_HOST/"
 
+rsync -a --delete \
+  --exclude 'dist/' --exclude 'node_modules/' --exclude 'gerado/' --exclude '.env' \
+  "$CLONE_HOST/apps/licita-api/" "$APP_HOST/servidor/"
+
+rsync -a --delete \
+  --exclude 'dist/' --exclude 'node_modules/' \
+  "$CLONE_HOST/packages/licitacoes-shared/" "$APP_HOST/compartilhado/"
+
 verde "Código em $APP_HOST ($(git -C "$CLONE_HOST" rev-parse --short HEAD))"
+
+# ---------- Segredos ----------
+
+if [[ ! -f "$APP_HOST/.env" ]]; then
+  cp "$APP_HOST/.env.example" "$APP_HOST/.env"
+  chmod 600 "$APP_HOST/.env"
+
+  vermelho "Criei $APP_HOST/.env a partir do exemplo — ele está incompleto."
+  echo
+  amarelo "Antes de seguir, preencha no mínimo:"
+  echo "    DATABASE_URL   — Postgres da Norty (CT 102)"
+  echo "    JWT_SECRET     — openssl rand -base64 48"
+  echo
+  amarelo "E, para que alguém consiga confirmar a conta e entrar:"
+  echo "    SMTP_HOST, SMTP_USER, SMTP_PASS  — SMTP do heimdall"
+  echo
+  amarelo "Edite e rode este script de novo:"
+  echo "    nano $APP_HOST/.env"
+  exit 2
+fi
+
+# Falhar aqui é melhor do que falhar no build: a mensagem do
+# compose para variável obrigatória vazia não diz o que fazer.
+for obrigatoria in DATABASE_URL JWT_SECRET; do
+  if ! grep -qE "^${obrigatoria}=.+" "$APP_HOST/.env"; then
+    vermelho "$obrigatoria está vazia em $APP_HOST/.env — a API não sobe sem ela."
+    exit 2
+  fi
+done
+
+if ! grep -qE '^SMTP_HOST=.+' "$APP_HOST/.env"; then
+  amarelo "SMTP_HOST vazio: o cadastro vai funcionar, mas o link de confirmação"
+  amarelo "não sai — e sem confirmar o e-mail ninguém consegue entrar."
+fi
 
 # ---------- Reconstrói dentro do CT ----------
 
@@ -174,10 +224,28 @@ IP_CT="${IP_CT:-192.168.15.73}"
 sleep 3
 
 if pct exec "$CT" -- wget -q -O- "http://127.0.0.1:${PORTA}/" >/dev/null 2>&1; then
-  verde "LICITA+ respondendo em http://${IP_CT}:${PORTA}"
+  verde "Aplicativo respondendo em http://${IP_CT}:${PORTA}"
 else
   vermelho "O container subiu mas não respondeu na porta ${PORTA}. Logs:"
   pct exec "$CT" -- bash -c "cd '$APP_CT' && docker compose logs --tail=40 licita-web"
+  exit 1
+fi
+
+# A API é conferida pelo mesmo caminho que o navegador usa — pelo
+# nginx, sob /v1. Testá-la direto no container provaria que o
+# processo subiu, não que o front consegue falar com ele.
+sleep 5
+if pct exec "$CT" -- wget -q -O- "http://127.0.0.1:${PORTA}/v1/saude" >/dev/null 2>&1; then
+  verde "API respondendo em http://${IP_CT}:${PORTA}/v1/saude (banco alcançável)"
+else
+  vermelho "A API não respondeu em /v1/saude. O aplicativo vai subir em modo"
+  vermelho "demonstração até isso ser resolvido. Logs:"
+  pct exec "$CT" -- bash -c "cd '$APP_CT' && docker compose logs --tail=60 licita-api"
+  echo
+  amarelo "Causas mais comuns, nesta ordem:"
+  echo "    1. DATABASE_URL errada ou Postgres do CT 102 inacessível daqui"
+  echo "    2. O banco 'licita' ou o usuário ainda não existem"
+  echo "    3. JWT_SECRET com menos de 32 caracteres (a API recusa subir)"
   exit 1
 fi
 

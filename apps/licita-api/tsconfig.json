@@ -17,6 +17,13 @@
     "rootDir": "./src",
     "baseUrl": "./",
     "incremental": true,
+    // Dentro do dist de propósito. O `deleteOutDir` do nest-cli
+    // apaga a pasta a cada build; com o tsbuildinfo fora dela, o
+    // compilador continuava achando que já tinha emitido arquivos
+    // que acabaram de ser apagados — e o build saía sem eles. O
+    // sintoma era MODULE_NOT_FOUND só em produção, na primeira
+    // linha que exigisse o módulo faltante.
+    "tsBuildInfoFile": "./dist/tsconfig.tsbuildinfo",
     "skipLibCheck": true,
     "strict": true,
     "strictNullChecks": true,
