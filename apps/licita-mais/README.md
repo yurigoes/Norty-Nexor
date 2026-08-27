@@ -140,3 +140,48 @@ lance** — e isso aparece na interface, não só aqui. O envio é feito pelo
 fornecedor na plataforma oficial do órgão, com certificado digital,
 porque proposta é ato juridicamente vinculante e a responsabilidade é de
 quem assina.
+
+## Deploy
+
+Roda no Thor, na mesma stack do my Home, atrás do mesmo Caddy:
+
+```
+licita.norty.com.br → licita (nginx estático)
+```
+
+```bash
+# no Thor, na raiz do repositório
+git pull
+make licita
+```
+
+O `make licita` reconstrói só a imagem do LICITA+ e recarrega o
+Caddy. As outras aplicações não são tocadas.
+
+**Pré-requisito:** o DNS de `licita.norty.com.br` apontando para o
+IP do Thor. O Caddy emite o certificado no primeiro acesso — não há
+passo manual de SSL. Enquanto o DNS não propagar, o Caddy tenta e
+repete; o my Home continua servindo normalmente.
+
+O domínio já vem como padrão no compose, então `infra/.env` só
+precisa de `LICITA_DOMAIN` se for usar outro endereço.
+
+### Por que a imagem não tem passo de build
+
+O app é HTML, CSS e módulos ES servidos como estão — o que roda em
+produção é exatamente o que está no repositório. O estágio de build
+só executa `verificar.mjs`: nome de topo duplicado, import sem
+extensão ou cor literal fora dos tokens impedem a imagem de ser
+gerada.
+
+### Diferenças do nginx do my Home
+
+- **Cache curto com revalidação** em vez de um ano. Os arquivos não
+  levam hash no nome, então cache longo serviria versão velha
+  depois do deploy.
+- **CSP restrita** a `self` mais Google Fonts, que é o único host
+  externo que o app usa.
+- **Sem bloco `types`.** No nginx um `types` em qualquer nível
+  substitui o mapa MIME herdado inteiro em vez de complementá-lo;
+  o mapa padrão já serve `.js` com o Content-Type que os módulos
+  ES exigem.

@@ -5,7 +5,7 @@
 #
 #    myhome.norty.com.br      → web (estático, servido pelo Caddy)
 #    api-myhome.norty.com.br  → api (NestJS)
-#    ${LICITA_DOMAIN}         → licita (LICITA+, estático)
+#    licita.norty.com.br      → licita (LICITA+, estático)
 #
 #  O Caddy emite e renova os certificados sozinho pelo Let's Encrypt.
 #  Só ele expõe porta para fora: banco e Redis ficam na rede interna,
@@ -108,7 +108,7 @@ services:
     environment:
       APP_DOMAIN: ${APP_DOMAIN:-myhome.norty.com.br}
       API_DOMAIN: ${API_DOMAIN:-api-myhome.norty.com.br}
-      LICITA_DOMAIN: ${LICITA_DOMAIN:-licita.localhost}
+      LICITA_DOMAIN: ${LICITA_DOMAIN:-licita.norty.com.br}
       ACME_EMAIL: ${ACME_EMAIL:?defina ACME_EMAIL no .env}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
