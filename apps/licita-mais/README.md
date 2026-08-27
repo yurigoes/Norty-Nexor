@@ -198,8 +198,30 @@ pct exec 103 -- wget -qO- http://127.0.0.1:3500/ | head -3
 ### Cloudflare Tunnel
 
 O compose publica **só a porta alta**, nunca 80 nem 443: quem termina
-TLS é o túnel. No CT onde roda o `cloudflared`, acrescente ao bloco
-`ingress:` do `config.yml`, **antes da regra final de 404**:
+TLS é o túnel.
+
+**Antes de procurar o `config.yml`, descubra o modo.** O `cloudflared`
+roda de duas formas, e só uma delas tem arquivo:
+
+- **Config local** — existe um `config.yml` com o bloco `ingress:`.
+- **Gerenciado pelo dashboard** — sobe com `--token eyJ...` e **não há
+  `config.yml` nenhum**. O ingress mora no Cloudflare Zero Trust, em
+  *Networks → Tunnels → o túnel → Public Hostnames*.
+
+Para descobrir qual é o caso e onde ele roda:
+
+```bash
+/srv/apps-fase1/licita-mais/achar-tunel.sh
+```
+
+O script varre o host e cada CT procurando processo, container Docker,
+serviço systemd e arquivos nos caminhos usuais — `/etc/cloudflared/`,
+`/root/.cloudflared/`, `~/.cloudflared/`. Só lê; não altera nem
+reinicia nada. Ao encontrar, imprime o trecho atual do `ingress:` e diz
+qual dos dois modos está em uso. O token aparece truncado.
+
+Em modo config local, acrescente ao bloco `ingress:` **antes da regra
+final de 404**:
 
 ```yaml
   - hostname: licita.norty.com.br
