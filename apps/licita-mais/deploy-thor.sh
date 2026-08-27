@@ -221,31 +221,60 @@ passo "Conferindo"
 
 IP_CT="$(pct exec "$CT" -- bash -c "hostname -I" 2>/dev/null | awk '{print $1}')"
 IP_CT="${IP_CT:-192.168.15.73}"
-sleep 3
 
-if pct exec "$CT" -- wget -q -O- "http://127.0.0.1:${PORTA}/" >/dev/null 2>&1; then
-  verde "Aplicativo respondendo em http://${IP_CT}:${PORTA}"
-else
+# Espera em vez de conferir uma vez só. A API roda `prisma migrate
+# deploy` ANTES de escutar a porta, e a primeira subida ainda cria
+# doze tabelas — pedir a saúde três segundos depois do compose
+# responder é perguntar cedo demais e chamar de falha o que era
+# só demora.
+esperar_por() {
+  local rotulo="$1" caminho="$2" limite="${3:-120}" passado=0
+
+  while (( passado < limite )); do
+    if pct exec "$CT" -- wget -q -O- "http://127.0.0.1:${PORTA}${caminho}" >/dev/null 2>&1; then
+      verde "$rotulo respondendo (${passado}s)"
+      return 0
+    fi
+    sleep 5
+    passado=$(( passado + 5 ))
+    # Sinal de vida a cada 15s: sem ele, dois minutos de silêncio
+    # parecem travamento.
+    (( passado % 15 == 0 )) && amarelo "  aguardando $rotulo… ${passado}s"
+  done
+
+  return 1
+}
+
+if ! esperar_por "Aplicativo" "/" 60; then
   vermelho "O container subiu mas não respondeu na porta ${PORTA}. Logs:"
   pct exec "$CT" -- bash -c "cd '$APP_CT' && docker compose logs --tail=40 licita-web"
   exit 1
 fi
+verde "  http://${IP_CT}:${PORTA}"
 
 # A API é conferida pelo mesmo caminho que o navegador usa — pelo
 # nginx, sob /v1. Testá-la direto no container provaria que o
 # processo subiu, não que o front consegue falar com ele.
-sleep 5
-if pct exec "$CT" -- wget -q -O- "http://127.0.0.1:${PORTA}/v1/saude" >/dev/null 2>&1; then
-  verde "API respondendo em http://${IP_CT}:${PORTA}/v1/saude (banco alcançável)"
+if esperar_por "API" "/v1/saude" 180; then
+  verde "  http://${IP_CT}:${PORTA}/v1/saude — banco alcançável"
 else
-  vermelho "A API não respondeu em /v1/saude. O aplicativo vai subir em modo"
-  vermelho "demonstração até isso ser resolvido. Logs:"
-  pct exec "$CT" -- bash -c "cd '$APP_CT' && docker compose logs --tail=60 licita-api"
+  vermelho "A API não respondeu em /v1/saude em 3 minutos. O aplicativo fica"
+  vermelho "em modo demonstração até isso ser resolvido."
+  echo
+  amarelo "Estado dos containers:"
+  pct exec "$CT" -- bash -c "cd '$APP_CT' && docker compose ps"
+  echo
+  amarelo "Últimas linhas da API:"
+  pct exec "$CT" -- bash -c "cd '$APP_CT' && docker compose logs --tail=80 licita-api"
   echo
   amarelo "Causas mais comuns, nesta ordem:"
-  echo "    1. DATABASE_URL errada ou Postgres do CT 102 inacessível daqui"
-  echo "    2. O banco 'licita' ou o usuário ainda não existem"
-  echo "    3. JWT_SECRET com menos de 32 caracteres (a API recusa subir)"
+  echo "    1. DATABASE_URL errada, ou o Postgres não aceita conexão deste CT"
+  echo "       (em Docker: a 5432 precisa estar publicada em 0.0.0.0, não no loopback)"
+  echo "    2. O banco ou o papel não existem — rode ./preparar-banco.sh"
+  echo "    3. JWT_SECRET com menos de 32 caracteres: a API recusa subir"
+  echo
+  amarelo "Para acompanhar ao vivo:"
+  echo "    pct exec ${CT} -- bash -c 'cd ${APP_CT} && docker compose logs -f licita-api'"
   exit 1
 fi
 
