@@ -1,0 +1,268 @@
+/* =========================================================
+   VEYRA — Apresentação
+   Rolagem com encaixe por seção. Cada seção ocupa a tela
+   inteira no desktop e cresce no celular: forçar 100dvh no
+   telefone cortaria texto, e texto cortado não vende nada.
+   ========================================================= */
+
+.vy-deck {
+  height: 100dvh;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+}
+
+.vy-deck__secao {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 100dvh;
+  padding: var(--space-16) var(--space-8);
+  scroll-snap-align: start;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.vy-deck__interno {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.vy-deck__numero {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+  letter-spacing: var(--tracking-wide);
+}
+
+.vy-deck__titulo {
+  margin-top: var(--space-3);
+  font-size: clamp(1.75rem, 4.2vw, 3.25rem);
+  font-weight: 800;
+  letter-spacing: var(--tracking-tight);
+  line-height: 1.06;
+  color: var(--text-strong);
+  max-width: 22ch;
+}
+
+.vy-deck__linha {
+  margin-top: var(--space-5);
+  font-size: clamp(0.95rem, 1.5vw, 1.2rem);
+  line-height: var(--leading-normal);
+  color: var(--text-muted);
+  max-width: 62ch;
+}
+
+.vy-deck__conteudo {
+  margin-top: var(--space-10);
+}
+
+/* ---------- Capa ---------- */
+
+.vy-deck__capa {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  background:
+    radial-gradient(760px 460px at 50% 34%, rgb(11 92 255 / 0.16), transparent 68%),
+    radial-gradient(560px 360px at 22% 78%, rgb(24 216 232 / 0.09), transparent 66%),
+    radial-gradient(560px 360px at 78% 22%, rgb(113 87 255 / 0.11), transparent 66%);
+}
+
+.vy-deck__capa-marca {
+  font-size: clamp(3rem, 12vw, 8rem);
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-indent: 0.2em;
+  line-height: 1;
+  background: var(--vy-gradient-text);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.vy-deck__capa-assinatura {
+  margin-top: var(--space-5);
+  font-size: clamp(0.8rem, 2vw, 1.1rem);
+  font-weight: 600;
+  letter-spacing: var(--tracking-widest);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ---------- Índice lateral ---------- */
+
+.vy-deck__indice {
+  position: fixed;
+  z-index: var(--z-sticky);
+  top: 50%;
+  right: var(--space-5);
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 74dvh;
+  overflow-y: auto;
+  padding: var(--space-2);
+  scrollbar-width: none;
+}
+
+.vy-deck__indice::-webkit-scrollbar {
+  display: none;
+}
+
+.vy-deck__marcador {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 8px;
+}
+
+.vy-deck__marcador span {
+  width: 16px;
+  height: 2px;
+  border-radius: var(--radius-full);
+  background: var(--border-strong);
+  transition: all var(--duration-base) var(--ease-out);
+}
+
+.vy-deck__marcador[aria-current='true'] span {
+  width: 30px;
+  height: 3px;
+  background: var(--vy-gradient);
+}
+
+.vy-deck__marcador::before {
+  content: attr(data-rotulo);
+  position: absolute;
+  right: calc(100% + var(--space-3));
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--vy-midnight-800);
+  border: 1px solid var(--border-default);
+  font-size: var(--text-2xs);
+  color: var(--text-default);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.vy-deck__marcador:hover::before {
+  opacity: 1;
+}
+
+/* ---------- Topo da apresentação ---------- */
+
+.vy-deck__topo {
+  position: fixed;
+  z-index: var(--z-sticky);
+  inset-inline: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-6);
+  background: linear-gradient(to bottom, rgb(5 12 23 / 0.9), transparent);
+}
+
+[data-tema='claro'] .vy-deck__topo {
+  background: linear-gradient(to bottom, rgb(244 247 251 / 0.92), transparent);
+}
+
+/* ---------- Blocos reutilizados nas seções ---------- */
+
+.vy-deck__grade {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.vy-deck__bloco {
+  padding: var(--space-5);
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.vy-deck__bloco strong {
+  display: block;
+  font-size: var(--text-md);
+  color: var(--text-strong);
+  margin-bottom: var(--space-2);
+}
+
+.vy-deck__bloco p {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  line-height: var(--leading-normal);
+}
+
+/* Números grandes — usados nas seções de resultado. */
+.vy-deck__numerao {
+  font-size: clamp(2rem, 5vw, 3.4rem);
+  font-weight: 800;
+  letter-spacing: var(--tracking-tight);
+  line-height: 1;
+  background: var(--vy-gradient-text);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Fluxo do ciclo comercial: rola na horizontal em tela estreita. */
+.vy-deck__fluxo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-bottom: var(--space-3);
+  overflow-x: auto;
+}
+
+.vy-deck__etapa {
+  flex-shrink: 0;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-default);
+  background: var(--surface-card);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-default);
+  white-space: nowrap;
+}
+
+.vy-deck__etapa[data-destaque='true'] {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--vy-midnight-700), var(--vy-midnight-700)) padding-box,
+    var(--vy-gradient) border-box;
+  color: var(--text-strong);
+}
+
+[data-tema='claro'] .vy-deck__etapa[data-destaque='true'] {
+  background:
+    linear-gradient(var(--surface-raised), var(--surface-raised)) padding-box,
+    var(--vy-gradient) border-box;
+}
+
+@media (max-width: 860px) {
+  .vy-deck {
+    scroll-snap-type: none;
+  }
+
+  .vy-deck__secao {
+    min-height: auto;
+    padding: var(--space-16) var(--space-5);
+  }
+
+  .vy-deck__capa {
+    min-height: 100dvh;
+  }
+
+  .vy-deck__indice {
+    display: none;
+  }
+}

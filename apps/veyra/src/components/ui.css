@@ -1,0 +1,779 @@
+/* =========================================================
+   VEYRA — Componentes
+   Um arquivo, porque o conjunto é pequeno e coeso. Cada bloco
+   começa pela decisão que o explica.
+   ========================================================= */
+
+/* ---------- Botão ----------
+   Quatro variantes e nada além disso. `primario` carrega o gradiente da
+   marca e é único por tela: se dois botões disputam a atenção, nenhum a
+   tem. `perigo` só aparece em ação destrutiva de verdade. */
+
+.vy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-4);
+  height: 36px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: var(--tracking-normal);
+  white-space: nowrap;
+  border: 1px solid transparent;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out);
+}
+
+.vy-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.vy-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.vy-btn--primario {
+  background: var(--vy-gradient);
+  color: var(--text-on-accent);
+  box-shadow: 0 4px 18px rgb(11 92 255 / 0.28);
+}
+
+.vy-btn--primario:hover:not(:disabled) {
+  box-shadow: 0 6px 26px rgb(11 92 255 / 0.42);
+  filter: brightness(1.06);
+}
+
+.vy-btn--secundario {
+  background: var(--surface-raised);
+  border-color: var(--border-default);
+  color: var(--text-strong);
+}
+
+.vy-btn--secundario:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--surface-active);
+}
+
+.vy-btn--fantasma {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.vy-btn--fantasma:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-strong);
+}
+
+.vy-btn--perigo {
+  background: var(--danger-soft);
+  border-color: rgb(240 74 86 / 0.34);
+  color: var(--danger);
+}
+
+.vy-btn--perigo:hover:not(:disabled) {
+  background: var(--danger);
+  color: #fff;
+}
+
+.vy-btn--pequeno {
+  height: 30px;
+  padding: 0 var(--space-3);
+  font-size: var(--text-xs);
+}
+
+.vy-btn--grande {
+  height: 46px;
+  padding: 0 var(--space-6);
+  font-size: var(--text-md);
+  border-radius: var(--radius-lg);
+}
+
+.vy-btn--bloco {
+  width: 100%;
+}
+
+.vy-btn--icone {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+}
+
+.vy-btn--icone:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-strong);
+}
+
+/* ---------- Cartão ----------
+   Toda superfície de conteúdo é este cartão. A borda em gradiente
+   (`destaque`) marca o que a IA produziu — e só isso. */
+
+.vy-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  transition:
+    border-color var(--duration-base) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out),
+    transform var(--duration-base) var(--ease-out);
+}
+
+.vy-card--preenchido {
+  padding: var(--space-5);
+}
+
+.vy-card--interativo {
+  cursor: pointer;
+}
+
+.vy-card--interativo:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.vy-card--destaque {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--surface-card), var(--surface-card)) padding-box,
+    var(--vy-gradient) border-box;
+}
+
+.vy-card__cabecalho {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.vy-card__titulo {
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.vy-card__descricao {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.vy-card__corpo {
+  padding: var(--space-5);
+}
+
+/* ---------- Selo ---------- */
+
+.vy-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.vy-badge--neutro {
+  background: var(--surface-raised);
+  border-color: var(--border-default);
+  color: var(--text-muted);
+}
+.vy-badge--info {
+  background: var(--info-soft);
+  border-color: rgb(24 216 232 / 0.3);
+  color: var(--vy-cyan-300);
+}
+.vy-badge--sucesso {
+  background: var(--success-soft);
+  border-color: rgb(33 197 138 / 0.3);
+  color: var(--success);
+}
+.vy-badge--atencao {
+  background: var(--warning-soft);
+  border-color: rgb(245 165 36 / 0.32);
+  color: var(--warning);
+}
+.vy-badge--perigo {
+  background: var(--danger-soft);
+  border-color: rgb(240 74 86 / 0.32);
+  color: var(--danger);
+}
+.vy-badge--marca {
+  background: var(--vy-gradient-soft);
+  border-color: rgb(113 87 255 / 0.34);
+  color: var(--vy-violet-400);
+}
+
+/* Ponto pulsante: só para estado realmente vivo (IA atendendo, sincronia
+   em curso). Usado em qualquer outro lugar vira ruído. */
+.vy-badge__ponto {
+  width: 5px;
+  height: 5px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+  animation: vy-pulse 1.8s var(--ease-in-out) infinite;
+}
+
+/* ---------- Indicador numérico (KPI) ---------- */
+
+.vy-stat {
+  position: relative;
+  /* A folga extra embaixo é para o minigráfico, que fica ancorado no
+     rodapé do cartão e cruzaria o texto sem ela. */
+  padding: var(--space-5) var(--space-5) var(--space-8);
+  overflow: hidden;
+}
+
+.vy-stat__rotulo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.vy-stat__valor {
+  margin-top: var(--space-3);
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+}
+
+.vy-stat__rodape {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+}
+
+.vy-stat__delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: 700;
+}
+
+.vy-stat__delta--sobe {
+  color: var(--success);
+}
+.vy-stat__delta--desce {
+  color: var(--danger);
+}
+.vy-stat__delta--neutro {
+  color: var(--text-subtle);
+}
+
+.vy-stat__grafico {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* ---------- Tabela ----------
+   Cabeçalho gruda no topo porque a lista é longa por natureza. */
+
+.vy-tabela-wrap {
+  overflow-x: auto;
+  border-radius: var(--radius-lg);
+}
+
+.vy-tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  min-width: 720px;
+}
+
+.vy-tabela thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  background: var(--surface-sunken);
+  backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.vy-tabela tbody td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-default);
+  vertical-align: middle;
+}
+
+.vy-tabela tbody tr {
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.vy-tabela tbody tr:hover {
+  background: var(--surface-hover);
+}
+
+.vy-tabela tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.vy-tabela--clicavel tbody tr {
+  cursor: pointer;
+}
+
+.vy-tabela__numero {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Campos ---------- */
+
+.vy-campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.vy-campo__rotulo {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.vy-input,
+.vy-select,
+.vy-textarea {
+  width: 100%;
+  padding: 0 var(--space-3);
+  height: 36px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-strong);
+  font-size: var(--text-sm);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.vy-textarea {
+  height: auto;
+  min-height: 92px;
+  padding: var(--space-3);
+  resize: vertical;
+  line-height: var(--leading-normal);
+}
+
+.vy-input::placeholder,
+.vy-textarea::placeholder {
+  color: var(--text-subtle);
+}
+
+.vy-input:focus,
+.vy-select:focus,
+.vy-textarea:focus {
+  outline: none;
+  border-color: var(--vy-cyan);
+  box-shadow: 0 0 0 3px rgb(24 216 232 / 0.15);
+}
+
+.vy-input--invalido {
+  border-color: var(--danger);
+}
+
+.vy-campo__erro {
+  font-size: var(--text-xs);
+  color: var(--danger);
+}
+
+.vy-select {
+  appearance: none;
+  padding-right: var(--space-8);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238fa3bd' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--space-3) center;
+}
+
+.vy-select option {
+  background: var(--vy-midnight-800);
+  color: var(--text-strong);
+}
+
+.vy-busca {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.vy-busca svg {
+  position: absolute;
+  left: var(--space-3);
+  color: var(--text-subtle);
+  pointer-events: none;
+}
+
+.vy-busca .vy-input {
+  padding-left: var(--space-8);
+}
+
+/* ---------- Controle segmentado ---------- */
+
+.vy-segmentado {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.vy-segmentado__item {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.vy-segmentado__item:hover {
+  color: var(--text-strong);
+}
+
+.vy-segmentado__item[aria-selected='true'] {
+  background: var(--surface-raised);
+  color: var(--text-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---------- Abas ---------- */
+
+.vy-abas {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--border-subtle);
+  overflow-x: auto;
+}
+
+.vy-abas__item {
+  position: relative;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.vy-abas__item:hover {
+  color: var(--text-default);
+}
+
+.vy-abas__item[aria-selected='true'] {
+  color: var(--text-strong);
+}
+
+.vy-abas__item[aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  inset-inline: var(--space-3);
+  bottom: -1px;
+  height: 2px;
+  border-radius: var(--radius-full);
+  background: var(--vy-gradient);
+}
+
+/* ---------- Avatar ---------- */
+
+.vy-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  font-weight: 700;
+  color: var(--text-on-accent);
+  letter-spacing: var(--tracking-normal);
+  border: 1px solid rgb(247 250 252 / 0.14);
+}
+
+/* ---------- Estados vazio, erro e carregando ---------- */
+
+.vy-estado {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-12) var(--space-6);
+  text-align: center;
+}
+
+.vy-estado__icone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  border-radius: var(--radius-xl);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-subtle);
+}
+
+.vy-estado__icone--erro {
+  background: var(--danger-soft);
+  border-color: rgb(240 74 86 / 0.3);
+  color: var(--danger);
+}
+
+.vy-estado__titulo {
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.vy-estado__texto {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  max-width: 42ch;
+}
+
+/* Esqueleto: mesma altura do conteúdo que substitui, para a página não
+   pular quando o dado chega. */
+.vy-skeleton {
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--surface-raised) 25%,
+    var(--surface-hover) 50%,
+    var(--surface-raised) 75%
+  );
+  background-size: 260% 100%;
+  animation: vy-shimmer 1.4s linear infinite;
+}
+
+.vy-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-default);
+  border-top-color: var(--vy-cyan);
+  border-radius: var(--radius-full);
+  animation: vy-spin 0.7s linear infinite;
+}
+
+/* ---------- Modal e gaveta ---------- */
+
+.vy-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  background: var(--surface-overlay);
+  backdrop-filter: blur(6px);
+  animation: vy-fade var(--duration-base) var(--ease-out);
+}
+
+.vy-modal {
+  position: fixed;
+  z-index: var(--z-modal);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - var(--space-8)));
+  max-height: calc(100dvh - var(--space-16));
+  overflow: auto;
+  background: var(--vy-midnight-800);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  animation: vy-fade-up var(--duration-base) var(--ease-out);
+}
+
+[data-tema='claro'] .vy-modal {
+  background: var(--surface-raised);
+}
+
+.vy-gaveta {
+  position: fixed;
+  z-index: var(--z-drawer);
+  inset-block: 0;
+  right: 0;
+  width: min(460px, 100vw);
+  overflow: auto;
+  background: var(--vy-midnight-800);
+  border-left: 1px solid var(--border-default);
+  box-shadow: var(--shadow-xl);
+  animation: vy-gaveta-entra var(--duration-slow) var(--ease-out);
+}
+
+[data-tema='claro'] .vy-gaveta {
+  background: var(--surface-raised);
+}
+
+@keyframes vy-gaveta-entra {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+/* ---------- Aviso (toast) ---------- */
+
+.vy-toasts {
+  position: fixed;
+  z-index: var(--z-toast);
+  right: var(--space-5);
+  bottom: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+.vy-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 280px;
+  max-width: 380px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--vy-midnight-700);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  pointer-events: auto;
+  animation: vy-fade-up var(--duration-base) var(--ease-spring);
+}
+
+[data-tema='claro'] .vy-toast {
+  background: var(--surface-raised);
+}
+
+.vy-toast__titulo {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.vy-toast__texto {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* ---------- Dica (tooltip) ---------- */
+
+.vy-dica {
+  position: relative;
+  display: inline-flex;
+}
+
+.vy-dica__balao {
+  position: absolute;
+  z-index: var(--z-tooltip);
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--space-1) var(--space-2);
+  background: var(--vy-midnight-900);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-2xs);
+  color: var(--text-default);
+  white-space: nowrap;
+  box-shadow: var(--shadow-md);
+  animation: vy-fade var(--duration-fast) var(--ease-out);
+}
+
+/* ---------- Barra de progresso e anel de score ---------- */
+
+.vy-progresso {
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.vy-progresso__trilho {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--vy-gradient);
+  transition: width var(--duration-slow) var(--ease-out);
+}
+
+/* ---------- Linha do tempo ---------- */
+
+.vy-timeline {
+  position: relative;
+  padding-left: var(--space-6);
+}
+
+.vy-timeline::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 9px;
+  width: 1px;
+  background: linear-gradient(
+    to bottom,
+    var(--border-default),
+    var(--border-subtle) 60%,
+    transparent
+  );
+}
+
+.vy-timeline__item {
+  position: relative;
+  padding-bottom: var(--space-5);
+}
+
+.vy-timeline__item:last-child {
+  padding-bottom: 0;
+}
+
+.vy-timeline__ponto {
+  position: absolute;
+  left: calc(var(--space-6) * -1 + 4px);
+  top: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-full);
+  background: var(--vy-midnight-800);
+  border: 2px solid var(--border-strong);
+  display: grid;
+  place-items: center;
+}

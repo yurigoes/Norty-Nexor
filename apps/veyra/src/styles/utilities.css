@@ -1,0 +1,176 @@
+/* =========================================================
+   VEYRA — Utilitários
+   Poucos, nomeados pelo que significam. Não é um framework de
+   utilitários: é o mínimo que se repete em todo módulo.
+   ========================================================= */
+
+.vy-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.vy-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.vy-row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.vy-wrap {
+  flex-wrap: wrap;
+}
+
+.vy-grow {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Grade responsiva padrão dos módulos. O `auto-fit` evita media query
+   para o caso comum de cartões. */
+.vy-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.vy-grid-2 {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+/* Superfície de vidro. O blur é sutil de propósito. */
+.vy-glass {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.vy-gradient-text {
+  background: var(--vy-gradient-text);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.vy-eyebrow {
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-widest);
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.vy-mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-normal);
+}
+
+.vy-muted {
+  color: var(--text-muted);
+}
+
+.vy-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Números tabulares: coluna de dinheiro não pode dançar entre linhas. */
+.vy-numeric {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Conteúdo largo rola dentro do próprio contêiner — a página nunca
+   ganha rolagem horizontal. */
+.vy-scroll-x {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.vy-only-desktop {
+  display: initial;
+}
+
+.vy-only-mobile {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .vy-only-desktop {
+    display: none;
+  }
+
+  .vy-only-mobile {
+    display: initial;
+  }
+}
+
+.vy-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@keyframes vy-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes vy-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes vy-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes vy-shimmer {
+  from {
+    background-position: -180% 0;
+  }
+  to {
+    background-position: 180% 0;
+  }
+}
+
+@keyframes vy-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.vy-enter {
+  animation: vy-fade-up var(--duration-slow) var(--ease-out) both;
+}

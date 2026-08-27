@@ -1,0 +1,75 @@
+/* VEYRA Admin. Reaproveita os componentes da casca do aplicativo, mas a
+   lateral é âmbar em vez de gradiente — a diferença de cor é o lembrete
+   permanente de que quem está aqui enxerga todas as organizações. */
+
+.vy-admin {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 1fr;
+  min-height: 100dvh;
+}
+
+.vy-admin__lateral {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  padding: var(--space-4) var(--space-3);
+  background: var(--surface-sidebar);
+  border-right: 1px solid rgb(245 165 36 / 0.2);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.vy-admin__marca {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-4);
+}
+
+.vy-admin__tag {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-widest);
+  text-transform: uppercase;
+  color: var(--warning);
+}
+
+.vy-admin__nav {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.vy-admin .vy-item[aria-current='page']::before {
+  background: var(--warning);
+}
+
+.vy-admin .vy-topo {
+  border-bottom-color: rgb(245 165 36 / 0.2);
+}
+
+@media (max-width: 860px) {
+  .vy-admin {
+    grid-template-columns: 1fr;
+  }
+
+  .vy-admin__lateral {
+    position: static;
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    overflow-x: auto;
+  }
+
+  .vy-admin__nav {
+    display: flex;
+    gap: var(--space-1);
+  }
+
+  .vy-admin__lateral .vy-lateral__rodape {
+    display: none;
+  }
+}

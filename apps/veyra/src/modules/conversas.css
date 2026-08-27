@@ -1,0 +1,237 @@
+/* Central de Conversas — três colunas em desktop, uma no celular. */
+
+.vy-conversas {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr) 300px;
+  gap: var(--space-3);
+  height: calc(100dvh - var(--topbar-height) - 190px);
+  min-height: 520px;
+}
+
+.vy-conversas__fila,
+.vy-conversas__chat,
+.vy-conversas__contexto {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.vy-conversas__contexto {
+  overflow-y: auto;
+}
+
+.vy-conversas__lista {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.vy-conversas__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.vy-conversas__item:hover {
+  background: var(--surface-hover);
+}
+
+.vy-conversas__item[data-ativa='true'] {
+  background: var(--surface-active);
+  box-shadow: inset 3px 0 0 0 var(--vy-cyan);
+}
+
+.vy-conversas__contador {
+  display: grid;
+  place-items: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  background: var(--danger);
+  color: #fff;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.vy-conversas__cabecalho {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* O selo da IA é discreto de propósito: o cliente não precisa saber que
+   é robô, e o vendedor precisa — mas sem que isso domine o cabeçalho. */
+.vy-conversas__ia {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 3px var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--vy-gradient-soft);
+  border: 1px solid rgb(113 87 255 / 0.3);
+  color: var(--vy-violet-400);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+}
+
+.vy-conversas__mensagens {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-5) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background:
+    radial-gradient(600px 300px at 80% 0%, rgb(11 92 255 / 0.05), transparent 70%);
+}
+
+.vy-conversas__sistema {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 3px var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  font-size: var(--text-2xs);
+  color: var(--text-subtle);
+}
+
+.vy-balao {
+  display: flex;
+  max-width: 78%;
+}
+
+.vy-balao--casa {
+  align-self: flex-end;
+  justify-content: flex-end;
+}
+
+.vy-balao__conteudo {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--text-default);
+  border-bottom-left-radius: var(--radius-xs);
+}
+
+.vy-balao--casa .vy-balao__conteudo {
+  background: rgb(11 92 255 / 0.16);
+  border-color: rgb(11 92 255 / 0.26);
+  border-bottom-left-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-xs);
+}
+
+/* Resposta da IA ganha a borda em gradiente. É o mesmo sinal usado em
+   todo lugar onde a IA produziu conteúdo — sem legenda, a pessoa
+   aprende o código uma vez. */
+.vy-balao__conteudo[data-ia='true'] {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--vy-midnight-700), var(--vy-midnight-700)) padding-box,
+    var(--vy-gradient) border-box;
+}
+
+[data-tema='claro'] .vy-balao__conteudo[data-ia='true'] {
+  background:
+    linear-gradient(var(--surface-raised), var(--surface-raised)) padding-box,
+    var(--vy-gradient) border-box;
+}
+
+.vy-balao__autor {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 4px;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  color: var(--text-subtle);
+}
+
+.vy-balao__anexo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+
+.vy-balao__hora {
+  display: block;
+  margin-top: 5px;
+  font-size: var(--text-2xs);
+  color: var(--text-subtle);
+}
+
+.vy-conversas__acoes-ia {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.vy-conversas__acao-ia {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  background: var(--surface-sunken);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.vy-conversas__acao-ia:hover {
+  color: var(--vy-violet-400);
+  border-color: rgb(113 87 255 / 0.4);
+  background: var(--vy-gradient-soft);
+}
+
+.vy-conversas__campo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+@media (max-width: 1200px) {
+  .vy-conversas {
+    grid-template-columns: 280px minmax(0, 1fr);
+  }
+
+  .vy-conversas__contexto {
+    display: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .vy-conversas {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .vy-conversas__fila {
+    max-height: 320px;
+  }
+
+  .vy-conversas__chat {
+    min-height: 460px;
+  }
+}

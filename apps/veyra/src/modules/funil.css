@@ -1,0 +1,79 @@
+/* Kanban do funil. Rola na horizontal dentro do próprio contêiner — a
+   página nunca ganha rolagem lateral. */
+
+.vy-funil {
+  display: flex;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  align-items: flex-start;
+}
+
+.vy-funil__coluna {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 264px;
+  max-height: calc(100dvh - 320px);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+/* Enquanto um cartão está sendo arrastado, toda coluna vira alvo
+   visível. Sem isso o destino do arrasto fica adivinhado. */
+.vy-funil__coluna[data-alvo='true'] {
+  border-color: var(--vy-cyan);
+  border-style: dashed;
+}
+
+.vy-funil__cabecalho {
+  position: relative;
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.vy-funil__faixa {
+  position: absolute;
+  left: var(--space-3);
+  top: var(--space-3);
+  bottom: var(--space-3);
+  width: 3px;
+  border-radius: var(--radius-full);
+}
+
+.vy-funil__lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  overflow-y: auto;
+}
+
+.vy-funil__cartao {
+  padding: var(--space-3);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: grab;
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out);
+}
+
+.vy-funil__cartao:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.vy-funil__cartao[data-arrastando='true'] {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+
+.vy-funil__vazio {
+  padding: var(--space-5) var(--space-3);
+  text-align: center;
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+}
