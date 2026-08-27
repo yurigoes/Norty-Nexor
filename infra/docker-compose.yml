@@ -5,6 +5,7 @@
 #
 #    myhome.norty.com.br      → web (estático, servido pelo Caddy)
 #    api-myhome.norty.com.br  → api (NestJS)
+#    ${LICITA_DOMAIN}         → licita (LICITA+, estático)
 #
 #  O Caddy emite e renova os certificados sozinho pelo Let's Encrypt.
 #  Só ele expõe porta para fora: banco e Redis ficam na rede interna,
@@ -86,10 +87,20 @@ services:
     restart: unless-stopped
     networks: [edge]
 
+  # LICITA+ — produto independente, mesma borda.
+  # Sem banco e sem API própria por enquanto: é front-end estático
+  # com dados de demonstração, então não entra na rede `internal`.
+  licita:
+    build:
+      context: ..
+      dockerfile: infra/licita.Dockerfile
+    restart: unless-stopped
+    networks: [edge]
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
-    depends_on: [api, web]
+    depends_on: [api, web, licita]
     ports:
       - "80:80"
       - "443:443"
@@ -97,6 +108,7 @@ services:
     environment:
       APP_DOMAIN: ${APP_DOMAIN:-myhome.norty.com.br}
       API_DOMAIN: ${API_DOMAIN:-api-myhome.norty.com.br}
+      LICITA_DOMAIN: ${LICITA_DOMAIN:-licita.localhost}
       ACME_EMAIL: ${ACME_EMAIL:?defina ACME_EMAIL no .env}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
