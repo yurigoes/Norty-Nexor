@@ -257,9 +257,14 @@ export default {
   <footer class="rodape-publico">
     <div class="rodape-interno">
       ${raw(marcaHorizontal({ tamanho: 32, comTagline: true }))}
-      <p class="tenue" style="font-size: var(--t-micro); max-width: 46ch; text-align: right">
-        Protótipo de demonstração. Os dados exibidos são fictícios e não representam
-        licitações reais.
+      <nav class="rodape-links" aria-label="Rodapé">
+        <a href="#recursos">Recursos</a>
+        <a href="#como-funciona">Como funciona</a>
+        <a href="#/entrar">Entrar</a>
+        <a href="#/onboarding">Criar conta</a>
+      </nav>
+      <p class="tenue" style="font-size: var(--t-micro)">
+        © ${new Date().getFullYear()} LICITA+
       </p>
     </div>
   </footer>

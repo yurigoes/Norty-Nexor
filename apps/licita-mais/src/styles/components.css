@@ -912,3 +912,187 @@
   .modal { max-height: 92vh; }
   .stat-num { font-size: 1.8rem; }
 }
+
+/* =========================================================
+   Tela de carregamento — a marca se montando
+   ---------------------------------------------------------
+   A ordem das peças conta a história do produto: os dados
+   chegam (quadradinhos), a estrutura os organiza (losango e
+   fitas) e a oportunidade sai disso (o "+", que é desenhado,
+   não revelado).
+
+   Cada peça tem `animation-fill-mode: both`, então o estado
+   inicial vale antes do atraso começar — sem isso tudo
+   apareceria montado por um quadro antes de sumir e voltar.
+   ========================================================= */
+
+.lm-cortina {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-toast);
+  display: grid;
+  place-items: center;
+  background: var(--grad-sidebar);
+  transition: opacity var(--tr-lenta), visibility var(--tr-lenta);
+}
+
+/* Malha de pontos no fundo, na geometria da marca. */
+.lm-cortina::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, .3) 1.1px, transparent 1.1px);
+  background-size: 26px 26px;
+  opacity: .1;
+}
+
+/* Brilho ambiente atrás da marca. Sem borda dura: uma forma
+   sólida desse tamanho competiria com o símbolo em vez de
+   emoldurá-lo — e o que precisa ser visto aqui é a marca. */
+.lm-cortina::after {
+  content: '';
+  position: absolute;
+  width: 560px; height: 560px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(22, 119, 232, .20), rgba(0, 140, 69, .07) 45%, transparent 68%);
+}
+
+/* Losango só como contorno fino, girando devagar: a geometria
+   da marca aparece sem disputar atenção com ela. */
+.lm-anel {
+  position: absolute;
+  width: 260px; height: 260px;
+  border-radius: 52px;
+  border: 1px solid rgba(255, 255, 255, .10);
+  animation: lm-girar 26s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes lm-girar { from { transform: rotate(45deg); } to { transform: rotate(405deg); } }
+
+.lm-cortina.-saindo { opacity: 0; visibility: hidden; }
+
+@media (prefers-reduced-motion: reduce) { .lm-anel { animation: none; } }
+
+.lm-palco {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: var(--e-5);
+  padding: var(--e-6);
+}
+
+/* ---------- As peças ---------- */
+
+/* O `both` vai dentro de cada shorthand, e não numa regra base.
+   `animation` é shorthand: ele reseta `animation-fill-mode` para
+   `none`, e sem o valor aqui as peças se montavam e voltavam a
+   sumir no fim da animação. */
+.lm-simbolo .lm-pix,
+.lm-simbolo .lm-losango,
+.lm-simbolo .lm-fita,
+.lm-simbolo .lm-circulo {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.lm-simbolo .lm-pix { animation: lm-pix .42s cubic-bezier(.2, .9, .3, 1) both; }
+.lm-simbolo .lm-pix:nth-of-type(1) { animation-delay: .05s; }
+.lm-simbolo .lm-pix:nth-of-type(2) { animation-delay: .13s; }
+.lm-simbolo .lm-pix:nth-of-type(3) { animation-delay: .21s; }
+.lm-simbolo .lm-pix:nth-of-type(4) { animation-delay: .29s; }
+
+.lm-simbolo .lm-losango { animation: lm-losango .68s cubic-bezier(.22, .9, .3, 1) .34s both; }
+.lm-simbolo .lm-fita-a  { animation: lm-fita .5s cubic-bezier(.22, .9, .3, 1) .74s both; }
+.lm-simbolo .lm-fita-b  { animation: lm-fita .5s cubic-bezier(.22, .9, .3, 1) .88s both; }
+.lm-simbolo .lm-circulo { animation: lm-circulo .46s cubic-bezier(.3, 1.5, .5, 1) 1.06s both; }
+
+/* O "+" se desenha: traço lê como construção, fade lê como
+   aparição — e a marca precisa parecer montada. */
+.lm-simbolo .lm-mais {
+  animation: lm-mais .52s cubic-bezier(.4, 0, .2, 1) 1.34s both;
+}
+
+@keyframes lm-pix {
+  from { opacity: 0; transform: translateX(-10px) scale(.4); }
+  to   { opacity: .9; transform: none; }
+}
+
+@keyframes lm-losango {
+  from { opacity: 0; transform: rotate(-96deg) scale(.3); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes lm-fita {
+  from { opacity: 0; transform: scale(.55); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes lm-circulo {
+  from { opacity: 0; transform: scale(0); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes lm-mais {
+  from { stroke-dashoffset: 22; }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* ---------- Assinatura e progresso ---------- */
+
+.lm-marca {
+  opacity: 0;
+  animation: lm-subir .5s cubic-bezier(.2, .9, .3, 1) 1.62s both;
+}
+.lm-marca .marca-texto { color: var(--branco); font-size: 1.5rem; letter-spacing: -.03em; }
+
+@keyframes lm-subir {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.lm-trilho {
+  width: min(260px, 64vw);
+  height: 3px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, .16);
+  overflow: hidden;
+  opacity: 0;
+  animation: lm-subir .4s ease 1.82s both;
+}
+
+.lm-avanco {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--grad-oportunidade);
+  transition: width var(--tr-lenta);
+}
+
+.lm-etapa {
+  font-size: var(--t-micro);
+  letter-spacing: .06em;
+  color: rgba(255, 255, 255, .6);
+  text-align: center;
+  min-height: 1.3em;
+  opacity: 0;
+  animation: lm-subir .4s ease 1.94s both;
+}
+
+/* Sem movimento: as peças chegam prontas e só a etapa muda. A
+   informação é a mesma; o que sai é a encenação. */
+@media (prefers-reduced-motion: reduce) {
+  .lm-cortina::after { animation: none; }
+  .lm-simbolo .lm-pix,
+  .lm-simbolo .lm-losango,
+  .lm-simbolo .lm-fita,
+  .lm-simbolo .lm-circulo,
+  .lm-marca, .lm-trilho, .lm-etapa {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+  }
+  .lm-simbolo .lm-mais { stroke-dashoffset: 0; animation: none; }
+}

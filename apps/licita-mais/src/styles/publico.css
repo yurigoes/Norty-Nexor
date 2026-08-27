@@ -372,3 +372,7 @@
   .heroi-provas { gap: var(--e-5); }
   .rodape-publico { padding: var(--e-8) var(--e-4); }
 }
+
+.rodape-links { display: flex; gap: var(--e-5); flex-wrap: wrap; }
+.rodape-links a { font-size: var(--t-corpo-sm); font-weight: var(--p-semi); color: var(--texto-suave); }
+.rodape-links a:hover { color: var(--texto-forte); }

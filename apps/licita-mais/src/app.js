@@ -20,6 +20,7 @@ import { itemNotificacao, corpoExplicacao } from './ui/domain.js';
 import { alternarFavorito, obter, aplicarTema, assinar, totalFavoritos, alternarTema, marcarTudoLido } from './lib/store.js';
 import { empresa, notificacoes, licitacoes, licitacaoPorId, monitoramentos } from './data/mock.js';
 import { iniciais } from './lib/format.js';
+import { mostrarCarregando, fecharCarregando } from './ui/carregando.js';
 
 /* ---------- Páginas ---------- */
 
@@ -412,3 +413,29 @@ aplicarTema();
 ligarAcoesGlobais();
 aoMudarRota(renderizar);
 iniciar('/');
+
+/**
+ * Abertura: a marca se monta uma vez, no primeiro carregamento
+ * da sessão. Nas navegações seguintes ela não reaparece —
+ * cortina que volta a cada clique deixa de ser identidade e
+ * vira obstáculo.
+ */
+function abertura() {
+  try {
+    if (sessionStorage.getItem('licita-mais:aberto')) return;
+    sessionStorage.setItem('licita-mais:aberto', '1');
+  } catch {
+    /* Janela anônima: sem persistência, a cortina roda de novo.
+       É o menor dos males — melhor repetir que quebrar a carga. */
+  }
+
+  mostrarCarregando({
+    texto: 'Inteligência para oportunidades públicas',
+    etapas: ['Conectando aos portais públicos', 'Preparando o seu radar'],
+    intervalo: 900,
+  });
+
+  setTimeout(fecharCarregando, 2400);
+}
+
+abertura();

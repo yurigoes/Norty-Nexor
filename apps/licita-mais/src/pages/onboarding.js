@@ -15,6 +15,7 @@ import { html, raw, $, $$, ao, aoClicarEm } from '../lib/dom.js';
 import { icone } from '../lib/icons.js';
 import { marcaHorizontal } from '../ui/brand.js';
 import { campo, seletor, toast } from '../ui/primitives.js';
+import { comCarregamento } from '../ui/carregando.js';
 import { irPara } from '../lib/router.js';
 
 const TOTAL = 5;
@@ -225,11 +226,24 @@ export default {
     });
 
     aoClicarEm(raiz, '[data-acao="concluir"]', () => {
-      irPara('/painel');
-      toast('Perfil criado', {
-        variante: 'sucesso',
-        sub: 'Encontramos 23 oportunidades abertas compatíveis com o que você declarou.',
-      });
+      comCarregamento(
+        {
+          texto: 'Criando o perfil da sua empresa…',
+          etapas: [
+            'Consultando CNAEs e porte',
+            'Montando o seu radar',
+            'Buscando oportunidades abertas',
+          ],
+          duracao: 2800,
+        },
+        () => {
+          irPara('/painel');
+          toast('Perfil criado', {
+            variante: 'sucesso',
+            sub: 'Encontramos 23 oportunidades abertas compatíveis com o que você declarou.',
+          });
+        },
+      );
     });
   },
 };

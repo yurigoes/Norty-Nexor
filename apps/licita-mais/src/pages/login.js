@@ -11,6 +11,7 @@ import { html, raw, $, ao, aoClicarEm } from '../lib/dom.js';
 import { icone } from '../lib/icons.js';
 import { marcaHorizontal, textoMarca, simbolo } from '../ui/brand.js';
 import { campo, toast } from '../ui/primitives.js';
+import { comCarregamento } from '../ui/carregando.js';
 import { irPara } from '../lib/router.js';
 import { empresa } from '../data/mock.js';
 
@@ -130,17 +131,31 @@ export default {
         return;
       }
 
-      // Estado de carregamento antes de navegar: sem ele o clique
-      // parece não ter sido registrado.
+      // A marca se monta enquanto o texto diz o que está
+      // acontecendo. As etapas são as reais do produto — entrar,
+      // carregar o perfil, varrer, triar — para a espera informar
+      // em vez de só ocupar tempo.
       botao.classList.add('-carregando');
-      setTimeout(() => {
-        botao.classList.remove('-carregando');
-        irPara('/painel');
-        toast(`Bem-vindo de volta, ${empresa.usuario.nome.split(' ')[0]}`, {
-          variante: 'sucesso',
-          sub: '23 novas oportunidades desde a sua última visita.',
-        });
-      }, 700);
+
+      comCarregamento(
+        {
+          texto: 'Autenticando…',
+          etapas: [
+            'Carregando o perfil da empresa',
+            'Varrendo os portais públicos',
+            'Analisando compatibilidade',
+          ],
+          duracao: 2600,
+        },
+        () => {
+          botao.classList.remove('-carregando');
+          irPara('/painel');
+          toast(`Bem-vindo de volta, ${empresa.usuario.nome.split(' ')[0]}`, {
+            variante: 'sucesso',
+            sub: '23 novas oportunidades desde a sua última visita.',
+          });
+        },
+      );
     });
 
     aoClicarEm(raiz, '[data-acao="ver-senha"]', (_evento, alvo) => {

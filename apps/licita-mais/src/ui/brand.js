@@ -61,6 +61,56 @@ export function simbolo({ tamanho = 40, comPontos = true } = {}) {
 </svg>`;
 }
 
+/**
+ * Símbolo com as peças nomeadas, para a tela de carregamento
+ * montá-lo na ordem. A sequência conta a história do produto:
+ * primeiro os dados chegando (os quadradinhos), depois a
+ * estrutura que os organiza (o losango), e por último a
+ * oportunidade que sai disso (o "+").
+ *
+ * O "+" é desenhado por `stroke-dasharray`, não por opacidade:
+ * traço que se desenha lê como construção, e fade lê como
+ * aparição. A diferença é o que faz a marca parecer montada em
+ * vez de apenas revelada.
+ */
+export function simboloAnimado({ tamanho = 96 } = {}) {
+  const id = `lma${(contadorGradiente += 1)}`;
+
+  return `
+<svg class="lm-simbolo" width="${tamanho}" height="${tamanho}" viewBox="0 0 48 48" fill="none"
+     role="img" aria-label="LICITA+">
+  <defs>
+    <linearGradient id="${id}a" x1="8" y1="6" x2="40" y2="42" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1677E8"/><stop offset=".55" stop-color="#005CA9"/><stop offset="1" stop-color="#071E3D"/>
+    </linearGradient>
+    <linearGradient id="${id}b" x1="24" y1="8" x2="42" y2="26" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFCC00"/><stop offset="1" stop-color="#E5B400"/>
+    </linearGradient>
+    <linearGradient id="${id}c" x1="24" y1="40" x2="42" y2="22" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00A95C"/><stop offset="1" stop-color="#008C45"/>
+    </linearGradient>
+  </defs>
+
+  <rect class="lm-pix" x="4.5" y="21" width="4" height="4" rx="1" fill="#005CA9"/>
+  <rect class="lm-pix" x="0" y="27.5" width="3" height="3" rx=".8" fill="#1677E8"/>
+  <rect class="lm-pix" x="5" y="31.5" width="3.4" height="3.4" rx="1" fill="#008C45"/>
+  <rect class="lm-pix" x="10.5" y="37" width="3" height="3" rx=".8" fill="#FFCC00"/>
+
+  <rect class="lm-losango" x="10.5" y="10.5" width="27" height="27" rx="7.5"
+        transform="rotate(45 24 24)" fill="url(#${id}a)"/>
+
+  <path class="lm-fita lm-fita-a" d="M24 7.5 A16.5 16.5 0 0 1 40.5 24 L33.5 24 A9.5 9.5 0 0 0 24 14.5 Z"
+        fill="url(#${id}b)"/>
+  <path class="lm-fita lm-fita-b" d="M40.5 24 A16.5 16.5 0 0 1 24 40.5 L24 33.5 A9.5 9.5 0 0 0 33.5 24 Z"
+        fill="url(#${id}c)"/>
+
+  <circle class="lm-circulo" cx="24" cy="24" r="10" fill="#071E3D"/>
+  <path class="lm-mais" d="M24 18.5v11M18.5 24h11"
+        stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round"
+        stroke-dasharray="22" stroke-dashoffset="22"/>
+</svg>`;
+}
+
 /** Assinatura textual. O "+" recebe o gradiente de oportunidade. */
 export function textoMarca({ classe = '' } = {}) {
   return `<span class="marca-texto ${classe}">LICITA<i>+</i></span>`;
