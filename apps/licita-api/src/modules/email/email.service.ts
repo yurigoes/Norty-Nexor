@@ -37,29 +37,38 @@ export class EmailService {
     return this.transporte;
   }
 
-  private async enviar(para: string, assunto: string, html: string, texto: string): Promise<void> {
+  /**
+   * Devolve `true` quando o servidor aceitou a mensagem. Falha de
+   * envio continua não derrubando a operação que a originou — mas
+   * quem chamou passa a saber, e pode dizer a verdade na tela em
+   * vez de prometer um e-mail que não saiu.
+   */
+  private async enviar(para: string, assunto: string, html: string, texto: string): Promise<boolean> {
     const transporte = this.obterTransporte();
 
     if (!transporte) {
       this.logger.warn(`SMTP desligado — e-mail para ${para} não enviado: "${assunto}"`);
       if (!config.producao) this.logger.debug(`Conteúdo:\n${texto}`);
-      return;
+      return false;
     }
 
     try {
       await transporte.sendMail({ from: config.smtp.remetente, to: para, subject: assunto, html, text: texto });
       this.logger.log(`E-mail enviado para ${para}: "${assunto}"`);
+      return true;
     } catch (erro) {
       this.logger.error(
-        `Falha ao enviar para ${para}: ${erro instanceof Error ? erro.message : String(erro)}`,
+        `Falha ao enviar para ${para}: ${erro instanceof Error ? erro.message : String(erro)}. ` +
+          'Diagnostique com: node dist/tarefas/smtp.js',
       );
+      return false;
     }
   }
 
-  async confirmacaoDeConta(para: string, nome: string, token: string): Promise<void> {
+  async confirmacaoDeConta(para: string, nome: string, token: string): Promise<boolean> {
     const link = `${config.urlApp}/#/confirmar?token=${encodeURIComponent(token)}`;
 
-    await this.enviar(
+    return this.enviar(
       para,
       'Confirme seu e-mail — LICITA+',
       molde({
@@ -75,10 +84,10 @@ export class EmailService {
     );
   }
 
-  async redefinicaoDeSenha(para: string, nome: string, token: string): Promise<void> {
+  async redefinicaoDeSenha(para: string, nome: string, token: string): Promise<boolean> {
     const link = `${config.urlApp}/#/redefinir?token=${encodeURIComponent(token)}`;
 
-    await this.enviar(
+    return this.enviar(
       para,
       'Redefinir sua senha — LICITA+',
       molde({

@@ -88,8 +88,12 @@ export class AuthService {
     // nem nega a existência do cadastro.
     if (jaExiste) {
       this.logger.warn(`Cadastro tentado com e-mail existente: ${email}`);
-      await this.email.redefinicaoDeSenha(email, jaExiste.nome, await this.emitirToken(jaExiste.id, TipoToken.redefinicao, HORA));
-      return { mensagem: MENSAGEM_CADASTRO };
+      const enviado = await this.email.redefinicaoDeSenha(
+        email,
+        jaExiste.nome,
+        await this.emitirToken(jaExiste.id, TipoToken.redefinicao, HORA),
+      );
+      return { mensagem: enviado ? MENSAGEM_CADASTRO : MENSAGEM_SEM_ENVIO };
     }
 
     const cnpjEmUso = await this.prisma.empresa.findUnique({ where: { cnpj } });
@@ -128,10 +132,15 @@ export class AuthService {
     });
 
     const token = await this.emitirToken(usuario.id, TipoToken.confirmacao, DIA);
-    await this.email.confirmacaoDeConta(email, usuario.nome, token);
+    const enviado = await this.email.confirmacaoDeConta(email, usuario.nome, token);
 
     this.logger.log(`Conta criada: ${email} (empresa ${cnpj})`);
-    return { mensagem: MENSAGEM_CADASTRO };
+
+    // A conta existe de qualquer forma — falha de e-mail não a
+    // desfaz. Mas dizer "enviamos o link" quando o servidor
+    // recusou faz o usuário esperar por algo que não vem, e
+    // procurar na caixa de spam por uma mensagem que não existe.
+    return { mensagem: enviado ? MENSAGEM_CADASTRO : MENSAGEM_SEM_ENVIO };
   }
 
   async confirmarEmail(tokenBruto: string): Promise<{ mensagem: string }> {
@@ -384,6 +393,15 @@ export class AuthService {
 const MENSAGEM_CADASTRO =
   'Conta criada. Enviamos um link de confirmação para o seu e-mail — ' +
   'ele vale por 24 horas.';
+
+/**
+ * Mesma frase nos dois caminhos do cadastro (e-mail novo e já
+ * existente), para que a falha de envio não vire, sem querer, um
+ * jeito de descobrir quem tem conta.
+ */
+const MENSAGEM_SEM_ENVIO =
+  'Conta criada, mas não conseguimos enviar o e-mail de confirmação agora. ' +
+  'Peça o reenvio em alguns minutos — se persistir, avise o administrador.';
 
 const normalizarEmail = (email: string): string => email.toLowerCase().trim();
 const somenteDigitos = (texto: string): string => texto.replace(/\D/g, '');
