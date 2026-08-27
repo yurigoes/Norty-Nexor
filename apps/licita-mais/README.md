@@ -143,52 +143,78 @@ quem assina.
 
 ## Deploy — Thor (Proxmox)
 
-Segue a regra de ouro da infra Norty: **o código mora no host** em
-`/srv/apps-fase<N>/licita-mais` e entra no CT pelo bind-mount já
-existente em `/opt/fase<N>`. Edita-se no host, reconstrói-se dentro do
-container.
+| | |
+|---|---|
+| Container | **CT 103 Vanaheim** (`norty-apps-fase1`, `192.168.15.73`) |
+| Código no host | `/srv/apps-fase1/licita-mais` |
+| Caminho no CT | `/opt/licita-mais` (bind-mount) |
+| Porta | `3500` (ajustável por `LICITA_PORT`) |
+| Domínio | `licita.norty.com.br` via Cloudflare Tunnel |
 
 ```bash
-ssh -i ~/.ssh/norty_cluster_ed25519 root@100.91.185.42     # thor
-cd /srv/apps-fase3/.licita-mais-repo 2>/dev/null || true
-bash <(curl -fsSL https://raw.githubusercontent.com/yurigoes/Norty-Nexor/claude/gov-bidding-automation-4jopo0/apps/licita-mais/deploy-thor.sh)
+ssh -i ~/.ssh/norty_cluster_ed25519 root@100.91.185.42
+/srv/apps-fase1/licita-mais/deploy-thor.sh
 ```
 
-Ou, com o repositório já clonado no host:
+### O mount point é o primeiro passo, e ele custa um reboot
+
+No **CT 103 o bind-mount é por app** (`/srv/apps-fase1/bolao →
+/opt/bolao`), diferente do 104 e do 105, que montam a pasta da fase
+inteira. Um app novo ali precisa de um mount point novo — e em LXC
+mount point só aparece depois de reiniciar o container.
+
+O script **nunca reinicia o CT**. Se o mount faltar, ele imprime o
+comando e para:
 
 ```bash
-CT=105 FASE=3 /srv/apps-fase3/licita-mais/deploy-thor.sh
+pct set 103 -mp9 /srv/apps-fase1/licita-mais,mp=/opt/licita-mais
+pct reboot 103
 ```
 
-O script confere antes de mexer em qualquer coisa: se o CT existe, se
-está rodando, se o bind-mount está visível de dentro dele e se há
-Docker lá. Só depois atualiza o código e manda reconstruir. Nenhum
-outro app é tocado — só o diretório do LICITA+ e só o compose dele.
+**Reiniciar o 103 derruba junto Bolão da Galera, Central de Leads e
+Sorva.** Faça numa janela combinada. Depois rode o script de novo.
 
-Manualmente, o mesmo em três passos:
+### O que o script confere antes de mexer
+
+CT existe, está rodando, enxerga o bind-mount, tem Docker, e a porta
+está livre — distinguindo "ocupada por outro serviço" de "já é o
+`licita-web`, então é redeploy". Só depois atualiza o código e
+reconstrói. Nenhum outro app é tocado.
+
+### Manualmente
 
 ```bash
 # 1. no host thor
 rsync -a --delete --exclude dist/ --exclude node_modules/ \
-  <clone>/apps/licita-mais/ /srv/apps-fase3/licita-mais/
+  <clone>/apps/licita-mais/ /srv/apps-fase1/licita-mais/
 
 # 2. reconstrói dentro do CT
-pct exec 105 -- bash -c 'cd /opt/fase3/licita-mais && docker compose up -d --build'
+pct exec 103 -- bash -c 'cd /opt/licita-mais && docker compose up -d --build'
 
 # 3. confere
-pct exec 105 -- wget -qO- http://127.0.0.1:3060/ | head -3
+pct exec 103 -- wget -qO- http://127.0.0.1:3500/ | head -3
 ```
 
-### Porta e ingress
+### Cloudflare Tunnel
 
-O compose publica **só uma porta alta no CT** (`3060` por padrão,
-ajustável por `LICITA_PORT`). Ele nunca toma 80 nem 443: quem termina
-TLS e resolve o domínio é o ingress da Norty. Um serviço tomando a 443
-aqui brigaria com tudo o que já serve domínio no Thor.
+O compose publica **só a porta alta**, nunca 80 nem 443: quem termina
+TLS é o túnel. No CT onde roda o `cloudflared`, acrescente ao bloco
+`ingress:` do `config.yml`, **antes da regra final de 404**:
 
-Depois do container de pé, falta apontar `licita.norty.com.br` para
-`192.168.15.75:3060` no ingress — Cloudflare Tunnel ou o proxy que
-estiver na frente.
+```yaml
+  - hostname: licita.norty.com.br
+    service: http://192.168.15.73:3500
+```
+
+E registre o DNS uma vez só:
+
+```bash
+cloudflared tunnel route dns <nome-do-tunel> licita.norty.com.br
+```
+
+Depois recarregue o `cloudflared`. A ordem importa: a regra
+`service: http_status:404` tem que continuar sendo a última do
+`ingress`, senão ela engole tudo abaixo dela.
 
 ### Sem banco, sem Redis
 

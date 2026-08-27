@@ -11,9 +11,12 @@
 #  compose. Um serviço tomando a 443 aqui brigaria com tudo o que
 #  já serve domínio no Thor.
 #
+#  Roda no CT 103 (Vanaheim, fase1), onde o bind-mount é por app:
+#    /srv/apps-fase1/licita-mais → /opt/licita-mais
+#
 #  Subir:
-#    pct exec 105 -- bash -c \
-#      'cd /opt/fase3/licita-mais && docker compose up -d --build'
+#    pct exec 103 -- bash -c \
+#      'cd /opt/licita-mais && docker compose up -d --build'
 # =========================================================
 
 name: licita-mais
@@ -29,7 +32,7 @@ services:
       # Só no loopback do CT seria o ideal, mas o ingress vem de
       # outro host — então escuta em todas as interfaces do CT e
       # o firewall do Proxmox faz o recorte.
-      - "${LICITA_PORT:-3060}:80"
+      - "${LICITA_PORT:-3500}:80"
     environment:
       TZ: America/Bahia
     healthcheck:
