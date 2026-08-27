@@ -1,178 +1,135 @@
 /* =========================================================
    LICITA+ — Entrar
    ---------------------------------------------------------
-   Duas colunas: a esquerda carrega a marca e a promessa, a
-   direita o formulário. Em tela estreita a arte sai inteira —
-   num celular, o que importa é o campo de e-mail acima da
-   dobra, não a composição geométrica.
+   Autenticação de verdade contra a API. Duas decisões que a
+   tela precisa respeitar e que vêm do servidor:
+
+   - A mensagem de erro é a mesma para e-mail inexistente e
+     senha errada. A tela não pode "melhorar" isso dizendo
+     "e-mail não encontrado" — seria transformar o login num
+     verificador de quem tem conta.
+   - E-mail não confirmado tem mensagem própria, e aí sim vale
+     oferecer o reenvio do link: aqui a existência da conta já
+     foi estabelecida por quem digitou a senha certa.
    ========================================================= */
 
 import { html, raw, $, ao, aoClicarEm } from '../lib/dom.js';
 import { icone } from '../lib/icons.js';
-import { marcaHorizontal, textoMarca, simbolo } from '../ui/brand.js';
 import { campo, toast } from '../ui/primitives.js';
+import { molduraAuth, campoSenha, ligarOlhoDeSenha, avisoAuth } from '../ui/autenticacao.js';
 import { comCarregamento } from '../ui/carregando.js';
 import { irPara } from '../lib/router.js';
-import { empresa } from '../data/mock.js';
-
-const VANTAGENS = [
-  'Oportunidades analisadas contra o perfil da sua empresa',
-  'Compatibilidade com a conta aberta, critério por critério',
-  'Alerta de prazo antes de a oportunidade fechar',
-  'Histórico que ensina a calibrar o próximo preço',
-];
+import { entrarNaConta, reenviarConfirmacao, primeiroNome, destinoAposEntrar } from '../lib/sessao.js';
+import { emDemonstracao } from '../lib/config.js';
 
 export default {
   titulo: 'Entrar',
   shell: false,
 
   render() {
-    return html`
-<div class="login">
+    return molduraAuth({
+      titulo: 'Bem-vindo de volta',
+      subtitulo: 'Entre para continuar acompanhando suas oportunidades.',
 
-  <!-- Lado da marca -->
-  <aside class="login-arte">
-    <span class="login-geo-1" aria-hidden="true"></span>
-    <span class="login-geo-2" aria-hidden="true"></span>
-    <span class="login-geo-3" aria-hidden="true"></span>
+      corpo: html`
+        <div id="aviso-login"></div>
 
-    <a href="#/" style="position: relative; z-index: 1; display: inline-flex; align-items: center; gap: var(--e-3)">
-      ${raw(simbolo({ tamanho: 38, comPontos: false }))}
-      ${raw(textoMarca({ classe: '-inversa' }))}
-    </a>
+        <form class="pilha" style="margin-top: var(--e-8)" id="form-login" novalidate>
+          ${raw(campo({
+            rotulo: 'E-mail', id: 'login-email', tipo: 'email',
+            placeholder: 'voce@suaempresa.com.br',
+            atributos: 'autocomplete="email" required',
+          }))}
 
-    <div style="position: relative; z-index: 1">
-      <h2>Inteligência para encontrar oportunidades.</h2>
-      <p>
-        O LICITA+ analisa o que é publicado nos portais públicos e mostra o que
-        realmente faz sentido para o seu negócio.
-      </p>
+          ${raw(campoSenha({ id: 'login-senha', rotulo: 'Senha' }))}
 
-      <div class="login-lista" style="margin-top: var(--e-8)">
-        ${raw(VANTAGENS.map((v) => `
-          <div class="login-lista-item">${icone('check_circulo')}<span>${v}</span></div>`).join(''))}
-      </div>
-    </div>
-
-    <p style="position: relative; z-index: 1; font-size: var(--t-micro); color: rgba(255,255,255,.42)">
-      Plataforma privada e independente, sem vínculo com órgãos públicos.
-    </p>
-  </aside>
-
-  <!-- Formulário -->
-  <main class="login-form">
-    <div class="login-caixa">
-      <div style="display: none" class="login-marca-mobile">${raw(marcaHorizontal({ tamanho: 34 }))}</div>
-
-      <h1 style="font-size: var(--t-h2)">Bem-vindo de volta</h1>
-      <p class="suave" style="margin-top: 6px; font-size: var(--t-corpo-sm)">
-        Entre para continuar acompanhando suas oportunidades.
-      </p>
-
-      <form class="pilha" style="margin-top: var(--e-8)" id="form-login" novalidate>
-        ${raw(campo({
-          rotulo: 'E-mail', id: 'login-email', tipo: 'email',
-          valor: empresa.usuario.email,
-          placeholder: 'voce@suaempresa.com.br',
-          atributos: 'autocomplete="email" required',
-        }))}
-
-        <div class="campo">
-          <div class="linha-entre">
-            <label class="campo-rotulo" for="login-senha">Senha</label>
-            <a href="#/entrar" style="font-size: var(--t-micro); font-weight: var(--p-semi)"
-              data-acao="esqueci">Esqueci minha senha</a>
+          <div class="linha-entre" style="margin-top: -4px">
+            <span></span>
+            <a href="#/esqueci-senha" style="font-size: var(--t-micro); font-weight: var(--p-semi)">
+              Esqueci minha senha
+            </a>
           </div>
-          <div style="position: relative">
-            <input class="input" id="login-senha" type="password" value="demonstracao"
-              placeholder="Sua senha" autocomplete="current-password" required
-              style="padding-right: 44px">
-            <button type="button" class="btn-icone" data-acao="ver-senha"
-              aria-label="Mostrar senha" aria-pressed="false"
-              style="position: absolute; right: 2px; top: 1px">${raw(icone('olho'))}</button>
-          </div>
-        </div>
 
-        <label class="check" for="login-lembrar" style="margin-top: 2px">
-          <input type="checkbox" id="login-lembrar" checked>
-          <span>Manter conectado neste dispositivo</span>
-        </label>
+          <button class="btn -gradiente -lg -cheio" type="submit" id="btn-entrar" style="margin-top: var(--e-2)">
+            Entrar
+          </button>
+        </form>
 
-        <button class="btn -gradiente -lg -cheio" type="submit" id="btn-entrar" style="margin-top: var(--e-2)">
-          Entrar
-        </button>
-      </form>
+        ${raw(emDemonstracao() ? avisoAuth(
+          '<b>Modo demonstração.</b> A API não está respondendo neste ambiente. ' +
+          'Qualquer e-mail entra numa conta fictícia, e nenhum dado é real.',
+          'info',
+        ) : '')}`,
 
-      <div class="divisor-ou">ou</div>
-
-      <button class="btn -secundario -cheio" data-acao="gov">
-        ${raw(icone('escudo'))} Entrar com gov.br
-      </button>
-
-      <p class="suave" style="text-align: center; margin-top: var(--e-8); font-size: var(--t-corpo-sm)">
-        Não possui uma conta?
-        <a href="#/onboarding" style="font-weight: var(--p-semi)">Criar conta</a>
-      </p>
-    </div>
-  </main>
-</div>`;
+      rodape: `
+        <p class="suave" style="text-align: center; margin-top: var(--e-8); font-size: var(--t-corpo-sm)">
+          Não possui uma conta?
+          <a href="#/criar-conta" style="font-weight: var(--p-semi)">Criar conta</a>
+        </p>`,
+    });
   },
 
   ativar(raiz) {
     const form = $('#form-login', raiz);
     const botao = $('#btn-entrar', raiz);
+    const aviso = $('#aviso-login', raiz);
 
-    ao(form, 'submit', (evento) => {
+    ligarOlhoDeSenha(raiz, aoClicarEm);
+
+    ao(form, 'submit', async (evento) => {
       evento.preventDefault();
-      const email = $('#login-email', raiz).value.trim();
 
-      if (!email.includes('@')) {
-        toast('Informe um e-mail válido', { variante: 'erro', sub: 'O endereço precisa conter @.' });
+      const email = $('#login-email', raiz).value.trim();
+      const senha = $('#login-senha', raiz).value;
+
+      if (!email.includes('@') || senha.length === 0) {
+        aviso.innerHTML = avisoAuth('Informe e-mail e senha para continuar.');
         return;
       }
 
-      // A marca se monta enquanto o texto diz o que está
-      // acontecendo. As etapas são as reais do produto — entrar,
-      // carregar o perfil, varrer, triar — para a espera informar
-      // em vez de só ocupar tempo.
+      aviso.innerHTML = '';
       botao.classList.add('-carregando');
+      botao.disabled = true;
 
-      comCarregamento(
-        {
-          texto: 'Autenticando…',
-          etapas: [
-            'Carregando o perfil da empresa',
-            'Varrendo os portais públicos',
-            'Analisando compatibilidade',
-          ],
-          duracao: 2600,
-        },
-        () => {
-          botao.classList.remove('-carregando');
-          irPara('/painel');
-          toast(`Bem-vindo de volta, ${empresa.usuario.nome.split(' ')[0]}`, {
-            variante: 'sucesso',
-            sub: '23 novas oportunidades desde a sua última visita.',
-          });
-        },
-      );
+      try {
+        await entrarNaConta({ email, senha });
+
+        // A cortina só entra depois da autenticação dar certo. Se
+        // ela cobrisse a espera, um erro de senha apareceria
+        // depois de dois segundos de animação — a espera precisa
+        // ser sobre carregar dados, não sobre esconder a demora.
+        comCarregamento(
+          {
+            texto: 'Preparando o seu radar…',
+            etapas: ['Carregando o perfil da empresa', 'Selecionando o que fecha primeiro'],
+            duracao: 1500,
+          },
+          () => {
+            irPara(destinoAposEntrar());
+            toast(`Bem-vindo de volta, ${primeiroNome()}`, { variante: 'sucesso' });
+          },
+        );
+      } catch (erro) {
+        botao.classList.remove('-carregando');
+        botao.disabled = false;
+
+        const naoConfirmado = /confirme seu e-mail/i.test(erro.message ?? '');
+        aviso.innerHTML = avisoAuth(
+          naoConfirmado
+            ? `${erro.message} <button class="btn-link" data-acao="reenviar">Reenviar o link</button>`
+            : erro.message,
+        );
+      }
     });
 
-    aoClicarEm(raiz, '[data-acao="ver-senha"]', (_evento, alvo) => {
-      const senha = $('#login-senha', raiz);
-      const visivel = senha.type === 'text';
-      senha.type = visivel ? 'password' : 'text';
-      alvo.setAttribute('aria-pressed', String(!visivel));
-      alvo.setAttribute('aria-label', visivel ? 'Mostrar senha' : 'Ocultar senha');
-    });
-
-    aoClicarEm(raiz, '[data-acao="esqueci"]', (evento) => {
-      evento.preventDefault();
-      toast('Enviaríamos um link de redefinição', { variante: 'info', sub: 'Indisponível na demonstração.' });
-    });
-
-    aoClicarEm(raiz, '[data-acao="gov"]', () => {
-      toast('Login gov.br', { variante: 'info', sub: 'Integração indisponível na demonstração.' });
+    aoClicarEm(raiz, '[data-acao="reenviar"]', async () => {
+      const email = $('#login-email', raiz).value.trim();
+      try {
+        const { mensagem } = await reenviarConfirmacao(email);
+        aviso.innerHTML = avisoAuth(mensagem, 'sucesso');
+      } catch (erro) {
+        aviso.innerHTML = avisoAuth(erro.message);
+      }
     });
   },
 };

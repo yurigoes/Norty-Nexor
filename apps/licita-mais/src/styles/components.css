@@ -1096,3 +1096,68 @@
   }
   .lm-simbolo .lm-mais { stroke-dashoffset: 0; animation: none; }
 }
+
+/* ---------- Telas de conta e faixa de demonstração ---------- */
+
+/* Dois campos lado a lado até a tela ficar estreita, quando a
+   coluna única volta — dois campos de 160px não se preenchem
+   com o polegar. */
+.campo-grupo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--e-4);
+  align-items: start;
+}
+
+.divisor-texto {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  margin: var(--e-3) 0 calc(var(--e-1) * -1);
+  font-size: var(--t-micro);
+  font-weight: var(--p-semi);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--texto-tenue);
+}
+.divisor-texto::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--borda);
+}
+
+/* Ação textual dentro de um bloco de aviso: é botão de verdade
+   (dispara ação, não navega), com aparência de link. */
+.btn-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: var(--p-semi);
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.btn-link:hover { opacity: .78; }
+
+/* A faixa de demonstração é deliberadamente impossível de não
+   ver: o pior desfecho deste produto é alguém decidir preço
+   sobre dado fictício achando que é edital publicado. */
+.faixa-demo {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  padding: 10px var(--e-6);
+  background: var(--aviso-fundo);
+  border-bottom: 1px solid var(--amarelo-100);
+  color: var(--amarelo-texto);
+  font-size: var(--t-corpo-sm);
+  line-height: 1.4;
+}
+.faixa-demo svg { width: 18px; height: 18px; flex: none; }
+
+@media (max-width: 560px) {
+  .campo-grupo { grid-template-columns: 1fr; }
+  .faixa-demo { padding: 10px var(--e-4); font-size: var(--t-micro); }
+}
