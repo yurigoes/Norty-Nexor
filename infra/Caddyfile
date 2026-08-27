@@ -57,21 +57,3 @@
 		}
 	}
 }
-
-# =========================================================
-#  LICITA+ — inteligência para oportunidades públicas
-#  Produto independente do my Home; compartilha só a borda.
-# =========================================================
-{$LICITA_DOMAIN} {
-	import seguranca
-	encode zstd gzip
-
-	reverse_proxy licita:80
-
-	log {
-		output file /data/access-licita.log {
-			roll_size 20mb
-			roll_keep 5
-		}
-	}
-}

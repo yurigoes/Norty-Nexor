@@ -141,47 +141,76 @@ fornecedor na plataforma oficial do órgão, com certificado digital,
 porque proposta é ato juridicamente vinculante e a responsabilidade é de
 quem assina.
 
-## Deploy
+## Deploy — Thor (Proxmox)
 
-Roda no Thor, na mesma stack do my Home, atrás do mesmo Caddy:
-
-```
-licita.norty.com.br → licita (nginx estático)
-```
+Segue a regra de ouro da infra Norty: **o código mora no host** em
+`/srv/apps-fase<N>/licita-mais` e entra no CT pelo bind-mount já
+existente em `/opt/fase<N>`. Edita-se no host, reconstrói-se dentro do
+container.
 
 ```bash
-# no Thor, na raiz do repositório
-git pull
-make licita
+ssh -i ~/.ssh/norty_cluster_ed25519 root@100.91.185.42     # thor
+cd /srv/apps-fase3/.licita-mais-repo 2>/dev/null || true
+bash <(curl -fsSL https://raw.githubusercontent.com/yurigoes/Norty-Nexor/claude/gov-bidding-automation-4jopo0/apps/licita-mais/deploy-thor.sh)
 ```
 
-O `make licita` reconstrói só a imagem do LICITA+ e recarrega o
-Caddy. As outras aplicações não são tocadas.
+Ou, com o repositório já clonado no host:
 
-**Pré-requisito:** o DNS de `licita.norty.com.br` apontando para o
-IP do Thor. O Caddy emite o certificado no primeiro acesso — não há
-passo manual de SSL. Enquanto o DNS não propagar, o Caddy tenta e
-repete; o my Home continua servindo normalmente.
+```bash
+CT=105 FASE=3 /srv/apps-fase3/licita-mais/deploy-thor.sh
+```
 
-O domínio já vem como padrão no compose, então `infra/.env` só
-precisa de `LICITA_DOMAIN` se for usar outro endereço.
+O script confere antes de mexer em qualquer coisa: se o CT existe, se
+está rodando, se o bind-mount está visível de dentro dele e se há
+Docker lá. Só depois atualiza o código e manda reconstruir. Nenhum
+outro app é tocado — só o diretório do LICITA+ e só o compose dele.
+
+Manualmente, o mesmo em três passos:
+
+```bash
+# 1. no host thor
+rsync -a --delete --exclude dist/ --exclude node_modules/ \
+  <clone>/apps/licita-mais/ /srv/apps-fase3/licita-mais/
+
+# 2. reconstrói dentro do CT
+pct exec 105 -- bash -c 'cd /opt/fase3/licita-mais && docker compose up -d --build'
+
+# 3. confere
+pct exec 105 -- wget -qO- http://127.0.0.1:3060/ | head -3
+```
+
+### Porta e ingress
+
+O compose publica **só uma porta alta no CT** (`3060` por padrão,
+ajustável por `LICITA_PORT`). Ele nunca toma 80 nem 443: quem termina
+TLS e resolve o domínio é o ingress da Norty. Um serviço tomando a 443
+aqui brigaria com tudo o que já serve domínio no Thor.
+
+Depois do container de pé, falta apontar `licita.norty.com.br` para
+`192.168.15.75:3060` no ingress — Cloudflare Tunnel ou o proxy que
+estiver na frente.
+
+### Sem banco, sem Redis
+
+O LICITA+ hoje é front-end estático com dados de demonstração: não
+toca a infra compartilhada do CT 102. Quando ganhar API, a
+`DATABASE_URL` aponta para `192.168.15.72:5432` como os outros apps.
 
 ### Por que a imagem não tem passo de build
 
 O app é HTML, CSS e módulos ES servidos como estão — o que roda em
-produção é exatamente o que está no repositório. O estágio de build
-só executa `verificar.mjs`: nome de topo duplicado, import sem
-extensão ou cor literal fora dos tokens impedem a imagem de ser
-gerada.
+produção é exatamente o que está no disco. O primeiro estágio existe
+só para rodar `verificar.mjs`: nome de topo duplicado, import sem
+extensão ou cor literal fora dos tokens impedem a imagem de ser gerada.
 
-### Diferenças do nginx do my Home
+### Notas do nginx
 
 - **Cache curto com revalidação** em vez de um ano. Os arquivos não
-  levam hash no nome, então cache longo serviria versão velha
-  depois do deploy.
-- **CSP restrita** a `self` mais Google Fonts, que é o único host
-  externo que o app usa.
+  levam hash no nome, então cache longo serviria versão velha depois
+  do deploy.
+- **CSP restrita** a `self` mais Google Fonts, o único host externo
+  que o app usa.
 - **Sem bloco `types`.** No nginx um `types` em qualquer nível
-  substitui o mapa MIME herdado inteiro em vez de complementá-lo;
-  o mapa padrão já serve `.js` com o Content-Type que os módulos
-  ES exigem.
+  substitui o mapa MIME herdado inteiro em vez de complementá-lo; o
+  mapa padrão já serve `.js` com o `text/javascript` que os módulos ES
+  exigem.

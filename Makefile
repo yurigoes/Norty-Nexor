@@ -43,8 +43,3 @@ shell-api: ## Abre um shell no contêiner da API
 
 shell-db: ## Abre o psql
 	docker compose -f infra/docker-compose.yml --env-file infra/.env exec db psql -U $${POSTGRES_USER:-myhome} -d $${POSTGRES_DB:-myhome}
-
-licita: ## Sobe/atualiza só o LICITA+ (exige LICITA_DOMAIN no .env)
-	docker compose -f infra/docker-compose.yml --env-file infra/.env build licita
-	docker compose -f infra/docker-compose.yml --env-file infra/.env up -d licita caddy
-	@echo "LICITA+ no ar em https://$$(grep -E '^LICITA_DOMAIN=' infra/.env | cut -d= -f2)"
