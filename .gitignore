@@ -50,3 +50,6 @@ apps/web/.env
 # Perfil do radar de licitações: tem CNPJ e estratégia comercial.
 # O exemplo comentado é versionado, o preenchido não.
 apps/licitacoes/perfil.json
+
+# Build da prévia do LICITA+ (gerado por script)
+apps/licita-mais/dist/

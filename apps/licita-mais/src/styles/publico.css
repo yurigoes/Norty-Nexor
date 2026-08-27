@@ -1,0 +1,374 @@
+/* =========================================================
+   LICITA+ — Telas públicas
+   Landing, login e onboarding. Fora do shell da aplicação.
+   ========================================================= */
+
+/* ---------- Marca ---------- */
+
+.marca { display: inline-flex; align-items: center; gap: var(--e-3); text-decoration: none; }
+.marca-bloco { display: flex; flex-direction: column; }
+
+.marca-texto {
+  font-size: 1.32rem;
+  font-weight: var(--p-extra);
+  letter-spacing: -.03em;
+  color: var(--azul-900);
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
+/* O "+" é parte do nome, não pontuação: recebe o gradiente de
+   oportunidade e um pouco mais de peso óptico. */
+.marca-texto i {
+  font-style: normal;
+  background: var(--grad-oportunidade);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  padding-left: 1px;
+}
+
+.marca-texto.-inversa { color: var(--branco); }
+.marca-texto.-sm { font-size: 1.06rem; }
+.marca-tagline { font-size: var(--t-micro); color: var(--texto-suave); margin-top: 1px; }
+
+/* ---------- Topo público ---------- */
+
+.topo-publico {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-4);
+  padding: var(--e-4) var(--e-8);
+  background: rgba(255, 255, 255, .88);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--borda-suave);
+}
+
+.topo-publico nav { display: flex; align-items: center; gap: var(--e-6); }
+.topo-publico nav a { font-size: var(--t-corpo-sm); font-weight: var(--p-semi); color: var(--texto-suave); }
+.topo-publico nav a:hover { color: var(--texto-forte); }
+
+/* ---------- Herói ---------- */
+
+.heroi {
+  position: relative;
+  overflow: hidden;
+  padding: var(--e-20) var(--e-8) var(--e-16);
+  background: var(--branco);
+}
+
+.heroi-grade {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.04fr);
+  gap: var(--e-16);
+  align-items: center;
+  max-width: 1240px;
+  margin: 0 auto;
+}
+
+.heroi-selo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-2);
+  padding: 6px 14px 6px 8px;
+  border: 1px solid var(--azul-200);
+  border-radius: var(--r-pill);
+  background: var(--azul-50);
+  font-size: var(--t-micro);
+  font-weight: var(--p-semi);
+  color: var(--azul-700);
+  margin-bottom: var(--e-5);
+}
+.heroi-selo svg { width: 15px; height: 15px; }
+
+.heroi h1 {
+  font-size: clamp(2.1rem, 4.6vw, 3.4rem);
+  font-weight: var(--p-extra);
+  letter-spacing: -.035em;
+  line-height: 1.08;
+}
+
+/* Uma expressão em gradiente na frase inteira. Mais que isso
+   vira ruído e o destaque deixa de destacar. */
+.heroi h1 em {
+  font-style: normal;
+  background: var(--grad-principal);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.heroi-sub {
+  font-size: 1.06rem;
+  color: var(--texto-suave);
+  line-height: 1.65;
+  max-width: 54ch;
+  margin-top: var(--e-5);
+}
+
+.heroi-acoes { display: flex; gap: var(--e-3); flex-wrap: wrap; margin-top: var(--e-8); }
+
+.heroi-provas {
+  display: flex;
+  gap: var(--e-8);
+  flex-wrap: wrap;
+  margin-top: var(--e-10);
+  padding-top: var(--e-6);
+  border-top: 1px solid var(--borda);
+}
+.heroi-prova-num {
+  font-size: var(--t-h2);
+  font-weight: var(--p-extra);
+  color: var(--azul-900);
+  letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums;
+}
+.heroi-prova-rot { font-size: var(--t-micro); color: var(--texto-suave); margin-top: 1px; }
+
+/* Composição do painel ao lado do texto */
+.heroi-arte { position: relative; }
+
+.heroi-painel {
+  position: relative;
+  z-index: 2;
+  border: 1px solid var(--borda);
+  border-radius: var(--r-xl);
+  background: var(--branco);
+  box-shadow: var(--sombra-xl);
+  overflow: hidden;
+}
+.heroi-painel-topo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--e-3) var(--e-4);
+  background: var(--cinza-50);
+  border-bottom: 1px solid var(--borda);
+}
+.heroi-painel-bolinha { width: 9px; height: 9px; border-radius: 50%; background: var(--cinza-300); }
+
+.heroi-flutua {
+  position: absolute;
+  z-index: 3;
+  padding: var(--e-3) var(--e-4);
+  background: var(--branco);
+  border: 1px solid var(--borda);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sombra-lg);
+  animation: flutuar 5s ease-in-out infinite;
+}
+@keyframes flutuar { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+
+/* ---------- Geometria de fundo ---------- */
+
+.heroi-geo-1 {
+  position: absolute; z-index: 0;
+  width: 460px; height: 460px;
+  border-radius: 88px;
+  transform: rotate(45deg);
+  right: -160px; top: -170px;
+  background: linear-gradient(135deg, rgba(22, 119, 232, .10), rgba(0, 140, 69, .07));
+}
+.heroi-geo-2 {
+  position: absolute; z-index: 0;
+  width: 250px; height: 250px;
+  border-radius: 50%;
+  left: -110px; bottom: -110px;
+  background: radial-gradient(circle, rgba(255, 204, 0, .13), transparent 70%);
+}
+.heroi-geo-3 {
+  position: absolute; z-index: 0;
+  inset: 0;
+  color: var(--azul-500);
+  background-image: radial-gradient(currentColor 1.2px, transparent 1.2px);
+  background-size: 26px 26px;
+  opacity: .07;
+  /* Máscara é canal alfa, não cor de tema — daí o preto literal. */
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 30%, transparent 75%);
+}
+
+/* ---------- Seções da landing ---------- */
+
+.secao-publica { padding: var(--e-16) var(--e-8); }
+.secao-publica.-escura { background: var(--azul-900); color: var(--texto-inverso); position: relative; overflow: hidden; }
+.secao-publica.-escura h2, .secao-publica.-escura h3 { color: var(--branco); }
+.secao-publica.-alt { background: var(--cinza-50); }
+
+.secao-interna { max-width: 1180px; margin: 0 auto; }
+
+.secao-titulo-central { text-align: center; max-width: 640px; margin: 0 auto var(--e-12); }
+.secao-titulo-central h2 { font-size: clamp(1.6rem, 3vw, 2.2rem); letter-spacing: -.028em; }
+.secao-titulo-central p { color: var(--texto-suave); margin-top: var(--e-3); font-size: 1.02rem; line-height: 1.6; }
+.-escura .secao-titulo-central p { color: rgba(255, 255, 255, .68); }
+
+.passo-num {
+  display: grid; place-items: center;
+  width: 40px; height: 40px;
+  border-radius: 12px;
+  transform: rotate(45deg);
+  background: var(--grad-tecnologico);
+  color: var(--branco);
+  font-weight: var(--p-extra);
+  font-size: var(--t-corpo-sm);
+  flex: none;
+  margin-bottom: var(--e-4);
+}
+.passo-num span { transform: rotate(-45deg); }
+
+.cartao-recurso {
+  padding: var(--e-6);
+  border: 1px solid var(--borda);
+  border-radius: var(--r-lg);
+  background: var(--branco);
+  transition: border-color var(--tr-media), transform var(--tr-media), box-shadow var(--tr-media);
+}
+.cartao-recurso:hover { border-color: var(--azul-200); transform: translateY(-3px); box-shadow: var(--sombra-md); }
+.cartao-recurso h3 { font-size: var(--t-h4); margin-bottom: var(--e-2); }
+.cartao-recurso p { font-size: var(--t-corpo-sm); color: var(--texto-suave); line-height: 1.6; }
+
+.cta-final {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: var(--e-16) var(--e-8);
+  border-radius: var(--r-xl);
+  background: var(--grad-principal);
+  color: var(--branco);
+  overflow: hidden;
+}
+.cta-final h2 { color: var(--branco); font-size: clamp(1.7rem, 3.2vw, 2.4rem); }
+.cta-final p { color: rgba(255, 255, 255, .8); margin-top: var(--e-4); font-size: 1.04rem; }
+
+.rodape-publico {
+  padding: var(--e-10) var(--e-8);
+  border-top: 1px solid var(--borda);
+  background: var(--branco);
+}
+.rodape-interno {
+  max-width: 1180px; margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--e-6); flex-wrap: wrap;
+}
+
+/* ---------- Login ---------- */
+
+.login { display: grid; grid-template-columns: 1.06fr 1fr; min-height: 100vh; min-height: 100dvh; }
+
+.login-arte {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: var(--e-10);
+  background: var(--grad-sidebar);
+  color: var(--branco);
+}
+.login-arte h2 { color: var(--branco); font-size: clamp(1.7rem, 2.6vw, 2.3rem); letter-spacing: -.03em; max-width: 15ch; }
+.login-arte p { color: rgba(255, 255, 255, .68); margin-top: var(--e-4); max-width: 44ch; line-height: 1.65; }
+
+.login-geo-1 {
+  position: absolute;
+  width: 380px; height: 380px;
+  border-radius: 78px;
+  transform: rotate(45deg);
+  right: -140px; top: 8%;
+  background: linear-gradient(135deg, rgba(22, 119, 232, .26), rgba(0, 140, 69, .14));
+}
+.login-geo-2 {
+  position: absolute;
+  width: 200px; height: 200px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, .14);
+  left: -60px; bottom: 14%;
+}
+.login-geo-3 {
+  position: absolute; inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, .3) 1.1px, transparent 1.1px);
+  background-size: 24px 24px;
+  opacity: .12;
+}
+
+.login-lista { display: flex; flex-direction: column; gap: var(--e-3); position: relative; z-index: 1; }
+.login-lista-item { display: flex; align-items: center; gap: var(--e-3); font-size: var(--t-corpo-sm); color: rgba(255,255,255,.8); }
+.login-lista-item svg { width: 17px; height: 17px; color: var(--verde-500); flex: none; }
+
+.login-form { display: grid; place-items: center; padding: var(--e-8); background: var(--branco); }
+.login-caixa { width: min(400px, 100%); }
+
+.divisor-ou {
+  display: flex; align-items: center; gap: var(--e-3);
+  color: var(--texto-tenue); font-size: var(--t-micro);
+  margin: var(--e-5) 0;
+}
+.divisor-ou::before, .divisor-ou::after { content: ''; flex: 1; height: 1px; background: var(--borda); }
+
+/* ---------- Onboarding ---------- */
+
+.onb { display: grid; place-items: center; min-height: 100vh; min-height: 100dvh; padding: var(--e-6); position: relative; overflow: hidden; }
+.onb-caixa { width: min(680px, 100%); position: relative; z-index: 1; }
+
+.onb-trilha { display: flex; gap: 6px; margin-bottom: var(--e-8); }
+.onb-trilha span { flex: 1; height: 4px; border-radius: var(--r-pill); background: var(--cinza-200); transition: background var(--tr-lenta); }
+.onb-trilha span.-feito { background: var(--grad-tecnologico); }
+
+.onb-passo { animation: aparecer var(--tr-lenta) both; }
+.onb-passo h2 { font-size: clamp(1.5rem, 3vw, 2rem); letter-spacing: -.028em; }
+.onb-passo > p { color: var(--texto-suave); margin-top: var(--e-3); line-height: 1.6; }
+
+.onb-opcoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--e-3); margin-top: var(--e-6); }
+
+.onb-opcao {
+  display: flex; align-items: center; gap: var(--e-3);
+  padding: var(--e-4);
+  border: 1px solid var(--borda);
+  border-radius: var(--r-lg);
+  background: var(--branco);
+  text-align: left;
+  transition: border-color var(--tr-rapida), background var(--tr-rapida), transform var(--tr-rapida);
+}
+.onb-opcao:hover { border-color: var(--azul-200); transform: translateY(-2px); }
+.onb-opcao.-marcada { border-color: var(--azul-500); background: var(--azul-50); }
+.onb-opcao-marca {
+  display: grid; place-items: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 2px solid var(--borda-forte);
+  flex: none; color: transparent;
+}
+.onb-opcao.-marcada .onb-opcao-marca { border-color: var(--azul-600); background: var(--azul-600); color: var(--branco); }
+.onb-opcao-marca svg { width: 13px; height: 13px; }
+
+.onb-final { text-align: center; }
+.onb-final-marca {
+  display: grid; place-items: center;
+  width: 88px; height: 88px;
+  border-radius: 26px;
+  transform: rotate(45deg);
+  background: var(--grad-oportunidade);
+  margin: 0 auto var(--e-6);
+}
+.onb-final-marca svg { width: 40px; height: 40px; color: var(--branco); transform: rotate(-45deg); }
+
+/* ---------- Responsivo das telas públicas ---------- */
+
+@media (max-width: 1024px) {
+  .heroi-grade { grid-template-columns: minmax(0, 1fr); gap: var(--e-12); }
+  .login { grid-template-columns: minmax(0, 1fr); }
+  .login-arte { display: none; }
+}
+
+@media (max-width: 760px) {
+  .topo-publico { padding: var(--e-3) var(--e-4); }
+  .topo-publico nav { display: none; }
+  .heroi { padding: var(--e-10) var(--e-4) var(--e-12); }
+  .secao-publica { padding: var(--e-12) var(--e-4); }
+  .heroi-flutua { display: none; }
+  .heroi-provas { gap: var(--e-5); }
+  .rodape-publico { padding: var(--e-8) var(--e-4); }
+}

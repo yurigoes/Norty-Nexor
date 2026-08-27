@@ -1,0 +1,302 @@
+/* =========================================================
+   LICITA+ — Shell da aplicação
+   ---------------------------------------------------------
+   Grid de duas colunas no desktop; no mobile a sidebar sai do
+   fluxo e vira gaveta, e uma barra inferior assume a
+   navegação principal. Nenhuma medida fixa governa o
+   conteúdo — a coluna central é sempre fluida.
+   ========================================================= */
+
+.shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-larg) minmax(0, 1fr);
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* ---------- Sidebar ---------- */
+
+.sidebar {
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--grad-sidebar);
+  border-right: 1px solid rgba(255, 255, 255, .06);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* Losango de fundo: geometria da marca como textura, bem
+   abaixo do conteúdo e sem interceptar clique. */
+.sidebar::after {
+  content: '';
+  position: absolute;
+  right: -70px;
+  bottom: 90px;
+  width: 220px;
+  height: 220px;
+  border-radius: 34px;
+  transform: rotate(45deg);
+  background: linear-gradient(135deg, rgba(22, 119, 232, .16), rgba(0, 140, 69, .10));
+  pointer-events: none;
+}
+
+.sidebar-topo {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  height: var(--header-alt);
+  padding: 0 var(--e-5);
+  flex: none;
+  position: relative;
+  z-index: 1;
+}
+
+.sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--e-4) var(--e-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: relative;
+  z-index: 1;
+}
+
+.nav-grupo-rotulo {
+  padding: var(--e-5) var(--e-3) var(--e-2);
+  font-size: var(--t-micro);
+  font-weight: var(--p-semi);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .38);
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  padding: 10px var(--e-3);
+  border-radius: var(--r-md);
+  color: var(--texto-inverso-suave);
+  font-size: var(--t-corpo-sm);
+  font-weight: var(--p-medio);
+  transition: background var(--tr-rapida), color var(--tr-rapida);
+  width: 100%;
+  text-align: left;
+  position: relative;
+}
+
+.nav-item:hover { background: rgba(255, 255, 255, .07); color: var(--texto-inverso); }
+.nav-item svg { flex: none; width: 18px; height: 18px; }
+
+.nav-item[aria-current='page'] {
+  background: var(--grad-tecnologico);
+  color: var(--texto-inverso);
+  font-weight: var(--p-semi);
+  box-shadow: 0 2px 12px rgba(22, 119, 232, .34);
+}
+
+.nav-item-contagem {
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, .14);
+  font-size: var(--t-micro);
+  font-weight: var(--p-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.nav-item[aria-current='page'] .nav-item-contagem { background: rgba(255, 255, 255, .24); }
+
+.sidebar-rodape {
+  flex: none;
+  padding: var(--e-3);
+  border-top: 1px solid var(--borda-inversa);
+  position: relative;
+  z-index: 1;
+}
+
+.conta {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  width: 100%;
+  padding: var(--e-2);
+  border-radius: var(--r-md);
+  transition: background var(--tr-rapida);
+  text-align: left;
+}
+
+.conta:hover { background: rgba(255, 255, 255, .07); }
+.conta-texto { min-width: 0; flex: 1; }
+.conta-nome {
+  font-size: var(--t-corpo-sm);
+  font-weight: var(--p-semi);
+  color: var(--texto-inverso);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.conta-empresa {
+  font-size: var(--t-micro);
+  color: rgba(255, 255, 255, .5);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ---------- Coluna principal ---------- */
+
+.principal { display: flex; flex-direction: column; min-width: 0; }
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  gap: var(--e-4);
+  height: var(--header-alt);
+  padding: 0 var(--e-6);
+  background: var(--superficie-card);
+  border-bottom: 1px solid var(--borda);
+  flex: none;
+}
+
+.header-titulo { min-width: 0; flex: 1; }
+.header-titulo h1 { font-size: var(--t-h3); font-weight: var(--p-bold); }
+
+.trilha {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  font-size: var(--t-micro);
+  color: var(--texto-suave);
+  margin-bottom: 1px;
+}
+.trilha svg { width: 13px; height: 13px; }
+
+.header-acoes { display: flex; align-items: center; gap: var(--e-2); flex: none; }
+
+.conteudo {
+  flex: 1;
+  padding: var(--e-8) var(--e-6) var(--e-16);
+  width: 100%;
+  max-width: var(--conteudo-max);
+  margin: 0 auto;
+}
+
+/* ---------- Grades reutilizáveis ---------- */
+
+.grade { display: grid; gap: var(--e-4); }
+.grade-4 { grid-template-columns: repeat(auto-fit, minmax(226px, 1fr)); }
+.grade-3 { grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); }
+.grade-2 { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+
+/* Duas colunas assimétricas: conteúdo + trilho lateral. */
+.grade-conteudo-trilho { display: grid; grid-template-columns: minmax(0, 1fr) 336px; gap: var(--e-5); align-items: start; }
+
+.pilha { display: flex; flex-direction: column; gap: var(--e-4); }
+.pilha-sm { display: flex; flex-direction: column; gap: var(--e-2); }
+.pilha-lg { display: flex; flex-direction: column; gap: var(--e-8); }
+.linha { display: flex; align-items: center; gap: var(--e-3); }
+.linha-entre { display: flex; align-items: center; justify-content: space-between; gap: var(--e-4); flex-wrap: wrap; }
+
+.cabecalho-secao { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--e-4); flex-wrap: wrap; }
+.cabecalho-secao p { font-size: var(--t-corpo-sm); color: var(--texto-suave); max-width: 62ch; margin-top: 3px; }
+
+/* ---------- Gaveta mobile / bottom nav ---------- */
+
+.sidebar-fundo {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-drawer);
+  background: rgba(7, 30, 61, .5);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity var(--tr-media);
+}
+.sidebar-fundo.-visivel { opacity: 1; }
+
+.barra-inferior { display: none; }
+
+/* ---------- Tablet ---------- */
+
+@media (max-width: 1180px) {
+  .grade-conteudo-trilho { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 1024px) {
+  .shell { grid-template-columns: var(--sidebar-larg-min) minmax(0, 1fr); }
+  .sidebar-topo { justify-content: center; padding: 0 var(--e-2); }
+  .sidebar-topo .marca-texto { display: none; }
+  .nav-item { justify-content: center; padding: 11px; }
+  .nav-item span, .nav-item .nav-item-contagem { display: none; }
+  .nav-grupo-rotulo { display: none; }
+  .conta-texto, .conta-seta { display: none; }
+  .conta { justify-content: center; }
+  .sidebar::after { display: none; }
+}
+
+/* ---------- Mobile ---------- */
+
+@media (max-width: 760px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: min(280px, 84vw);
+    height: 100dvh;
+    z-index: calc(var(--z-drawer) + 1);
+    transform: translateX(-102%);
+    transition: transform var(--tr-lenta);
+    box-shadow: var(--sombra-xl);
+  }
+  .sidebar.-aberta { transform: translateX(0); }
+
+  /* Dentro da gaveta a sidebar volta a ser larga. */
+  .sidebar .sidebar-topo { justify-content: flex-start; padding: 0 var(--e-5); }
+  .sidebar .marca-texto { display: block; }
+  .sidebar .nav-item { justify-content: flex-start; padding: 10px var(--e-3); }
+  .sidebar .nav-item span, .sidebar .nav-item .nav-item-contagem { display: block; }
+  .sidebar .nav-grupo-rotulo { display: block; }
+  .sidebar .conta-texto { display: block; }
+  .sidebar .conta { justify-content: flex-start; }
+
+  .sidebar-fundo.-ativa { display: block; }
+
+  .header { padding: 0 var(--e-4); gap: var(--e-3); }
+  .header-titulo h1 { font-size: var(--t-h4); }
+  .trilha { display: none; }
+  .conteudo { padding: var(--e-5) var(--e-4) 96px; }
+
+  .barra-inferior {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: var(--z-sticky);
+    background: var(--superficie-card);
+    border-top: 1px solid var(--borda);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  .barra-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 9px 4px 7px;
+    font-size: 10px;
+    font-weight: var(--p-semi);
+    color: var(--texto-suave);
+    transition: color var(--tr-rapida);
+  }
+  .barra-item svg { width: 21px; height: 21px; }
+  .barra-item[aria-current='page'] { color: var(--azul-600); }
+}
+
+/* Telas públicas (landing, login, onboarding) não usam o shell. */
+.tela-publica { min-height: 100vh; min-height: 100dvh; background: var(--superficie-card); }

@@ -1,0 +1,12 @@
+{
+  "name": "@nexor/licita-mais",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LICITA+ — front-end da plataforma de inteligência para oportunidades públicas",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/servidor.mjs",
+    "build:previa": "node scripts/build-previa.mjs",
+    "lint": "node scripts/verificar.mjs"
+  }
+}

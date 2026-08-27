@@ -1,0 +1,245 @@
+/* =========================================================
+   LICITA+ — Design Tokens
+   ---------------------------------------------------------
+   Fonte única de verdade: cor, tipografia, espaço, raio,
+   sombra, camada e transição. Nenhum componente escreve um
+   valor literal — se um token não existe, ele nasce aqui.
+
+   A divisão de papéis da paleta é rígida, e é ela que separa
+   "produto sério" de "site colorido":
+
+     azul profundo  (--azul-900)  superfície institucional, sidebar
+     azul principal (--azul-600)  ação, navegação, estado ativo
+     azul técnico   (--azul-500)  dado, gráfico, interação
+     verde Brasil   (--verde-600) sucesso e alta compatibilidade
+     amarelo Brasil (--amarelo)   acento raro — o "+" e pouco mais
+
+   O amarelo #FFCC00 rende 1.4:1 sobre branco: ele nunca recebe
+   texto por cima nem carrega texto sozinho. Onde é preciso
+   escrever "amarelo", entra `--amarelo-texto`, que é escuro o
+   bastante para ser lido.
+   ========================================================= */
+
+:root {
+  /* ---------- Marca ---------- */
+  --azul-900: #071E3D;
+  --azul-800: #0B2C56;
+  --azul-700: #073E7A;
+  --azul-600: #005CA9;
+  --azul-500: #1677E8;
+  --azul-400: #4A97F0;
+  --azul-200: #B8D6FA;
+  --azul-100: #E3EFFD;
+  --azul-50:  #F1F7FE;
+
+  --verde-700: #00703A;
+  --verde-600: #008C45;
+  --verde-500: #00A95C;
+  --verde-100: #DFF4E8;
+  --verde-50:  #F0FAF4;
+
+  --amarelo:      #FFCC00;
+  --amarelo-500:  #E5B400;
+  /* Tom legível do amarelo: usado onde a cor precisa virar texto. */
+  --amarelo-texto: #8A6200;
+  --amarelo-100:  #FFF4CC;
+  --amarelo-50:   #FFFBEB;
+
+  --vermelho-600: #C7342F;
+  --vermelho-500: #D14343;
+  --vermelho-100: #FBE3E2;
+
+  /* ---------- Neutros ----------
+     Cinza com viés azul, na direção do acento: cinza puro lê
+     como não escolhido. */
+  --branco:   #FFFFFF;
+  --cinza-50: #F5F7FA;
+  --cinza-100:#EDF1F6;
+  --cinza-200:#E2E8F0;
+  --cinza-300:#CBD5E1;
+  --cinza-400:#94A3B8;
+  --cinza-500:#64748B;
+  --cinza-600:#475569;
+  --cinza-700:#334155;
+  --cinza-900:#10233F;
+
+  /* ---------- Superfícies ---------- */
+  --superficie-app:     var(--cinza-50);
+  --superficie-card:    var(--branco);
+  --superficie-elevada: var(--branco);
+  --superficie-afundada:var(--cinza-100);
+  --superficie-inversa: var(--azul-900);
+  --superficie-hover:   var(--cinza-50);
+  --superficie-ativa:   var(--azul-100);
+
+  /* ---------- Texto ---------- */
+  --texto-forte:    var(--cinza-900);
+  --texto-padrao:   #1E3454;
+  --texto-suave:    var(--cinza-500);
+  --texto-tenue:    var(--cinza-400);
+  --texto-inverso:  var(--branco);
+  --texto-inverso-suave: rgba(255, 255, 255, .68);
+  --texto-link:     var(--azul-600);
+
+  /* ---------- Bordas ---------- */
+  --borda:        var(--cinza-200);
+  --borda-suave:  var(--cinza-100);
+  --borda-forte:  var(--cinza-300);
+  --borda-inversa:rgba(255, 255, 255, .12);
+  --borda-foco:   var(--azul-500);
+
+  /* ---------- Semântica ----------
+     Reservadas. Nunca reaproveitadas como "cor de série". */
+  --sucesso:   var(--verde-600);
+  --sucesso-fundo: var(--verde-50);
+  --aviso:     var(--amarelo-texto);
+  --aviso-fundo: var(--amarelo-50);
+  --erro:      var(--vermelho-600);
+  --erro-fundo:var(--vermelho-100);
+  --info:      var(--azul-600);
+  --info-fundo:var(--azul-50);
+
+  /* ---------- Compatibilidade ----------
+     Faixas do score. O texto usa o tom escuro; o arco usa o
+     vivo. A faixa também aparece por extenso ("Alta"), então a
+     informação nunca depende só da cor. */
+  --score-alta:        var(--verde-600);
+  --score-alta-fundo:  var(--verde-50);
+  --score-media:       var(--azul-600);
+  --score-media-fundo: var(--azul-50);
+  --score-baixa:       var(--amarelo-texto);
+  --score-baixa-fundo: var(--amarelo-50);
+  --score-minima:      var(--cinza-500);
+  --score-minima-fundo:var(--cinza-100);
+
+  /* ---------- Gráficos ----------
+     Passos próprios, derivados das mesmas rampas e validados
+     contra a superfície clara (ΔE CVD ≥ 8 em todos os pares).
+     Não são os mesmos hex da interface de propósito. */
+  --grafico-1: #1677E8;
+  --grafico-2: #00803E;
+  --grafico-3: #D14343;
+  --grafico-grade: var(--cinza-200);
+  --grafico-eixo:  var(--cinza-400);
+  --grafico-superficie: var(--branco);
+
+  /* ---------- Gradientes ----------
+     Destaque, não preenchimento padrão. */
+  --grad-principal:   linear-gradient(135deg, #071E3D 0%, #005CA9 60%, #008C45 100%);
+  --grad-tecnologico: linear-gradient(135deg, #005CA9 0%, #1677E8 100%);
+  --grad-oportunidade:linear-gradient(135deg, #008C45 0%, #00A95C 55%, #FFCC00 100%);
+  --grad-sidebar:     linear-gradient(180deg, #071E3D 0%, #061834 100%);
+
+  /* ---------- Tipografia ---------- */
+  --fonte: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  --t-h1: 2.25rem;   /* 36 */
+  --t-h2: 1.625rem;  /* 26 */
+  --t-h3: 1.25rem;   /* 20 */
+  --t-h4: 1.0625rem; /* 17 */
+  --t-corpo: 0.9375rem;   /* 15 */
+  --t-corpo-sm: 0.875rem; /* 14 */
+  --t-label: 0.8125rem;   /* 13 */
+  --t-micro: 0.75rem;     /* 12 */
+
+  --p-regular: 400;
+  --p-medio: 500;
+  --p-semi: 600;
+  --p-bold: 700;
+  --p-extra: 800;
+
+  /* ---------- Espaço — escala de 4 ---------- */
+  --e-1: 4px;
+  --e-2: 8px;
+  --e-3: 12px;
+  --e-4: 16px;
+  --e-5: 20px;
+  --e-6: 24px;
+  --e-8: 32px;
+  --e-10: 40px;
+  --e-12: 48px;
+  --e-16: 64px;
+  --e-20: 80px;
+
+  /* ---------- Raio ----------
+     Entre 10 e 16. Nada de pílula em superfície grande. */
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 16px;
+  --r-pill: 999px;
+
+  /* ---------- Sombra ----------
+     Muito suaves. A elevação vem da borda, não da sombra. */
+  --sombra-sm: 0 1px 2px rgba(7, 30, 61, .05);
+  --sombra-md: 0 2px 8px rgba(7, 30, 61, .06);
+  --sombra-lg: 0 8px 24px rgba(7, 30, 61, .09);
+  --sombra-xl: 0 18px 48px rgba(7, 30, 61, .14);
+  --sombra-foco: 0 0 0 3px rgba(22, 119, 232, .28);
+
+  /* ---------- Camadas ---------- */
+  --z-base: 1;
+  --z-sticky: 20;
+  --z-drawer: 40;
+  --z-modal: 60;
+  --z-toast: 80;
+
+  /* ---------- Transição ----------
+     150–300ms. Nada além disso parece lento. */
+  --tr-rapida: 150ms cubic-bezier(.4, 0, .2, 1);
+  --tr-media: 220ms cubic-bezier(.4, 0, .2, 1);
+  --tr-lenta: 300ms cubic-bezier(.4, 0, .2, 1);
+
+  /* ---------- Métrica de layout ---------- */
+  --sidebar-larg: 264px;
+  --sidebar-larg-min: 76px;
+  --header-alt: 68px;
+  --conteudo-max: 1440px;
+}
+
+/* =========================================================
+   Dark Mode — estrutura pronta, ativada por [data-tema]
+   ---------------------------------------------------------
+   Só os tokens são redefinidos; nenhum componente conhece o
+   tema. É isso que permite ligar o modo escuro depois sem
+   reescrever a interface.
+   ========================================================= */
+
+[data-tema='escuro'] {
+  --superficie-app:     #061428;
+  --superficie-card:    #0B2141;
+  --superficie-elevada: #0E2A50;
+  --superficie-afundada:#04101F;
+  --superficie-hover:   #10305A;
+  --superficie-ativa:   #123A6B;
+
+  --texto-forte:  #EAF2FD;
+  --texto-padrao: #D3E2F5;
+  --texto-suave:  #93A9C7;
+  --texto-tenue:  #6B83A3;
+
+  --borda:       #16375F;
+  --borda-suave: #102C4E;
+  --borda-forte: #1E4A7A;
+
+  --grafico-grade: #16375F;
+  --grafico-eixo:  #6B83A3;
+  --grafico-superficie: #0B2141;
+
+  --grafico-1: #4A97F0;
+  --grafico-2: #2CB56F;
+  --grafico-3: #E86B6B;
+
+  --score-alta-fundo:  rgba(0, 140, 69, .16);
+  --score-media-fundo: rgba(22, 119, 232, .16);
+  --score-baixa-fundo: rgba(255, 204, 0, .14);
+  --score-minima-fundo:rgba(148, 163, 184, .14);
+  --score-baixa:       #E5B400;
+  --score-minima:      #93A9C7;
+
+  --sucesso-fundo: rgba(0, 140, 69, .16);
+  --aviso-fundo:   rgba(255, 204, 0, .14);
+  --erro-fundo:    rgba(209, 67, 67, .16);
+  --info-fundo:    rgba(22, 119, 232, .14);
+  --aviso:         #E5B400;
+}
