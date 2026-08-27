@@ -9,19 +9,30 @@
    A análise de compatibilidade vem antes do resumo de
    propósito: quem abriu a página já sabe o objeto — o que
    ainda não sabe é se vale o próprio tempo.
+
+   Duas ausências deliberadas. Não há lista de anexos para
+   baixar: o PNCP publica o edital como página, não como
+   arquivo que possamos servir, e uma lista de documentos que
+   não abrem seria pior do que apontar para a fonte. E não há
+   estimativa de margem nem de número de concorrentes — seriam
+   números inventados no lugar exato onde o usuário decide
+   preço.
    ========================================================= */
 
 import { html, raw, $, aoClicarEm } from '../lib/dom.js';
 import { icone } from '../lib/icons.js';
-import { moeda, data, dataHora, prazoTexto, prazoUrgente, cnpj, faixaScore } from '../lib/format.js';
+import { moeda, data, dataHora, prazoTexto, prazoUrgente, faixaScore } from '../lib/format.js';
 import { scoreAnel, listaRazoes, corpoExplicacao } from '../ui/domain.js';
-import { selo, abas, ativarAbas, toast, alerta, abrirModal } from '../ui/primitives.js';
-import { licitacaoPorId } from '../data/mock.js';
-import { ehFavorito, alternarFavorito } from '../lib/store.js';
-import { vazio } from '../ui/primitives.js';
+import { selo, abas, ativarAbas, toast, alerta, abrirModal, fecharModal, vazio, skeletonCartao, campo } from '../ui/primitives.js';
+import { ehFavorito } from '../lib/store.js';
+import { alternarFavoritoRemoto, obterOportunidade, criarParticipacao } from '../dados/index.js';
+
+/* ---------- Abas ---------- */
 
 function painelItens(licitacao) {
-  const total = licitacao.itens.reduce((s, i) => s + i.qtd * i.unitario, 0);
+  const totalDe = (i) => (i.qtd ?? 0) * (i.unitario ?? 0);
+  const total = licitacao.itens.reduce((soma, i) => soma + totalDe(i), 0);
+  const temPreco = licitacao.itens.some((i) => i.unitario !== null && i.unitario !== undefined);
 
   return html`<div class="tabela-caixa">
     <div class="tabela-rolagem">
@@ -38,99 +49,137 @@ function painelItens(licitacao) {
           ${raw(licitacao.itens.map((i) => `<tr>
             <td class="-num">${i.n}</td>
             <td class="tabela-titulo-celula">${i.descricao}</td>
-            <td class="-num">${i.qtd.toLocaleString('pt-BR')}</td>
-            <td>${i.un}</td>
-            <td class="-num">${moeda(i.unitario)}</td>
-            <td class="-num" style="font-weight: var(--p-semi)">${moeda(i.qtd * i.unitario)}</td>
+            <td class="-num">${(i.qtd ?? 0).toLocaleString('pt-BR')}</td>
+            <td>${i.un ?? '—'}</td>
+            <td class="-num">${i.unitario === null || i.unitario === undefined ? 'sigiloso' : moeda(i.unitario)}</td>
+            <td class="-num" style="font-weight: var(--p-semi)">
+              ${i.unitario === null || i.unitario === undefined ? '—' : moeda(totalDe(i))}
+            </td>
           </tr>`).join(''))}
         </tbody>
-        <tfoot><tr>
+        ${raw(temPreco ? `<tfoot><tr>
           <td colspan="5" style="text-align: right; font-weight: var(--p-semi)">Total estimado</td>
           <td class="-num" style="font-weight: var(--p-extra); color: var(--texto-forte)">${moeda(total)}</td>
-        </tr></tfoot>
+        </tr></tfoot>` : '')}
       </table>
     </div>
   </div>`;
 }
 
-function painelDocumentos(licitacao) {
-  return html`<div class="grade grade-2">
-    ${raw(licitacao.documentos.map((d) => `
-      <div class="card -interativo">
-        <div class="card-corpo linha" style="gap: var(--e-3)">
-          <span class="stat-icone -azul" style="width: 42px; height: 42px">${icone('documento')}</span>
-          <div style="flex: 1; min-width: 0">
-            <div style="font-weight: var(--p-semi); color: var(--texto-forte); font-size: var(--t-corpo-sm)">
-              ${d.nome}
-            </div>
-            <div class="suave" style="font-size: var(--t-micro)">
-              ${d.tipo} · ${d.paginas} páginas · ${d.tamanho}
-            </div>
+/**
+ * Onde ler e onde disputar. São dois endereços diferentes e
+ * confundi-los custa o certame: o PNCP publica, mas a proposta
+ * é enviada no sistema de origem.
+ */
+function painelFontes(licitacao) {
+  const cartao = (titulo, descricao, href, nomeIcone) => `
+    <a class="card -interativo" href="${href}" target="_blank" rel="noopener noreferrer"
+       style="display: block">
+      <div class="card-corpo linha" style="gap: var(--e-3)">
+        <span class="stat-icone -azul" style="width: 42px; height: 42px">${icone(nomeIcone)}</span>
+        <div style="flex: 1; min-width: 0">
+          <div style="font-weight: var(--p-semi); color: var(--texto-forte); font-size: var(--t-corpo-sm)">
+            ${titulo}
           </div>
-          <button class="btn-icone" data-acao="baixar" data-nome="${d.nome}"
-            aria-label="Baixar ${d.nome}">${icone('baixar')}</button>
+          <div class="suave" style="font-size: var(--t-micro); line-height: 1.5">${descricao}</div>
         </div>
-      </div>`).join(''))}
+        <span class="btn-icone" aria-hidden="true">${icone('externo')}</span>
+      </div>
+    </a>`;
+
+  return html`<div class="pilha">
+    ${raw(licitacao.linkPncp
+      ? cartao('Edital no PNCP', 'A publicação oficial, com o edital e os anexos do órgão.',
+               licitacao.linkPncp, 'documento')
+      : '')}
+
+    ${raw(licitacao.linkSistemaOrigem
+      ? cartao(`Disputar em ${licitacao.plataforma}`,
+               'Onde a proposta é efetivamente enviada. É neste sistema que você precisa ter cadastro e certificado.',
+               licitacao.linkSistemaOrigem, 'martelo')
+      : `<div class="alerta-bloco -aviso">${icone('alerta')}
+          <div>O órgão não informou o sistema de disputa nesta publicação. O caminho está
+          no corpo do edital, no PNCP.</div>
+        </div>`)}
+
+    <p class="tenue" style="font-size: var(--t-micro); line-height: 1.6">
+      Os arquivos do edital ficam no portal do órgão — o LICITA+ aponta para eles em vez
+      de hospedar uma cópia que pode envelhecer sem aviso. Edital retificado é comum, e
+      uma cópia desatualizada aqui seria pior do que nenhuma.
+    </p>
   </div>`;
 }
 
 function painelCronograma(licitacao) {
   const etapas = [
-    { titulo: 'Publicação do edital', quando: licitacao.abertura, estado: 'feito', icone: 'check' },
     { titulo: 'Abertura do recebimento de propostas', quando: licitacao.abertura, estado: 'feito', icone: 'check' },
     { titulo: 'Encerramento das propostas', quando: licitacao.encerramento, estado: 'agora', icone: 'relogio' },
-    { titulo: 'Sessão de disputa', quando: null, estado: 'futuro', icone: 'martelo', nota: 'Divulgada após o encerramento' },
+    { titulo: 'Sessão de disputa', quando: null, estado: 'futuro', icone: 'martelo', nota: 'Data divulgada pelo órgão no edital' },
     { titulo: 'Habilitação do vencedor', quando: null, estado: 'futuro', icone: 'escudo', nota: 'Verificação de documentos' },
     { titulo: 'Adjudicação e homologação', quando: null, estado: 'futuro', icone: 'balanca', nota: 'Etapa final do certame' },
   ];
 
-  return html`<div class="timeline">
-    ${raw(etapas.map((e) => `
-      <div class="timeline-item ${e.estado === 'feito' ? '-feito' : e.estado === 'agora' ? '-agora' : ''}">
-        <span class="timeline-ponto">${icone(e.icone)}</span>
-        <div>
-          <div class="timeline-titulo">${e.titulo}</div>
-          <div class="timeline-data">${e.quando ? dataHora(e.quando) : e.nota}</div>
-        </div>
-      </div>`).join(''))}
+  return html`<div class="pilha">
+    <div class="timeline">
+      ${raw(etapas.map((e) => `
+        <div class="timeline-item ${e.estado === 'feito' ? '-feito' : e.estado === 'agora' ? '-agora' : ''}">
+          <span class="timeline-ponto">${icone(e.icone)}</span>
+          <div>
+            <div class="timeline-titulo">${e.titulo}</div>
+            <div class="timeline-data">${e.quando ? dataHora(e.quando) : e.nota}</div>
+          </div>
+        </div>`).join(''))}
+    </div>
+
+    <p class="tenue" style="font-size: var(--t-micro); line-height: 1.6">
+      Só as duas primeiras datas são publicadas junto com a contratação. As seguintes
+      dependem do andamento da sessão e saem no próprio certame — por isso aparecem sem
+      data em vez de com uma estimativa.
+    </p>
   </div>`;
 }
+
+/* ---------- Página ---------- */
 
 export default {
   titulo: 'Oportunidade',
   trilha: ['Início', 'Oportunidades', 'Detalhe'],
   nav: 'oportunidades',
 
-  render(ctx) {
-    const licitacao = licitacaoPorId(ctx.params.id);
+  esqueleto: () => skeletonCartao(2),
 
-    if (!licitacao) {
+  async render(ctx) {
+    let licitacao;
+
+    try {
+      licitacao = await obterOportunidade(ctx.params.id);
+    } catch {
       return vazio({
         nomeIcone: 'arquivo_x',
         titulo: 'Oportunidade não encontrada',
-        texto: 'Ela pode ter sido removida ou o endereço está incorreto.',
+        texto: 'Ela pode ter encerrado o prazo de propostas ou o endereço está incorreto.',
         acao: '<a class="btn -primario" href="#/oportunidades">Voltar para oportunidades</a>',
       });
     }
 
-    const favorito = ehFavorito(licitacao.id);
+    const favorito = licitacao.favorito ?? ehFavorito(licitacao.id);
     const urgente = prazoUrgente(licitacao.encerramento);
     const faixa = faixaScore(licitacao.compatibilidade);
-    const atendidos = licitacao.razoes.filter((r) => r.ok).length;
+    const pontuados = licitacao.razoes.filter((r) => (r.pontos ?? 0) > 0).length;
 
     const infos = [
       ['Órgão', licitacao.orgao.nome],
+      ['Unidade', licitacao.orgao.unidade ?? '—'],
       ['Modalidade', licitacao.modalidade],
       ['Número', licitacao.numero],
       ['Processo', licitacao.processo],
       ['Cidade', `${licitacao.orgao.cidade} — ${licitacao.orgao.uf}`],
       ['Esfera', licitacao.orgao.esfera],
-      ['Valor estimado', moeda(licitacao.valor)],
+      ['Valor estimado', licitacao.valor === null ? 'Orçamento sigiloso' : moeda(licitacao.valor)],
       ['Abertura', dataHora(licitacao.abertura)],
       ['Encerramento', dataHora(licitacao.encerramento)],
-      ['Situação', licitacao.situacao],
-      ['Plataforma', licitacao.plataforma],
       ['Registro de preços', licitacao.srp ? 'Sim' : 'Não'],
+      ['Referência PNCP', licitacao.referencia ?? '—'],
     ];
 
     return html`
@@ -140,7 +189,6 @@ export default {
     ${raw(icone('seta_esq'))} Voltar
   </a>
 
-  <!-- Cabeçalho -->
   <header class="card" style="overflow: hidden; position: relative">
     <span class="geo geo-losango" style="width: 200px; height: 200px; right: -80px; top: -80px;
       background: linear-gradient(135deg, var(--azul-50), var(--verde-50))"></span>
@@ -148,7 +196,7 @@ export default {
     <div class="card-corpo" style="position: relative">
       <div class="linha" style="gap: var(--e-2); flex-wrap: wrap; margin-bottom: var(--e-3)">
         ${raw(selo({ texto: licitacao.situacao, variante: 'sucesso', nomeIcone: 'check_circulo' }))}
-        ${raw(selo({ texto: licitacao.categoria, variante: 'neutro' }))}
+        ${raw(selo({ texto: licitacao.modalidade, variante: 'neutro' }))}
         ${raw(licitacao.srp ? selo({ texto: 'Registro de preços', variante: 'aviso' }) : '')}
       </div>
 
@@ -163,7 +211,9 @@ export default {
             <div>
               <div class="rotulo">Valor estimado</div>
               <div style="font-size: var(--t-h3); font-weight: var(--p-extra); color: var(--texto-forte);
-                font-variant-numeric: tabular-nums">${moeda(licitacao.valor)}</div>
+                font-variant-numeric: tabular-nums">
+                ${licitacao.valor === null ? 'Sigiloso' : moeda(licitacao.valor)}
+              </div>
             </div>
             <div>
               <div class="rotulo">Encerramento</div>
@@ -178,7 +228,6 @@ export default {
           </div>
         </div>
 
-        <!-- Bloco de compatibilidade -->
         <div style="flex: none; min-width: 260px; padding: var(--e-4);
           border: 1px solid var(--borda); border-radius: var(--r-lg);
           background: var(--score-${faixa.chave}-fundo)">
@@ -188,7 +237,7 @@ export default {
               <div style="font-weight: var(--p-extra); font-size: var(--t-h4);
                 color: var(--score-${faixa.chave})">${faixa.rotulo} compatibilidade</div>
               <div class="suave" style="font-size: var(--t-micro)">
-                ${atendidos} de ${licitacao.razoes.length} critérios
+                ${pontuados} de ${licitacao.razoes.length} critérios pontuaram
               </div>
             </div>
           </div>
@@ -199,18 +248,21 @@ export default {
       </div>
 
       <div class="linha" style="gap: var(--e-2); margin-top: var(--e-6); flex-wrap: wrap">
-        <button class="btn -gradiente" data-acao="analisar">
-          ${raw(icone('faisca'))} Analisar oportunidade
-        </button>
+        ${raw(licitacao.linkSistemaOrigem || licitacao.linkPncp
+          ? `<a class="btn -gradiente" href="${licitacao.linkSistemaOrigem ?? licitacao.linkPncp}"
+                target="_blank" rel="noopener noreferrer">
+               ${icone('externo')} Abrir o certame
+             </a>`
+          : '')}
         <button class="btn -secundario ${favorito ? '-ativo' : ''}" data-acao="favoritar-detalhe">
           ${raw(icone('coracao'))} <span id="rotulo-fav">${favorito ? 'Favoritada' : 'Favoritar'}</span>
         </button>
-        <button class="btn -secundario" data-acao="monitorar">
-          ${raw(icone('sino'))} Criar alerta
+        <button class="btn -secundario" data-acao="registrar-part">
+          ${raw(icone('balanca'))} Vou participar
         </button>
-        <a class="btn -fantasma" href="#/oportunidades" data-acao="abrir-plataforma">
-          ${raw(icone('externo'))} Abrir no ${licitacao.plataforma}
-        </a>
+        <button class="btn -fantasma" data-acao="checklist">
+          ${raw(icone('lista'))} O que conferir antes
+        </button>
       </div>
     </div>
   </header>
@@ -218,7 +270,6 @@ export default {
   <div class="grade-conteudo-trilho">
     <div class="pilha-lg" style="min-width: 0">
 
-      <!-- Por que é relevante -->
       <section class="card">
         <div class="card-topo">
           <div>
@@ -229,7 +280,15 @@ export default {
         <div class="card-corpo">${raw(listaRazoes(licitacao.razoes))}</div>
       </section>
 
-      <!-- Abas: resumo, itens, documentos, cronograma -->
+      ${raw(licitacao.alertas.length ? `
+      <section class="pilha-sm">
+        ${licitacao.alertas.map((a) => alerta({
+          variante: a.gravidade === 'critico' ? 'erro' : 'aviso',
+          nomeIcone: 'alerta',
+          texto: a.mensagem,
+        })).join('')}
+      </section>` : '')}
+
       <section class="card">
         <div style="padding: 0 var(--e-5)">
           ${raw(abas({
@@ -237,7 +296,7 @@ export default {
             itens: [
               { chave: 'resumo', rotulo: 'Resumo' },
               { chave: 'itens', rotulo: 'Itens', contagem: licitacao.itens.length },
-              { chave: 'documentos', rotulo: 'Documentos', contagem: licitacao.documentos.length },
+              { chave: 'fontes', rotulo: 'Edital e disputa' },
               { chave: 'cronograma', rotulo: 'Cronograma' },
             ],
           }))}
@@ -248,7 +307,6 @@ export default {
       </section>
     </div>
 
-    <!-- Trilho: ficha técnica -->
     <aside class="pilha">
       <div class="card">
         <div class="card-topo"><div class="card-titulo" style="font-size: var(--t-corpo)">Ficha técnica</div></div>
@@ -258,7 +316,7 @@ export default {
               <div style="display: grid; gap: 1px">
                 <dt class="rotulo">${chave}</dt>
                 <dd style="margin: 0; font-size: var(--t-corpo-sm); font-weight: var(--p-medio);
-                  color: var(--texto-forte)">${valor}</dd>
+                  color: var(--texto-forte); word-break: break-word">${valor}</dd>
               </div>`).join(''))}
           </dl>
         </div>
@@ -284,92 +342,143 @@ export default {
   },
 
   ativar(raiz, ctx) {
-    const licitacao = licitacaoPorId(ctx.params.id);
-    if (!licitacao) return;
-
     const painel = $('#painel-aba', raiz);
+    if (!painel) return;
 
-    ativarAbas(raiz, (chave) => {
+    // A página já tem o dado desenhado; buscar de novo só para
+    // ligar as abas seria uma ida à rede sem resposta nova.
+    let licitacao = null;
+    const comLicitacao = async () => {
+      licitacao ??= await obterOportunidade(ctx.params.id);
+      return licitacao;
+    };
+
+    ativarAbas(raiz, async (chave) => {
+      const l = await comLicitacao();
       const conteudos = {
-        resumo: `<p style="line-height: 1.7; max-width: 72ch">${licitacao.resumo}</p>`,
-        itens: painelItens(licitacao),
-        documentos: painelDocumentos(licitacao),
-        cronograma: painelCronograma(licitacao),
+        resumo: `<p style="line-height: 1.7; max-width: 72ch">${l.resumo}</p>`,
+        itens: l.itens.length
+          ? painelItens(l)
+          : '<p class="tenue" style="line-height: 1.6; margin: 0">O órgão não detalhou os itens nesta publicação. A relação completa está no edital.</p>',
+        fontes: painelFontes(l),
+        cronograma: painelCronograma(l),
       };
       painel.innerHTML = conteudos[chave] ?? '';
     });
 
-    aoClicarEm(raiz, '[data-acao="explicar"]', () => {
+    aoClicarEm(raiz, '[data-acao="explicar"]', async () => {
+      const l = await comLicitacao();
       abrirModal({
         titulo: 'Por que recomendamos esta oportunidade?',
-        subtitulo: licitacao.objeto,
-        corpo: corpoExplicacao(licitacao),
+        subtitulo: l.objeto,
+        corpo: corpoExplicacao(l),
         rodape: '<button class="btn -primario" data-acao="fechar-modal">Entendi</button>',
       });
     });
 
-    aoClicarEm(raiz, '[data-acao="favoritar-detalhe"]', (_evento, alvo) => {
-      const agora = alternarFavorito(licitacao.id);
-      $('#rotulo-fav', raiz).textContent = agora ? 'Favoritada' : 'Favoritar';
-      alvo.classList.toggle('-ativo', agora);
-      toast(agora ? 'Oportunidade adicionada aos favoritos.' : 'Oportunidade removida dos favoritos.', {
-        variante: agora ? 'sucesso' : 'info',
-      });
+    aoClicarEm(raiz, '[data-acao="favoritar-detalhe"]', async (_evento, alvo) => {
+      if (alvo.disabled) return;
+      alvo.disabled = true;
+
+      try {
+        const agora = await alternarFavoritoRemoto(ctx.params.id);
+        $('#rotulo-fav', raiz).textContent = agora ? 'Favoritada' : 'Favoritar';
+        alvo.classList.toggle('-ativo', agora);
+        toast(agora ? 'Oportunidade adicionada aos favoritos.' : 'Oportunidade removida dos favoritos.', {
+          variante: agora ? 'sucesso' : 'info',
+        });
+      } catch (erro) {
+        toast('Não foi possível salvar o favorito', { variante: 'erro', sub: erro.message });
+      } finally {
+        alvo.disabled = false;
+      }
     });
 
-    aoClicarEm(raiz, '[data-acao="monitorar"]', () => {
-      toast('Alerta criado', {
-        variante: 'sucesso',
-        sub: 'Você será avisado sobre retificações e mudanças de prazo nesta licitação.',
-      });
-    });
+    // "Vou participar" abre o registro já preenchido com o que a
+    // tela sabe. Pedir que o usuário redigite o número do pregão
+    // e o nome do órgão seria trabalho que o sistema já fez.
+    aoClicarEm(raiz, '[data-acao="registrar-part"]', async () => {
+      const l = await comLicitacao();
 
-    aoClicarEm(raiz, '[data-acao="analisar"]', () => {
       abrirModal({
-        titulo: 'Analisar oportunidade',
-        subtitulo: licitacao.objeto,
-        largo: true,
+        titulo: 'Registrar participação',
+        subtitulo: l.objeto,
+        corpo: html`<div class="pilha">
+          <p class="suave" style="font-size: var(--t-corpo-sm); line-height: 1.6; margin: 0">
+            O registro entra como <b>em análise</b>. Quando sair o resultado, você atualiza
+            em Participações — é esse histórico que mostra em que faixa de preço a sua
+            empresa costuma ganhar.
+          </p>
+          ${raw(campo({
+            rotulo: 'Valor da sua proposta', id: 'det-valor', tipo: 'number',
+            placeholder: 'R$ 0',
+            ajuda: 'Opcional agora; dá para preencher depois.',
+          }))}
+          ${raw(campo({
+            rotulo: 'Observação', id: 'det-obs',
+            placeholder: 'O que pesou na decisão de participar',
+          }))}
+        </div>`,
+        rodape: `<button class="btn -secundario" data-acao="fechar-modal">Cancelar</button>
+                 <button class="btn -primario" data-acao="confirmar-part">Registrar</button>`,
+      });
+    });
+
+    const desligar = [
+      aoClicarEm(document.body, '[data-acao="confirmar-part"]', async (_evento, alvo) => {
+        const l = await comLicitacao();
+        alvo.disabled = true;
+
+        try {
+          await criarParticipacao({
+            descricao: `${l.modalidade} ${l.numero} — ${l.objeto.slice(0, 120)}`,
+            orgao: l.orgao.nome,
+            valor: $('#det-valor')?.value ? Number($('#det-valor').value) : undefined,
+            observacao: $('#det-obs')?.value?.trim() || undefined,
+            situacao: 'analise',
+            licitacaoId: l.id,
+          });
+
+          fecharModal();
+          toast('Participação registrada', {
+            variante: 'sucesso',
+            sub: 'Atualize o resultado em Participações quando o certame for decidido.',
+          });
+        } catch (erro) {
+          alvo.disabled = false;
+          toast('Não foi possível registrar', { variante: 'erro', sub: erro.message });
+        }
+      }),
+    ];
+
+    aoClicarEm(raiz, '[data-acao="checklist"]', () => {
+      abrirModal({
+        titulo: 'O que conferir antes de disputar',
+        subtitulo: 'O que mais elimina fornecedor não é preço — é documento.',
         corpo: html`<div class="pilha">
           ${raw(alerta({
-            variante: 'info', nomeIcone: 'faisca',
-            texto: 'A análise cruza o edital com o seu catálogo, histórico de preços e certidões.',
+            variante: 'aviso', nomeIcone: 'alerta',
+            texto: 'Certidão vencida na habilitação desclassifica quem já tinha o menor preço. É a causa mais comum de perder um certame já ganho.',
           }))}
-          <div class="grade grade-3">
-            ${raw([
-              { t: 'Itens que você fornece', v: `${licitacao.itens.length} de ${licitacao.itens.length}`, i: 'maleta' },
-              { t: 'Margem estimada', v: '18% a 24%', i: 'subindo' },
-              { t: 'Concorrentes prováveis', v: '6 a 11 empresas', i: 'usuario' },
-            ].map((c) => `<div class="stat">
-              <div class="stat-topo">
-                <span class="stat-rotulo">${c.t}</span>
-                <span class="stat-icone -azul">${icone(c.i)}</span>
-              </div>
-              <div style="font-size: var(--t-h3); font-weight: var(--p-extra); color: var(--texto-forte)">
-                ${c.v}</div>
-            </div>`).join(''))}
-          </div>
-          <p class="suave" style="font-size: var(--t-corpo-sm); line-height: 1.6">
-            Estimativas de demonstração, calculadas sobre dados fictícios. Numa conta real elas
-            viriam do seu histórico de participações e da tabela de custo do seu fornecedor.
+
+          <ul style="line-height: 1.8; padding-left: var(--e-5); margin: 0">
+            <li><b>Certidões em dia</b> — federal, estadual, municipal, FGTS e trabalhista.</li>
+            <li><b>Cadastro na plataforma da disputa</b>, não só no PNCP. São sistemas diferentes.</li>
+            <li><b>Certificado digital e-CNPJ válido</b>, com o token à mão no dia da sessão.</li>
+            <li><b>Atestado de capacidade técnica</b>, se o edital exigir — leia o item de habilitação.</li>
+            <li><b>Prazo de entrega</b> que o seu fornecedor sustenta, não o que você espera dele.</li>
+            <li><b>Cota ME/EPP</b>: veja se o edital reserva parte do quantitativo. Muda a conta.</li>
+          </ul>
+
+          <p class="tenue" style="font-size: var(--t-micro); line-height: 1.6">
+            Esta lista é um lembrete geral, não a leitura do edital. As exigências que
+            valem são as que estão escritas nele.
           </p>
         </div>`,
-        rodape: `
-          <button class="btn -secundario" data-acao="fechar-modal">Fechar</button>
-          <button class="btn -primario" data-acao="fechar-modal">Gerar dossiê</button>`,
+        rodape: '<button class="btn -primario" data-acao="fechar-modal">Entendi</button>',
       });
     });
 
-    aoClicarEm(raiz, '[data-acao="baixar"]', (evento, alvo) => {
-      evento.preventDefault();
-      toast(`${alvo.dataset.nome}`, { variante: 'info', sub: 'Download indisponível na demonstração.' });
-    });
-
-    aoClicarEm(raiz, '[data-acao="abrir-plataforma"]', (evento) => {
-      evento.preventDefault();
-      toast(`Abriria o ${licitacao.plataforma}`, {
-        variante: 'info',
-        sub: 'Na versão real, este botão leva direto ao certame na plataforma do órgão.',
-      });
-    });
+    return () => desligar.forEach((cancelar) => cancelar?.());
   },
 };

@@ -261,6 +261,21 @@ export class AuthService {
     };
   }
 
+  /**
+   * Derruba todas as sessões do usuário. É o botão de "perdi o
+   * celular": sem ele, a única forma de invalidar um aparelho
+   * esquecido em outro lugar seria trocar a senha.
+   */
+  async sairDeTudo(usuarioId: string): Promise<{ encerradas: number }> {
+    const { count } = await this.prisma.sessao.updateMany({
+      where: { usuarioId, revogadaEm: null },
+      data: { revogadaEm: new Date() },
+    });
+
+    this.logger.log(`Sessões encerradas: usuário ${usuarioId} (${count})`);
+    return { encerradas: count };
+  }
+
   async sair(sessaoId: string): Promise<void> {
     await this.prisma.sessao.updateMany({
       where: { id: sessaoId, revogadaEm: null },

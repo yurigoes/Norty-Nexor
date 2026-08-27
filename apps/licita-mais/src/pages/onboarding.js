@@ -1,45 +1,99 @@
 /* =========================================================
-   LICITA+ — Onboarding
+   LICITA+ — Primeiro acesso
    ---------------------------------------------------------
-   Cinco passos que existem por uma razão: cada resposta vira
-   um critério de recomendação. Por isso cada tela diz o que a
-   informação faz — pedir CNAE sem explicar para quê é o
-   caminho mais curto para o abandono.
+   Roda depois do cadastro, com a conta já criada: aqui não se
+   pergunta quem é a empresa, e sim o que ela vende e onde. É a
+   diferença entre um formulário de registro e a calibragem do
+   radar.
 
-   O estado vive num objeto só e a barra de progresso reflete
-   o passo; não há navegação por URL entre passos de propósito,
-   porque voltar pelo botão do navegador quebraria a sequência.
+   Cada resposta vira campo do perfil e, no fim, uma escrita
+   real em `PUT /empresa`. As categorias não viram rótulo
+   decorativo — cada uma se transforma numa **linha de
+   fornecimento** com as palavras que de fato aparecem em
+   edital. É o que faz "notebook" casar com "microcomputador
+   portátil" já na primeira varredura, sem o usuário precisar
+   adivinhar o vocabulário do órgão.
+
+   Quem pula chega ao painel com o perfil mínimo do cadastro e
+   pode completar depois em Minha empresa. Bloquear a entrada
+   até o formulário acabar é o caminho mais curto para o
+   abandono.
    ========================================================= */
 
-import { html, raw, $, $$, ao, aoClicarEm } from '../lib/dom.js';
+import { html, raw, $, aoClicarEm } from '../lib/dom.js';
 import { icone } from '../lib/icons.js';
 import { marcaHorizontal } from '../ui/brand.js';
-import { campo, seletor, toast } from '../ui/primitives.js';
+import { campo, toast } from '../ui/primitives.js';
 import { comCarregamento } from '../ui/carregando.js';
 import { irPara } from '../lib/router.js';
+import { UFS, MODALIDADES_PNCP } from '../lib/tabelas.js';
+import { obterEmpresa, salvarEmpresa } from '../dados/index.js';
 
-const TOTAL = 5;
+const TOTAL = 4;
 
-const resposta = {
-  empresa: '',
-  cnpj: '',
-  porte: 'epp',
-  fornece: new Set(),
-  regiao: new Set(['BA']),
-};
-
-const FORNECIMENTO = [
-  { chave: 'informatica', rotulo: 'Equipamentos de informática', icone: 'painel' },
-  { chave: 'ti', rotulo: 'Serviços de TI e software', icone: 'raio' },
-  { chave: 'expediente', rotulo: 'Material de expediente', icone: 'documento' },
-  { chave: 'limpeza', rotulo: 'Material de limpeza', icone: 'faisca' },
-  { chave: 'mobiliario', rotulo: 'Mobiliário', icone: 'maleta' },
-  { chave: 'manutencao', rotulo: 'Manutenção e obras', icone: 'martelo' },
-  { chave: 'saude', rotulo: 'Equipamentos médicos', icone: 'escudo' },
-  { chave: 'outros', rotulo: 'Outros', icone: 'mais' },
+/**
+ * Cada categoria carrega o vocabulário de edital correspondente.
+ * Órgão não escreve "notebook" — escreve "microcomputador
+ * portátil". Entregar esse dicionário pronto é boa parte do
+ * valor do primeiro acesso.
+ */
+const CATALOGO = [
+  {
+    chave: 'informatica', rotulo: 'Equipamentos de informática', icone: 'painel',
+    palavrasChave: ['notebook', 'microcomputador', 'computador', 'monitor', 'impressora', 'nobreak', 'scanner', 'periférico'],
+    palavrasExcluidas: ['locação', 'comodato', 'outsourcing'],
+  },
+  {
+    chave: 'ti', rotulo: 'Serviços de TI e software', icone: 'raio',
+    palavrasChave: ['suporte técnico', 'manutenção de computadores', 'licença de software', 'help desk', 'infraestrutura de rede', 'cabeamento estruturado'],
+    palavrasExcluidas: [],
+  },
+  {
+    chave: 'expediente', rotulo: 'Material de expediente', icone: 'documento',
+    palavrasChave: ['material de expediente', 'papel a4', 'toner', 'cartucho', 'material de escritório'],
+    palavrasExcluidas: [],
+  },
+  {
+    chave: 'limpeza', rotulo: 'Material de limpeza e higiene', icone: 'faisca',
+    palavrasChave: ['material de limpeza', 'higiene', 'papel higiênico', 'saco de lixo', 'desinfetante'],
+    palavrasExcluidas: ['prestação de serviço de limpeza'],
+  },
+  {
+    chave: 'mobiliario', rotulo: 'Mobiliário', icone: 'maleta',
+    palavrasChave: ['mobiliário', 'cadeira', 'mesa de escritório', 'armário', 'estante'],
+    palavrasExcluidas: [],
+  },
+  {
+    chave: 'manutencao', rotulo: 'Manutenção predial e obras', icone: 'martelo',
+    palavrasChave: ['manutenção predial', 'reforma', 'material de construção', 'elétrica', 'hidráulica'],
+    palavrasExcluidas: [],
+  },
+  {
+    chave: 'saude', rotulo: 'Material e equipamento de saúde', icone: 'escudo',
+    palavrasChave: ['material hospitalar', 'equipamento médico', 'material odontológico', 'insumo laboratorial'],
+    palavrasExcluidas: ['medicamento'],
+  },
+  {
+    chave: 'alimentacao', rotulo: 'Gêneros alimentícios', icone: 'carteira',
+    palavrasChave: ['gênero alimentício', 'alimentação escolar', 'hortifruti', 'cesta básica'],
+    palavrasExcluidas: [],
+  },
 ];
 
-const ESTADOS = ['BA', 'SE', 'PE', 'AL', 'SP', 'RJ', 'MG', 'DF', 'Brasil todo'];
+/* ---------- Estado do assistente ---------- */
+
+const resposta = {
+  fornece: new Set(),
+  regiao: new Set(),
+  modalidades: new Set([6, 8, 12]),
+  valorMinimo: 0,
+  valorMaximo: 80000,
+};
+
+let atual = 1;
+let perfilBase = null;
+
+/* ---------- Marcação ---------- */
 
 function trilha(passo) {
   return `<div class="onb-trilha" role="progressbar" aria-valuenow="${passo}" aria-valuemin="1"
@@ -66,16 +120,18 @@ function opcoes(itens, selecionadas, acao) {
 }
 
 function passo(n) {
+  const nome = perfilBase?.nomeFantasia || perfilBase?.razaoSocial || 'sua empresa';
+
   const telas = {
     1: () => `<div class="onb-passo" style="text-align: center">
         <div style="display: flex; justify-content: center; margin-bottom: var(--e-8)">
           ${marcaHorizontal({ tamanho: 52, comTagline: true })}
         </div>
-        <h2>Bem-vindo ao LICITA+</h2>
-        <p style="max-width: 46ch; margin-left: auto; margin-right: auto">
-          Encontre licitações que realmente fazem sentido para sua empresa.
-          Vamos montar seu perfil em cinco passos rápidos — é ele que alimenta
-          as recomendações.
+        <h2>Conta criada. Vamos calibrar o radar.</h2>
+        <p style="max-width: 48ch; margin-left: auto; margin-right: auto">
+          Três perguntas sobre o que a ${nome} vende, onde entrega e em que faixa de
+          valor compensa disputar. É isso que separa as licitações que interessam das
+          milhares que são publicadas todo dia.
         </p>
         <button class="btn -gradiente -lg" data-acao="avancar" style="margin-top: var(--e-8)">
           Começar ${icone('seta_dir')}
@@ -83,49 +139,70 @@ function passo(n) {
       </div>`,
 
     2: () => `<div class="onb-passo">
-        <h2>Conte sobre sua empresa</h2>
-        <p>Usamos o CNPJ para descobrir seus CNAEs e o seu porte automaticamente.</p>
-        <div class="pilha" style="margin-top: var(--e-8)">
-          ${campo({ rotulo: 'Razão social ou nome fantasia', id: 'onb-empresa',
-            valor: resposta.empresa, placeholder: 'Nexor Suprimentos' })}
-          ${campo({ rotulo: 'CNPJ', id: 'onb-cnpj', valor: resposta.cnpj,
-            placeholder: '00.000.000/0001-00', ajuda: 'Só números ou com máscara — nós formatamos.' })}
-          ${seletor({ rotulo: 'Porte da empresa', id: 'onb-porte', valor: resposta.porte, opcoes: [
-            { valor: 'mei', rotulo: 'MEI' },
-            { valor: 'me', rotulo: 'Microempresa' },
-            { valor: 'epp', rotulo: 'Empresa de Pequeno Porte' },
-            { valor: 'demais', rotulo: 'Demais portes' },
-          ] })}
-        </div>
+        <h2>O que a sua empresa vende?</h2>
+        <p>
+          Cada categoria escolhida vira uma lista de palavras que aparecem em edital —
+          incluindo as que o órgão usa e você não usaria. Dá para ajustar tudo depois.
+        </p>
+        ${opcoes(CATALOGO, resposta.fornece, 'fornece')}
         <div class="alerta-bloco -info" style="margin-top: var(--e-5)">
           ${icone('info')}
-          <div>ME e EPP têm acesso à cota exclusiva de até <b>R$ 80 mil por item</b>
-          (LC 123/2006). O LICITA+ pontua essas oportunidades mais alto.</div>
+          <div>Este é o critério que mais pesa: <b>45 dos 100 pontos</b> da
+          compatibilidade vêm da aderência entre o objeto do edital e o que você
+          declara aqui.</div>
         </div>
       </div>`,
 
     3: () => `<div class="onb-passo">
-        <h2>Quais oportunidades você procura?</h2>
-        <p>Escolha o que a sua empresa fornece. Isso define o que aparece no seu radar.</p>
-        ${opcoes(FORNECIMENTO, resposta.fornece, 'fornece')}
+        <h2>Onde a sua empresa consegue entregar?</h2>
+        <p>
+          Frete e prazo de entrega pesam no preço. Fora destes estados a oportunidade é
+          descartada — não apenas rebaixada.
+        </p>
+        ${opcoes(UFS, resposta.regiao, 'regiao')}
       </div>`,
 
     4: () => `<div class="onb-passo">
-        <h2>Onde sua empresa atua?</h2>
-        <p>Entrega e frete pesam no preço. Selecione só onde você consegue atender.</p>
-        ${opcoes(ESTADOS, resposta.regiao, 'regiao')}
-      </div>`,
-
-    5: () => `<div class="onb-passo onb-final">
-        <span class="onb-final-marca">${icone('check')}</span>
-        <h2>Pronto!</h2>
-        <p style="max-width: 44ch; margin: var(--e-3) auto 0">
-          Seu perfil está preparado. Agora vamos encontrar oportunidades para você —
-          já separamos <b>23 licitações</b> abertas que batem com o que você declarou.
+        <h2>Em que faixa compensa disputar?</h2>
+        <p>
+          Abaixo do mínimo o esforço não paga. Acima do máximo, lembre que em licitação
+          você entrega antes de receber.
         </p>
-        <button class="btn -gradiente -lg" data-acao="concluir" style="margin-top: var(--e-8)">
-          Ver minhas oportunidades ${icone('seta_dir')}
-        </button>
+
+        <div class="grade grade-2" style="gap: var(--e-4); margin-top: var(--e-6)">
+          ${campo({
+            rotulo: 'Valor mínimo', id: 'onb-min', tipo: 'number',
+            valor: resposta.valorMinimo, placeholder: 'R$ 0',
+          })}
+          ${campo({
+            rotulo: 'Valor máximo', id: 'onb-max', tipo: 'number',
+            valor: resposta.valorMaximo, placeholder: 'R$ 80.000',
+          })}
+        </div>
+
+        <div style="margin-top: var(--e-6)">
+          <div class="campo-rotulo" style="margin-bottom: var(--e-3)">Modalidades</div>
+          <div class="linha" style="gap: var(--e-2); flex-wrap: wrap">
+            ${MODALIDADES_PNCP.filter((m) => m.entrada || resposta.modalidades.has(m.codigo))
+              .map((m) => `<button type="button"
+                class="filtro-pill ${resposta.modalidades.has(m.codigo) ? '-ativo' : ''}"
+                data-acao="modalidade" data-codigo="${m.codigo}"
+                aria-pressed="${resposta.modalidades.has(m.codigo)}">
+                ${resposta.modalidades.has(m.codigo) ? icone('check') : ''}${m.nome}
+              </button>`).join('')}
+          </div>
+          <span class="campo-ajuda" style="display: block; margin-top: var(--e-3)">
+            Estas três são as portas de entrada: ritos curtos e de valor baixo. As demais
+            pedem estrutura documental que raramente compensa antes das primeiras vitórias —
+            você pode habilitá-las depois em Minha empresa.
+          </span>
+        </div>
+
+        <div class="alerta-bloco -info" style="margin-top: var(--e-5)">
+          ${icone('escudo')}
+          <div>Até <b>R$ 80 mil por item</b> a contratação pode ser reservada a ME e EPP
+          (LC 123/2006). Se a sua empresa se enquadra, é aí que a concorrência é menor.</div>
+        </div>
       </div>`,
   };
 
@@ -133,23 +210,31 @@ function passo(n) {
 }
 
 function rodape(n) {
-  if (n === 1 || n === 5) return '';
+  if (n === 1) return '';
+
   return `<div class="linha-entre" style="margin-top: var(--e-10)">
     <button class="btn -fantasma" data-acao="voltar">${icone('seta_esq')} Voltar</button>
-    <button class="btn -primario" data-acao="avancar">
-      ${n === 4 ? 'Concluir' : 'Continuar'} ${icone('seta_dir')}
+    <button class="btn -primario" data-acao="${n === TOTAL ? 'concluir' : 'avancar'}" id="btn-onb">
+      ${n === TOTAL ? 'Salvar e ver oportunidades' : 'Continuar'} ${icone('seta_dir')}
     </button>
   </div>`;
 }
 
-let atual = 1;
+/* ---------- Página ---------- */
 
 export default {
-  titulo: 'Criar conta',
+  titulo: 'Configurar perfil',
   shell: false,
 
-  render() {
+  async render() {
     atual = 1;
+    perfilBase = await obterEmpresa().catch(() => null);
+
+    // Semeia com o que o cadastro já sabe, em vez de pedir de novo.
+    resposta.regiao = new Set(perfilBase?.estadosAtuacao?.length
+      ? perfilBase.estadosAtuacao
+      : [perfilBase?.uf].filter(Boolean));
+
     return html`
 <div class="tela-publica onb">
   <span class="heroi-geo-1" aria-hidden="true"></span>
@@ -166,8 +251,9 @@ export default {
     </div>
 
     <p class="tenue" style="text-align: center; margin-top: var(--e-5); font-size: var(--t-micro)">
-      Demonstração — nenhum dado é enviado.
-      <a href="#/painel" style="font-weight: var(--p-semi)">Pular e ir ao painel</a>
+      Pode deixar para depois —
+      <a href="#/painel" style="font-weight: var(--p-semi)">ir direto ao painel</a>
+      e completar em Minha empresa.
     </p>
   </div>
 </div>`;
@@ -184,35 +270,39 @@ export default {
       trilhaEl.innerHTML = trilha(atual);
     };
 
-    const guardarPasso2 = () => {
-      resposta.empresa = $('#onb-empresa', raiz)?.value.trim() ?? '';
-      resposta.cnpj = $('#onb-cnpj', raiz)?.value.trim() ?? '';
-      resposta.porte = $('#onb-porte', raiz)?.value ?? 'epp';
+    const guardarFaixa = () => {
+      const minimo = $('#onb-min', raiz);
+      const maximo = $('#onb-max', raiz);
+      if (minimo) resposta.valorMinimo = Number(minimo.value) || 0;
+      if (maximo) resposta.valorMaximo = Number(maximo.value) || 0;
     };
 
     aoClicarEm(raiz, '[data-acao="avancar"]', () => {
-      if (atual === 2) {
-        guardarPasso2();
-        if (!resposta.empresa) {
-          toast('Informe o nome da empresa', { variante: 'erro', sub: 'É por ele que identificamos seu perfil.' });
-          return;
-        }
-      }
-      if (atual === 3 && resposta.fornece.size === 0) {
-        toast('Escolha ao menos uma categoria', { variante: 'erro', sub: 'É o que define o que entra no seu radar.' });
+      if (atual === 2 && resposta.fornece.size === 0) {
+        toast('Escolha ao menos uma categoria', {
+          variante: 'erro',
+          sub: 'Sem isso a triagem não tem com o que comparar o edital.',
+        });
         return;
       }
+      if (atual === 3 && resposta.regiao.size === 0) {
+        toast('Escolha ao menos um estado', {
+          variante: 'erro',
+          sub: 'Fora dos estados declarados a oportunidade é descartada.',
+        });
+        return;
+      }
+
       atual = Math.min(TOTAL, atual + 1);
       pintar();
     });
 
     aoClicarEm(raiz, '[data-acao="voltar"]', () => {
-      if (atual === 2) guardarPasso2();
+      if (atual === TOTAL) guardarFaixa();
       atual = Math.max(1, atual - 1);
       pintar();
     });
 
-    // Alternância de seleção múltipla nos passos 3 e 4.
     aoClicarEm(raiz, '[data-acao="fornece"], [data-acao="regiao"]', (_evento, alvo) => {
       const conjunto = alvo.dataset.acao === 'fornece' ? resposta.fornece : resposta.regiao;
       const chave = alvo.dataset.chave;
@@ -225,22 +315,63 @@ export default {
       alvo.setAttribute('aria-pressed', String(marcada));
     });
 
-    aoClicarEm(raiz, '[data-acao="concluir"]', () => {
+    aoClicarEm(raiz, '[data-acao="modalidade"]', (_evento, alvo) => {
+      const codigo = Number(alvo.dataset.codigo);
+      if (resposta.modalidades.has(codigo)) resposta.modalidades.delete(codigo);
+      else resposta.modalidades.add(codigo);
+
+      const ativo = resposta.modalidades.has(codigo);
+      alvo.classList.toggle('-ativo', ativo);
+      alvo.setAttribute('aria-pressed', String(ativo));
+    });
+
+    aoClicarEm(raiz, '[data-acao="concluir"]', async (_evento, alvo) => {
+      guardarFaixa();
+
+      if (resposta.valorMaximo && resposta.valorMaximo < resposta.valorMinimo) {
+        toast('O valor máximo está abaixo do mínimo', { variante: 'erro' });
+        return;
+      }
+
+      alvo.disabled = true;
+
+      const linhas = CATALOGO
+        .filter((c) => resposta.fornece.has(c.chave))
+        .map((c) => ({
+          nome: c.rotulo,
+          palavrasChave: c.palavrasChave,
+          palavrasExcluidas: c.palavrasExcluidas,
+        }));
+
+      try {
+        await salvarEmpresa({
+          estadosAtuacao: [...resposta.regiao],
+          modalidades: [...resposta.modalidades],
+          valorMinimo: resposta.valorMinimo,
+          valorMaximo: resposta.valorMaximo,
+          linhas,
+        });
+      } catch (erro) {
+        alvo.disabled = false;
+        toast('Não foi possível salvar o perfil', { variante: 'erro', sub: erro.message });
+        return;
+      }
+
       comCarregamento(
         {
-          texto: 'Criando o perfil da sua empresa…',
+          texto: 'Montando o seu radar…',
           etapas: [
-            'Consultando CNAEs e porte',
-            'Montando o seu radar',
-            'Buscando oportunidades abertas',
+            'Gravando o perfil da empresa',
+            'Preparando a próxima varredura',
+            'Abrindo o painel',
           ],
-          duracao: 2800,
+          duracao: 2200,
         },
         () => {
           irPara('/painel');
-          toast('Perfil criado', {
+          toast('Perfil salvo', {
             variante: 'sucesso',
-            sub: 'Encontramos 23 oportunidades abertas compatíveis com o que você declarou.',
+            sub: `${linhas.length} linha${linhas.length === 1 ? '' : 's'} de fornecimento e ${resposta.regiao.size} estado${resposta.regiao.size === 1 ? '' : 's'} declarados.`,
           });
         },
       );

@@ -21,7 +21,7 @@ import { comCarregamento } from '../ui/carregando.js';
 import { irPara } from '../lib/router.js';
 import { entrarNaConta, reenviarConfirmacao, primeiroNome, destinoAposEntrar } from '../lib/sessao.js';
 import { emDemonstracao } from '../lib/config.js';
-import { sincronizarFavoritos } from '../dados/index.js';
+import { sincronizarFavoritos, obterEmpresa } from '../dados/index.js';
 
 export default {
   titulo: 'Entrar',
@@ -96,6 +96,13 @@ export default {
         await entrarNaConta({ email, senha });
         await sincronizarFavoritos().catch(() => null);
 
+        // Perfil sem linha de fornecimento é conta recém-criada: a
+        // triagem ainda não tem com o que comparar edital nenhum.
+        // Mandar para o painel vazio seria entregar um radar
+        // desligado e deixar o usuário descobrir sozinho por quê.
+        const perfil = await obterEmpresa().catch(() => null);
+        const primeiroAcesso = perfil !== null && (perfil.linhas ?? []).length === 0;
+
         // A cortina só entra depois da autenticação dar certo. Se
         // ela cobrisse a espera, um erro de senha apareceria
         // depois de dois segundos de animação — a espera precisa
@@ -107,7 +114,7 @@ export default {
             duracao: 1500,
           },
           () => {
-            irPara(destinoAposEntrar());
+            irPara(primeiroAcesso ? '/onboarding' : destinoAposEntrar());
             toast(`Bem-vindo de volta, ${primeiroNome()}`, { variante: 'sucesso' });
           },
         );

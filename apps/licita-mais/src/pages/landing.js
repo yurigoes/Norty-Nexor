@@ -47,7 +47,7 @@ export default {
       <a href="#como-funciona">Como funciona</a>
       <a href="#/entrar">Entrar</a>
     </nav>
-    <a class="btn -gradiente" href="#/onboarding">Começar agora</a>
+    <a class="btn -gradiente" href="#/criar-conta">Começar agora</a>
   </header>
 
   <!-- Herói -->
@@ -72,7 +72,7 @@ export default {
         </p>
 
         <div class="heroi-acoes">
-          <a class="btn -gradiente -lg" href="#/onboarding">
+          <a class="btn -gradiente -lg" href="#/criar-conta">
             Começar agora ${raw(icone('seta_dir'))}
           </a>
           <a class="btn -secundario -lg" href="#/painel">
@@ -241,7 +241,7 @@ export default {
           <p>Cadastre o perfil da sua empresa e veja o que já está aberto para você.</p>
           <div class="linha" style="justify-content: center; gap: var(--e-3); margin-top: var(--e-8);
             flex-wrap: wrap">
-            <a class="btn -lg" href="#/onboarding"
+            <a class="btn -lg" href="#/criar-conta"
               style="background: var(--branco); color: var(--azul-900)">
               Começar agora ${raw(icone('seta_dir'))}
             </a>
@@ -261,7 +261,7 @@ export default {
         <a href="#recursos">Recursos</a>
         <a href="#como-funciona">Como funciona</a>
         <a href="#/entrar">Entrar</a>
-        <a href="#/onboarding">Criar conta</a>
+        <a href="#/criar-conta">Criar conta</a>
       </nav>
       <p class="tenue" style="font-size: var(--t-micro)">
         © ${new Date().getFullYear()} LICITA+

@@ -88,6 +88,17 @@ export class AuthController {
     res.clearCookie(COOKIE_REFRESH, { path: '/', domain: config.cookie.dominio });
   }
 
+  @Post('sair-de-tudo')
+  @HttpCode(200)
+  async sairDeTudo(
+    @Usuario() usuario: UsuarioRequisicao,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const resultado = await this.auth.sairDeTudo(usuario.id);
+    res.clearCookie(COOKIE_REFRESH, { path: '/', domain: config.cookie.dominio });
+    return resultado;
+  }
+
   @Post('esqueci-senha')
   @Publica()
   @HttpCode(200)
