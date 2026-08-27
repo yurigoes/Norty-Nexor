@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { EsqueletoLista, ProvedorAvisos } from './components';
 import { ProvedorSessao } from './app/sessao';
 import { Apresentacao } from './apresentacao/Apresentacao';
@@ -55,9 +55,16 @@ const AdminChaves = lazy(() => import('./admin/Admin').then((m) => ({ default: m
  * — misturá-la com o aplicativo do cliente seria a forma mais fácil de,
  * um dia, vazar dado de uma organização para outra.
  */
+/**
+ * O build autocontido roda como arquivo único, sem servidor para
+ * reescrever a URL: ali a navegação vai por hash. No build normal, com
+ * a API servindo o `index.html` em qualquer caminho, a URL fica limpa.
+ */
+const Roteador = import.meta.env.VITE_STANDALONE === 'true' ? HashRouter : BrowserRouter;
+
 export function App() {
   return (
-    <BrowserRouter>
+    <Roteador>
       <ProvedorSessao>
         <ProvedorAvisos>
           {/* O esqueleto tem a altura do conteúdo que substitui, para a
@@ -109,6 +116,6 @@ export function App() {
           </Suspense>
         </ProvedorAvisos>
       </ProvedorSessao>
-    </BrowserRouter>
+    </Roteador>
   );
 }

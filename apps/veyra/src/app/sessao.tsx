@@ -71,6 +71,10 @@ function gravarArmazenado(chave: string, valor: string): void {
 
 export function ProvedorSessao({ children }: { children: ReactNode }) {
   const [papel, setPapel] = useState<RoleKey>(() => (lerArmazenado(CHAVE_PAPEL) as RoleKey) ?? 'administrador');
+  /* O escuro é o padrão mesmo quando o sistema do leitor está claro: no
+     VEYRA ele não é uma preferência de acessibilidade, é a superfície
+     onde o dado brilha e a marca se lê. Quem preferir claro alterna na
+     barra superior, e a escolha fica guardada. */
   const [tema, setTema] = useState<Tema>(() => (lerArmazenado(CHAVE_TEMA) as Tema) ?? 'escuro');
   const [versaoDados, setVersaoDados] = useState(1);
 
