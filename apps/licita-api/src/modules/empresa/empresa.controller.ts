@@ -8,8 +8,8 @@
    existe.
    ========================================================= */
 
-import { Body, Controller, Get, Put } from '@nestjs/common';
-import { IsArray, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { Body, Controller, Get, Put, Query } from '@nestjs/common';
+import { IsArray, IsInt, IsNumber, IsOptional, IsString, Length, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { EmpresaId } from '../../common/decorators';
@@ -24,6 +24,10 @@ class PerfilDto {
   @IsOptional() @IsString() @MaxLength(200) razaoSocial?: string;
   @IsOptional() @IsString() @MaxLength(120) nomeFantasia?: string;
   @IsOptional() @IsString() @MaxLength(4) porte?: string;
+  @IsOptional() @IsString() @MaxLength(120) municipio?: string;
+  @IsOptional() @IsString() @Matches(/^\d{7}$/, { message: 'Código IBGE deve ter 7 dígitos.' })
+  municipioIbge?: string;
+  @IsOptional() @IsString() @Length(2, 2) uf?: string;
 
   @IsOptional() @IsArray() @IsString({ each: true }) municipiosRegiao?: string[];
   @IsOptional() @IsArray() @IsString({ each: true }) estadosAtuacao?: string[];
@@ -50,6 +54,25 @@ export class EmpresaController {
     });
 
     return { ...serializar(empresa), completude: completude(empresa) };
+  }
+
+  /**
+   * Municípios disponíveis para escolher no perfil. Vêm do que já
+   * foi ingerido, não de uma tabela do IBGE embarcada: a lista
+   * relevante é a dos municípios que de fato publicam licitação na
+   * região, e ela se mantém sozinha a cada varredura.
+   */
+  @Get('municipios')
+  async municipios(@Query('uf') uf?: string) {
+    const linhas = await this.prisma.licitacao.findMany({
+      where: { ...(uf ? { uf: uf.toUpperCase() } : {}), municipioIbge: { not: null } },
+      select: { municipio: true, municipioIbge: true, uf: true },
+      distinct: ['municipioIbge'],
+      orderBy: { municipio: 'asc' },
+      take: 600,
+    });
+
+    return linhas.map((l) => ({ nome: l.municipio, ibge: l.municipioIbge, uf: l.uf }));
   }
 
   @Put()
@@ -107,7 +130,7 @@ function serializar(empresa: Record<string, unknown>) {
  */
 function completude(empresa: {
   razaoSocial: string;
-  municipioIbge: string;
+  municipioIbge: string | null;
   municipiosRegiao: string[];
   estadosAtuacao: string[];
   modalidades: number[];

@@ -111,7 +111,7 @@ export class AuthService {
           nomeFantasia: dto.nomeFantasia?.trim() || null,
           cnpj,
           uf: dto.uf.toUpperCase(),
-          municipioIbge: dto.municipioIbge,
+          municipio: dto.municipio.trim(),
           estadosAtuacao: [dto.uf.toUpperCase()],
         },
       });

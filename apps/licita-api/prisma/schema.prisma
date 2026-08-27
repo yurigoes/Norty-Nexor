@@ -56,7 +56,13 @@ model Empresa {
   porte         PorteEmpresa @default(me)
 
   uf            String       @db.Char(2)
-  municipioIbge String       @db.Char(7)
+  /// Nome do município sede, como a empresa o escreve.
+  municipio     String?
+  /// Código IBGE da sede. Opcional porque ninguém sabe o seu de cor:
+  /// o cadastro pede a cidade por nome e o código é preenchido depois,
+  /// no perfil, escolhendo da lista dos municípios que publicam. Sem
+  /// ele a triagem apenas não pontua o anel "mesmo município".
+  municipioIbge String?      @db.Char(7)
   /// Códigos IBGE dos municípios vizinhos que a empresa atende.
   municipiosRegiao String[]  @default([])
   estadosAtuacao   String[]  @default([])

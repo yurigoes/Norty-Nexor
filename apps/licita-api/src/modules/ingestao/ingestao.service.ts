@@ -245,7 +245,8 @@ type EmpresaComLinhas = {
   cnpj: string;
   porte: string;
   uf: string;
-  municipioIbge: string;
+  municipio: string | null;
+  municipioIbge: string | null;
   municipiosRegiao: string[];
   valorMinimo: unknown;
   valorMaximo: unknown;
@@ -261,7 +262,9 @@ function paraPerfil(empresa: EmpresaComLinhas): PerfilEmpresa {
     cnpj: empresa.cnpj,
     porte: empresa.porte as PerfilEmpresa['porte'],
     uf: empresa.uf,
-    municipioIbge: empresa.municipioIbge,
+    // Sem código IBGE a triagem só não pontua o anel "mesmo
+    // município"; região e UF continuam valendo.
+    municipioIbge: empresa.municipioIbge ?? '',
     municipiosRegiao: empresa.municipiosRegiao,
     linhas: empresa.linhas.map((l) => ({
       nome: l.nome,

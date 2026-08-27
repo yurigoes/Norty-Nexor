@@ -33,8 +33,14 @@ export class CadastrarDto {
   @IsString() @Length(2, 2, { message: 'UF deve ter duas letras.' })
   uf!: string;
 
-  @IsString() @Matches(/^\d{7}$/, { message: 'Código IBGE do município deve ter 7 dígitos.' })
-  municipioIbge!: string;
+  /**
+   * Cidade por nome. Pedir o código IBGE no cadastro travaria a
+   * criação de conta numa informação que o dono da empresa não
+   * tem à mão — ele é escolhido depois, no perfil, a partir dos
+   * municípios que de fato publicam licitação.
+   */
+  @IsString() @MinLength(2) @MaxLength(120)
+  municipio!: string;
 }
 
 export class EntrarDto {
