@@ -52,9 +52,18 @@ RUN npx prisma generate && npx nest build
 
 # Poda as dependências de desenvolvimento depois do build: o
 # runtime não precisa do compilador nem do CLI do Nest, e eles
-# são a maior parte do peso da imagem.
+# são a maior parte do peso da imagem. O CLI do Prisma fica —
+# está em `dependencies`, não em `devDependencies`, porque a
+# subida do container roda `prisma migrate deploy`.
 WORKDIR /app
 RUN npm prune --omit=dev
+
+# Com workspaces o npm eleva tudo para /app/node_modules, e
+# /app/servidor/node_modules pode simplesmente não existir — foi o
+# que quebrou o build antes. A pasta é criada para o COPY do
+# estágio seguinte ter sempre o que copiar, e continua servindo
+# caso um conflito de versão force uma instalação local.
+RUN mkdir -p /app/servidor/node_modules
 
 # ---------------------------------------------------------
 

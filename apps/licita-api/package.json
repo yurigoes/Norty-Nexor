@@ -2,7 +2,7 @@
   "name": "@nexor/licita-api",
   "version": "0.1.0",
   "private": true,
-  "description": "API do LICITA+ — contas, perfil da empresa, ingestão do PNCP e triagem",
+  "description": "API do LICITA+ \u2014 contas, perfil da empresa, ingest\u00e3o do PNCP e triagem",
   "scripts": {
     "build": "prisma generate && nest build",
     "dev": "prisma generate && nest start --watch",
@@ -33,6 +33,7 @@
     "cookie-parser": "^1.4.7",
     "helmet": "^8.1.0",
     "nodemailer": "^7.0.13",
+    "prisma": "^6.16.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
   },
@@ -43,7 +44,6 @@
     "@types/express": "^5.0.3",
     "@types/node": "^24.13.3",
     "@types/nodemailer": "^7.0.12",
-    "prisma": "^6.16.2",
     "tsx": "^4.20.6",
     "typescript": "~6.0.2"
   }
