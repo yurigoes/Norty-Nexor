@@ -29,6 +29,23 @@ function explicar(erro: unknown): string[] {
   const bruto = erro instanceof Error ? erro.message : String(erro);
   const codigo = (erro as { code?: string })?.code ?? '';
 
+  // Primeiro, porque é a hipótese mais específica — e porque
+  // casar pela frase erra menos que adivinhar o código: cada
+  // servidor recusa remetente com um número diferente (501, 550,
+  // 553, 5.7.1), mas todos dizem a mesma coisa em inglês.
+  if (/not allowed to send|from this address|sender address rejected|not owned by user|sender verify failed|553/i.test(bruto)) {
+    return [
+      'O servidor recusou o REMETENTE, não o destinatário.',
+      `Autenticado como  ${config.smtp.usuario}`,
+      `Enviando como     ${config.smtp.remetente}`,
+      '',
+      'Quase todo relay exige que os dois batam. Ajuste SMTP_FROM',
+      'no .env para o endereço autenticado, e recrie o container:',
+      `    SMTP_FROM=LICITA+ <${config.smtp.usuario}>`,
+      '    docker compose up -d licita-api',
+    ];
+  }
+
   if (/EAUTH|535|534|530/.test(bruto + codigo)) {
     return [
       'O servidor recusou as credenciais.',
@@ -77,18 +94,6 @@ function explicar(erro: unknown): string[] {
     ];
   }
 
-  // Servidor autenticado como um endereço, enviando como outro:
-  // a maioria dos relays recusa, e a mensagem cita o remetente.
-  if (/553|550.*(sender|from)|not owned by user|Sender address rejected/i.test(bruto)) {
-    return [
-      'O servidor recusou o REMETENTE, não o destinatário.',
-      `Você autentica como "${config.smtp.usuario}" mas envia como`,
-      `"${config.smtp.remetente}".`,
-      'Quase todo relay exige que os dois batam. Ajuste SMTP_FROM',
-      'para o endereço autenticado.',
-    ];
-  }
-
   if (/certificate|self.signed|unable to verify/i.test(bruto)) {
     return [
       'O certificado do servidor não foi aceito.',
@@ -119,6 +124,20 @@ async function principal(): Promise<void> {
     console.log('      docker compose up -d licita-api');
     process.exitCode = 1;
     return;
+  }
+
+  // O remetente que viaja no envelope é o endereço dentro de
+  // SMTP_FROM, não o nome de exibição. Comparar com o usuário
+  // autenticado antecipa a recusa mais provável em vez de esperar
+  // o servidor negar.
+  const enderecoDoRemetente = (config.smtp.remetente.match(/<([^>]+)>/)?.[1] ?? config.smtp.remetente).trim();
+
+  if (config.smtp.usuario && enderecoDoRemetente.toLowerCase() !== config.smtp.usuario.toLowerCase()) {
+    console.log(amarelo('  SMTP_FROM não bate com SMTP_USER:'));
+    console.log(amarelo(`    autenticado como  ${config.smtp.usuario}`));
+    console.log(amarelo(`    enviando como     ${enderecoDoRemetente}`));
+    console.log(amarelo('  Quase todo relay recusa isso. Se o envio falhar, é aqui.'));
+    console.log('');
   }
 
   if (!config.smtp.usuario || !config.smtp.senha) {

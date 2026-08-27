@@ -103,6 +103,7 @@ export function carregarConfig(): Config {
 
   const smtpHost = (process.env.SMTP_HOST ?? '').trim();
   const smtpPorta = Number(texto('SMTP_PORT') ?? 465);
+  const smtpUsuario = (process.env.SMTP_USER ?? '').trim();
 
   cache = {
     nodeEnv,
@@ -144,9 +145,14 @@ export function carregarConfig(): Config {
       seguro: texto('SMTP_SECURE') === undefined
         ? smtpPorta === 465
         : texto('SMTP_SECURE') === 'true',
-      usuario: process.env.SMTP_USER ?? '',
+      usuario: smtpUsuario,
       senha: process.env.SMTP_PASS ?? '',
-      remetente: process.env.SMTP_FROM ?? 'LICITA+ <nao-responda@norty.com.br>',
+      // Sem SMTP_FROM, o remetente é o próprio usuário autenticado.
+      // Um endereço fixo aqui seria um padrão capaz de estar
+      // errado: o relay recusa quem envia como um e autentica como
+      // outro, e a falha só aparece no primeiro cadastro.
+      remetente: texto('SMTP_FROM')
+        ?? (smtpUsuario ? `LICITA+ <${smtpUsuario}>` : 'LICITA+ <nao-responda@norty.com.br>'),
     },
 
     pncp: {
