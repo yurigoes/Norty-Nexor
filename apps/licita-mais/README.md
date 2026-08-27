@@ -1,11 +1,22 @@
 # LICITA+
 
-Front-end da plataforma de inteligência para oportunidades públicas.
+Aplicativo da plataforma de inteligência para oportunidades públicas.
 **Inteligência para oportunidades públicas.**
 
-> Protótipo comercial. Todos os dados são fictícios e a interface diz isso
-> em tela — um protótipo que insinua dado real cria expectativa que o
-> produto ainda não pode cumprir.
+Conta de verdade, banco de verdade, licitação de verdade: as telas leem a
+API (`@nexor/licita-api`), que ingere o **PNCP** e tria cada contratação
+contra o perfil da empresa.
+
+> **Duas fontes de dados.** Sem API respondendo, o aplicativo cai num
+> banco de demonstração em memória e **avisa em tela**, numa faixa que
+> ninguém consegue não ver. O pior desfecho deste produto é alguém
+> decidir preço sobre dado fictício achando que é edital publicado — por
+> isso o modo de demonstração é anunciado, nunca silencioso.
+>
+> A escolha é resolvida uma vez, na subida, perguntando ao healthcheck se
+> há API. O padrão não é fixo no HTML de propósito: se fosse
+> "demonstração" e a substituição no deploy falhasse, produção serviria
+> dado fictício em silêncio.
 
 ## Rodar
 
@@ -45,15 +56,24 @@ src/
     format.js         moeda, data, prazo, CNPJ, faixa de score — tudo pt-BR
     icons.js          conjunto de ícones SVG
     router.js         rotas por hash
-    store.js          estado com assinatura + localStorage
+    store.js          preferências locais: tema, modo de lista, lidas
     charts.js         área, barras, colunas, empilhada + tooltip
+    tabelas.js        modalidades do PNCP, UFs, ordenações
+    config.js         qual fonte de dados, resolvida uma vez na subida
+    http.js           porta única para a API: token, renovação, erros
+    sessao.js         quem está logado; entrar, sair, restaurar
+  dados/
+    index.js          o que as páginas importam — não sabem quem responde
+    api.js            resposta da API → cartão que as telas desenham
+    demo.js           mesma interface, servida do banco fictício
   ui/
     brand.js          logo em SVG, nas cinco variantes
     primitives.js     Button, Input, Card, Modal, Drawer, Toast, Tabs…
     domain.js         CompatibilityScore, OpportunityCard, StatCard…
-  data/mock.js        órgãos, licitações, monitoramentos, participações
-  pages/              14 telas
-  app.js              shell, rotas e ações globais
+    autenticacao.js   moldura comum das telas de conta
+  data/mock.js        banco de demonstração — só `dados/demo.js` o importa
+  pages/              18 telas
+  app.js              shell, rotas, guarda e ações globais
 scripts/
   servidor.mjs        servidor estático de desenvolvimento
   build-previa.mjs    empacotador para arquivo único
@@ -61,6 +81,32 @@ scripts/
 ```
 
 ## Decisões que sustentam o resto
+
+**As páginas não sabem de onde vem o dado.** Elas importam de `dados/`,
+e lá dentro `api.js` e `demo.js` implementam a mesma interface. Foi o
+que permitiu ligar a API sem reescrever quatorze telas — e é o que
+mantém a prévia navegável sem servidor. A tradução entre o que a API
+devolve e o cartão que a tela desenha mora num arquivo só: se cada
+página lesse `valorEstimado` e `encerramentoProposta` direto, trocar um
+nome de campo no servidor obrigaria a caçar quatorze arquivos.
+
+**O access token nunca é persistido.** Ele vive em memória, vale 15
+minutos e some ao fechar a aba. Guardar em `localStorage` entregaria a
+sessão a qualquer XSS. O que sobrevive ao refresh é o cookie `httpOnly`,
+que JavaScript não lê — e é ele que reergue a sessão na subida.
+
+**Renovação em fila única.** A API rotaciona o refresh token a cada uso:
+duas renovações simultâneas queimariam o token uma da outra e
+derrubariam a sessão. Dez requisições que recebam 401 juntas esperam a
+mesma promessa.
+
+**Esconder o item de menu é conveniência; a guarda é a proteção.** Rota
+protegida sem sessão redireciona para o login e guarda o destino — quem
+abriu um link de oportunidade volta para ela, não para o painel.
+
+**Filtro, ordenação e paginação acontecem no servidor.** Peneirar em
+memória funciona com trinta licitações e desmorona com trinta mil, que é
+o volume real de um mês de PNCP em três estados.
 
 **Cor semântica fora da paleta da marca.** Se azul, verde e amarelo são
 identidade, eles não podem *também* significar "ok", "atenção" e "erro" —
@@ -238,16 +284,77 @@ Depois recarregue o `cloudflared`. A ordem importa: a regra
 `service: http_status:404` tem que continuar sendo a última do
 `ingress`, senão ela engole tudo abaixo dela.
 
-### Sem banco, sem Redis
+### Dois serviços, uma pasta
 
-O LICITA+ hoje é front-end estático com dados de demonstração: não
-toca a infra compartilhada do CT 102. Quando ganhar API, a
-`DATABASE_URL` aponta para `192.168.15.72:5432` como os outros apps.
+O `docker-compose.yml` sobe **`licita-web`** (nginx) e **`licita-api`**
+(NestJS + Prisma). A API viaja dentro deste diretório, em `servidor/`, e
+o domínio compartilhado em `compartilhado/` — o `deploy-thor.sh` monta
+essa estrutura no host.
 
-### Por que a imagem não tem passo de build
+Não é organização caprichosa: no CT 103 o bind-mount é **por app**, e
+criar um mount novo exige reiniciar o container, derrubando Bolão,
+Central de Leads e Sorva junto. Uma pasta a mais aqui evita uma janela
+de manutenção lá.
+
+**A API não publica porta.** Só o nginx a alcança, pela rede interna do
+compose. É o que garante que não exista caminho até a API que não passe
+pelo mesmo domínio — e, portanto, pelo cookie de sessão.
+
+### Por que a API é servida em `/v1` do mesmo domínio
+
+O refresh token vive num cookie `httpOnly` com `SameSite=Lax`, que o
+navegador **não envia numa requisição entre sites**. Com a API num
+subdomínio (`api-licita.norty.com.br`), a sessão morreria a cada 15
+minutos e o F5 derrubaria todo mundo. A alternativa seria afrouxar o
+cookie para `SameSite=None` — trocar uma proteção real por conveniência
+de arranjo. Servir sob `/v1` resolve cookie e CORS de uma vez.
+
+### Banco e segredos
+
+Postgres da Norty, no CT 102 (`192.168.15.72:5432`). Antes do primeiro
+deploy:
+
+```sql
+CREATE DATABASE licita;
+CREATE USER licita WITH PASSWORD '...';
+GRANT ALL PRIVILEGES ON DATABASE licita TO licita;
+```
+
+Os segredos moram em `/srv/apps-fase1/licita-mais/.env`, **no host e
+nunca no repositório** — o `deploy-thor.sh` preserva esse arquivo a cada
+deploy justamente por isso. Veja `.env.example`; o mínimo é
+`DATABASE_URL` e `JWT_SECRET` (`openssl rand -base64 48`).
+
+A migração roda sozinha na subida do container, antes de servir: se
+falhar, o container morre em vez de atender contra um esquema errado.
+
+### A primeira carga não espera as 5h
+
+A varredura do PNCP é diária, de madrugada. Depois do primeiro deploy o
+painel estaria vazio até lá:
+
+```bash
+docker compose exec licita-api node dist/tarefas/ingestao.js
+docker compose exec licita-api node dist/tarefas/ingestao.js BA SE
+docker compose exec licita-api node dist/tarefas/ingestao.js --somente-avaliar
+```
+
+O último refaz só as notas, sem consultar o PNCP — é o que usar depois
+de mexer nas linhas de fornecimento do perfil.
+
+### Sem SMTP ninguém entra
+
+O cadastro é aberto e a conta nasce **pendente de confirmação**. Sem
+`SMTP_HOST` a API sobe, o cadastro responde certo e o link nunca sai — e
+sem confirmar o e-mail o login recusa. É o bloco do `.env` que separa
+"no ar" de "utilizável".
+
+### Por que a imagem do aplicativo não tem passo de build
 
 O app é HTML, CSS e módulos ES servidos como estão — o que roda em
-produção é exatamente o que está no disco. O primeiro estágio existe
+produção é exatamente o que está no disco. (A imagem da API tem, e
+precisa: TypeScript, Prisma e o domínio compartilhado são compilados
+antes de rodar.) O primeiro estágio existe
 só para rodar `verificar.mjs`: nome de topo duplicado, import sem
 extensão ou cor literal fora dos tokens impedem a imagem de ser gerada.
 
