@@ -38,7 +38,21 @@ function explicar(erro: unknown): string[] {
     ];
   }
 
-  if (/ETIMEDOUT|ECONNREFUSED|EHOSTUNREACH|ENETUNREACH/.test(bruto + codigo)) {
+  // Antes do teste de conectividade: na 465 sem TLS implícito, o
+  // servidor espera o handshake e o cliente espera a saudação. Dá
+  // timeout como se a porta estivesse fechada, mas a porta está
+  // aberta — o que está errado é o modo.
+  if (/Greeting never received|ETIMEDOUT/.test(bruto + codigo) && config.smtp.porta === 465 && !config.smtp.seguro) {
+    return [
+      'A porta 465 é TLS implícito, mas a conexão saiu em STARTTLS.',
+      'O servidor espera o handshake antes de qualquer texto, e os',
+      'dois lados ficam esperando um pelo outro.',
+      'A API deduz o modo pela porta — se está em STARTTLS aqui,',
+      'há um SMTP_SECURE=false explícito no .env. Remova a linha.',
+    ];
+  }
+
+  if (/ETIMEDOUT|ECONNREFUSED|EHOSTUNREACH|ENETUNREACH|Greeting never received/.test(bruto + codigo)) {
     return [
       `Não foi possível abrir conexão com ${config.smtp.host}:${config.smtp.porta}.`,
       'Ou a porta está fechada para este container, ou o host está errado.',
@@ -60,6 +74,18 @@ function explicar(erro: unknown): string[] {
       'A 465 é TLS implícito; a 587 é STARTTLS.',
       'A API deduz isso pela porta — só force SMTP_SECURE se o',
       'servidor fugir da convenção.',
+    ];
+  }
+
+  // Servidor autenticado como um endereço, enviando como outro:
+  // a maioria dos relays recusa, e a mensagem cita o remetente.
+  if (/553|550.*(sender|from)|not owned by user|Sender address rejected/i.test(bruto)) {
+    return [
+      'O servidor recusou o REMETENTE, não o destinatário.',
+      `Você autentica como "${config.smtp.usuario}" mas envia como`,
+      `"${config.smtp.remetente}".`,
+      'Quase todo relay exige que os dois batam. Ajuste SMTP_FROM',
+      'para o endereço autenticado.',
     ];
   }
 

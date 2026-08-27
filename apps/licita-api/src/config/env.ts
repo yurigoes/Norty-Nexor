@@ -69,6 +69,21 @@ function emSegundos(ttl: string): number {
   return { s: n, m: n * 60, h: n * 3600, d: n * 86400 }[achou[2] ?? 's'] ?? n;
 }
 
+/**
+ * Variável ausente e variável vazia são a mesma coisa aqui.
+ *
+ * A distinção parece acadêmica e não é: o docker-compose declara
+ * `SMTP_SECURE: ${SMTP_SECURE:-}`, que **define** a variável com
+ * string vazia quando o .env não a traz. Um `=== undefined`
+ * nunca dispara nesse arranjo, e a dedução pela porta —
+ * justamente o que evita a combinação que trava o envio — ficava
+ * morta em produção enquanto passava em qualquer teste local.
+ */
+const texto = (nome: string): string | undefined => {
+  const valor = process.env[nome]?.trim();
+  return valor === '' ? undefined : valor;
+};
+
 const lista = (valor: string | undefined): string[] =>
   (valor ?? '')
     .split(',')
@@ -86,8 +101,8 @@ export function carregarConfig(): Config {
     throw new Error('JWT_SECRET curto demais. Gere com: openssl rand -base64 48');
   }
 
-  const smtpHost = process.env.SMTP_HOST ?? '';
-  const smtpPorta = Number(process.env.SMTP_PORT ?? 465);
+  const smtpHost = (process.env.SMTP_HOST ?? '').trim();
+  const smtpPorta = Number(texto('SMTP_PORT') ?? 465);
 
   cache = {
     nodeEnv,
@@ -124,13 +139,11 @@ export function carregarConfig(): Config {
       // A porta decide o modo quando ninguém disse o contrário. A 465
       // é TLS implícito: o servidor espera o handshake antes de
       // qualquer texto. Tentar STARTTLS nela deixa os dois lados
-      // esperando um pelo outro até o timeout — e o sintoma é "o
-      // cadastro trava", nunca "o SMTP está errado". Deixar isso a
-      // cargo de uma segunda variável é convidar a combinação que
-      // não funciona.
-      seguro: process.env.SMTP_SECURE === undefined
+      // esperando um pelo outro até o timeout — e o sintoma é
+      // "Greeting never received", nunca "o modo está errado".
+      seguro: texto('SMTP_SECURE') === undefined
         ? smtpPorta === 465
-        : process.env.SMTP_SECURE === 'true',
+        : texto('SMTP_SECURE') === 'true',
       usuario: process.env.SMTP_USER ?? '',
       senha: process.env.SMTP_PASS ?? '',
       remetente: process.env.SMTP_FROM ?? 'LICITA+ <nao-responda@norty.com.br>',
