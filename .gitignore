@@ -46,3 +46,7 @@ infra/.env
 apps/api/.env
 apps/web/.env
 !**/.env.example
+
+# Perfil do radar de licitações: tem CNPJ e estratégia comercial.
+# O exemplo comentado é versionado, o preenchido não.
+apps/licitacoes/perfil.json

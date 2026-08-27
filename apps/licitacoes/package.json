@@ -1,0 +1,21 @@
+{
+  "name": "@nexor/licitacoes",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Radar de licitações públicas: encontra, tria e monitora oportunidades no PNCP",
+  "type": "module",
+  "bin": {
+    "nexor-radar": "./src/cli.ts"
+  },
+  "scripts": {
+    "radar": "npm run build -w @nexor/licitacoes-shared --silent && node src/cli.ts",
+    "test": "npm run build -w @nexor/licitacoes-shared --silent && node --test \"test/**/*.test.ts\"",
+    "lint": "npm run build -w @nexor/licitacoes-shared --silent && tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@nexor/licitacoes-shared": "*"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.2"
+  }
+}

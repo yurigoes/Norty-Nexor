@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "verbatimModuleSyntax": true,
+    "types": ["node"],
+
+    // O app não compila: o Node 22 executa `src/` direto, com
+    // remoção de tipos nativa. O TypeScript aqui é só verificador,
+    // então `noEmit` e imports com extensão `.ts` real.
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src", "test"]
+}

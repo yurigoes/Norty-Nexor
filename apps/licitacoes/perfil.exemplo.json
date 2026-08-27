@@ -1,0 +1,61 @@
+{
+  "_leia_me": "Copie este arquivo para perfil.json e troque TODOS os valores pelos da sua empresa. Os códigos IBGE têm 7 dígitos e você encontra em https://www.ibge.gov.br/explica/codigos-dos-municipios.php",
+
+  "razaoSocial": "Sua Empresa LTDA",
+  "cnpj": "00.000.000/0001-00",
+  "porte": "me",
+
+  "uf": "SP",
+  "municipioIbge": "3550308",
+  "municipiosRegiao": ["3548708", "3509502", "3552205"],
+
+  "_sobre_linhas": "Cada linha é uma coisa que você vende. As palavras-chave casam por palavra inteira, sem acento e sem caixa — 'informática' acha 'INFORMATICA'. Expressões de várias palavras também funcionam. As palavras excluídas derrubam a oportunidade mesmo que outra linha tenha casado.",
+  "linhas": [
+    {
+      "nome": "Informática e equipamentos",
+      "palavrasChave": [
+        "notebook",
+        "computador",
+        "desktop",
+        "informática",
+        "impressora",
+        "monitor",
+        "nobreak",
+        "periféricos"
+      ],
+      "palavrasExcluidas": ["locação", "comodato"]
+    },
+    {
+      "nome": "Software e serviços de TI",
+      "palavrasChave": [
+        "software",
+        "sistema de gestão",
+        "licença de uso",
+        "desenvolvimento de sistema",
+        "hospedagem",
+        "suporte técnico"
+      ]
+    },
+    {
+      "nome": "Material de escritório",
+      "palavrasChave": [
+        "material de escritório",
+        "material de expediente",
+        "papel a4",
+        "caneta",
+        "toner",
+        "cartucho"
+      ]
+    }
+  ],
+
+  "_sobre_valores": "valorMinimo é o piso abaixo do qual participar não paga o esforço. valorMaximo é o teto que seu capital de giro aguenta — lembre que em licitação você entrega primeiro e recebe depois.",
+  "valorMinimo": 5000,
+  "valorMaximo": 80000,
+
+  "_sobre_modalidades": "6 = Pregão Eletrônico, 8 = Dispensa de Licitação, 12 = Credenciamento. Estas três são as portas de entrada. Lista vazia ou campo ausente usa exatamente essas.",
+  "modalidades": [6, 8, 12],
+
+  "_sobre_preparo": "Quantos dias você precisa, na prática, para montar proposta e reunir certidões. Quem já tem SICAF e certidões válidas responde em 1 ou 2; quem depende do contador, coloque 5.",
+  "diasMinimosPreparo": 3
+}
