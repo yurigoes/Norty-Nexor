@@ -1,80 +1,51 @@
 /* =========================================================
    LICITA+ — Oportunidades
    ---------------------------------------------------------
-   Busca, filtro, ordenação e alternância lista/tabela sobre a
-   base de demonstração. Tudo acontece em memória e repinta só
-   a região de resultados — o cabeçalho e os filtros não
-   piscam a cada tecla.
+   Busca, filtro, ordenação e alternância lista/tabela.
+
+   Filtrar, ordenar e paginar acontecem **no servidor**. A
+   tentação seria trazer tudo e peneirar aqui, o que funciona
+   com trinta licitações e desmorona com trinta mil — que é o
+   volume real de um mês de PNCP em três estados. A nota já
+   está indexada por `(empresaId, nota)` no banco; ordenar lá
+   é uma consulta, ordenar aqui seria carregar a base inteira
+   na memória do navegador a cada clique.
 
    O estado da tela mora num objeto só (`filtro`), e é ele que
-   a URL reflete. Isso é o que permite salvar uma pesquisa e
-   voltar a ela depois.
+   vira querystring. É o que permite salvar a pesquisa como
+   monitoramento com exatamente o que está em tela.
    ========================================================= */
 
 import { html, raw, $, $$, ao, aoClicarEm, debounce } from '../lib/dom.js';
 import { icone } from '../lib/icons.js';
-import { moeda, normalizar, diasAte } from '../lib/format.js';
+import { moeda } from '../lib/format.js';
 import { cartaoOportunidade, linhaOportunidade, cabecalhoPagina } from '../ui/domain.js';
-import { busca, seletor, botao, vazio, paginacao, selo, abrirGaveta, fecharGaveta, toast, caixaSelecao, skeletonCartao } from '../ui/primitives.js';
-import { licitacoes, modalidades, categorias, orgaos } from '../data/mock.js';
+import { busca, seletor, vazio, paginacao, abrirGaveta, fecharGaveta, toast, skeletonCartao, campo } from '../ui/primitives.js';
 import { obter, definir } from '../lib/store.js';
+import { listarOportunidades, criarMonitoramento } from '../dados/index.js';
+import { MODALIDADES_PNCP, UFS, ORDENS_LISTA, nomeModalidade } from '../lib/tabelas.js';
 
-const POR_PAGINA = 6;
+const POR_PAGINA = 8;
 
 const filtro = {
   termo: '',
-  modalidade: '',
-  categoria: '',
+  modalidadeCodigo: '',
   uf: '',
-  orgao: '',
   valorMin: '',
   valorMax: '',
   compatMin: 0,
-  apenasFavoritos: false,
   ordem: 'compatibilidade',
   pagina: 1,
 };
 
-const ORDENS = [
-  { valor: 'compatibilidade', rotulo: 'Maior compatibilidade' },
-  { valor: 'prazo', rotulo: 'Encerra primeiro' },
-  { valor: 'valor-desc', rotulo: 'Maior valor' },
-  { valor: 'valor-asc', rotulo: 'Menor valor' },
-  { valor: 'recente', rotulo: 'Publicadas recentemente' },
-];
+/** Última resposta do servidor — o que a tela está mostrando. */
+let ultima = { itens: [], total: 0, pagina: 1, totalPaginas: 1 };
+let raizPagina = null;
 
-/** Aplica todos os filtros e a ordenação. Função pura sobre a base. */
-export function aplicar(base = licitacoes, f = filtro) {
-  const termo = normalizar(f.termo);
+const paraConsulta = () => ({ ...filtro, tamanho: POR_PAGINA });
 
-  let saida = base.filter((l) => {
-    if (termo) {
-      const alvo = normalizar(`${l.objeto} ${l.orgao.nome} ${l.categoria} ${l.numero} ${l.orgao.cidade}`);
-      if (!alvo.includes(termo)) return false;
-    }
-    if (f.modalidade && l.modalidade !== f.modalidade) return false;
-    if (f.categoria && l.categoria !== f.categoria) return false;
-    if (f.uf && l.orgao.uf !== f.uf) return false;
-    if (f.orgao && l.orgao.id !== f.orgao) return false;
-    if (f.valorMin && l.valor < Number(f.valorMin)) return false;
-    if (f.valorMax && l.valor > Number(f.valorMax)) return false;
-    if (f.compatMin && l.compatibilidade < f.compatMin) return false;
-    return true;
-  });
+/* ---------- Chips do que está filtrado ---------- */
 
-  const ordenadores = {
-    compatibilidade: (a, b) => b.compatibilidade - a.compatibilidade,
-    prazo: (a, b) => new Date(a.encerramento) - new Date(b.encerramento),
-    'valor-desc': (a, b) => b.valor - a.valor,
-    'valor-asc': (a, b) => a.valor - b.valor,
-    recente: (a, b) => new Date(b.abertura) - new Date(a.abertura),
-  };
-
-  saida = [...saida].sort(ordenadores[f.ordem] ?? ordenadores.compatibilidade);
-  return saida;
-}
-
-/** Chips do que está filtrado — e o botão de tirar cada um. */
 function chipsAtivos() {
   const chips = [];
   const add = (chave, texto) =>
@@ -83,10 +54,8 @@ function chipsAtivos() {
         ${icone('fechar')}</button></span>`);
 
   if (filtro.termo) add('termo', `"${filtro.termo}"`);
-  if (filtro.modalidade) add('modalidade', filtro.modalidade);
-  if (filtro.categoria) add('categoria', filtro.categoria);
+  if (filtro.modalidadeCodigo) add('modalidadeCodigo', nomeModalidade(Number(filtro.modalidadeCodigo)));
   if (filtro.uf) add('uf', filtro.uf);
-  if (filtro.orgao) add('orgao', orgaos.find((o) => o.id === filtro.orgao)?.sigla ?? filtro.orgao);
   if (filtro.valorMin) add('valorMin', `a partir de ${moeda(Number(filtro.valorMin))}`);
   if (filtro.valorMax) add('valorMax', `até ${moeda(Number(filtro.valorMax))}`);
   if (filtro.compatMin) add('compatMin', `${filtro.compatMin}%+ compatível`);
@@ -99,21 +68,30 @@ function chipsAtivos() {
   </div>`;
 }
 
-function corpoResultados() {
-  const resultados = aplicar();
-  const totalPaginas = Math.max(1, Math.ceil(resultados.length / POR_PAGINA));
-  const pagina = Math.min(filtro.pagina, totalPaginas);
-  const fatia = resultados.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
-  const modo = obter().modoLista;
+/* ---------- Resultados ---------- */
 
-  if (resultados.length === 0) {
-    return vazio({
-      nomeIcone: 'arquivo_x',
-      titulo: 'Nenhuma oportunidade encontrada',
-      texto: 'Tente alterar seus filtros ou realizar uma nova busca. Você também pode ampliar a faixa de valor ou incluir outros estados.',
-      acao: `<button class="btn -secundario" data-acao="limpar-tudo">Limpar filtros</button>`,
-    });
+const temFiltro = () =>
+  Boolean(filtro.termo || filtro.modalidadeCodigo || filtro.uf || filtro.valorMin
+    || filtro.valorMax || filtro.compatMin);
+
+function corpoResultados() {
+  if (ultima.itens.length === 0) {
+    return temFiltro()
+      ? vazio({
+          nomeIcone: 'arquivo_x',
+          titulo: 'Nenhuma oportunidade com esses filtros',
+          texto: 'Amplie a faixa de valor, baixe a compatibilidade mínima ou inclua outros estados.',
+          acao: '<button class="btn -secundario" data-acao="limpar-tudo">Limpar filtros</button>',
+        })
+      : vazio({
+          nomeIcone: 'radar',
+          titulo: 'Ainda não há oportunidades avaliadas',
+          texto: 'A varredura dos portais roda todo dia de madrugada. Enquanto isso, completar o perfil da empresa faz a próxima rodada render mais.',
+          acao: '<a class="btn -primario" href="#/empresa">Completar perfil</a>',
+        });
   }
+
+  const modo = obter().modoLista;
 
   const lista =
     modo === 'tabela'
@@ -122,39 +100,76 @@ function corpoResultados() {
             <th>Objeto</th><th>Modalidade</th><th class="-num">Valor estimado</th>
             <th>Encerramento</th><th>Compatibilidade</th><th></th>
           </tr></thead>
-          <tbody>${fatia.map(linhaOportunidade).join('')}</tbody>
+          <tbody>${ultima.itens.map(linhaOportunidade).join('')}</tbody>
         </table></div></div>`
-      : `<div class="pilha">${fatia.map((l) => cartaoOportunidade(l)).join('')}</div>`;
+      : `<div class="pilha">${ultima.itens.map((l) => cartaoOportunidade(l)).join('')}</div>`;
 
   return `${lista}
     <div style="margin-top: var(--e-5)">
-      ${paginacao({ pagina, totalPaginas, totalItens: resultados.length, porPagina: POR_PAGINA })}
+      ${paginacao({
+        pagina: ultima.pagina,
+        totalPaginas: ultima.totalPaginas,
+        totalItens: ultima.total,
+        porPagina: POR_PAGINA,
+      })}
     </div>`;
+}
+
+/**
+ * Busca no servidor e repinta só a região de resultados. O
+ * cabeçalho e os filtros não piscam a cada tecla — e o contador
+ * de requisições evita que uma resposta lenta de duas teclas
+ * atrás sobrescreva a atual.
+ */
+let consultaAtualId = 0;
+
+async function repintar() {
+  if (!raizPagina) return;
+
+  const minha = ++consultaAtualId;
+  const alvo = $('#resultados', raizPagina);
+  alvo.setAttribute('aria-busy', 'true');
+  alvo.style.opacity = '.5';
+
+  try {
+    const resposta = await listarOportunidades(paraConsulta());
+    if (minha !== consultaAtualId) return;
+    ultima = resposta;
+  } catch (erro) {
+    if (minha !== consultaAtualId) return;
+    alvo.style.opacity = '';
+    alvo.removeAttribute('aria-busy');
+    alvo.innerHTML = vazio({
+      nomeIcone: 'alerta',
+      titulo: 'Não foi possível carregar',
+      texto: erro.message,
+    });
+    return;
+  }
+
+  alvo.style.opacity = '';
+  alvo.removeAttribute('aria-busy');
+  alvo.innerHTML = corpoResultados();
+  $('#chips', raizPagina).innerHTML = chipsAtivos();
+  $('#contagem', raizPagina).textContent = `${ultima.total} oportunidade${ultima.total === 1 ? '' : 's'}`;
 }
 
 /* ---------- Gaveta de filtros avançados ---------- */
 
 function gavetaFiltros() {
-  const ufs = [...new Set(orgaos.map((o) => o.uf))].sort();
-
   abrirGaveta({
     titulo: 'Filtros',
     corpo: html`<div class="pilha">
       ${raw(seletor({
-        rotulo: 'Modalidade', id: 'f-modalidade', valor: filtro.modalidade,
-        opcoes: [{ valor: '', rotulo: 'Todas as modalidades' }, ...modalidades.map((m) => ({ valor: m, rotulo: m }))],
-      }))}
-      ${raw(seletor({
-        rotulo: 'Categoria', id: 'f-categoria', valor: filtro.categoria,
-        opcoes: [{ valor: '', rotulo: 'Todas as categorias' }, ...categorias.map((c) => ({ valor: c, rotulo: c }))],
+        rotulo: 'Modalidade', id: 'f-modalidade', valor: String(filtro.modalidadeCodigo),
+        opcoes: [
+          { valor: '', rotulo: 'Todas as modalidades' },
+          ...MODALIDADES_PNCP.map((m) => ({ valor: String(m.codigo), rotulo: m.nome })),
+        ],
       }))}
       ${raw(seletor({
         rotulo: 'Estado', id: 'f-uf', valor: filtro.uf,
-        opcoes: [{ valor: '', rotulo: 'Todos os estados' }, ...ufs.map((u) => ({ valor: u, rotulo: u }))],
-      }))}
-      ${raw(seletor({
-        rotulo: 'Órgão', id: 'f-orgao', valor: filtro.orgao,
-        opcoes: [{ valor: '', rotulo: 'Todos os órgãos' }, ...orgaos.map((o) => ({ valor: o.id, rotulo: o.nome }))],
+        opcoes: [{ valor: '', rotulo: 'Todos os estados' }, ...UFS.map((u) => ({ valor: u, rotulo: u }))],
       }))}
 
       <div class="grade grade-2" style="gap: var(--e-3)">
@@ -179,14 +194,10 @@ function gavetaFiltros() {
         </span>
       </label>
 
-      ${raw(seletor({
-        rotulo: 'Situação', id: 'f-situacao', valor: '',
-        opcoes: [
-          { valor: '', rotulo: 'Recebendo propostas' },
-          { valor: 'julgamento', rotulo: 'Em julgamento' },
-          { valor: 'homologada', rotulo: 'Homologada' },
-        ],
-      }))}
+      <p class="tenue" style="font-size: var(--t-micro); line-height: 1.5">
+        A lista mostra apenas o que ainda recebe proposta. Certame encerrado sai da
+        listagem sozinho — não há filtro de situação porque não haveria o que filtrar.
+      </p>
     </div>`,
     rodape: `
       <button class="btn -fantasma" data-acao="limpar-gaveta">Limpar</button>
@@ -202,62 +213,127 @@ function gavetaFiltros() {
       v === 0 ? 'Qualquer compatibilidade' : `A partir de ${v}%`;
   });
 
-  aoClicarEm(gaveta, '[data-acao="aplicar-gaveta"]', () => {
+  aoClicarEm(gaveta, '[data-acao="aplicar-gaveta"]', async () => {
     Object.assign(filtro, {
-      modalidade: $('#f-modalidade', gaveta).value,
-      categoria: $('#f-categoria', gaveta).value,
+      modalidadeCodigo: $('#f-modalidade', gaveta).value,
       uf: $('#f-uf', gaveta).value,
-      orgao: $('#f-orgao', gaveta).value,
       valorMin: $('#f-valor-min', gaveta).value,
       valorMax: $('#f-valor-max', gaveta).value,
       compatMin: Number($('#f-compat', gaveta).value),
       pagina: 1,
     });
     fecharGaveta();
-    repintar();
-    toast('Filtros aplicados', { variante: 'info', sub: `${aplicar().length} oportunidades encontradas` });
+    await repintar();
+    toast('Filtros aplicados', { variante: 'info', sub: `${ultima.total} oportunidades encontradas` });
   });
 
   aoClicarEm(gaveta, '[data-acao="limpar-gaveta"]', () => {
     Object.assign(filtro, {
-      modalidade: '', categoria: '', uf: '', orgao: '',
-      valorMin: '', valorMax: '', compatMin: 0, pagina: 1,
+      modalidadeCodigo: '', uf: '', valorMin: '', valorMax: '', compatMin: 0, pagina: 1,
     });
     fecharGaveta();
     repintar();
   });
 }
 
-let raizPagina = null;
+/* ---------- Salvar como monitoramento ----------
+   O botão cria uma busca salva de verdade, com os filtros que
+   estão em tela. Um "salvar" que só mostra um toast é a
+   diferença entre protótipo e produto. */
 
-function repintar() {
-  if (!raizPagina) return;
-  $('#resultados', raizPagina).innerHTML = corpoResultados();
-  $('#chips', raizPagina).innerHTML = chipsAtivos();
-  $('#contagem', raizPagina).textContent = `${aplicar().length} oportunidades`;
+function gavetaSalvarPesquisa() {
+  abrirGaveta({
+    titulo: 'Salvar como monitoramento',
+    corpo: html`<div class="pilha">
+      <p class="suave" style="font-size: var(--t-corpo-sm); line-height: 1.6">
+        O monitoramento guarda estes filtros e avisa quando aparecer algo novo que
+        se encaixe neles.
+      </p>
+
+      ${raw(campo({
+        rotulo: 'Nome do monitoramento', id: 'sp-nome',
+        valor: filtro.termo || 'Minha pesquisa',
+        placeholder: 'Ex.: Equipamentos de informática na Bahia',
+        atributos: 'required',
+      }))}
+
+      <div class="card">
+        <div class="card-corpo pilha-sm">
+          <span class="rotulo">Filtros que serão guardados</span>
+          ${raw(chipsAtivos() || '<p class="tenue" style="font-size: var(--t-micro); margin: 0">Nenhum filtro — o monitoramento acompanharia tudo.</p>')}
+        </div>
+      </div>
+
+      <label class="check" for="sp-email">
+        <input type="checkbox" id="sp-email" checked>
+        <span>Quero receber e-mail quando houver novidade</span>
+      </label>
+    </div>`,
+    rodape: `
+      <button class="btn -fantasma" data-acao="fechar-gaveta">Cancelar</button>
+      <button class="btn -primario" data-acao="confirmar-salvar">Criar monitoramento</button>`,
+  });
+
+  const gaveta = $('.gaveta');
+
+  aoClicarEm(gaveta, '[data-acao="confirmar-salvar"]', async (_evento, alvo) => {
+    const nome = $('#sp-nome', gaveta).value.trim();
+    if (!nome) {
+      toast('Dê um nome ao monitoramento', { variante: 'erro' });
+      return;
+    }
+
+    alvo.disabled = true;
+
+    try {
+      await criarMonitoramento({
+        nome,
+        termos: filtro.termo ? [filtro.termo] : [],
+        estados: filtro.uf ? [filtro.uf] : [],
+        modalidades: filtro.modalidadeCodigo ? [Number(filtro.modalidadeCodigo)] : [],
+        valorMinimo: filtro.valorMin ? Number(filtro.valorMin) : undefined,
+        alertaEmail: $('#sp-email', gaveta).checked,
+      });
+
+      fecharGaveta();
+      toast('Monitoramento criado', {
+        variante: 'sucesso',
+        sub: 'Você será avisado quando surgir algo novo com estes filtros.',
+      });
+    } catch (erro) {
+      alvo.disabled = false;
+      toast('Não foi possível criar', { variante: 'erro', sub: erro.message });
+    }
+  });
 }
+
+/* ---------- Página ---------- */
 
 export default {
   titulo: 'Oportunidades',
   trilha: ['Início', 'Oportunidades'],
   nav: 'oportunidades',
 
-  render(ctx) {
-    if (ctx?.consulta?.q) filtro.termo = ctx.consulta.q;
+  esqueleto: () => skeletonCartao(4),
+
+  async render(ctx) {
+    if (ctx?.consulta?.q !== undefined) filtro.termo = ctx.consulta.q;
+    filtro.pagina = 1;
+
+    ultima = await listarOportunidades(paraConsulta());
     const modo = obter().modoLista;
 
     return html`
 <div class="pilha">
   ${raw(cabecalhoPagina({
     titulo: 'Oportunidades',
-    subtitulo: 'Todas as licitações que o LICITA+ encontrou e analisou para o seu perfil.',
+    subtitulo: 'Tudo o que o LICITA+ encontrou nos portais públicos e analisou para o seu perfil.',
     acoes: `
       <button class="btn -secundario -sm" data-acao="salvar-pesquisa">
         ${icone('salvar')} Salvar pesquisa
       </button>`,
   }))}
 
-  <!-- Barra de busca e controles -->
   <div class="card">
     <div class="card-corpo">
       <div class="linha" style="gap: var(--e-3); flex-wrap: wrap">
@@ -271,7 +347,7 @@ export default {
 
         <label class="campo" style="min-width: 190px">
           <select class="select" id="ordem" aria-label="Ordenar por">
-            ${raw(ORDENS.map((o) =>
+            ${raw(ORDENS_LISTA.map((o) =>
               `<option value="${o.valor}" ${o.valor === filtro.ordem ? 'selected' : ''}>${o.rotulo}</option>`,
             ).join(''))}
           </select>
@@ -291,8 +367,7 @@ export default {
   </div>
 
   <div class="linha-entre">
-    <span class="rotulo" id="contagem">${aplicar().length} oportunidades</span>
-    <span class="tenue" style="font-size: var(--t-micro)">Dados de demonstração</span>
+    <span class="rotulo" id="contagem">${ultima.total} oportunidade${ultima.total === 1 ? '' : 's'}</span>
   </div>
 
   <div id="resultados">${raw(corpoResultados())}</div>
@@ -310,7 +385,7 @@ export default {
       filtro.pagina = 1;
       caixaBusca.classList.toggle('-preenchida', entrada.value.length > 0);
       repintar();
-    }, 220);
+    }, 280);
 
     ao(entrada, 'input', buscar);
 
@@ -335,10 +410,13 @@ export default {
         b.classList.toggle('-ativo', ativo);
         b.setAttribute('aria-pressed', String(ativo));
       });
-      repintar();
+      // Só a apresentação mudou: redesenha do que já está em mãos,
+      // sem uma ida ao servidor que traria exatamente o mesmo.
+      $('#resultados', raiz).innerHTML = corpoResultados();
     });
 
     aoClicarEm(raiz, '[data-acao="abrir-filtros"]', gavetaFiltros);
+    aoClicarEm(raiz, '[data-acao="salvar-pesquisa"]', gavetaSalvarPesquisa);
 
     aoClicarEm(raiz, '[data-acao="remover-filtro"]', (_evento, alvo) => {
       const chave = alvo.dataset.chave;
@@ -350,7 +428,7 @@ export default {
 
     aoClicarEm(raiz, '[data-acao="limpar-tudo"]', () => {
       Object.assign(filtro, {
-        termo: '', modalidade: '', categoria: '', uf: '', orgao: '',
+        termo: '', modalidadeCodigo: '', uf: '',
         valorMin: '', valorMax: '', compatMin: 0, pagina: 1,
       });
       entrada.value = '';
@@ -358,17 +436,12 @@ export default {
       repintar();
     });
 
-    aoClicarEm(raiz, '[data-acao="pagina"]', (_evento, alvo) => {
+    aoClicarEm(raiz, '[data-acao="pagina"]', async (_evento, alvo) => {
       filtro.pagina = Number(alvo.dataset.pagina);
-      repintar();
+      await repintar();
       raiz.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 
-    aoClicarEm(raiz, '[data-acao="salvar-pesquisa"]', () => {
-      toast('Pesquisa salva', {
-        variante: 'sucesso',
-        sub: 'Você receberá alerta quando surgirem novas oportunidades com estes filtros.',
-      });
-    });
+    return () => { raizPagina = null; };
   },
 };

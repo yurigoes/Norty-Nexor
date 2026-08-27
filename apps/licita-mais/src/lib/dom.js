@@ -53,12 +53,22 @@ export const $$ = (seletor, raiz = document) => [...raiz.querySelectorAll(seleto
  * Delegação de evento: um único ouvinte na raiz atende a todos
  * os alvos, inclusive os que ainda não existem. É o que permite
  * repintar uma lista inteira sem religar nada.
+ *
+ * Devolve o cancelador. Ligado na raiz da página ele é
+ * dispensável — o nó morre com a troca de tela. Ligado no
+ * `body` (o caso de modal e gaveta, que vivem fora dela) ele é
+ * obrigatório: sem cancelar, cada visita à mesma página
+ * empilharia mais um ouvinte, e o quinto clique em "salvar"
+ * dispararia cinco gravações.
  */
 export function aoClicarEm(raiz, seletor, manipulador) {
-  raiz.addEventListener('click', (evento) => {
+  const ouvinte = (evento) => {
     const alvo = evento.target.closest(seletor);
     if (alvo && raiz.contains(alvo)) manipulador(evento, alvo);
-  });
+  };
+
+  raiz.addEventListener('click', ouvinte);
+  return () => raiz.removeEventListener('click', ouvinte);
 }
 
 export function ao(alvo, tipo, manipulador, opcoes) {

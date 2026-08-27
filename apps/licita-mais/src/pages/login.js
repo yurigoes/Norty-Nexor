@@ -21,6 +21,7 @@ import { comCarregamento } from '../ui/carregando.js';
 import { irPara } from '../lib/router.js';
 import { entrarNaConta, reenviarConfirmacao, primeiroNome, destinoAposEntrar } from '../lib/sessao.js';
 import { emDemonstracao } from '../lib/config.js';
+import { sincronizarFavoritos } from '../dados/index.js';
 
 export default {
   titulo: 'Entrar',
@@ -93,6 +94,7 @@ export default {
 
       try {
         await entrarNaConta({ email, senha });
+        await sincronizarFavoritos().catch(() => null);
 
         // A cortina só entra depois da autenticação dar certo. Se
         // ela cobrisse a espera, um erro de senha apareceria

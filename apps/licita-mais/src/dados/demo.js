@@ -182,6 +182,17 @@ export async function demoSalvarEmpresa(perfil) {
   return escritas.empresa;
 }
 
+/** Amostra fixa: sem ingestão não há municípios de verdade a listar. */
+export async function demoListarMunicipios(uf = 'BA') {
+  await respirar(80);
+  const porUf = {
+    BA: ['Salvador', 'Feira de Santana', 'Camaçari', 'Lauro de Freitas', 'Vitória da Conquista', 'Simões Filho'],
+    SE: ['Aracaju', 'Nossa Senhora do Socorro', 'Lagarto'],
+    PE: ['Recife', 'Olinda', 'Jaboatão dos Guararapes', 'Caruaru'],
+  };
+  return (porUf[uf] ?? []).map((nome, i) => ({ nome, ibge: `29${String(10000 + i)}`, uf }));
+}
+
 /* ---------- Monitoramentos ---------- */
 
 export async function demoListarMonitoramentos() {

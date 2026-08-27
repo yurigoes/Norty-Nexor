@@ -12,12 +12,12 @@
    ========================================================= */
 
 import { emDemonstracao } from '../lib/config.js';
-import { alternarFavorito, ehFavorito } from '../lib/store.js';
+import { alternarFavorito, ehFavorito, definir } from '../lib/store.js';
 
 import {
   apiListarOportunidades, apiObterOportunidade, apiResumoPainel,
   apiListarFavoritos, apiFavoritar, apiDesfavoritar,
-  apiObterEmpresa, apiSalvarEmpresa,
+  apiObterEmpresa, apiSalvarEmpresa, apiListarMunicipios,
   apiListarMonitoramentos, apiCriarMonitoramento, apiAtualizarMonitoramento,
   apiRemoverMonitoramento, apiMarcarVisto,
   apiListarParticipacoes, apiCriarParticipacao, apiAtualizarParticipacao, apiRemoverParticipacao,
@@ -27,7 +27,7 @@ import {
 import {
   demoListarOportunidades, demoObterOportunidade, demoResumoPainel,
   demoListarFavoritos, demoFavoritar, demoDesfavoritar,
-  demoObterEmpresa, demoSalvarEmpresa,
+  demoObterEmpresa, demoSalvarEmpresa, demoListarMunicipios,
   demoListarMonitoramentos, demoCriarMonitoramento, demoAtualizarMonitoramento,
   demoRemoverMonitoramento, demoMarcarVisto,
   demoListarParticipacoes, demoCriarParticipacao, demoAtualizarParticipacao, demoRemoverParticipacao,
@@ -82,10 +82,26 @@ export async function alternarFavoritoRemoto(id) {
 
 export const listarFavoritos = escolher(apiListarFavoritos, demoListarFavoritos);
 
+/**
+ * Traz os favoritos do servidor para a loja local. Sem isso, o
+ * contador da sidebar e os corações da lista mostrariam o que
+ * este navegador marcou, não o que a conta tem — e o mesmo
+ * usuário veria favoritos diferentes em cada aparelho.
+ */
+export async function sincronizarFavoritos() {
+  if (emDemonstracao()) return;
+
+  const itens = await apiListarFavoritos().catch(() => null);
+  if (!itens) return;
+
+  definir({ favoritos: itens.map((i) => i.id) }, 'favoritos');
+}
+
 /* ---------- Empresa ---------- */
 
 export const obterEmpresa = escolher(apiObterEmpresa, demoObterEmpresa);
 export const salvarEmpresa = escolher(apiSalvarEmpresa, demoSalvarEmpresa);
+export const listarMunicipios = escolher(apiListarMunicipios, demoListarMunicipios);
 
 /* ---------- Monitoramentos ---------- */
 

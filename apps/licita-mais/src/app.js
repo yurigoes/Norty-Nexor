@@ -29,7 +29,7 @@ import { iniciais } from './lib/format.js';
 import { mostrarCarregando, fecharCarregando } from './ui/carregando.js';
 import { resolverFonte, emDemonstracao } from './lib/config.js';
 import { restaurarSessao, usuarioLogado, estaAutenticado, sairDaConta, guardarDestino } from './lib/sessao.js';
-import { alternarFavoritoRemoto, listarNotificacoes, obterOportunidade } from './dados/index.js';
+import { alternarFavoritoRemoto, listarNotificacoes, obterOportunidade, sincronizarFavoritos } from './dados/index.js';
 
 /* ---------- Páginas ---------- */
 
@@ -577,7 +577,8 @@ async function subir() {
   const cortina = abertura();
 
   await resolverFonte();
-  await restaurarSessao().catch(() => null);
+  const usuario = await restaurarSessao().catch(() => null);
+  if (usuario) await sincronizarFavoritos().catch(() => null);
 
   iniciar('/');
 

@@ -65,18 +65,26 @@ export function listaRazoes(razoes) {
   return html`<div class="razoes">
     ${raw(
       razoes
-        .map(
-          (r) => `<div class="razao ${r.ok ? '-ok' : '-nao'}">
-            <span class="razao-marca">${icone(r.ok ? 'check' : 'fechar')}</span>
+        .map((r) => {
+          // A triagem pontua em faixa, não em sim/não: "região
+          // vizinha" vale menos que "mesmo município" e mais que
+          // zero. Mostrar só ✓ ou ✗ esconderia justamente a parte
+          // que explica um score intermediário.
+          const pontos = r.pontos ?? (r.ok ? r.peso : 0);
+          const estado = pontos >= r.peso ? '-ok' : pontos > 0 ? '-parcial' : '-nao';
+          const marca = pontos >= r.peso ? 'check' : pontos > 0 ? 'menos' : 'fechar';
+
+          return `<div class="razao ${estado}">
+            <span class="razao-marca">${icone(marca)}</span>
             <div>
               <div class="razao-titulo">${r.titulo}</div>
               <div class="razao-detalhe">${r.detalhe}</div>
             </div>
             <span class="rotulo" style="margin-left: auto; white-space: nowrap">
-              ${r.ok ? `+${r.peso}` : '0'} pts
+              ${pontos} de ${r.peso} pts
             </span>
-          </div>`,
-        )
+          </div>`;
+        })
         .join(''),
     )}
   </div>`;
@@ -89,7 +97,7 @@ export function listaRazoes(razoes) {
  */
 export function corpoExplicacao(licitacao) {
   const faixa = faixaScore(licitacao.compatibilidade);
-  const atendidos = licitacao.razoes.filter((r) => r.ok).length;
+  const pontuados = licitacao.razoes.filter((r) => (r.pontos ?? (r.ok ? r.peso : 0)) > 0).length;
 
   return html`<div class="pilha">
     <div class="linha" style="gap: var(--e-5); align-items: center">
@@ -99,7 +107,7 @@ export function corpoExplicacao(licitacao) {
           Compatibilidade ${faixa.rotulo.toLowerCase()}
         </div>
         <p class="suave" style="font-size: var(--t-corpo-sm); margin-top: 2px">
-          ${faixa.descricao}. ${atendidos} de ${licitacao.razoes.length} critérios atendidos.
+          ${faixa.descricao}. ${pontuados} de ${licitacao.razoes.length} critérios pontuaram.
         </p>
       </div>
     </div>
@@ -116,7 +124,9 @@ export function corpoExplicacao(licitacao) {
 /* ---------- Cartão de oportunidade ---------- */
 
 export function cartaoOportunidade(licitacao, { compacto = false } = {}) {
-  const favorito = ehFavorito(licitacao.id);
+  // O servidor é a autoridade sobre o favorito; a loja local é o
+  // fallback do modo demonstração e do estado otimista.
+  const favorito = licitacao.favorito ?? ehFavorito(licitacao.id);
   const urgente = prazoUrgente(licitacao.encerramento);
 
   return html`<article class="oport" data-id="${licitacao.id}">

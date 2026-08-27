@@ -804,6 +804,7 @@
 .razao-marca { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; flex: none; margin-top: 1px; }
 .razao-marca svg { width: 13px; height: 13px; }
 .razao.-ok .razao-marca { background: var(--sucesso-fundo); color: var(--sucesso); }
+.razao.-parcial .razao-marca { background: var(--aviso-fundo); color: var(--aviso); }
 .razao.-nao .razao-marca { background: var(--cinza-200); color: var(--texto-suave); }
 .razao-titulo { font-size: var(--t-corpo-sm); font-weight: var(--p-semi); color: var(--texto-forte); }
 .razao-detalhe { font-size: var(--t-micro); color: var(--texto-suave); margin-top: 1px; }

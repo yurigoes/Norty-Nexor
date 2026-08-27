@@ -3,24 +3,21 @@
    ---------------------------------------------------------
    Lista curta e viva: o usuário salvou porque pretende
    decidir. Por isso a tela ordena por prazo, não por nota — o
-   que ele precisa saber aqui é o que vence primeiro.
+   que ele precisa saber aqui é o que vence primeiro. A API já
+   devolve nessa ordem.
+
+   Favorito é da conta, não do navegador: quem marca no
+   escritório encontra a mesma lista no celular.
    ========================================================= */
 
-import { html, raw, $, aoClicarEm } from '../lib/dom.js';
-import { icone } from '../lib/icons.js';
-import { diasAte, prazoTexto } from '../lib/format.js';
+import { html, raw, $ } from '../lib/dom.js';
+import { diasAte } from '../lib/format.js';
 import { cartaoOportunidade, cabecalhoPagina } from '../ui/domain.js';
-import { vazio, toast, alerta } from '../ui/primitives.js';
-import { licitacoes } from '../data/mock.js';
-import { obter, assinar } from '../lib/store.js';
+import { vazio, alerta, skeletonCartao } from '../ui/primitives.js';
+import { assinar } from '../lib/store.js';
+import { listarFavoritos } from '../dados/index.js';
 
-function listaFavoritos() {
-  const ids = obter().favoritos;
-
-  const itens = licitacoes
-    .filter((l) => ids.includes(l.id))
-    .sort((a, b) => new Date(a.encerramento) - new Date(b.encerramento));
-
+function corpoFavoritos(itens) {
   if (itens.length === 0) {
     return vazio({
       nomeIcone: 'coracao',
@@ -52,26 +49,33 @@ export default {
   trilha: ['Início', 'Favoritos'],
   nav: 'favoritos',
 
-  render() {
+  esqueleto: () => skeletonCartao(3),
+
+  async render() {
+    const itens = await listarFavoritos();
+
     return html`
 <div class="pilha-lg">
   ${raw(cabecalhoPagina({
     titulo: 'Favoritos',
     subtitulo: 'As oportunidades que você separou, ordenadas pelo que encerra primeiro.',
   }))}
-  <div id="lista-favoritos">${raw(listaFavoritos())}</div>
+  <div id="lista-favoritos">${raw(corpoFavoritos(itens))}</div>
 </div>`;
   },
 
   ativar(raiz) {
-    // Repinta quando o favorito mudar em qualquer lugar do app —
-    // inclusive pelo botão dentro do próprio cartão desta lista.
-    const cancelar = assinar((_estado, evento) => {
+    // Desfavoritar dentro desta própria lista precisa tirar o
+    // cartão de tela. Buscar de novo em vez de remover o nó local
+    // mantém o aviso de urgência e a contagem coerentes com o que
+    // o servidor tem.
+    return assinar(async (_estado, evento) => {
       if (evento !== 'favoritos') return;
       const alvo = $('#lista-favoritos', raiz);
-      if (alvo) alvo.innerHTML = listaFavoritos();
-    });
+      if (!alvo) return;
 
-    return cancelar;
+      const itens = await listarFavoritos().catch(() => null);
+      if (itens && alvo.isConnected) alvo.innerHTML = corpoFavoritos(itens);
+    });
   },
 };

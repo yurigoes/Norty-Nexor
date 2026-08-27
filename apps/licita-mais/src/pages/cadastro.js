@@ -22,11 +22,7 @@ import { html, raw, $, ao, aoClicarEm } from '../lib/dom.js';
 import { campo, seletor } from '../ui/primitives.js';
 import { molduraAuth, campoSenha, ligarOlhoDeSenha, avisoAuth, senhaCurta, AJUDA_SENHA } from '../ui/autenticacao.js';
 import { cadastrarConta } from '../lib/sessao.js';
-
-const UFS = [
-  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
-  'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
-];
+import { UFS } from '../lib/tabelas.js';
 
 const soDigitos = (texto) => texto.replace(/\D/g, '');
 

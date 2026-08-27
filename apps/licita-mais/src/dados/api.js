@@ -13,33 +13,10 @@
    ========================================================= */
 
 import { pedir, consulta } from '../lib/http.js';
+import { nomeModalidade, NOME_ESFERA } from '../lib/tabelas.js';
 
 /* ---------- Tabelas de tradução ---------- */
 
-const NOME_MODALIDADE = {
-  1: 'Leilão Eletrônico',
-  2: 'Diálogo Competitivo',
-  3: 'Concurso',
-  4: 'Concorrência Eletrônica',
-  5: 'Concorrência Presencial',
-  6: 'Pregão Eletrônico',
-  7: 'Pregão Presencial',
-  8: 'Dispensa Eletrônica',
-  9: 'Inexigibilidade',
-  10: 'Manifestação de Interesse',
-  11: 'Pré-qualificação',
-  12: 'Credenciamento',
-  13: 'Leilão Presencial',
-};
-
-const NOME_ESFERA = { F: 'Federal', E: 'Estadual', M: 'Municipal', D: 'Distrital' };
-
-/**
- * Rótulo e peso máximo de cada critério da triagem. Os pesos
- * espelham `PESOS` de `@nexor/licitacoes-shared` — é o que
- * permite desenhar a barra "18 de 20" sem pedir mais um campo
- * à API.
- */
 const CRITERIOS = {
   aderencia: { titulo: 'Aderência ao que você vende', maximo: 45 },
   geografia: { titulo: 'Distância e região de atuação', maximo: 20 },
@@ -115,7 +92,7 @@ function paraCartao(bruta) {
       esfera: NOME_ESFERA[orgao.esfera] ?? 'Não informada',
     },
 
-    modalidade: NOME_MODALIDADE[bruta.modalidadeCodigo] ?? `Modalidade ${bruta.modalidadeCodigo}`,
+    modalidade: nomeModalidade(bruta.modalidadeCodigo),
     modalidadeCodigo: bruta.modalidadeCodigo,
     categoria: bruta.linhasAtendidas?.[0] ?? 'Sem linha correspondente',
 
@@ -188,6 +165,9 @@ export const apiDesfavoritar = (id) => pedir(`/favoritos/${id}`, { metodo: 'DELE
 
 export const apiObterEmpresa = () => pedir('/empresa');
 export const apiSalvarEmpresa = (perfil) => pedir('/empresa', { metodo: 'PUT', corpo: perfil });
+
+/** Municípios já vistos na ingestão — a lista que importa de fato. */
+export const apiListarMunicipios = (uf) => pedir(`/empresa/municipios${consulta({ uf })}`);
 
 /* ---------- Monitoramentos ---------- */
 
