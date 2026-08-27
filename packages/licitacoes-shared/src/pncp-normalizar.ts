@@ -12,8 +12,8 @@
    não leva a lugar nenhum é pior que um item a menos.
    ========================================================= */
 
-import type { Oportunidade } from '@nexor/licitacoes-shared';
-import type { ContratacaoBruta } from './tipos.ts';
+import type { Oportunidade } from './dominio.ts';
+import type { ContratacaoBruta } from './pncp-tipos.ts';
 
 export function normalizarContratacao(bruta: ContratacaoBruta): Oportunidade | null {
   const cnpj = bruta.orgaoEntidade?.cnpj?.replace(/\D/g, '') ?? '';

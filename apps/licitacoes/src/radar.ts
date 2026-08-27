@@ -20,9 +20,11 @@ import {
   paraFormatoPncp,
   somarDias,
   triar,
+  ClientePncp,
+  normalizarLote,
+  type OpcoesCliente,
 } from '@nexor/licitacoes-shared';
-import { ClientePncp, type OpcoesCliente } from './pncp/cliente.ts';
-import { normalizarLote } from './pncp/normalizar.ts';
+
 
 export interface OpcoesRadar {
   /** Quantos dias à frente procurar prazos que ainda fecham. */

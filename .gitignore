@@ -53,3 +53,9 @@ apps/licitacoes/perfil.json
 
 # Build da prévia do LICITA+ (gerado por script)
 apps/licita-mais/dist/
+
+# Cliente do Prisma gerado para o LICITA+
+apps/licita-api/gerado/
+
+# Cache incremental do TypeScript
+*.tsbuildinfo

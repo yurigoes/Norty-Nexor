@@ -1,0 +1,360 @@
+// =========================================================
+//  LICITA+ — Schema do banco (PostgreSQL)
+// ---------------------------------------------------------
+//  Duas naturezas de dado convivem aqui, e a separação é o que
+//  sustenta o resto:
+//
+//  PÚBLICO — `Licitacao` e `ItemLicitacao` vêm do PNCP e são os
+//  mesmos para todo mundo. Ficam numa tabela só, sem dono. Copiar
+//  a mesma licitação para cada empresa multiplicaria milhões de
+//  linhas e faria a mesma retificação precisar ser aplicada N
+//  vezes.
+//
+//  POR EMPRESA — `Avaliacao`, `Favorito`, `Monitoramento` e
+//  `Participacao` pertencem a uma empresa e nunca atravessam
+//  fronteira. Todo índice composto começa por `empresaId`, porque
+//  nenhuma leitura legítima cruza empresas: o banco varre só a
+//  fatia do cliente.
+//
+//  Dinheiro é Decimal(14,2), nunca Float — em ponto flutuante
+//  0.1 + 0.2 não fecha conta.
+// =========================================================
+
+generator client {
+  provider = "prisma-client-js"
+  // Saída própria, e não o node_modules/@prisma/client padrão: o
+  // my Home tem o seu próprio schema no mesmo monorepo, e os dois
+  // gerando no mesmo lugar se sobrescrevem — o último `generate`
+  // apagaria o cliente do outro.
+  output   = "../gerado/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------- Empresa e acesso ----------------
+
+enum PorteEmpresa {
+  mei
+  me
+  epp
+  demais
+}
+
+enum PapelUsuario {
+  dono
+  operador
+}
+
+model Empresa {
+  id            String       @id @default(cuid())
+  razaoSocial   String
+  nomeFantasia  String?
+  cnpj          String       @unique
+  porte         PorteEmpresa @default(me)
+
+  uf            String       @db.Char(2)
+  municipioIbge String       @db.Char(7)
+  /// Códigos IBGE dos municípios vizinhos que a empresa atende.
+  municipiosRegiao String[]  @default([])
+  estadosAtuacao   String[]  @default([])
+
+  /// Piso abaixo do qual participar não paga o esforço.
+  valorMinimo   Decimal      @default(0) @db.Decimal(14, 2)
+  /// Teto que o capital de giro aguenta — em licitação se entrega antes de receber.
+  valorMaximo   Decimal      @default(80000) @db.Decimal(14, 2)
+  /// Códigos de modalidade do PNCP. Vazio = todas.
+  modalidades   Int[]        @default([6, 8, 12])
+  diasMinimosPreparo Int     @default(3)
+
+  ativa         Boolean      @default(true)
+  criadaEm      DateTime     @default(now())
+  atualizadaEm  DateTime     @updatedAt
+
+  usuarios      Usuario[]
+  linhas        LinhaFornecimento[]
+  avaliacoes    Avaliacao[]
+  favoritos     Favorito[]
+  monitoramentos Monitoramento[]
+  participacoes Participacao[]
+
+  @@map("empresas")
+}
+
+/// O que a empresa vende. Nomear por ramo (e não por produto solto)
+/// é o que permite a interface dizer "casou com Informática" em vez
+/// de "casou com 3 palavras".
+model LinhaFornecimento {
+  id                String   @id @default(cuid())
+  empresaId         String
+  nome              String
+  palavrasChave     String[] @default([])
+  palavrasExcluidas String[] @default([])
+  criadaEm          DateTime @default(now())
+
+  empresa           Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId])
+  @@map("linhas_fornecimento")
+}
+
+model Usuario {
+  id              String       @id @default(cuid())
+  empresaId       String
+  nome            String
+  email           String       @unique
+  /// Argon2id. Nunca sai da API — as respostas usam um tipo sem este campo.
+  senhaHash       String
+  papel           PapelUsuario @default(dono)
+  cargo           String?
+
+  /// Enquanto for nulo, a conta existe mas não entra.
+  emailConfirmadoEm DateTime?
+  ativo           Boolean      @default(true)
+  ultimoLoginEm   DateTime?
+
+  criadoEm        DateTime     @default(now())
+  atualizadoEm    DateTime     @updatedAt
+
+  empresa         Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  sessoes         Sessao[]
+  tokens          TokenEmail[]
+
+  @@index([empresaId])
+  @@map("usuarios")
+}
+
+/// Uma sessão por dispositivo. O refresh token vive aqui em hash:
+/// vazamento do banco não vira sessão ativa.
+model Sessao {
+  id           String   @id @default(cuid())
+  usuarioId    String
+  refreshHash  String   @unique
+  ip           String?
+  userAgent    String?
+  criadaEm     DateTime @default(now())
+  ultimoUsoEm  DateTime @default(now())
+  expiraEm     DateTime
+  revogadaEm   DateTime?
+
+  usuario      Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@index([expiraEm])
+  @@map("sessoes")
+}
+
+enum TipoToken {
+  confirmacao
+  redefinicao
+}
+
+/// Tokens de e-mail, guardados em hash pelo mesmo motivo do refresh.
+/// `usadoEm` impede reuso: um link de redefinição vale uma vez.
+model TokenEmail {
+  id         String    @id @default(cuid())
+  usuarioId  String
+  tipo       TipoToken
+  tokenHash  String    @unique
+  expiraEm   DateTime
+  usadoEm    DateTime?
+  criadoEm   DateTime  @default(now())
+
+  usuario    Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, tipo])
+  @@map("tokens_email")
+}
+
+// ---------------- Dado público do PNCP ----------------
+
+/// Uma linha por contratação publicada, compartilhada por todas as
+/// empresas. `numeroControlePncp` é a chave natural do PNCP e o que
+/// torna a ingestão idempotente: rodar duas vezes atualiza, não
+/// duplica.
+model Licitacao {
+  id                 String   @id @default(cuid())
+  numeroControlePncp String   @unique
+
+  cnpjOrgao          String   @db.VarChar(14)
+  orgaoRazaoSocial   String
+  orgaoEsfera        String?  @db.Char(1)
+  unidadeNome        String?
+  municipio          String
+  municipioIbge      String?  @db.Char(7)
+  uf                 String   @db.Char(2)
+
+  ano                Int
+  sequencial         Int
+  numeroCompra       String?
+  processo           String?
+
+  objeto             String
+  informacaoComplementar String?
+  modalidadeCodigo   Int
+  modoDisputaCodigo  Int      @default(5)
+  situacaoCodigo     Int      @default(1)
+  registroDePrecos   Boolean  @default(false)
+
+  /// Nulo quando o órgão declara orçamento sigiloso — diferente de zero.
+  valorEstimado      Decimal? @db.Decimal(14, 2)
+
+  aberturaProposta   DateTime?
+  encerramentoProposta DateTime?
+  publicacaoPncp     DateTime?
+
+  linkPncp           String
+  linkSistemaOrigem  String?
+
+  vistaEm            DateTime @default(now())
+  atualizadaEm       DateTime @updatedAt
+
+  itens              ItemLicitacao[]
+  avaliacoes         Avaliacao[]
+  favoritos          Favorito[]
+
+  // Os índices seguem as consultas reais da tela: recorte
+  // geográfico, prazo e modalidade.
+  @@index([uf, encerramentoProposta])
+  @@index([municipioIbge])
+  @@index([modalidadeCodigo, encerramentoProposta])
+  @@index([encerramentoProposta])
+  @@map("licitacoes")
+}
+
+model ItemLicitacao {
+  id           String   @id @default(cuid())
+  licitacaoId  String
+  numero       Int
+  descricao    String
+  quantidade   Decimal  @db.Decimal(14, 4)
+  unidade      String
+  valorUnitario Decimal? @db.Decimal(14, 2)
+
+  licitacao    Licitacao @relation(fields: [licitacaoId], references: [id], onDelete: Cascade)
+
+  @@unique([licitacaoId, numero])
+  @@map("itens_licitacao")
+}
+
+// ---------------- Cruzamento empresa × licitação ----------------
+
+/// O resultado da triagem. Guardar em vez de calcular na leitura é
+/// o que permite ordenar e paginar por nota no banco — recalcular
+/// em memória a cada página não escala.
+///
+/// `motivos` é JSON de propósito: a forma dos critérios muda com o
+/// motor, e uma tabela normalizada exigiria migração a cada ajuste
+/// de peso.
+model Avaliacao {
+  id          String   @id @default(cuid())
+  empresaId   String
+  licitacaoId String
+
+  nota        Int
+  motivos     Json
+  alertas     Json
+  linhasAtendidas String[] @default([])
+
+  /// Preenchido quando a licitação NÃO passou nos cortes.
+  descartadaPor String?
+
+  calculadaEm DateTime @default(now())
+
+  empresa     Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  licitacao   Licitacao @relation(fields: [licitacaoId], references: [id], onDelete: Cascade)
+
+  @@unique([empresaId, licitacaoId])
+  @@index([empresaId, nota])
+  @@index([empresaId, descartadaPor])
+  @@map("avaliacoes")
+}
+
+model Favorito {
+  id          String   @id @default(cuid())
+  empresaId   String
+  licitacaoId String
+  criadoEm    DateTime @default(now())
+  /// Anotação do usuário sobre por que separou.
+  nota        String?
+
+  empresa     Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  licitacao   Licitacao @relation(fields: [licitacaoId], references: [id], onDelete: Cascade)
+
+  // Favoritar duas vezes é a mesma coisa que favoritar uma. A
+  // unicidade mora no banco porque duas requisições simultâneas
+  // passariam juntas por uma checagem só na aplicação.
+  @@unique([empresaId, licitacaoId])
+  @@index([empresaId])
+  @@map("favoritos")
+}
+
+model Monitoramento {
+  id         String   @id @default(cuid())
+  empresaId  String
+  nome       String
+  termos     String[] @default([])
+  estados    String[] @default([])
+  municipios String[] @default([])
+  modalidades Int[]   @default([])
+  valorMinimo Decimal? @db.Decimal(14, 2)
+  ativo      Boolean  @default(true)
+
+  alertaEmail Boolean @default(true)
+  /// Marca d'água da última varredura: o que entrou depois é "novo".
+  ultimaVarreduraEm DateTime?
+
+  criadoEm   DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  empresa    Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId])
+  @@map("monitoramentos")
+}
+
+enum SituacaoParticipacao {
+  analise
+  ganha
+  perdida
+  desistiu
+}
+
+model Participacao {
+  id          String   @id @default(cuid())
+  empresaId   String
+  licitacaoId String?
+  descricao   String
+  orgao       String
+  valor       Decimal? @db.Decimal(14, 2)
+  situacao    SituacaoParticipacao @default(analise)
+  data        DateTime @default(now())
+  observacao  String?
+
+  empresa     Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId, situacao])
+  @@map("participacoes")
+}
+
+// ---------------- Operação ----------------
+
+/// Registro de cada varredura do PNCP. Sem isto, "por que a lista
+/// não atualizou hoje?" só se responde lendo log de container.
+model ExecucaoIngestao {
+  id            String   @id @default(cuid())
+  iniciadaEm    DateTime @default(now())
+  concluidaEm   DateTime?
+  uf            String?  @db.Char(2)
+  modalidades   Int[]    @default([])
+  consultadas   Int      @default(0)
+  novas         Int      @default(0)
+  atualizadas   Int      @default(0)
+  avaliacoes    Int      @default(0)
+  erro          String?
+
+  @@index([iniciadaEm])
+  @@map("execucoes_ingestao")
+}

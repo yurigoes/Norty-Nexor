@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { ClientePncp, ErroPncp } from '../src/pncp/cliente.ts';
-import type { ContratacaoBruta } from '../src/pncp/tipos.ts';
+import { ClientePncp, ErroPncp } from '../src/pncp-cliente.ts';
+import type { ContratacaoBruta } from '../src/pncp-tipos.ts';
 
 /** Sobe uma resposta HTTP falsa sem tocar em rede. */
 function resposta(corpo: unknown, status = 200): Response {

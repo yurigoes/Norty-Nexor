@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizarContratacao, normalizarLote } from '../src/pncp/normalizar.ts';
-import type { ContratacaoBruta } from '../src/pncp/tipos.ts';
+import { normalizarContratacao, normalizarLote } from '../src/pncp-normalizar.ts';
+import type { ContratacaoBruta } from '../src/pncp-tipos.ts';
 
 const COMPLETA: ContratacaoBruta = {
   numeroControlePNCP: '11222333000141-1-000012/2026',

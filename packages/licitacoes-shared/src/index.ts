@@ -4,3 +4,6 @@ export * from './texto.ts';
 export * from './prazos.ts';
 export * from './perfil.ts';
 export * from './triagem.ts';
+export * from './pncp-tipos.ts';
+export * from './pncp-cliente.ts';
+export * from './pncp-normalizar.ts';

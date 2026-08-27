@@ -22,7 +22,7 @@
       ficou faltando em vez de fingir que a lista está completa.
    ========================================================= */
 
-import type { ContratacaoBruta, PaginaBruta } from './tipos.ts';
+import type { ContratacaoBruta, PaginaBruta } from './pncp-tipos.ts';
 
 export const BASE_PADRAO = 'https://pncp.gov.br/api/consulta';
 

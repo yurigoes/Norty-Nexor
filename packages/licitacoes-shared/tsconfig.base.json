@@ -17,6 +17,12 @@
     // O motivo é prático: assim o Node 22 executa `src/` direto, sem
     // build e sem dependência de runtime — que é o que faz o radar
     // rodar num cron com `node`, e os testes rodarem contra o fonte.
+    // O cliente do PNCP usa fetch, URL, AbortSignal e setTimeout.
+    // São APIs do runtime, não do DOM: vêm dos tipos do Node, que
+    // é onde este cliente roda (a API e o cron). O navegador nem
+    // conseguiria chamar o PNCP direto — CORS barraria.
+    "types": ["node"],
+
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true
   },
