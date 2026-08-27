@@ -46,3 +46,6 @@ infra/.env
 apps/api/.env
 apps/web/.env
 !**/.env.example
+
+# Cache incremental do TypeScript
+*.tsbuildinfo

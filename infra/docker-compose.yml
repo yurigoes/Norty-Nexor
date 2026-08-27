@@ -1,117 +1,78 @@
 # =========================================================
-#  my Home by norty — stack de produção
+#  my Home by norty — stack do CT 105 Asgard (fase3)
 # ---------------------------------------------------------
-#  Sobe tudo no Thor:
+#  Segue as convenções da infraestrutura Norty:
 #
-#    myhome.norty.com.br      → web (estático, servido pelo Caddy)
-#    api-myhome.norty.com.br  → api (NestJS)
+#  · Banco, Redis e MinIO NÃO sobem aqui. São a infra compartilhada
+#    do CT 102 Yggdrasil (192.168.15.72). Cada app subir o próprio
+#    Postgres significaria N backups, N versões e N lugares para
+#    procurar quando um dado some.
 #
-#  O Caddy emite e renova os certificados sozinho pelo Let's Encrypt.
-#  Só ele expõe porta para fora: banco e Redis ficam na rede interna,
-#  sem publicar porta no host — o Postgres não fica exposto à internet
-#  nem à rede local por acidente.
+#  · Não há Caddy nem portas 80/443. O Cloudflare Tunnel termina o
+#    TLS e alcança estas portas internas direto — certificado,
+#    renovação e exposição do roteador deixam de ser problema nosso.
+#
+#  · O código mora em /srv/apps-fase3/my-home no host thor e entra
+#    no CT por bind-mount em /opt/fase3/my-home. Edite no host,
+#    reconstrua aqui dentro.
+#
+#      myhome.norty.com.br      → 192.168.15.75:3060
+#      api-myhome.norty.com.br  → 192.168.15.75:3061
 # =========================================================
 
 name: myhome
 
 services:
-  db:
-    image: postgres:17-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-myhome}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
-      POSTGRES_DB: ${POSTGRES_DB:-myhome}
-      # Locale pt-BR para ordenação correta de nomes com acento.
-      LANG: pt_BR.utf8
-    volumes:
-      - db-data:/var/lib/postgresql/data
-      - ./backup:/backup
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-myhome} -d ${POSTGRES_DB:-myhome}"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 20s
-    networks: [internal]
-
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
-    volumes:
-      - redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-    networks: [internal]
-
   api:
     build:
       context: ..
       dockerfile: infra/api.Dockerfile
+    container_name: myhome-api
     restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     environment:
       NODE_ENV: production
       PORT: 3333
-      DATABASE_URL: postgresql://${POSTGRES_USER:-myhome}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-myhome}?schema=public&connection_limit=10
-      REDIS_URL: redis://redis:6379
+      # Infra compartilhada — CT 102 Yggdrasil.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-myhome}:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}@${POSTGRES_HOST:-192.168.15.72}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-myhome}?schema=public&connection_limit=10
+      REDIS_URL: redis://${REDIS_HOST:-192.168.15.72}:${REDIS_PORT:-6379}/${REDIS_DB:-7}
       JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env}
       JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
       JWT_REFRESH_TTL_DAYS: ${JWT_REFRESH_TTL_DAYS:-30}
       CORS_ORIGINS: ${APP_URL:-https://myhome.norty.com.br}
+      # O ponto na frente faz o cookie do refresh valer para
+      # myhome e api-myhome ao mesmo tempo.
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:-.norty.com.br}
+      # Um salto: o cloudflared. Confiar na cadeia inteira deixaria
+      # qualquer cliente forjar o próprio IP e escapar do limitador.
+      TRUST_PROXY_HOPS: 1
       APP_VERSION: ${APP_VERSION:-1.0.0}
+    ports:
+      - "${API_PORT:-3061}:3333"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3333/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 40s
-    networks: [internal, edge]
 
   web:
     build:
       context: ..
       dockerfile: infra/web.Dockerfile
       args:
+        # O Vite grava este valor dentro do bundle em tempo de build:
+        # não há como trocá-lo depois sem reconstruir a imagem.
         VITE_API_URL: ${API_URL:-https://api-myhome.norty.com.br}/v1
+        VITE_DATA_SOURCE: api
+    container_name: myhome-web
     restart: unless-stopped
-    networks: [edge]
-
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    depends_on: [api, web]
+    depends_on:
+      api:
+        condition: service_healthy
     ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    environment:
-      APP_DOMAIN: ${APP_DOMAIN:-myhome.norty.com.br}
-      API_DOMAIN: ${API_DOMAIN:-api-myhome.norty.com.br}
-      ACME_EMAIL: ${ACME_EMAIL:?defina ACME_EMAIL no .env}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-    networks: [edge]
-
-volumes:
-  db-data:
-  redis-data:
-  caddy-data:
-  caddy-config:
-
-networks:
-  # `internal` não tem saída para a internet: o banco só conversa com a API.
-  internal:
-    internal: true
-  edge:
+      - "${WEB_PORT:-3060}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

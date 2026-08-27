@@ -10,7 +10,9 @@ FROM node:22-alpine AS build
 WORKDIR /app
 
 ARG VITE_API_URL
+ARG VITE_DATA_SOURCE=api
 ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_DATA_SOURCE=$VITE_DATA_SOURCE
 
 COPY package.json package-lock.json* ./
 COPY packages/shared/package.json packages/shared/

@@ -52,44 +52,23 @@ npm run dev:api          # API em http://localhost:3333/v1
 npm run build            # shared → api → web
 ```
 
-### Subir tudo em produção (no servidor)
+### Subir em produção
+
+Roda no **CT 105 Asgard** da infraestrutura Norty, com banco no CT 102 e
+Cloudflare Tunnel na borda. O passo a passo está em
+[infra/NORTY.md](infra/NORTY.md):
 
 ```bash
-git clone <repositorio> && cd my-home
-cp infra/.env.example infra/.env     # preencha ACME_EMAIL
-./scripts/preflight.sh               # diagnostica: Docker, portas, DNS, disco
-./scripts/bootstrap.sh --demo        # sobe tudo
+ssh -i ~/.ssh/norty_cluster_ed25519 root@100.91.185.42
+cd /srv/apps-fase3 && git clone <repositorio> my-home && cd my-home
+cp infra/.env.example infra/.env
+./scripts/preflight.sh          # diagnostica o CT 105 e a infra do CT 102
+./scripts/bootstrap.sh --demo   # constrói, sobe, migra e semeia
 ```
 
-No Proxmox, veja [infra/PROXMOX.md](infra/PROXMOX.md): LXC ou VM, flags
-necessárias para o Docker, rede e o que fazer se já houver um proxy
-reverso ocupando as portas 80 e 443.
-
-O `preflight.sh` só lê e reporta — não instala nem sobe nada. Ele confere
-Docker, memória, disco, relógio, portas 80/443 e se os dois subdomínios já
-apontam para o IP público da máquina. O `bootstrap.sh` roda esse mesmo
-diagnóstico antes de começar e para se algo estiver faltando.
-
-Um comando só: constrói as imagens, sobe PostgreSQL, Redis, API, web e
-Caddy, aplica as migrações, semeia o banco e confere a saúde dos
-serviços. É seguro rodar de novo a cada atualização.
-
-Aplicação em `http://localhost:5173`.
-
-### Demonstração em arquivo único
-
-```bash
-npm run build:standalone   # gera dist-standalone/myhome-demo.html
-```
-
-Empacota a aplicação inteira — código, estilos e tipografia — em um único
-HTML sem nenhuma referência externa. Serve para hospedar a demonstração em
-qualquer lugar, enviar por anexo ou abrir localmente, sem depender de um
-servidor que saiba reescrever rotas: nesse modo a navegação usa hash
-(`#/app/visitantes`).
-
-A tipografia embutida é gerada por `npm run fonts:embed`, que baixa as
-faces uma única vez para `src/styles/fonts.embedded.css`.
+O `bootstrap.sh` percebe que está no host e executa dentro do CT 105 via
+`pct exec`. É idempotente: serve tanto para o primeiro deploy quanto para
+cada atualização.
 
 ---
 
