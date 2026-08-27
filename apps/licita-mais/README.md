@@ -197,10 +197,39 @@ quem assina.
 | Porta | `3500` (ajustável por `LICITA_PORT`) |
 | Domínio | `licita.norty.com.br` via Cloudflare Tunnel |
 
+### Rode sempre a partir do clone, não de `/srv`
+
+Os scripts moram no repositório, e `/srv/apps-fase1/licita-mais/` só
+recebe os arquivos **no fim** do deploy. Rodar de lá executa a versão do
+deploy anterior — e um script que ainda não existia naquela versão
+simplesmente não está lá. O clone é a fonte; `/srv` é o destino.
+
 ```bash
 ssh -i ~/.ssh/norty_cluster_ed25519 root@100.91.185.42
-/srv/apps-fase1/licita-mais/deploy-thor.sh
+
+CLONE=/srv/apps-fase1/.licita-mais-repo
+BRANCH=claude/gov-bidding-automation-4jopo0
+
+if [ -d "$CLONE/.git" ]; then
+  git -C "$CLONE" fetch origin "$BRANCH" \
+  && git -C "$CLONE" checkout -B "$BRANCH" "origin/$BRANCH" \
+  && git -C "$CLONE" reset --hard "origin/$BRANCH"
+else
+  git clone --branch "$BRANCH" https://github.com/yurigoes/Norty-Nexor.git "$CLONE"
+fi
 ```
+
+Daí em diante, na ordem:
+
+```bash
+"$CLONE/apps/licita-mais/preparar-banco.sh"   # cria papel e base no CT 102
+nano /srv/apps-fase1/licita-mais/.env          # DATABASE_URL, JWT_SECRET, SMTP_*
+"$CLONE/apps/licita-mais/deploy-thor.sh"       # sobe os dois containers
+```
+
+O primeiro `deploy-thor.sh` cria o `.env` a partir do exemplo e **para**,
+pedindo que seja preenchido. É proposital: uma API que sobe com
+`JWT_SECRET` vazio é pior do que uma que não sobe.
 
 ### O mount point é o primeiro passo, e ele custa um reboot
 
