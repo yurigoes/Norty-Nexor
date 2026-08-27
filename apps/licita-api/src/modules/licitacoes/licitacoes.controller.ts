@@ -14,6 +14,7 @@ import { Type } from 'class-transformer';
 import { Prisma } from '../../../gerado/prisma';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { EmpresaId } from '../../common/decorators';
+import { serializarOportunidade } from './serializar';
 
 class ListarDto {
   @IsOptional() @IsString() q?: string;
@@ -91,7 +92,7 @@ export class LicitacoesController {
     const marcados = new Set(favoritos.map((f) => f.licitacaoId));
 
     return {
-      itens: itens.map((a) => serializar(a, marcados.has(a.licitacaoId))),
+      itens: itens.map((a) => serializarOportunidade(a, marcados.has(a.licitacaoId))),
       total,
       pagina,
       tamanho,
@@ -153,7 +154,7 @@ export class LicitacoesController {
     });
 
     return {
-      ...serializar(avaliacao, Boolean(favorito)),
+      ...serializarOportunidade(avaliacao, Boolean(favorito)),
       itens: avaliacao.licitacao.itens.map((i) => ({
         ...i,
         quantidade: Number(i.quantidade),
@@ -178,41 +179,4 @@ function ordenar(ordem?: string): Prisma.AvaliacaoOrderByWithRelationInput[] {
       // é o que se perde se ficar para amanhã.
       return [{ nota: 'desc' }, { licitacao: { encerramentoProposta: 'asc' } }];
   }
-}
-
-/** Decimal vira number uma única vez, aqui na fronteira da API. */
-function serializar(
-  avaliacao: { nota: number; motivos: unknown; alertas: unknown; linhasAtendidas: string[]; licitacao: Record<string, unknown> },
-  favorito: boolean,
-) {
-  const l = avaliacao.licitacao;
-  return {
-    id: l.id,
-    numeroControlePncp: l.numeroControlePncp,
-    objeto: l.objeto,
-    orgao: {
-      cnpj: l.cnpjOrgao,
-      razaoSocial: l.orgaoRazaoSocial,
-      esfera: l.orgaoEsfera,
-      unidade: l.unidadeNome,
-      municipio: l.municipio,
-      uf: l.uf,
-    },
-    modalidadeCodigo: l.modalidadeCodigo,
-    modoDisputaCodigo: l.modoDisputaCodigo,
-    registroDePrecos: l.registroDePrecos,
-    numeroCompra: l.numeroCompra,
-    processo: l.processo,
-    valorEstimado: l.valorEstimado === null ? null : Number(l.valorEstimado),
-    aberturaProposta: l.aberturaProposta,
-    encerramentoProposta: l.encerramentoProposta,
-    linkPncp: l.linkPncp,
-    linkSistemaOrigem: l.linkSistemaOrigem,
-
-    compatibilidade: avaliacao.nota,
-    motivos: avaliacao.motivos,
-    alertas: avaliacao.alertas,
-    linhasAtendidas: avaliacao.linhasAtendidas,
-    favorito,
-  };
 }

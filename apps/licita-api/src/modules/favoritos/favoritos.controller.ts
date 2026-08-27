@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, Param, Put } from '@nestjs/com
 import { IsOptional, IsString, MaxLength } from 'class-validator';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { EmpresaId } from '../../common/decorators';
+import { serializarOportunidade, semAvaliacao } from '../licitacoes/serializar';
 
 class FavoritarDto {
   @IsOptional() @IsString() @MaxLength(400) nota?: string;
@@ -22,28 +23,22 @@ export class FavoritosController {
 
     const avaliacoes = await this.prisma.avaliacao.findMany({
       where: { empresaId, licitacaoId: { in: favoritos.map((f) => f.licitacaoId) } },
-      select: { licitacaoId: true, nota: true, alertas: true, linhasAtendidas: true },
+      select: { licitacaoId: true, nota: true, motivos: true, alertas: true, linhasAtendidas: true },
     });
     const porLicitacao = new Map(avaliacoes.map((a) => [a.licitacaoId, a]));
 
-    return favoritos.map((f) => ({
-      id: f.licitacao.id,
-      objeto: f.licitacao.objeto,
-      orgao: {
-        razaoSocial: f.licitacao.orgaoRazaoSocial,
-        municipio: f.licitacao.municipio,
-        uf: f.licitacao.uf,
-      },
-      modalidadeCodigo: f.licitacao.modalidadeCodigo,
-      valorEstimado: f.licitacao.valorEstimado === null ? null : Number(f.licitacao.valorEstimado),
-      encerramentoProposta: f.licitacao.encerramentoProposta,
-      linkPncp: f.licitacao.linkPncp,
-      compatibilidade: porLicitacao.get(f.licitacaoId)?.nota ?? 0,
-      alertas: porLicitacao.get(f.licitacaoId)?.alertas ?? [],
-      linhasAtendidas: porLicitacao.get(f.licitacaoId)?.linhasAtendidas ?? [],
-      favorito: true,
-      anotacao: f.nota,
-    }));
+    // Mesma forma da lista de oportunidades: o cliente não deve
+    // precisar conhecer dois formatos do mesmo objeto.
+    const itens = favoritos.map((f) => {
+      const avaliacao = porLicitacao.get(f.licitacaoId);
+      const base = avaliacao
+        ? { ...avaliacao, licitacao: f.licitacao as unknown as Record<string, unknown> }
+        : semAvaliacao(f.licitacao as unknown as Record<string, unknown>);
+
+      return { ...serializarOportunidade(base, true), anotacao: f.nota };
+    });
+
+    return { itens, total: itens.length };
   }
 
   /**

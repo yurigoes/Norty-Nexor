@@ -13,6 +13,7 @@ import { LicitacoesController } from './modules/licitacoes/licitacoes.controller
 import { FavoritosController } from './modules/favoritos/favoritos.controller';
 import { MonitoramentosController } from './modules/monitoramentos/monitoramentos.controller';
 import { ParticipacoesController } from './modules/participacoes/participacoes.controller';
+import { RelatoriosController } from './modules/relatorios/relatorios.controller';
 import { IngestaoService } from './modules/ingestao/ingestao.service';
 import { EmailService } from './modules/email/email.service';
 
@@ -46,6 +47,7 @@ class SaudeController {
     FavoritosController,
     MonitoramentosController,
     ParticipacoesController,
+    RelatoriosController,
   ],
   providers: [
     PrismaService,
