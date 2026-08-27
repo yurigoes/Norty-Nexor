@@ -184,7 +184,7 @@ if [[ ! -f "$APP_HOST/.env" ]]; then
   vermelho "Criei $APP_HOST/.env a partir do exemplo — ele está incompleto."
   echo
   amarelo "Antes de seguir, preencha no mínimo:"
-  echo "    DATABASE_URL   — Postgres da Norty (CT 102)"
+  echo "    DATABASE_URL   — rode ./preparar-banco.sh e cole o que ele imprime"
   echo "    JWT_SECRET     — openssl rand -base64 48"
   echo
   amarelo "E, para que alguém consiga confirmar a conta e entrar:"
@@ -252,6 +252,11 @@ fi
 # ---------- O que falta ----------
 
 cat <<FIM
+
+$(amarelo "Falta a primeira varredura. Sem ela o painel fica vazio até as 5h:")
+
+  pct exec ${CT} -- bash -c \\
+    'cd ${APP_CT} && docker compose exec -T licita-api node dist/tarefas/ingestao.js'
 
 $(amarelo "Falta o ingress. No CT onde roda o cloudflared, acrescente ao")
 $(amarelo "bloco 'ingress:' do config.yml — ANTES da regra final de 404:")

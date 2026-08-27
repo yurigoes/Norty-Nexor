@@ -311,14 +311,18 @@ de arranjo. Servir sob `/v1` resolve cookie e CORS de uma vez.
 
 ### Banco e segredos
 
-Postgres da Norty, no CT 102 (`192.168.15.72:5432`). Antes do primeiro
-deploy:
+Postgres da Norty, no CT 102 (`192.168.15.72:5432`). O
+`preparar-banco.sh` cria papel e base, concede o schema `public` (no
+Postgres 15+ ele deixou de ser gravável por qualquer um, e sem isso a
+migração falha em "permission denied") e imprime a `DATABASE_URL`
+pronta:
 
-```sql
-CREATE DATABASE licita;
-CREATE USER licita WITH PASSWORD '...';
-GRANT ALL PRIVILEGES ON DATABASE licita TO licita;
+```bash
+/srv/apps-fase1/licita-mais/preparar-banco.sh
 ```
+
+É idempotente e **não troca a senha de um papel que já existe** —
+trocá-la por descuido derrubaria a API que estivesse usando a antiga.
 
 Os segredos moram em `/srv/apps-fase1/licita-mais/.env`, **no host e
 nunca no repositório** — o `deploy-thor.sh` preserva esse arquivo a cada
