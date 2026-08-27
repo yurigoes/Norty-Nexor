@@ -52,7 +52,7 @@ function detalhar(erro: unknown): string {
  * erro que fazia "0 contratações" não dizer nada.
  */
 interface Desfecho {
-  estado: 'ok' | 'recusado' | 'inacessivel';
+  estado: 'ok' | 'recusado' | 'limitado' | 'inacessivel';
   registros: number;
 }
 
@@ -87,6 +87,16 @@ async function consultar(uf: string, modalidade: number, dataFinal: string): Pro
     if (!resposta.ok) {
       const corpo = (await resposta.text()).slice(0, 300);
       console.log(vermelho(`    ${resposta.status} ${resposta.statusText} (${levou}ms)`));
+
+      if (resposta.status === 429) {
+        // O corpo do 429 do PNCP é uma página HTML inteira; a
+        // primeira linha de texto basta e o resto é ruído.
+        const espera = resposta.headers.get('retry-after');
+        console.log(amarelo('    Limite de requisições — o pedido está certo, o ritmo é que não.'));
+        if (espera) console.log(amarelo(`    O servidor pede ${espera}s de espera.`));
+        return { estado: 'limitado', registros: 0 };
+      }
+
       if (corpo) console.log(`    ${corpo}`);
       return { estado: 'recusado', registros: 0 };
     }
@@ -161,6 +171,7 @@ async function principal(): Promise<void> {
   console.log(`  estados     ${alvos.join(', ')}`);
   console.log(`  janela      ${config.pncp.janelaDias} dias → dataFinal=${dataFinal}`);
   console.log(`  modalidades ${MODALIDADES.join(', ')}`);
+  console.log(`  ritmo       ${config.pncp.intervaloMs}ms entre pedidos`);
   console.log('');
   console.log('  ── última varredura ──');
   await ultimaExecucao();
@@ -168,11 +179,18 @@ async function principal(): Promise<void> {
   console.log('  ── consultando agora ──');
   console.log('');
 
-  const contagem = { ok: 0, recusado: 0, inacessivel: 0 };
+  const contagem = { ok: 0, recusado: 0, limitado: 0, inacessivel: 0 };
   let registros = 0;
+  let primeiro = true;
 
   for (const uf of alvos) {
     for (const modalidade of MODALIDADES) {
+      // O diagnóstico respeita o mesmo ritmo da varredura: um
+      // comando que estoura o limite ao investigar o limite não
+      // mede coisa alguma.
+      if (!primeiro) await new Promise((r) => setTimeout(r, config.pncp.intervaloMs));
+      primeiro = false;
+
       const desfecho = await consultar(uf, modalidade, dataFinal);
       contagem[desfecho.estado] += 1;
       registros += desfecho.registros;
@@ -180,7 +198,7 @@ async function principal(): Promise<void> {
     }
   }
 
-  const total = contagem.ok + contagem.recusado + contagem.inacessivel;
+  const total = contagem.ok + contagem.recusado + contagem.limitado + contagem.inacessivel;
 
   const noBanco = await prisma.licitacao.count();
   console.log(`  licitações já no banco: ${noBanco}`);
@@ -196,6 +214,15 @@ async function principal(): Promise<void> {
     console.log(amarelo(`  ${contagem.inacessivel} de ${total} consultas não chegaram ao PNCP.`));
     console.log(amarelo('  A saída do container responde de forma intermitente — as que'));
     console.log(amarelo('  completaram provam que o endereço e os parâmetros estão certos.'));
+  } else if (contagem.limitado > 0) {
+    console.log(amarelo(`  ${contagem.limitado} de ${total} consultas bateram no limite do PNCP.`));
+    console.log(amarelo('  Rede e parâmetros estão certos — o que sobra é ritmo. A varredura'));
+    console.log(amarelo('  pagina dezenas de vezes e derruba o limite bem mais rápido que'));
+    console.log(amarelo('  este comando.'));
+    console.log('');
+    console.log(amarelo(`  Suba PNCP_INTERVALO_MS (hoje ${config.pncp.intervaloMs}ms) no .env e recrie o`));
+    console.log(amarelo('  container, ou varra um estado de cada vez:'));
+    console.log('      node dist/tarefas/ingestao.js BA');
   } else if (contagem.recusado > 0) {
     console.log(amarelo(`  ${contagem.recusado} de ${total} consultas foram recusadas pelo PNCP.`));
     console.log(amarelo('  O container alcança a API; o pedido é que não foi aceito. O'));

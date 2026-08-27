@@ -20,6 +20,12 @@
       consulta de pregão cair, a de dispensa ainda vale. Os erros
       voltam junto com os dados, para o relatório dizer o que
       ficou faltando em vez de fingir que a lista está completa.
+
+   4. **O PNCP limita requisições, e o limite é o gargalo real.**
+      Uma varredura de três estados são dezenas de páginas; sem
+      ritmo, a API corta com 429 e a varredura inteira volta
+      vazia. O cliente espaça os pedidos, desacelera sozinho a
+      cada 429 e obedece ao `Retry-After` quando ele vem.
    ========================================================= */
 
 import type { ContratacaoBruta, PaginaBruta } from './pncp-tipos.ts';
@@ -32,10 +38,26 @@ const TAMANHO_PAGINA = 50;
 /** Trava contra paginação infinita se a API devolver o envelope errado. */
 const MAX_PAGINAS = 40;
 
+/**
+ * Espera mínima entre dois pedidos. O PNCP não publica o limite
+ * exato, então o número aqui não é o limite — é um ritmo que o
+ * cliente sobe sozinho quando leva 429. Começar folgado e
+ * apertar sob demanda erra para o lado seguro.
+ */
+const INTERVALO_PADRAO = 900;
+
+/** Teto do ritmo adaptativo: acima disso a varredura não termina. */
+const INTERVALO_MAXIMO = 8_000;
+
+/** Teto de uma espera isolada, inclusive a pedida por `Retry-After`. */
+const RECUO_MAXIMO = 30_000;
+
 export interface OpcoesCliente {
   base?: string;
   timeoutMs?: number;
   tentativas?: number;
+  /** Espera mínima entre requisições, em ms. */
+  intervaloMs?: number;
   /** Injetável para teste; por padrão o `fetch` global do Node. */
   fetchImpl?: typeof fetch;
   /** Pausa entre tentativas. Injetável para não deixar teste lento. */
@@ -78,13 +100,23 @@ export class ClientePncp {
   private readonly fetchImpl: typeof fetch;
   private readonly aguardar: (ms: number) => Promise<void>;
 
+  /** Sobe a cada 429 e não volta a descer dentro da mesma varredura. */
+  private intervaloMs: number;
+  private jaPediuAlgo = false;
+
   constructor(opcoes: OpcoesCliente = {}) {
     this.base = (opcoes.base ?? BASE_PADRAO).replace(/\/+$/, '');
     this.timeoutMs = opcoes.timeoutMs ?? 30_000;
     this.tentativas = opcoes.tentativas ?? 3;
+    this.intervaloMs = opcoes.intervaloMs ?? INTERVALO_PADRAO;
     this.fetchImpl = opcoes.fetchImpl ?? globalThis.fetch;
     this.aguardar =
       opcoes.aguardar ?? ((ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  }
+
+  /** Ritmo atual, em ms — para o log dizer quanto o PNCP apertou. */
+  get intervaloAtual(): number {
+    return this.intervaloMs;
   }
 
   /**
@@ -96,20 +128,25 @@ export class ClientePncp {
     const falhas: { modalidade: number; erro: string }[] = [];
 
     for (const modalidade of consulta.modalidades) {
-      try {
-        contratacoes.push(...(await this.paginarModalidade(consulta, modalidade)));
-      } catch (erro) {
-        falhas.push({ modalidade, erro: erro instanceof Error ? erro.message : String(erro) });
-      }
+      const { itens, erro } = await this.paginarModalidade(consulta, modalidade);
+      contratacoes.push(...itens);
+      if (erro) falhas.push({ modalidade, erro });
     }
 
     return { contratacoes: deduplicar(contratacoes), falhas };
   }
 
+  /**
+   * Uma falha na página 12 não invalida as onze anteriores. Antes
+   * o erro subia pela pilha e levava junto tudo o que já tinha
+   * sido trazido — era assim que uma UF com 870 contratações
+   * disponíveis contribuía exatamente zero. Meia lista rotulada
+   * como meia lista vale muito mais que lista nenhuma.
+   */
   private async paginarModalidade(
     consulta: ConsultaProposta,
     modalidade: number,
-  ): Promise<ContratacaoBruta[]> {
+  ): Promise<{ itens: ContratacaoBruta[]; erro?: string }> {
     const acumulado: ContratacaoBruta[] = [];
 
     for (let pagina = 1; pagina <= MAX_PAGINAS; pagina += 1) {
@@ -120,7 +157,20 @@ export class ClientePncp {
       url.searchParams.set('pagina', String(pagina));
       url.searchParams.set('tamanhoPagina', String(TAMANHO_PAGINA));
 
-      const corpo = await this.buscarJson<PaginaBruta<ContratacaoBruta>>(url);
+      let corpo: PaginaBruta<ContratacaoBruta> | null;
+
+      try {
+        corpo = await this.buscarJson<PaginaBruta<ContratacaoBruta>>(url);
+      } catch (erro) {
+        const mensagem = erro instanceof Error ? erro.message : String(erro);
+        return {
+          itens: acumulado,
+          erro:
+            `página ${pagina}: ${mensagem}` +
+            (acumulado.length > 0 ? ` — ${acumulado.length} registro(s) anteriores mantidos` : ''),
+        };
+      }
+
       if (corpo === null) break;
 
       const itens = corpo.data ?? [];
@@ -133,7 +183,7 @@ export class ClientePncp {
       if (acabou || itens.length === 0) break;
     }
 
-    return acumulado;
+    return { itens: acumulado };
   }
 
   /**
@@ -146,6 +196,11 @@ export class ClientePncp {
     let ultimoErro: unknown;
 
     for (let tentativa = 1; tentativa <= this.tentativas; tentativa += 1) {
+      await this.respeitarORitmo();
+
+      // Recuo do 500: falha de servidor costuma passar rápido.
+      let recuo = 500 * 2 ** (tentativa - 1);
+
       try {
         const resposta = await this.fetchImpl(url, {
           headers: { Accept: 'application/json' },
@@ -168,8 +223,18 @@ export class ClientePncp {
               (motivo ? ` — ${motivo}` : ''),
             resposta.status,
           );
-          // 4xx é parâmetro errado: repetir não conserta.
-          if (resposta.status < 500 && resposta.status !== 429) throw erro;
+
+          if (resposta.status === 429) {
+            // Não é o pedido que está errado, é o ritmo. Repetir
+            // no mesmo passo só gasta a próxima tentativa: o
+            // cliente afrouxa o ritmo de vez e espera mais.
+            this.desacelerar();
+            recuo = this.esperaPedida(resposta) ?? Math.min(this.intervaloMs * 4, RECUO_MAXIMO);
+          } else if (resposta.status < 500) {
+            // 4xx de verdade é parâmetro errado: repetir não conserta.
+            throw erro;
+          }
+
           ultimoErro = erro;
         } else {
           const texto = await resposta.text();
@@ -177,18 +242,63 @@ export class ClientePncp {
           return JSON.parse(texto) as T;
         }
       } catch (erro) {
-        if (erro instanceof ErroPncp && erro.status !== undefined && erro.status < 500) throw erro;
+        if (
+          erro instanceof ErroPncp &&
+          erro.status !== undefined &&
+          erro.status < 500 &&
+          erro.status !== 429
+        ) {
+          throw erro;
+        }
         ultimoErro = erro;
       }
 
       if (tentativa < this.tentativas) {
-        await this.aguardar(500 * 2 ** (tentativa - 1));
+        await this.aguardar(recuo);
       }
     }
 
     throw ultimoErro instanceof Error
       ? ultimoErro
       : new ErroPncp(`Falha ao consultar ${url.pathname}`);
+  }
+
+  /**
+   * Espaça os pedidos. Dormir *entre* requisições, em vez de mirar
+   * um relógio, faz o ritmo real ser um pouco mais lento que o
+   * configurado — e num limite que não se conhece, errar para o
+   * lado lento é errar de graça: a varredura roda às 5h.
+   */
+  private async respeitarORitmo(): Promise<void> {
+    if (!this.jaPediuAlgo) {
+      this.jaPediuAlgo = true;
+      return;
+    }
+    await this.aguardar(this.intervaloMs);
+  }
+
+  private desacelerar(): void {
+    this.intervaloMs = Math.min(Math.round(this.intervaloMs * 1.8), INTERVALO_MAXIMO);
+  }
+
+  /**
+   * `Retry-After` vem em segundos ou como data HTTP. Quando o
+   * servidor diz quanto esperar, essa é a melhor informação que
+   * existe — melhor que qualquer curva de recuo adivinhada.
+   */
+  private esperaPedida(resposta: Response): number | null {
+    const cabecalho = resposta.headers?.get?.('retry-after');
+    if (!cabecalho) return null;
+
+    const segundos = Number(cabecalho.trim());
+    if (Number.isFinite(segundos) && segundos >= 0) {
+      return Math.min(segundos * 1000, RECUO_MAXIMO);
+    }
+
+    const quando = Date.parse(cabecalho);
+    if (Number.isNaN(quando)) return null;
+
+    return Math.min(Math.max(quando - Date.now(), 0), RECUO_MAXIMO);
   }
 }
 

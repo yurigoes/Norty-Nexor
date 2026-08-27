@@ -280,3 +280,118 @@ describe('ErroPncp', () => {
     assert.equal(erro.name, 'ErroPncp');
   });
 });
+
+describe('limite de requisições do PNCP', () => {
+  /** Registra cada espera pedida, para o teste ver o ritmo. */
+  function relogio() {
+    const esperas: number[] = [];
+    return { esperas, aguardar: async (ms: number) => void esperas.push(ms) };
+  }
+
+  test('espaça os pedidos — sem ritmo o PNCP corta a varredura com 429', async () => {
+    const { fetchImpl } = espiao([
+      resposta({ data: [contratacao(1)], paginasRestantes: 0 }),
+      resposta({ data: [contratacao(2)], paginasRestantes: 0 }),
+      resposta({ data: [contratacao(3)], paginasRestantes: 0 }),
+    ]);
+    const { esperas, aguardar } = relogio();
+    const cliente = new ClientePncp({ fetchImpl, aguardar, intervaloMs: 900 });
+
+    await cliente.contratacoesComPropostaAberta({
+      dataFinal: '20260930',
+      modalidades: [6, 8, 12],
+      uf: 'BA',
+    });
+
+    // Três pedidos, duas pausas: o primeiro não espera por nada.
+    assert.deepEqual(esperas, [900, 900]);
+  });
+
+  test('429 afrouxa o ritmo em vez de gastar a tentativa no mesmo passo', async () => {
+    const { fetchImpl } = espiao([
+      resposta('<html>Limite de requisições excedido</html>', 429),
+      resposta({ data: [contratacao(1)], paginasRestantes: 0 }),
+    ]);
+    const { esperas, aguardar } = relogio();
+    const cliente = new ClientePncp({ fetchImpl, aguardar, intervaloMs: 1000, tentativas: 3 });
+
+    const { contratacoes, falhas } = await cliente.contratacoesComPropostaAberta({
+      dataFinal: '20260930',
+      modalidades: [8],
+      uf: 'BA',
+    });
+
+    assert.equal(falhas.length, 0, 'a segunda tentativa deve trazer o dado');
+    assert.equal(contratacoes.length, 1);
+    assert.equal(cliente.intervaloAtual, 1800, 'o ritmo sobe 1,8× a cada 429');
+    // Recuo do 429 (4× o ritmo já afrouxado), depois o ritmo normal.
+    assert.deepEqual(esperas, [7200, 1800]);
+  });
+
+  test('obedece ao Retry-After quando o servidor diz quanto esperar', async () => {
+    const trezeSegundos = new Response('devagar', {
+      status: 429,
+      headers: { 'Retry-After': '13' },
+    });
+    const { fetchImpl } = espiao([trezeSegundos, resposta({ data: [], paginasRestantes: 0 })]);
+    const { esperas, aguardar } = relogio();
+    const cliente = new ClientePncp({ fetchImpl, aguardar, intervaloMs: 1000 });
+
+    await cliente.contratacoesComPropostaAberta({
+      dataFinal: '20260930',
+      modalidades: [8],
+      uf: 'BA',
+    });
+
+    assert.equal(esperas[0], 13_000, 'o servidor sabe melhor que a curva de recuo');
+  });
+
+  test('429 na página 12 não descarta as onze anteriores', async () => {
+    // Páginas cheias (50) mantêm a paginação andando; a terceira
+    // é cortada pelo limite.
+    const cheia = () => ({
+      data: Array.from({ length: 50 }, (_, i) => contratacao(i + 1)),
+      paginasRestantes: 5,
+    });
+    const { fetchImpl } = espiao([
+      resposta(cheia()),
+      resposta(cheia()),
+      resposta('limite', 429),
+      resposta('limite', 429),
+      resposta('limite', 429),
+    ]);
+    const cliente = new ClientePncp({
+      fetchImpl,
+      aguardar: semEspera,
+      tentativas: 3,
+      intervaloMs: 0,
+    });
+
+    const { contratacoes, falhas } = await cliente.contratacoesComPropostaAberta({
+      dataFinal: '20260930',
+      modalidades: [6],
+      uf: 'BA',
+    });
+
+    // Deduplicadas por numeroControlePNCP: as duas páginas trazem
+    // os mesmos 50 sequenciais. O que importa é não ser zero.
+    assert.equal(contratacoes.length, 50, 'o que já veio tem de sobreviver à falha');
+    assert.equal(falhas.length, 1);
+    assert.match(falhas[0].erro, /página 3/);
+    assert.match(falhas[0].erro, /100 registro\(s\) anteriores mantidos/);
+  });
+
+  test('4xx que não é 429 continua sem repetição — parâmetro errado não melhora', async () => {
+    const { urls, fetchImpl } = espiao([resposta('{"message":"dataFinal inválida"}', 400)]);
+    const cliente = new ClientePncp({ fetchImpl, aguardar: semEspera, tentativas: 3 });
+
+    const { falhas } = await cliente.contratacoesComPropostaAberta({
+      dataFinal: 'ontem',
+      modalidades: [8],
+      uf: 'BA',
+    });
+
+    assert.equal(urls.length, 1, 'repetir um 400 é desperdício');
+    assert.match(falhas[0].erro, /dataFinal inválida/, 'o corpo diz qual parâmetro caiu');
+  });
+});

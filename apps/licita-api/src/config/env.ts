@@ -42,6 +42,8 @@ export interface Config {
     base: string;
     janelaDias: number;
     ufs: string[];
+    /** Espera mínima entre requisições, contra o limite do PNCP. */
+    intervaloMs: number;
   };
 }
 
@@ -82,6 +84,11 @@ function emSegundos(ttl: string): number {
 const texto = (nome: string): string | undefined => {
   const valor = process.env[nome]?.trim();
   return valor === '' ? undefined : valor;
+};
+
+const inteiroPositivo = (valor: string | undefined, padrao: number): number => {
+  const numero = Number(valor);
+  return Number.isFinite(numero) && numero >= 0 ? numero : padrao;
 };
 
 const lista = (valor: string | undefined): string[] =>
@@ -159,6 +166,10 @@ export function carregarConfig(): Config {
       base: process.env.PNCP_BASE ?? 'https://pncp.gov.br/api/consulta',
       janelaDias: Number(process.env.PNCP_JANELA_DIAS ?? 30),
       ufs: lista(process.env.PNCP_UFS).length ? lista(process.env.PNCP_UFS) : ['BA', 'SE', 'PE'],
+      // O cliente sobe este número sozinho quando leva 429; ele é
+      // o ponto de partida, não um teto. Valor ilegível cai no
+      // padrão em vez de virar NaN — que desligaria a espera.
+      intervaloMs: inteiroPositivo(texto('PNCP_INTERVALO_MS'), 900),
     },
   };
 

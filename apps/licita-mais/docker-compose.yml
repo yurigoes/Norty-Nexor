@@ -107,6 +107,7 @@ services:
 
       PNCP_UFS: ${PNCP_UFS:-BA,SE,PE}
       PNCP_JANELA_DIAS: ${PNCP_JANELA_DIAS:-30}
+      PNCP_INTERVALO_MS: ${PNCP_INTERVALO_MS:-900}
     healthcheck:
       test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:3501/v1/saude"]
       interval: 30s

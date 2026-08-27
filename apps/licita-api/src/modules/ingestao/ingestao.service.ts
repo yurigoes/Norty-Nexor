@@ -80,7 +80,10 @@ export class IngestaoService {
     };
 
     try {
-      const cliente = new ClientePncp({ base: config.pncp.base });
+      const cliente = new ClientePncp({
+        base: config.pncp.base,
+        intervaloMs: config.pncp.intervaloMs,
+      });
       const dataFinal = paraFormatoPncp(somarDias(new Date(), config.pncp.janelaDias));
 
       for (const uf of ufs) {
@@ -135,6 +138,16 @@ export class IngestaoService {
       // o pedido três vezes". Quem lê o log é quem precisa saber.
       for (const falha of resumo.falhas) {
         this.logger.error(`PNCP recusou a modalidade ${falha.modalidade}: ${falha.erro}`);
+      }
+
+      // Se o cliente teve de afrouxar o passo, o limite do PNCP
+      // apertou durante a varredura. Vale saber antes de a
+      // próxima demorar o dobro sem explicação.
+      if (cliente.intervaloAtual > config.pncp.intervaloMs) {
+        this.logger.warn(
+          `O PNCP limitou o ritmo: ${config.pncp.intervaloMs}ms → ${cliente.intervaloAtual}ms ` +
+            'entre pedidos. Para começar já nesse passo, ajuste PNCP_INTERVALO_MS.',
+        );
       }
 
       this.logger.log(
