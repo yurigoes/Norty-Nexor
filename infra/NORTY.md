@@ -166,6 +166,22 @@ curl -s http://192.168.15.75:3061/v1/health
 pct exec 105 -- docker exec -it myhome-api sh
 ```
 
+## Conferir se está tudo certo
+
+Depois do deploy, a suíte de ponta a ponta exercita autenticação,
+isolamento entre condomínios, permissões por papel e os cinco fluxos
+contra a API que acabou de subir:
+
+```bash
+API_URL=http://192.168.15.75:3061/v1 node apps/api/test/e2e.mjs
+```
+
+São 38 verificações. Ela é segura de repetir: usa data inédita para a
+reserva e procura um profissional ainda não avaliado, porque a unicidade
+de horário e a de avaliação por unidade são regras reais do banco.
+
+---
+
 ## Contas iniciais
 
 Com `--demo`, as cinco contas nascem com a senha `123456`:
