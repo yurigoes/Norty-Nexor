@@ -68,16 +68,37 @@ pct status "$CT" >/dev/null 2>&1 || {
   exit 1
 }
 
-pct exec "$CT" -- command -v docker >/dev/null 2>&1 || {
+if ! pct exec "$CT" -- bash -c 'command -v docker' >/dev/null 2>&1; then
   vermelho "Docker não encontrado dentro do CT $CT."
+  echo
+  amarelo "O que o CT tem hoje:"
+  pct exec "$CT" -- bash -c 'ls -1 /usr/bin | grep -i -E "^docker|^podman|^containerd" || echo "  (nada parecido com docker)"' 2>/dev/null || true
+  echo
+  amarelo "Se os outros apps do CT rodam em Docker, ele deve estar em outro caminho:"
+  echo "    pct exec $CT -- bash -lc 'which docker; docker --version'"
+  echo
+  amarelo "Se realmente não houver Docker, instale dentro do CT:"
+  echo "    pct exec $CT -- bash -c 'curl -fsSL https://get.docker.com | sh'"
   exit 1
-}
+fi
+
+# O compose v2 é plugin do Docker; v1 é um binário separado com
+# outra sintaxe. Sem essa distinção o build falharia lá na frente
+# com "unknown command", já depois de mexer no código.
+if ! pct exec "$CT" -- bash -c 'docker compose version' >/dev/null 2>&1; then
+  vermelho "Docker existe no CT $CT, mas o plugin 'docker compose' (v2) não responde."
+  pct exec "$CT" -- bash -c 'docker compose version' 2>&1 | head -5 || true
+  echo
+  amarelo "Instale o plugin dentro do CT:"
+  echo "    pct exec $CT -- bash -c 'apt-get update && apt-get install -y docker-compose-plugin'"
+  exit 1
+fi
 
 mkdir -p "$APP_HOST"
 
 # O mount precisa existir ANTES do build: sem ele o código não chega
 # no CT e o compose falharia lá dentro com "no such file".
-if ! pct exec "$CT" -- test -d "$APP_CT" 2>/dev/null; then
+if ! pct exec "$CT" -- bash -c "test -d '$APP_CT'" 2>/dev/null; then
   vermelho "O CT $CT não enxerga $APP_CT — falta o bind-mount."
   echo
   amarelo "Para criar (escolha um mpN livre; veja os usados com: pct config $CT):"
@@ -97,14 +118,21 @@ verde "CT $CT ativo, $APP_CT visível, Docker presente."
 
 # ---------- Porta livre? ----------
 
-if pct exec "$CT" -- ss -ltn 2>/dev/null | grep -q ":${PORTA} "; then
+PORTAS_EM_USO="$(pct exec "$CT" -- bash -c \
+  'command -v ss >/dev/null && ss -ltn || (command -v netstat >/dev/null && netstat -ltn) || echo SEM_FERRAMENTA' \
+  2>/dev/null || echo SEM_FERRAMENTA)"
+
+if [[ "$PORTAS_EM_USO" == *SEM_FERRAMENTA* ]]; then
+  amarelo "Nem ss nem netstat no CT $CT — não deu para conferir a porta $PORTA."
+  amarelo "Se ela estiver ocupada, o compose vai reclamar no passo do build."
+elif grep -q ":${PORTA} " <<<"$PORTAS_EM_USO"; then
   # Se já é o nosso container, é só um redeploy.
-  if pct exec "$CT" -- docker ps --format '{{.Names}} {{.Ports}}' 2>/dev/null \
+  if pct exec "$CT" -- bash -c "docker ps --format '{{.Names}} {{.Ports}}'" 2>/dev/null \
        | grep -q "^licita-web .*:${PORTA}->"; then
     amarelo "Porta $PORTA já é do licita-web — redeploy."
   else
-    vermelho "Porta $PORTA já está ocupada no CT $CT por outro serviço."
-    pct exec "$CT" -- ss -ltnp 2>/dev/null | grep ":${PORTA} " || true
+    vermelho "Porta $PORTA já está ocupada no CT $CT por outro serviço:"
+    grep ":${PORTA} " <<<"$PORTAS_EM_USO" || true
     amarelo "Rode de novo com outra: LICITA_PORT=3501 $0"
     exit 1
   fi
@@ -141,7 +169,8 @@ pct exec "$CT" -- bash -c "cd '$APP_CT' && LICITA_PORT=${PORTA} docker compose u
 
 passo "Conferindo"
 
-IP_CT="$(pct exec "$CT" -- hostname -I | awk '{print $1}')"
+IP_CT="$(pct exec "$CT" -- bash -c "hostname -I" 2>/dev/null | awk '{print $1}')"
+IP_CT="${IP_CT:-192.168.15.73}"
 sleep 3
 
 if pct exec "$CT" -- wget -q -O- "http://127.0.0.1:${PORTA}/" >/dev/null 2>&1; then
