@@ -11,6 +11,8 @@ import { AuthModule } from './modules/auth/auth.module';
 import { EmpresaController } from './modules/empresa/empresa.controller';
 import { LicitacoesController } from './modules/licitacoes/licitacoes.controller';
 import { FavoritosController } from './modules/favoritos/favoritos.controller';
+import { MonitoramentosController } from './modules/monitoramentos/monitoramentos.controller';
+import { ParticipacoesController } from './modules/participacoes/participacoes.controller';
 import { IngestaoService } from './modules/ingestao/ingestao.service';
 import { EmailService } from './modules/email/email.service';
 
@@ -42,6 +44,8 @@ class SaudeController {
     EmpresaController,
     LicitacoesController,
     FavoritosController,
+    MonitoramentosController,
+    ParticipacoesController,
   ],
   providers: [
     PrismaService,
