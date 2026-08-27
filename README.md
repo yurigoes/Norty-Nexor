@@ -61,6 +61,10 @@ cp infra/.env.example infra/.env     # preencha ACME_EMAIL
 ./scripts/bootstrap.sh --demo        # sobe tudo
 ```
 
+No Proxmox, veja [infra/PROXMOX.md](infra/PROXMOX.md): LXC ou VM, flags
+necessárias para o Docker, rede e o que fazer se já houver um proxy
+reverso ocupando as portas 80 e 443.
+
 O `preflight.sh` só lê e reporta — não instala nem sobe nada. Ele confere
 Docker, memória, disco, relógio, portas 80/443 e se os dois subdomínios já
 apontam para o IP público da máquina. O `bootstrap.sh` roda esse mesmo
