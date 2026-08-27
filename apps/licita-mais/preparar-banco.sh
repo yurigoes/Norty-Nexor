@@ -43,15 +43,77 @@ pct status "$CT_PG" >/dev/null 2>&1 || {
   exit 1
 }
 
-# `psql` sem shell não resolve: pct exec faz execvp direto.
-if ! pct exec "$CT_PG" -- bash -c 'command -v psql' >/dev/null 2>&1; then
-  vermelho "psql não encontrado dentro do CT $CT_PG — este é mesmo o container do Postgres?"
+# ---------- Onde o Postgres realmente está ----------
+#
+# Duas montagens convivem na infra Norty: Postgres instalado no
+# próprio LXC, e Postgres em Docker dentro do LXC. No segundo caso
+# o `psql` existe, mas dentro do container — não no PATH do CT. Em
+# vez de exigir que você saiba qual é qual, o script descobre.
+#
+# `pct exec` faz execvp direto, sem shell: tudo que dependa de
+# PATH, pipe ou builtin precisa vir dentro de `bash -c`.
+
+no_ct() { pct exec "$CT_PG" -- bash -c "$1"; }
+
+MODO=""
+
+if [[ -n "${CONTAINER_PG:-}" ]]; then
+  MODO="docker"
+  amarelo "Usando o container Docker \"$CONTAINER_PG\" (CONTAINER_PG)."
+elif no_ct 'command -v psql' >/dev/null 2>&1; then
+  MODO="nativo"
+  verde "Postgres nativo no CT $CT_PG."
+elif no_ct 'command -v docker' >/dev/null 2>&1; then
+  # Procura pelo processo que de fato serve Postgres, e não pelo
+  # nome do container: nome é convenção, imagem é fato.
+  CONTAINER_PG="$(no_ct \
+    'docker ps --filter ancestor=postgres --format "{{.Names}}" 2>/dev/null | head -1' \
+    2>/dev/null || true)"
+
+  if [[ -z "$CONTAINER_PG" ]]; then
+    CONTAINER_PG="$(no_ct \
+      'docker ps --format "{{.Names}} {{.Image}}" 2>/dev/null | grep -i postgres | head -1 | cut -d" " -f1' \
+      2>/dev/null || true)"
+  fi
+
+  if [[ -n "$CONTAINER_PG" ]]; then
+    MODO="docker"
+    verde "Postgres em Docker no CT $CT_PG, container \"$CONTAINER_PG\"."
+  fi
+fi
+
+if [[ -z "$MODO" ]]; then
+  vermelho "Não achei Postgres no CT $CT_PG — nem nativo, nem em Docker."
+  echo
+  amarelo "O que este CT tem:"
+  no_ct 'command -v psql || echo "  psql: não"; command -v docker || echo "  docker: não"' 2>/dev/null || true
+  echo
+  amarelo "Containers rodando nele, se houver Docker:"
+  no_ct 'docker ps --format "  {{.Names}}  {{.Image}}  {{.Ports}}" 2>/dev/null || echo "  (sem docker)"' 2>/dev/null || true
+  echo
+  amarelo "Para descobrir quem escuta a 5432 no cluster, sem chutar CT:"
+  echo "    for c in \$(pct list | awk 'NR>1 {print \$1}'); do"
+  echo "      echo -n \"CT \$c: \"; pct exec \$c -- bash -c 'ss -ltn 2>/dev/null | grep -c :5432' 2>/dev/null || echo 0"
+  echo "    done"
+  echo
+  amarelo "Achado o certo, rode de novo apontando para ele:"
+  echo "    CT_PG=<numero> $0"
+  echo "    CT_PG=<numero> CONTAINER_PG=<nome-do-container> $0"
   exit 1
 fi
 
-passo "Postgres no CT $CT_PG"
+passo "Preparando o banco"
 
-pg() { pct exec "$CT_PG" -- su postgres -c "psql -tAc \"$1\""; }
+# Uma função só para os dois modos: quem chama não precisa saber
+# onde o Postgres mora.
+pg() {
+  local sql="$1" alvo="${2:-postgres}"
+  if [[ "$MODO" == "docker" ]]; then
+    no_ct "docker exec -i '$CONTAINER_PG' psql -U postgres -d '$alvo' -tAc \"$sql\""
+  else
+    no_ct "su postgres -c \"psql -d '$alvo' -tAc \\\"$sql\\\"\""
+  fi
+}
 
 # ---------- Papel ----------
 
@@ -75,9 +137,9 @@ fi
 
 # O dono do banco já pode tudo nele, mas no Postgres 15+ o schema
 # public deixou de ser gravável por qualquer um — sem esta linha a
-# migração falharia em "permission denied for schema public".
-pct exec "$CT_PG" -- su postgres -c \
-  "psql -d ${BANCO} -tAc \"GRANT ALL ON SCHEMA public TO ${PAPEL}\"" >/dev/null
+# migração falharia em "permission denied for schema public", já com
+# o container de pé.
+pg "GRANT ALL ON SCHEMA public TO ${PAPEL}" "$BANCO" >/dev/null
 verde "Permissões do schema public concedidas a \"$PAPEL\"."
 
 # ---------- Endereço ----------
@@ -85,13 +147,27 @@ verde "Permissões do schema public concedidas a \"$PAPEL\"."
 IP_PG="$(pct exec "$CT_PG" -- bash -c 'hostname -I' 2>/dev/null | awk '{print $1}')"
 IP_PG="${IP_PG:-192.168.15.72}"
 
-# O Postgres precisa aceitar conexão do CT da aplicação, não só do
-# próprio host. Checar aqui evita descobrir isso no meio do deploy.
-if ! pct exec "$CT_PG" -- bash -c "grep -qE '^\s*listen_addresses\s*=\s*'\''\*'\''' /etc/postgresql/*/main/postgresql.conf" 2>/dev/null; then
-  amarelo "Atenção: listen_addresses pode não estar aberto para a rede."
-  amarelo "Se a API não conectar, confira dentro do CT $CT_PG:"
-  echo "    /etc/postgresql/*/main/postgresql.conf → listen_addresses = '*'"
-  echo "    /etc/postgresql/*/main/pg_hba.conf     → host $BANCO $PAPEL 192.168.15.0/24 scram-sha-256"
+# O Postgres precisa aceitar conexão vinda do CT da aplicação, não
+# só do próprio host. A armadilha muda de forma conforme a
+# montagem, então a checagem também muda — e nenhuma delas
+# interrompe o script: são avisos, não veredictos.
+if [[ "$MODO" == "docker" ]]; then
+  PORTAS="$(no_ct "docker port '$CONTAINER_PG' 5432" 2>/dev/null || true)"
+
+  if [[ -z "$PORTAS" ]]; then
+    amarelo "Atenção: o container \"$CONTAINER_PG\" não publica a 5432 no CT."
+    amarelo "Sem publicação, o CT 103 não alcança este Postgres."
+  elif grep -q '127.0.0.1' <<<"$PORTAS"; then
+    amarelo "Atenção: a 5432 está publicada só no loopback do CT ($PORTAS)."
+    amarelo "Nesse caso o CT 103 não conecta — a publicação precisa ser 0.0.0.0."
+  fi
+else
+  if ! no_ct "grep -qE \"^\\s*listen_addresses\\s*=\\s*'\\*'\" /etc/postgresql/*/main/postgresql.conf" 2>/dev/null; then
+    amarelo "Atenção: listen_addresses pode não estar aberto para a rede."
+    amarelo "Se a API não conectar, confira dentro do CT $CT_PG:"
+    echo "    /etc/postgresql/*/main/postgresql.conf → listen_addresses = '*'"
+    echo "    /etc/postgresql/*/main/pg_hba.conf     → host $BANCO $PAPEL 192.168.15.0/24 scram-sha-256"
+  fi
 fi
 
 passo "Pronto"
@@ -124,8 +200,11 @@ Depois disso, ainda no host thor:
   1. Complete o .env         nano /srv/apps-fase1/licita-mais/.env
      (DATABASE_URL acima, JWT_SECRET, SMTP_USER e SMTP_PASS)
 
-  2. Suba a aplicação        /srv/apps-fase1/licita-mais/deploy-thor.sh
+  2. Suba a aplicação        $(dirname "$0")/deploy-thor.sh
      (a migração roda sozinha na subida do container)
+
+     Rode a partir do clone, e não de /srv: /srv só recebe os
+     arquivos no fim do deploy, então de lá roda a versão anterior.
 
   3. Primeira varredura      pct exec 103 -- bash -c \\
        'cd /opt/licita-mais && docker compose exec -T licita-api \\
