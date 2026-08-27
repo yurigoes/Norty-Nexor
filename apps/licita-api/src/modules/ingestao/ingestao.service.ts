@@ -91,10 +91,23 @@ export class IngestaoService {
         resumo.falhas.push(...falhas);
         resumo.consultadas += contratacoes.length;
 
-        for (const oportunidade of normalizarLote(contratacoes)) {
+        const normalizadas = normalizarLote(contratacoes);
+
+        for (const oportunidade of normalizadas) {
           const novo = await this.gravar(oportunidade);
           if (novo) resumo.novas += 1;
           else resumo.atualizadas += 1;
+        }
+
+        // A normalização descarta registro sem identificação
+        // mínima — de propósito. Mas descartar em silêncio faz
+        // "consultadas 40, novas 0" parecer defeito de gravação
+        // quando é o formato do que veio.
+        const descartadas = contratacoes.length - normalizadas.length;
+        if (descartadas > 0) {
+          this.logger.warn(
+            `${uf}: ${descartadas} de ${contratacoes.length} sem CNPJ, ano, sequencial ou objeto — descartadas.`,
+          );
         }
 
         this.logger.log(`${uf}: ${contratacoes.length} contratações`);
@@ -116,9 +129,18 @@ export class IngestaoService {
         },
       });
 
+      // As falhas por modalidade eram gravadas em
+      // `execucoes_ingestao.erro` e nunca apareciam no log — então
+      // "0 contratações" ficava indistinguível de "o PNCP recusou
+      // o pedido três vezes". Quem lê o log é quem precisa saber.
+      for (const falha of resumo.falhas) {
+        this.logger.error(`PNCP recusou a modalidade ${falha.modalidade}: ${falha.erro}`);
+      }
+
       this.logger.log(
         `Varredura concluída: ${resumo.novas} novas, ${resumo.atualizadas} atualizadas, ` +
-          `${resumo.avaliacoes} avaliações`,
+          `${resumo.avaliacoes} avaliações` +
+          (resumo.falhas.length ? ` — ${resumo.falhas.length} falha(s) acima` : ''),
       );
       return resumo;
     } catch (erro) {

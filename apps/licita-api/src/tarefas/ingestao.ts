@@ -50,6 +50,13 @@ async function principal(): Promise<void> {
         `Varredura concluída: ${resumo.consultadas} consultada(s), ${resumo.novas} nova(s), ` +
           `${resumo.atualizadas} atualizada(s), ${resumo.avaliacoes} avaliação(ões).`,
       );
+
+      if (resumo.consultadas === 0) {
+        registro.warn(
+          'Nenhuma contratação veio do PNCP. Para separar "não há nada" de '
+            + '"o pedido foi recusado", rode: node dist/tarefas/pncp.js',
+        );
+      }
     }
   } finally {
     // Fecha o contexto sempre: sem isso o processo fica preso

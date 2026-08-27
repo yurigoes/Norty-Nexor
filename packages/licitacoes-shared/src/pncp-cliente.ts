@@ -155,8 +155,17 @@ export class ClientePncp {
         if (resposta.status === 204) return null;
 
         if (!resposta.ok) {
+          // Num 4xx o corpo é a explicação — qual parâmetro o PNCP
+          // não aceitou. Descartá-lo deixa quem lê o log com o
+          // número do status e mais nada.
+          const motivo = await resposta.text().then(
+            (t) => t.trim().slice(0, 200),
+            () => '',
+          );
+
           const erro = new ErroPncp(
-            `PNCP respondeu ${resposta.status} para ${url.pathname}`,
+            `PNCP respondeu ${resposta.status} para ${url.pathname}` +
+              (motivo ? ` — ${motivo}` : ''),
             resposta.status,
           );
           // 4xx é parâmetro errado: repetir não conserta.
