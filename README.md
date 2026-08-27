@@ -57,8 +57,14 @@ npm run build            # shared → api → web
 ```bash
 git clone <repositorio> && cd my-home
 cp infra/.env.example infra/.env     # preencha ACME_EMAIL
-./scripts/bootstrap.sh               # --demo popula dados fictícios
+./scripts/preflight.sh               # diagnostica: Docker, portas, DNS, disco
+./scripts/bootstrap.sh --demo        # sobe tudo
 ```
+
+O `preflight.sh` só lê e reporta — não instala nem sobe nada. Ele confere
+Docker, memória, disco, relógio, portas 80/443 e se os dois subdomínios já
+apontam para o IP público da máquina. O `bootstrap.sh` roda esse mesmo
+diagnóstico antes de começar e para se algo estiver faltando.
 
 Um comando só: constrói as imagens, sobe PostgreSQL, Redis, API, web e
 Caddy, aplica as migrações, semeia o banco e confere a saúde dos

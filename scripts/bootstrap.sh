@@ -2,8 +2,9 @@
 #
 # my Home by norty — instalação e atualização em um comando.
 #
-#   ./scripts/bootstrap.sh            sobe (ou atualiza) a stack completa
-#   ./scripts/bootstrap.sh --demo     idem, populando dados de demonstração
+#   ./scripts/bootstrap.sh              sobe (ou atualiza) a stack completa
+#   ./scripts/bootstrap.sh --demo       idem, populando dados de demonstração
+#   ./scripts/bootstrap.sh --sem-check  pula o diagnóstico inicial
 #
 # É seguro rodar de novo: as migrações e a semeadura são idempotentes,
 # então este mesmo script serve tanto para o primeiro deploy quanto para
@@ -14,7 +15,13 @@ set -Eeuo pipefail
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE="docker compose -f $RAIZ/infra/docker-compose.yml --env-file $RAIZ/infra/.env"
 DEMO=false
-[[ "${1:-}" == "--demo" ]] && DEMO=true
+CHECAR=true
+for arg in "$@"; do
+  case "$arg" in
+    --demo)      DEMO=true ;;
+    --sem-check) CHECAR=false ;;
+  esac
+done
 
 azul()    { printf '\033[1;34m%s\033[0m\n' "$*"; }
 verde()   { printf '\033[1;32m%s\033[0m\n' "$*"; }
@@ -25,6 +32,16 @@ trap 'erro "Falhou na linha $LINENO. Nada foi deixado pela metade: rode de novo 
 
 # ---------- 1. Pré-requisitos ----------
 azul "1/6 · Conferindo pré-requisitos"
+
+# O diagnóstico completo roda antes de qualquer coisa: é melhor receber a
+# lista inteira de pendências agora do que descobrir na etapa 5, com meia
+# stack no ar.
+if $CHECAR && [[ -x "$RAIZ/scripts/preflight.sh" ]]; then
+  if ! "$RAIZ/scripts/preflight.sh"; then
+    erro "O diagnóstico encontrou problemas. Corrija-os, ou rode com --sem-check para seguir mesmo assim."
+    exit 1
+  fi
+fi
 
 for programa in docker openssl; do
   command -v "$programa" >/dev/null 2>&1 || {

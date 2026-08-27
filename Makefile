@@ -1,8 +1,11 @@
 # my Home by norty — atalhos de operação.
-.PHONY: help setup up down logs ps migrate seed seed-demo backup restore shell-api shell-db build
+.PHONY: help check setup setup-demo up down logs ps migrate seed backup shell-api shell-db build
 
 help: ## Mostra estes comandos
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
+
+check: ## Diagnostica a máquina antes do deploy (não altera nada)
+	./scripts/preflight.sh
 
 setup: ## Instala e sobe tudo pela primeira vez
 	./scripts/bootstrap.sh
