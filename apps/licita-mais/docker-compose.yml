@@ -96,8 +96,11 @@ services:
       # É o que permite subir antes do SMTP estar pronto — mas
       # ninguém consegue confirmar a conta até ele existir.
       SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      # Sem valor padrão de propósito: ausente, a API deduz o modo
+      # pela porta (465 = TLS implícito). Fixar `false` aqui
+      # recriaria a combinação que trava o envio.
+      SMTP_SECURE: ${SMTP_SECURE:-}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-LICITA+ <nao-responda@norty.com.br>}

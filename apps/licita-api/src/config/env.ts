@@ -87,6 +87,7 @@ export function carregarConfig(): Config {
   }
 
   const smtpHost = process.env.SMTP_HOST ?? '';
+  const smtpPorta = Number(process.env.SMTP_PORT ?? 465);
 
   cache = {
     nodeEnv,
@@ -119,8 +120,17 @@ export function carregarConfig(): Config {
       // pronto sem travar o cadastro inteiro.
       ativo: smtpHost !== '',
       host: smtpHost,
-      porta: Number(process.env.SMTP_PORT ?? 587),
-      seguro: process.env.SMTP_SECURE === 'true',
+      porta: smtpPorta,
+      // A porta decide o modo quando ninguém disse o contrário. A 465
+      // é TLS implícito: o servidor espera o handshake antes de
+      // qualquer texto. Tentar STARTTLS nela deixa os dois lados
+      // esperando um pelo outro até o timeout — e o sintoma é "o
+      // cadastro trava", nunca "o SMTP está errado". Deixar isso a
+      // cargo de uma segunda variável é convidar a combinação que
+      // não funciona.
+      seguro: process.env.SMTP_SECURE === undefined
+        ? smtpPorta === 465
+        : process.env.SMTP_SECURE === 'true',
       usuario: process.env.SMTP_USER ?? '',
       senha: process.env.SMTP_PASS ?? '',
       remetente: process.env.SMTP_FROM ?? 'LICITA+ <nao-responda@norty.com.br>',
