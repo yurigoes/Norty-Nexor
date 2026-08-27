@@ -96,14 +96,35 @@ export class AuthService {
       return { mensagem: enviado ? MENSAGEM_CADASTRO : MENSAGEM_SEM_ENVIO };
     }
 
-    const cnpjEmUso = await this.prisma.empresa.findUnique({ where: { cnpj } });
+    const cnpjEmUso = await this.prisma.empresa.findUnique({
+      where: { cnpj },
+      include: { usuarios: { select: { emailConfirmadoEm: true, criadoEm: true } } },
+    });
+
     if (cnpjEmUso) {
-      // Aqui a colisão é informativa: o CNPJ é público e o usuário
-      // precisa saber que a empresa já tem conta para pedir acesso
-      // a quem administra, em vez de criar uma segunda.
-      throw new ConflictException(
-        'Este CNPJ já tem conta no LICITA+. Peça um convite a quem administra a conta da empresa.',
-      );
+      const confirmada = cnpjEmUso.usuarios.some((u) => u.emailConfirmadoEm !== null);
+      const ultimaTentativa = Math.max(0, ...cnpjEmUso.usuarios.map((u) => u.criadoEm.getTime()));
+      const janelaAberta = Date.now() - ultimaTentativa < DIA;
+
+      if (confirmada || janelaAberta) {
+        // Aqui a colisão é informativa: o CNPJ é público e o usuário
+        // precisa saber que a empresa já tem conta para pedir acesso
+        // a quem administra, em vez de criar uma segunda.
+        throw new ConflictException(
+          confirmada
+            ? 'Este CNPJ já tem conta no LICITA+. Peça um convite a quem administra a conta da empresa.'
+            : 'Já existe um cadastro em andamento para este CNPJ, aguardando confirmação por e-mail. '
+              + 'Se o endereço foi digitado errado, tente de novo daqui a 24 horas.',
+        );
+      }
+
+      // Cadastro abandonado: ninguém provou ser dono daquele e-mail
+      // dentro da validade do link, então não há o que proteger — e
+      // um erro de digitação no endereço não pode trancar o CNPJ da
+      // empresa para sempre. O `onDelete: Cascade` leva junto o que
+      // pendurava nela, que nesse estado é essencialmente nada.
+      await this.prisma.empresa.delete({ where: { id: cnpjEmUso.id } });
+      this.logger.warn(`CNPJ ${cnpj} liberado: cadastro anterior nunca foi confirmado.`);
     }
 
     const senhaHash = await hash(dto.senha);
