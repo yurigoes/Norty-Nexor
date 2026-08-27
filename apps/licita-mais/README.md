@@ -222,14 +222,20 @@ fi
 Daí em diante, na ordem:
 
 ```bash
-"$CLONE/apps/licita-mais/preparar-banco.sh"   # cria papel e base no CT 102
-nano /srv/apps-fase1/licita-mais/.env          # DATABASE_URL, JWT_SECRET, SMTP_*
+"$CLONE/apps/licita-mais/preparar-banco.sh"   # papel, base e .env preenchido
+nano /srv/apps-fase1/licita-mais/.env          # só SMTP_USER e SMTP_PASS
 "$CLONE/apps/licita-mais/deploy-thor.sh"       # sobe os dois containers
 ```
 
-O primeiro `deploy-thor.sh` cria o `.env` a partir do exemplo e **para**,
-pedindo que seja preenchido. É proposital: uma API que sobe com
-`JWT_SECRET` vazio é pior do que uma que não sobe.
+O `preparar-banco.sh` **grava** `DATABASE_URL` e `JWT_SECRET` no `.env`
+em vez de imprimi-los para você colar: o arquivo só nasceria no fim do
+deploy, e a senha recém-gerada não precisa passar pelo terminal.
+Rodado de novo, preserva o que já está lá — trocar o `JWT_SECRET`
+derrubaria todas as sessões abertas.
+
+Se o `deploy-thor.sh` for o primeiro a rodar, ele cria o `.env` a partir
+do exemplo e **para**, pedindo que seja preenchido. É proposital: uma
+API que sobe com `JWT_SECRET` vazio é pior do que uma que não sobe.
 
 ### O mount point é o primeiro passo, e ele custa um reboot
 

@@ -3,8 +3,13 @@
 #  LICITA+ — cria o banco no Postgres da Norty
 # ---------------------------------------------------------
 #  Roda NO HOST thor, como root. Cria o papel e a base que a API
-#  usa, no CT do Postgres (102 por padrão), e imprime a
-#  DATABASE_URL pronta para colar no .env.
+#  usa, no CT do Postgres (102 por padrão), e grava DATABASE_URL e
+#  JWT_SECRET direto no .env da aplicação.
+#
+#  Grava em vez de imprimir por dois motivos: o .env só nasceria no
+#  fim do deploy, então mandar editá-lo antes é mandar editar um
+#  arquivo que não existe; e a senha recém-gerada não precisa passar
+#  pelo terminal — é um lugar a menos onde ela fica.
 #
 #  É idempotente: rodar duas vezes não quebra nada e não troca a
 #  senha de um papel que já existe — trocar a senha por descuido
@@ -170,30 +175,105 @@ else
   fi
 fi
 
+# ---------- Escreve o .env ----------
+#
+# O script grava o arquivo em vez de imprimir a senha para você
+# colar. Dois motivos: o .env só nasceria no fim do deploy, então
+# mandar editá-lo antes é mandar editar um arquivo que não existe;
+# e a senha recém-gerada nunca precisa aparecer no terminal — do
+# gerador direto para o arquivo é um lugar a menos onde ela fica.
+
+ENV_APP="${ENV_APP:-/srv/apps-fase${FASE:-1}/licita-mais/.env}"
+# Absoluto: o caminho é impresso no fim para ser colado, e
+# relativo ele só funcionaria de dentro desta pasta.
+AQUI="$(cd "$(dirname "$0")" && pwd)"
+EXEMPLO="$AQUI/.env.example"
+
+# `awk -v` carrega o valor sem interpretar nada: senha em base64
+# tem `+` e `/`, que quebrariam um `sed` com barra de delimitador.
+definir_env() {
+  local chave="$1" valor="$2" arquivo="$3" tmp
+  tmp="$(mktemp)"
+  awk -v k="$chave" -v v="$valor" '
+    $0 ~ "^" k "=" { print k "=" v; achou = 1; next }
+    { print }
+    END { if (!achou) print k "=" v }
+  ' "$arquivo" > "$tmp"
+  mv "$tmp" "$arquivo"
+  chmod 600 "$arquivo"
+}
+
+valor_env() {
+  grep -E "^$1=" "$2" 2>/dev/null | head -1 | cut -d= -f2- || true
+}
+
+passo "Escrevendo $ENV_APP"
+
+mkdir -p "$(dirname "$ENV_APP")"
+
+if [[ ! -f "$ENV_APP" ]]; then
+  if [[ -f "$EXEMPLO" ]]; then
+    cp "$EXEMPLO" "$ENV_APP"
+    verde "Criado a partir de .env.example."
+  else
+    : > "$ENV_APP"
+    amarelo "Sem .env.example ao lado do script — criei um .env vazio."
+  fi
+  chmod 600 "$ENV_APP"
+else
+  amarelo "Já existia — só os campos vazios serão preenchidos."
+fi
+
+URL_NOVA="postgresql://${PAPEL}:${SENHA}@${IP_PG}:5432/${BANCO}?schema=public"
+URL_ATUAL="$(valor_env DATABASE_URL "$ENV_APP")"
+
+if [[ -n "$SENHA" ]]; then
+  definir_env DATABASE_URL "$URL_NOVA" "$ENV_APP"
+  verde "DATABASE_URL gravada (senha nova, não impressa aqui de propósito)."
+elif [[ -n "$URL_ATUAL" && "$URL_ATUAL" != *TROQUE* ]]; then
+  amarelo "DATABASE_URL preservada — o papel já existia e a senha atual é a que vale."
+else
+  # O papel existe, mas ninguém sabe a senha: adivinhar seria pior
+  # do que dizer.
+  vermelho "O papel \"$PAPEL\" já existe e o .env não tem a senha dele."
+  amarelo "Defina uma nova (isto derruba quem estiver usando a antiga) e grave à mão."
+fi
+
+# JWT_SECRET assina o access token. Gerado aqui para ninguém
+# inventar um curto — em produção a API recusa subir com menos de
+# 32 caracteres, e descobrir isso no deploy custa uma ida e volta.
+if [[ -z "$(valor_env JWT_SECRET "$ENV_APP")" ]]; then
+  definir_env JWT_SECRET "$(openssl rand -base64 48 | tr -d '\n')" "$ENV_APP"
+  verde "JWT_SECRET gerado."
+else
+  amarelo "JWT_SECRET preservado — trocá-lo derrubaria as sessões abertas."
+fi
+
 passo "Pronto"
 
 if [[ -n "$SENHA" ]]; then
   cat <<FIM
-Cole no .env do LICITA+ (/srv/apps-fase1/licita-mais/.env):
+Banco criado e $ENV_APP preenchido. Falta só o SMTP:
 
-  DATABASE_URL=postgresql://${PAPEL}:${SENHA}@${IP_PG}:5432/${BANCO}?schema=public
+  SMTP_USER=  e  SMTP_PASS=
 
-$(amarelo "Esta senha aparece uma vez só. Guarde-a agora.")
+Sem eles o cadastro funciona, mas o link de confirmação não sai —
+e sem confirmar o e-mail ninguém entra.
 FIM
 else
   cat <<FIM
-O papel já existia, então a senha não foi trocada. A DATABASE_URL tem
-esta forma — a senha é a que você já guardou:
+Banco conferido e $ENV_APP atualizado no que estava vazio.
 
-  DATABASE_URL=postgresql://${PAPEL}:<senha>@${IP_PG}:5432/${BANCO}?schema=public
-
-Se ela se perdeu, defina outra (isto derruba quem estiver usando a antiga):
+O papel já existia, então a senha não foi trocada — trocá-la
+derrubaria a API que estivesse usando a antiga. Se ela se perdeu:
 
 $(if [[ "$MODO" == "docker" ]]; then
     echo "  pct exec ${CT_PG} -- bash -c \"docker exec -i ${CONTAINER_PG} psql -U postgres -tAc \\\"ALTER ROLE ${PAPEL} WITH PASSWORD 'nova'\\\"\""
   else
     echo "  pct exec ${CT_PG} -- bash -c \"su postgres -c 'psql -tAc \\\"ALTER ROLE ${PAPEL} WITH PASSWORD '\\''nova'\\''\\\"'\""
   fi)
+
+...e grave a nova DATABASE_URL em $ENV_APP.
 FIM
 fi
 
@@ -201,10 +281,10 @@ cat <<FIM
 
 Depois disso, ainda no host thor:
 
-  1. Complete o .env         nano /srv/apps-fase1/licita-mais/.env
-     (DATABASE_URL acima, JWT_SECRET, SMTP_USER e SMTP_PASS)
+  1. Complete o SMTP         nano $ENV_APP
+     (só SMTP_USER e SMTP_PASS — o resto já está preenchido)
 
-  2. Suba a aplicação        $(dirname "$0")/deploy-thor.sh
+  2. Suba a aplicação        $AQUI/deploy-thor.sh
      (a migração roda sozinha na subida do container)
 
      Rode a partir do clone, e não de /srv: /srv só recebe os
