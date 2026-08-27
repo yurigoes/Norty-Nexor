@@ -4,7 +4,7 @@
 
 **O sistema operacional do condomínio.**
 
-MVP navegável — Fase 1
+Fase 2 — aplicativo, API e banco de produção
 
 </div>
 
@@ -12,29 +12,57 @@ MVP navegável — Fase 1
 
 ## O que é esta entrega
 
-Um **MVP evolutivo** do my Home: uma aplicação navegável, com identidade visual
-definitiva, arquitetura de produto real e todos os fluxos principais funcionando
-ponta a ponta sobre um banco de dados provisório.
-
-Não é um protótipo descartável. A separação entre interface, regras de negócio,
-serviços e camada de dados foi construída para que a troca do banco provisório
-pelo definitivo (Fase 2) não exija reescrever o frontend.
+Monorepo com o aplicativo web, a API e o domínio compartilhado entre os dois:
 
 ```
-UI  →  Services  →  Repositories  →  Banco provisório   (hoje)
-UI  →  Services  →  Repositories  →  Banco de produção  (Fase 2)
+apps/web         React + Vite — 5 papéis, ~50 telas, design system próprio
+apps/api         NestJS + Prisma — auth, RBAC, multi-tenant, módulos de negócio
+packages/shared  Domínio, matriz de permissões e contratos de API
+infra            docker-compose, Caddy com HTTPS automático, Dockerfiles
 ```
+
+O domínio é compartilhado de propósito: os mesmos tipos e a mesma matriz de
+permissões alimentam o menu do aplicativo e os guards da API. Uma mudança de
+regra acontece em um lugar só, e o TypeScript aponta os dois lados afetados.
+
+```
+Aplicativo  →  API  →  Prisma  →  PostgreSQL
+```
+
+A demonstração navegável continua disponível com `VITE_DATA_SOURCE=mock`,
+que usa o banco em memória e não precisa de servidor.
+
+---
+
+## Endereços
+
+| | |
+|---|---|
+| Aplicativo | `myhome.norty.com.br` |
+| API | `api-myhome.norty.com.br` |
 
 ---
 
 ## Como executar
 
 ```bash
-npm install
-npm run dev      # ambiente de desenvolvimento
-npm run build    # build de produção
-npm run preview  # serve o build
+npm install              # instala o monorepo inteiro
+npm run dev:web          # aplicativo em http://localhost:5173
+npm run dev:api          # API em http://localhost:3333/v1
+npm run build            # shared → api → web
 ```
+
+### Subir tudo em produção (no servidor)
+
+```bash
+git clone <repositorio> && cd my-home
+cp infra/.env.example infra/.env     # preencha ACME_EMAIL
+./scripts/bootstrap.sh               # --demo popula dados fictícios
+```
+
+Um comando só: constrói as imagens, sobe PostgreSQL, Redis, API, web e
+Caddy, aplica as migrações, semeia o banco e confere a saúde dos
+serviços. É seguro rodar de novo a cada atualização.
 
 Aplicação em `http://localhost:5173`.
 

@@ -4,9 +4,14 @@
    O papel define o conjunto base; o usuário pode receber
    permissões extras. A UI nunca decide sozinha o que exibir:
    sempre consulta `can()`.
+
+   Este arquivo é compartilhado: a mesma matriz que esconde um
+   item de menu no aplicativo bloqueia a rota na API. Interface
+   e servidor não podem discordar sobre quem pode o quê — se
+   discordassem, esconder o botão viraria a única proteção.
    ========================================================= */
 
-import type { Permission, User, UserRole } from '../data/types';
+import type { Permission, User, UserRole } from './domain';
 
 const MORADOR: Permission[] = [
   'visitors.view', 'visitors.manage',

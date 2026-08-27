@@ -1,9 +1,10 @@
 /* =========================================================
    my Home — Modelo de domínio
-   Estes tipos são a fronteira entre a UI e a persistência.
-   A troca do banco provisório pelo definitivo (Fase 2) não
-   deve alterar nada aqui: apenas a implementação dos
-   repositories em data/repositories.
+   ---------------------------------------------------------
+   Fonte única de verdade do domínio, compartilhada entre o
+   aplicativo web e a API. O schema do Prisma e os DTOs da API
+   derivam daqui: se um campo muda, ele muda em um lugar só e
+   o TypeScript aponta todos os pontos afetados nos dois lados.
    ========================================================= */
 
 export type ID = string;
@@ -98,7 +99,13 @@ export interface User {
   id: ID;
   name: string;
   email: string;
-  password: string;
+  /**
+   * Só existe no banco de demonstração, que guarda a senha em claro.
+   * Em produção a senha vive como hash Argon2 na tabela `users` e a API
+   * nunca a devolve: as respostas usam `AuthenticatedUser`, que não tem
+   * este campo.
+   */
+  password?: string;
   role: UserRole;
   tenantId: ID;
   /** Vazio para administradora (acesso a todos do tenant). */
@@ -602,43 +609,3 @@ export interface ServiceRequest {
   respondedAt?: string;
 }
 
-/* ---------- Estado completo do banco provisório ---------- */
-
-export interface MyHomeDatabase {
-  version: number;
-  createdAt: string;
-  tenants: Tenant[];
-  condominiums: Condominium[];
-  towers: Tower[];
-  units: Unit[];
-  residents: Resident[];
-  users: User[];
-  commonAreas: CommonArea[];
-  gates: Gate[];
-  cameras: Camera[];
-  visitors: Visitor[];
-  staff: Staff[];
-  vehicles: Vehicle[];
-  accessLogs: AccessLog[];
-  deliveries: Delivery[];
-  reservations: Reservation[];
-  events: CondoEvent[];
-  invoices: Invoice[];
-  ledger: LedgerEntry[];
-  tickets: Ticket[];
-  incidents: Incident[];
-  maintenance: MaintenanceOrder[];
-  announcements: Announcement[];
-  documents: DocumentFile[];
-  assemblies: Assembly[];
-  notifications: AppNotification[];
-  audit: AuditEntry[];
-  sessions: DeviceSession[];
-  professionals: Professional[];
-  professionalReviews: ProfessionalReview[];
-  serviceRequests: ServiceRequest[];
-}
-
-export type CollectionName = {
-  [K in keyof MyHomeDatabase]: MyHomeDatabase[K] extends Array<infer _T> ? K : never;
-}[keyof MyHomeDatabase];

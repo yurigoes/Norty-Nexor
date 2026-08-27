@@ -1,0 +1,1232 @@
+// =========================================================
+//  my Home by norty — Schema do banco (PostgreSQL)
+// ---------------------------------------------------------
+//  Espelha o domínio em packages/shared/src/domain.ts.
+//
+//  Multi-tenant por linha: quase toda tabela carrega
+//  `condominiumId`, e o `TenantGuard` da API injeta esse filtro
+//  em cada consulta. O índice composto começa sempre por
+//  `condominiumId` porque nenhuma leitura legítima atravessa
+//  condomínios — o banco varre só a fatia do cliente.
+//
+//  Dinheiro é Decimal(12,2), nunca Float: em ponto flutuante
+//  0.1 + 0.2 não fecha caixa.
+// =========================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------- Identidade e estrutura ----------------
+
+enum Plan {
+  essential
+  professional
+  enterprise
+}
+
+model Tenant {
+  id            String         @id @default(cuid())
+  name          String
+  legalName     String
+  document      String         @unique
+  logoInitials  String
+  city          String
+  state         String         @db.Char(2)
+  plan          Plan           @default(essential)
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  condominiums  Condominium[]
+  users         User[]
+
+  @@map("tenants")
+}
+
+model Condominium {
+  id             String   @id @default(cuid())
+  tenantId       String
+  name           String
+  shortName      String
+  address        String
+  city           String
+  state          String   @db.Char(2)
+  zip            String
+  document       String   @unique
+  managerName    String
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  towers         Tower[]
+  units          Unit[]
+  residents      Resident[]
+  commonAreas    CommonArea[]
+  gates          Gate[]
+  cameras        Camera[]
+  visitors       Visitor[]
+  staff          Staff[]
+  vehicles       Vehicle[]
+  accessLogs     AccessLog[]
+  deliveries     Delivery[]
+  reservations   Reservation[]
+  events         CondoEvent[]
+  invoices       Invoice[]
+  ledger         LedgerEntry[]
+  tickets        Ticket[]
+  incidents      Incident[]
+  maintenance    MaintenanceOrder[]
+  announcements  Announcement[]
+  documents      DocumentFile[]
+  assemblies     Assembly[]
+  notifications  Notification[]
+  audit          AuditEntry[]
+  professionals  Professional[]
+  reviews        ProfessionalReview[]
+  serviceRequests ServiceRequest[]
+  memberships    Membership[]
+
+  @@index([tenantId])
+  @@map("condominiums")
+}
+
+model Tower {
+  id             String      @id @default(cuid())
+  condominiumId  String
+  name           String
+  floors         Int
+  unitsPerFloor  Int
+
+  condominium    Condominium @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+  units          Unit[]
+
+  @@index([condominiumId])
+  @@map("towers")
+}
+
+enum UnitStatus {
+  ocupada
+  vaga
+  reformando
+  alugada
+}
+
+model Unit {
+  id             String      @id @default(cuid())
+  condominiumId  String
+  towerId        String
+  label          String
+  floor          Int
+  block          String
+  bedrooms       Int
+  area           Int
+  status         UnitStatus  @default(ocupada)
+  ownerName      String
+  parkingSpots   String[]
+  monthlyFee     Decimal     @db.Decimal(12, 2)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  condominium    Condominium @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+  tower          Tower       @relation(fields: [towerId], references: [id], onDelete: Cascade)
+
+  residents      Resident[]
+  users          User[]
+  visitors       Visitor[]
+  staff          Staff[]
+  vehicles       Vehicle[]
+  deliveries     Delivery[]
+  reservations   Reservation[]
+  events         CondoEvent[]
+  invoices       Invoice[]
+  tickets        Ticket[]
+  incidents      Incident[]
+  reviews        ProfessionalReview[]
+  serviceRequests ServiceRequest[]
+  notifications  Notification[]
+
+  // Duas unidades não podem ter o mesmo número na mesma torre.
+  @@unique([towerId, label])
+  @@index([condominiumId, status])
+  @@map("units")
+}
+
+enum ResidentType {
+  proprietario
+  inquilino
+  dependente
+}
+
+model Resident {
+  id             String       @id @default(cuid())
+  condominiumId  String
+  unitId         String
+  userId         String?      @unique
+  name           String
+  document       String
+  email          String
+  phone          String
+  type           ResidentType
+  active         Boolean      @default(true)
+  since          DateTime     @db.Date
+  isMainContact  Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  condominium    Condominium  @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+  unit           Unit         @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  user           User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  visitors       Visitor[]
+  deliveries     Delivery[]
+  reservations   Reservation[]
+  events         CondoEvent[]
+
+  @@index([condominiumId, unitId])
+  @@index([condominiumId, name])
+  @@map("residents")
+}
+
+// ---------------- Acesso ao sistema ----------------
+
+enum UserRole {
+  morador
+  sindico
+  administrador
+  portaria
+  administradora
+}
+
+model User {
+  id                String        @id @default(cuid())
+  tenantId          String
+  name              String
+  email             String        @unique
+  // Hash Argon2id. Nunca sai daqui: as respostas da API usam
+  // `AuthenticatedUser`, que não tem este campo.
+  passwordHash      String
+  role              UserRole
+  phone             String?
+  avatarColorSeed   String?
+  jobTitle          String?
+  unitId            String?
+  // Permissões concedidas além das do papel.
+  extraPermissions  String[]      @default([])
+  active            Boolean       @default(true)
+  mustChangePassword Boolean      @default(false)
+  lastLoginAt       DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  tenant            Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  unit              Unit?         @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  resident          Resident?
+
+  memberships       Membership[]
+  sessions          DeviceSession[]
+  notifications     Notification[]
+
+  @@index([tenantId, role])
+  @@map("users")
+}
+
+/// A quais condomínios um usuário tem acesso. Um síndico atende um;
+/// a administradora atende a carteira inteira.
+model Membership {
+  id             String      @id @default(cuid())
+  userId         String
+  condominiumId  String
+  createdAt      DateTime    @default(now())
+
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  condominium    Condominium @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, condominiumId])
+  @@index([condominiumId])
+  @@map("memberships")
+}
+
+model DeviceSession {
+  id             String   @id @default(cuid())
+  userId         String
+  // Hash do refresh token — guardar o token em claro permitiria
+  // assumir a sessão de qualquer usuário a partir de um dump do banco.
+  refreshHash    String   @unique
+  device         String
+  browser        String
+  location       String
+  ip             String?
+  lastActiveAt   DateTime @default(now())
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  createdAt      DateTime @default(now())
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("device_sessions")
+}
+
+// ---------------- Áreas, portões e câmeras ----------------
+
+enum CommonAreaKind {
+  salao_festas
+  salao_gourmet
+  churrasqueira
+  academia
+  piscina
+  brinquedoteca
+  quadra
+  coworking
+  espaco_pet
+  cinema
+}
+
+model CommonArea {
+  id             String         @id @default(cuid())
+  condominiumId  String
+  name           String
+  kind           CommonAreaKind
+  capacity       Int
+  fee            Decimal        @db.Decimal(12, 2)
+  deposit        Decimal        @db.Decimal(12, 2)
+  autoApprove    Boolean        @default(false)
+  slots          String[]
+  rules          String[]
+  openDays       Int[]
+  active         Boolean        @default(true)
+
+  condominium    Condominium    @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+  reservations   Reservation[]
+  events         CondoEvent[]
+
+  @@index([condominiumId])
+  @@map("common_areas")
+}
+
+enum GateKind {
+  principal
+  garagem
+  servico
+  pedestre
+}
+
+enum GateStatus {
+  online
+  offline
+  manutencao
+}
+
+model Gate {
+  id             String      @id @default(cuid())
+  condominiumId  String
+  name           String
+  kind           GateKind
+  status         GateStatus  @default(online)
+  lastOpenedAt   DateTime?
+  lastOpenedBy   String?
+
+  condominium    Condominium @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+  accessLogs     AccessLog[]
+
+  @@index([condominiumId])
+  @@map("gates")
+}
+
+model Camera {
+  id             String      @id @default(cuid())
+  condominiumId  String
+  name           String
+  location       String
+  online         Boolean     @default(true)
+  channel        Int
+  streamUrl      String?
+
+  condominium    Condominium @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+
+  @@index([condominiumId])
+  @@map("cameras")
+}
+
+// ---------------- Visitantes e acessos ----------------
+
+enum AuthorizationKind {
+  unica
+  temporaria
+  recorrente
+  permanente
+}
+
+enum VisitorStatus {
+  aguardando
+  liberado
+  no_local
+  finalizado
+  revogado
+  expirado
+  recusado
+}
+
+enum VisitorCategory {
+  visita
+  prestador
+  entrega
+  convidado_evento
+}
+
+model Visitor {
+  id             String            @id @default(cuid())
+  condominiumId  String
+  unitId         String
+  residentId     String
+  name           String
+  document       String
+  phone          String?
+  kind           AuthorizationKind
+  status         VisitorStatus     @default(aguardando)
+  category       VisitorCategory   @default(visita)
+  expectedDate   DateTime          @db.Date
+  expectedTime   String
+  validUntil     DateTime?         @db.Date
+  recurrenceDays Int[]
+  notes          String?
+  vehiclePlate   String?
+  companyName    String?
+  eventId        String?
+  // Código do QR entregue ao visitante.
+  code           String            @unique
+  createdBy      String
+  checkInAt      DateTime?
+  checkOutAt     DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  condominium    Condominium       @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+  unit           Unit              @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  resident       Resident          @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  event          CondoEvent?       @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  // A portaria filtra por "quem chega hoje" o tempo todo.
+  @@index([condominiumId, expectedDate, status])
+  @@index([condominiumId, unitId])
+  @@map("visitors")
+}
+
+enum StaffKind {
+  funcionario_condominio
+  funcionario_unidade
+  prestador
+}
+
+model Staff {
+  id                String      @id @default(cuid())
+  condominiumId     String
+  unitId            String?
+  name              String
+  document          String
+  role              String
+  company           String?
+  phone             String
+  kind              StaffKind
+  workDays          Int[]
+  shiftStart        String
+  shiftEnd          String
+  accessValidUntil  DateTime?   @db.Date
+  active            Boolean     @default(true)
+  admittedAt        DateTime    @db.Date
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  condominium       Condominium @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+  unit              Unit?       @relation(fields: [unitId], references: [id], onDelete: SetNull)
+
+  @@index([condominiumId, kind, active])
+  @@map("staff")
+}
+
+enum VehicleOwnerKind {
+  morador
+  visitante
+  prestador
+  funcionario
+}
+
+enum VehicleKind {
+  carro
+  moto
+  utilitario
+  bicicleta
+}
+
+model Vehicle {
+  id             String           @id @default(cuid())
+  condominiumId  String
+  unitId         String?
+  ownerName      String
+  ownerKind      VehicleOwnerKind
+  plate          String
+  brand          String
+  model          String
+  color          String
+  kind           VehicleKind
+  parkingSpot    String?
+  authorized     Boolean          @default(true)
+  validUntil     DateTime?        @db.Date
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  condominium    Condominium      @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+  unit           Unit?            @relation(fields: [unitId], references: [id], onDelete: SetNull)
+
+  // A leitura de placa consulta por placa dentro do condomínio.
+  @@unique([condominiumId, plate])
+  @@index([condominiumId, unitId])
+  @@map("vehicles")
+}
+
+enum AccessDirection {
+  entrada
+  saida
+}
+
+enum AccessSubject {
+  morador
+  visitante
+  veiculo
+  prestador
+  funcionario
+  entrega
+}
+
+enum AccessMethod {
+  manual
+  qrcode
+  placa
+  biometria
+  tag
+}
+
+model AccessLog {
+  id             String          @id @default(cuid())
+  condominiumId  String
+  unitId         String?
+  subjectType    AccessSubject
+  subjectId      String?
+  subjectName    String
+  direction      AccessDirection
+  gateId         String
+  plate          String?
+  at             DateTime        @default(now())
+  registeredBy   String
+  method         AccessMethod
+  authorized     Boolean         @default(true)
+  photoUrl       String?
+
+  condominium    Condominium     @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+  gate           Gate            @relation(fields: [gateId], references: [id], onDelete: Cascade)
+
+  // Esta tabela cresce mais rápido que todas as outras: milhares de
+  // linhas por dia. O índice por data decrescente sustenta o histórico.
+  @@index([condominiumId, at(sort: Desc)])
+  @@index([condominiumId, unitId, at(sort: Desc)])
+  @@index([condominiumId, plate])
+  @@map("access_logs")
+}
+
+// ---------------- Encomendas ----------------
+
+enum DeliveryStatus {
+  recebida
+  notificada
+  retirada
+  devolvida
+}
+
+enum DeliverySize {
+  pequena
+  media
+  grande
+}
+
+model Delivery {
+  id                 String         @id @default(cuid())
+  condominiumId      String
+  unitId             String
+  residentId         String?
+  carrier            String
+  trackingCode       String
+  size               DeliverySize
+  status             DeliveryStatus @default(recebida)
+  receivedAt         DateTime       @default(now())
+  receivedBy         String
+  shelf              String
+  pickedUpAt         DateTime?
+  pickedUpBy         String?
+  notes              String?
+  requiresSignature  Boolean        @default(false)
+
+  condominium        Condominium    @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+  unit               Unit           @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  resident           Resident?      @relation(fields: [residentId], references: [id], onDelete: SetNull)
+
+  @@index([condominiumId, status])
+  @@index([condominiumId, unitId, status])
+  @@map("deliveries")
+}
+
+// ---------------- Reservas e eventos ----------------
+
+enum ReservationStatus {
+  pendente
+  confirmada
+  recusada
+  cancelada
+  concluida
+}
+
+model Reservation {
+  id             String            @id @default(cuid())
+  condominiumId  String
+  areaId         String
+  unitId         String
+  residentId     String
+  date           DateTime          @db.Date
+  slot           String
+  guests         Int
+  status         ReservationStatus @default(pendente)
+  fee            Decimal           @db.Decimal(12, 2)
+  notes          String?
+  eventId        String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  condominium    Condominium       @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+  area           CommonArea        @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  unit           Unit              @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  resident       Resident          @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  event          CondoEvent?       @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  // Regra de negócio no banco: a mesma área não pode ser reservada
+  // duas vezes no mesmo horário. Validar só na aplicação deixaria
+  // brecha para duas requisições simultâneas passarem juntas.
+  @@unique([areaId, date, slot])
+  @@index([condominiumId, date])
+  @@index([condominiumId, unitId])
+  @@map("reservations")
+}
+
+enum EventStatus {
+  planejado
+  em_andamento
+  concluido
+  cancelado
+}
+
+model CondoEvent {
+  id              String        @id @default(cuid())
+  condominiumId   String
+  unitId          String
+  residentId      String
+  title           String
+  date            DateTime      @db.Date
+  startTime       String
+  endTime         String
+  expectedGuests  Int
+  areaId          String?
+  status          EventStatus   @default(planejado)
+  inviteCode      String        @unique
+  createdAt       DateTime      @default(now())
+
+  condominium     Condominium   @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+  unit            Unit          @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  resident        Resident      @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  area            CommonArea?   @relation(fields: [areaId], references: [id], onDelete: SetNull)
+
+  visitors        Visitor[]
+  reservations    Reservation[]
+
+  @@index([condominiumId, date])
+  @@map("condo_events")
+}
+
+// ---------------- Financeiro ----------------
+
+enum InvoiceStatus {
+  aberto
+  pago
+  vencido
+  cancelado
+}
+
+model Invoice {
+  id             String         @id @default(cuid())
+  condominiumId  String
+  unitId         String
+  reference      String
+  dueDate        DateTime       @db.Date
+  amount         Decimal        @db.Decimal(12, 2)
+  status         InvoiceStatus  @default(aberto)
+  paidAt         DateTime?
+  barcode        String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  condominium    Condominium    @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+  unit           Unit           @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  items          InvoiceItem[]
+
+  // Um boleto por unidade por competência.
+  @@unique([unitId, reference])
+  @@index([condominiumId, status, dueDate])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id         String  @id @default(cuid())
+  invoiceId  String
+  label      String
+  amount     Decimal @db.Decimal(12, 2)
+
+  invoice    Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("invoice_items")
+}
+
+enum LedgerKind {
+  receita
+  despesa
+}
+
+enum LedgerStatus {
+  pago
+  pendente
+  atrasado
+}
+
+model LedgerEntry {
+  id             String       @id @default(cuid())
+  condominiumId  String
+  kind           LedgerKind
+  category       String
+  description    String
+  amount         Decimal      @db.Decimal(12, 2)
+  date           DateTime     @db.Date
+  status         LedgerStatus @default(pago)
+  supplier       String?
+  createdAt      DateTime     @default(now())
+
+  condominium    Condominium  @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+
+  @@index([condominiumId, date])
+  @@map("ledger_entries")
+}
+
+// ---------------- Chamados ----------------
+
+enum TicketStatus {
+  aberto
+  em_andamento
+  resolvido
+  cancelado
+}
+
+enum TicketPriority {
+  baixa
+  normal
+  alta
+  urgente
+}
+
+model Ticket {
+  id             String         @id @default(cuid())
+  condominiumId  String
+  unitId         String?
+  code           String
+  category       String
+  location       String
+  title          String
+  description    String
+  status         TicketStatus   @default(aberto)
+  priority       TicketPriority @default(normal)
+  openedBy       String
+  openedById     String?
+  assignedTo     String?
+  closedAt       DateTime?
+  hasAttachment  Boolean        @default(false)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  condominium    Condominium    @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+  unit           Unit?          @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  updates        TicketUpdate[]
+
+  @@unique([condominiumId, code])
+  @@index([condominiumId, status, priority])
+  @@map("tickets")
+}
+
+model TicketUpdate {
+  id        String        @id @default(cuid())
+  ticketId  String
+  at        DateTime      @default(now())
+  author    String
+  message   String
+  status    TicketStatus?
+
+  ticket    Ticket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, at])
+  @@map("ticket_updates")
+}
+
+// ---------------- Ocorrências ----------------
+
+enum IncidentType {
+  barulho
+  danos
+  acidente
+  seguranca
+  estrutural
+  regras
+  outros
+}
+
+enum IncidentSeverity {
+  baixa
+  media
+  alta
+  critica
+}
+
+enum IncidentStatus {
+  registrada
+  em_analise
+  notificada
+  encerrada
+}
+
+model Incident {
+  id             String               @id @default(cuid())
+  condominiumId  String
+  unitId         String?
+  code           String
+  type           IncidentType
+  title          String
+  description    String
+  severity       IncidentSeverity
+  status         IncidentStatus       @default(registrada)
+  location       String
+  reportedBy     String
+  involved       String[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  condominium    Condominium          @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+  unit           Unit?                @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  actions        IncidentAction[]
+  attachments    IncidentAttachment[]
+
+  @@unique([condominiumId, code])
+  @@index([condominiumId, status, severity])
+  @@map("incidents")
+}
+
+model IncidentAction {
+  id          String   @id @default(cuid())
+  incidentId  String
+  at          DateTime @default(now())
+  author      String
+  message     String
+
+  incident    Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, at])
+  @@map("incident_actions")
+}
+
+enum AttachmentKind {
+  foto
+  video
+  audio
+}
+
+model IncidentAttachment {
+  id          String         @id @default(cuid())
+  incidentId  String
+  kind        AttachmentKind
+  label       String
+  url         String?
+
+  incident    Incident       @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId])
+  @@map("incident_attachments")
+}
+
+// ---------------- Manutenção ----------------
+
+enum MaintenanceStatus {
+  agendada
+  em_execucao
+  concluida
+  atrasada
+}
+
+enum MaintenanceRecurrence {
+  unica
+  mensal
+  trimestral
+  semestral
+  anual
+}
+
+model MaintenanceOrder {
+  id              String                @id @default(cuid())
+  condominiumId   String
+  asset           String
+  description     String
+  supplier        String
+  scheduledFor    DateTime              @db.Date
+  status          MaintenanceStatus     @default(agendada)
+  cost            Decimal               @db.Decimal(12, 2)
+  recurrence      MaintenanceRecurrence @default(unica)
+  lastExecutedAt  DateTime?             @db.Date
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  condominium     Condominium           @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+
+  @@index([condominiumId, status, scheduledFor])
+  @@map("maintenance_orders")
+}
+
+// ---------------- Comunicação ----------------
+
+enum AnnouncementPriority {
+  normal
+  importante
+  urgente
+}
+
+enum AudienceKind {
+  todos
+  torre
+  unidade
+}
+
+model Announcement {
+  id             String               @id @default(cuid())
+  condominiumId  String
+  title          String
+  body           String
+  priority       AnnouncementPriority @default(normal)
+  audienceKind   AudienceKind         @default(todos)
+  audienceIds    String[]
+  audienceLabel  String
+  publishedAt    DateTime             @default(now())
+  author         String
+  pinned         Boolean              @default(false)
+
+  condominium    Condominium          @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+  reads          AnnouncementRead[]
+
+  @@index([condominiumId, publishedAt(sort: Desc)])
+  @@map("announcements")
+}
+
+model AnnouncementRead {
+  id              String       @id @default(cuid())
+  announcementId  String
+  userId          String
+  at              DateTime     @default(now())
+
+  announcement    Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, userId])
+  @@map("announcement_reads")
+}
+
+enum DocumentCategory {
+  convencao
+  regimento
+  atas
+  contratos
+  balancetes
+  comunicados
+  administrativo
+}
+
+enum DocumentFormat {
+  pdf
+  docx
+  xlsx
+  jpg
+}
+
+model DocumentFile {
+  id             String           @id @default(cuid())
+  condominiumId  String
+  name           String
+  category       DocumentCategory
+  sizeKb         Int
+  format         DocumentFormat
+  storageKey     String?
+  uploadedAt     DateTime         @default(now())
+  uploadedBy     String
+  restricted     Boolean          @default(false)
+  downloads      Int              @default(0)
+
+  condominium    Condominium      @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+
+  @@index([condominiumId, category])
+  @@map("documents")
+}
+
+// ---------------- Governança ----------------
+
+enum AssemblyKind {
+  ordinaria
+  extraordinaria
+}
+
+enum AssemblyStatus {
+  agendada
+  em_votacao
+  encerrada
+}
+
+model Assembly {
+  id              String              @id @default(cuid())
+  condominiumId   String
+  title           String
+  kind            AssemblyKind
+  date            DateTime            @db.Date
+  time            String
+  location        String
+  status          AssemblyStatus      @default(agendada)
+  quorumRequired  Int
+  minutesDocId    String?
+  createdAt       DateTime            @default(now())
+
+  condominium     Condominium         @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+  agenda          AssemblyAgendaItem[]
+
+  @@index([condominiumId, date])
+  @@map("assemblies")
+}
+
+model AssemblyAgendaItem {
+  id          String         @id @default(cuid())
+  assemblyId  String
+  order       Int
+  title       String
+  description String
+  options     String[]
+
+  assembly    Assembly       @relation(fields: [assemblyId], references: [id], onDelete: Cascade)
+  votes       AssemblyVote[]
+
+  @@index([assemblyId, order])
+  @@map("assembly_agenda_items")
+}
+
+model AssemblyVote {
+  id           String             @id @default(cuid())
+  agendaItemId String
+  unitId       String
+  option       String
+  voterName    String
+  at           DateTime           @default(now())
+
+  agendaItem   AssemblyAgendaItem @relation(fields: [agendaItemId], references: [id], onDelete: Cascade)
+
+  // Uma unidade, um voto por pauta — é a regra da convenção,
+  // e o banco é o único lugar onde ela não pode ser burlada.
+  @@unique([agendaItemId, unitId])
+  @@map("assembly_votes")
+}
+
+// ---------------- Notificações e auditoria ----------------
+
+enum NotificationKind {
+  visitante_chegou
+  encomenda
+  veiculo
+  aviso
+  boleto
+  reserva
+  chamado
+  ocorrencia
+  acesso
+  autorizacao
+  assembleia
+  servico
+}
+
+model Notification {
+  id             String           @id @default(cuid())
+  condominiumId  String
+  userId         String?
+  role           UserRole?
+  unitId         String?
+  kind           NotificationKind
+  title          String
+  body           String
+  link           String?
+  refId          String?
+  // Ações inline (liberar/recusar visitante, por exemplo).
+  actions        Json?
+  read           Boolean          @default(false)
+  at             DateTime         @default(now())
+
+  condominium    Condominium      @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+  user           User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unit           Unit?            @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@index([condominiumId, userId, read])
+  @@index([condominiumId, unitId, read])
+  @@index([condominiumId, role, read])
+  @@map("notifications")
+}
+
+model AuditEntry {
+  id             String      @id @default(cuid())
+  condominiumId  String
+  at             DateTime    @default(now())
+  actorId        String?
+  actorName      String
+  actorRole      UserRole
+  action         String
+  target         String
+  detail         String?
+  ip             String
+  userAgent      String?
+  module         String
+
+  condominium    Condominium @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+
+  @@index([condominiumId, at(sort: Desc)])
+  @@index([condominiumId, module])
+  @@map("audit_entries")
+}
+
+// ---------------- Profissionais recomendados ----------------
+
+enum ProfessionalCategory {
+  eletrica
+  hidraulica
+  reformas
+  limpeza
+  climatizacao
+  montagem
+  chaveiro
+  pintura
+  tecnologia
+  jardinagem
+  pet
+  aulas
+  mudancas
+  dedetizacao
+}
+
+model Professional {
+  id                 String               @id @default(cuid())
+  condominiumId      String
+  name               String
+  document           String
+  company            String?
+  category           ProfessionalCategory
+  specialties        String[]
+  phone              String
+  email              String?
+  bio                String
+  serviceArea        String
+  since              DateTime             @db.Date
+  jobsInCondo        Int                  @default(0)
+  // Média das avaliações, mantida desnormalizada: a listagem ordena
+  // por nota e recalcular a média de todas as avaliações a cada
+  // consulta não se sustenta conforme o catálogo cresce.
+  rating             Decimal              @default(0) @db.Decimal(3, 2)
+  reviewsCount       Int                  @default(0)
+  priceFrom          Decimal?             @db.Decimal(12, 2)
+  responseTime       String
+  verified           Boolean              @default(false)
+  recommendedByCondo Boolean              @default(false)
+  recommendedBy      String?
+  emergency          Boolean              @default(false)
+  active             Boolean              @default(true)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  condominium        Condominium          @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+  reviews            ProfessionalReview[]
+  requests           ServiceRequest[]
+
+  @@index([condominiumId, category, active])
+  @@index([condominiumId, recommendedByCondo, rating(sort: Desc)])
+  @@map("professionals")
+}
+
+model ProfessionalReview {
+  id              String       @id @default(cuid())
+  professionalId  String
+  condominiumId   String
+  unitId          String
+  authorName      String
+  rating          Int
+  service         String
+  comment         String
+  at              DateTime     @default(now())
+
+  professional    Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  condominium     Condominium  @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+  unit            Unit         @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  // Uma avaliação por unidade por profissional: sem isso, uma
+  // unidade sozinha conseguiria mover a média do catálogo.
+  @@unique([professionalId, unitId])
+  @@index([professionalId, at(sort: Desc)])
+  @@map("professional_reviews")
+}
+
+enum ServiceRequestStatus {
+  enviado
+  respondido
+  contratado
+  concluido
+  cancelado
+}
+
+model ServiceRequest {
+  id              String               @id @default(cuid())
+  condominiumId   String
+  professionalId  String
+  unitId          String
+  residentName    String
+  service         String
+  description     String
+  preferredDate   DateTime?            @db.Date
+  status          ServiceRequestStatus @default(enviado)
+  quotedAmount    Decimal?             @db.Decimal(12, 2)
+  respondedAt     DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  condominium     Condominium          @relation(fields: [condominiumId], references: [id], onDelete: Cascade)
+  professional    Professional         @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  unit            Unit                 @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@index([condominiumId, unitId, createdAt(sort: Desc)])
+  @@index([professionalId, status])
+  @@map("service_requests")
+}

@@ -1,29 +1,27 @@
 {
-  "name": "my-home-by-norty",
+  "name": "my-home",
   "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "version": "1.0.0",
+  "description": "my Home by norty — plataforma de gestão condominial",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "oxlint",
-    "preview": "vite preview",
-    "build:standalone": "tsc -b && node scripts/build-standalone.mjs",
-    "fonts:embed": "node scripts/embed-fonts.mjs"
+    "dev": "npm run dev --workspaces --if-present",
+    "dev:web": "npm run dev -w @myhome/web",
+    "dev:api": "npm run dev -w @myhome/api",
+    "build": "npm run build -w @myhome/shared && npm run build -w @myhome/api && npm run build -w @myhome/web",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:migrate": "npm run db:migrate -w @myhome/api",
+    "db:seed": "npm run db:seed -w @myhome/api",
+    "db:studio": "npm run db:studio -w @myhome/api",
+    "up": "docker compose -f infra/docker-compose.yml up -d",
+    "down": "docker compose -f infra/docker-compose.yml down",
+    "logs": "docker compose -f infra/docker-compose.yml logs -f"
   },
-  "dependencies": {
-    "lucide-react": "^1.31.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.2"
-  },
-  "devDependencies": {
-    "@types/node": "^24.13.3",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.4",
-    "oxlint": "^1.75.0",
-    "typescript": "~6.0.2",
-    "vite": "^8.2.0"
+  "engines": {
+    "node": ">=22"
   }
 }

@@ -32,3 +32,17 @@ pnpm-debug.log*
 
 # Build autocontido da demonstração
 dist-standalone/
+
+# Prisma / banco
+apps/api/prisma/*.db
+apps/api/generated/
+
+# Infra local
+infra/data/
+infra/caddy/
+
+# Segredos de ambiente (o exemplo é versionado, o real não)
+infra/.env
+apps/api/.env
+apps/web/.env
+!**/.env.example
