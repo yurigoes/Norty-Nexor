@@ -40,8 +40,17 @@ export interface ResumoIngestao {
   novas: number;
   atualizadas: number;
   avaliacoes: number;
-  falhas: { modalidade: number; erro: string }[];
+  /** A UF entra aqui: "modalidade 6 falhou" não diz de qual estado. */
+  falhas: { uf: string; modalidade: number; erro: string }[];
 }
+
+/**
+ * Espera antes da repescagem. O PNCP oscila — 502 e 503 no meio
+ * de uma varredura são a mesma API que respondeu bem um minuto
+ * antes e volta a responder um minuto depois. Repescar na hora
+ * pegaria a mesma indisponibilidade.
+ */
+const PAUSA_REPESCAGEM = 20_000;
 
 @Injectable()
 export class IngestaoService {
@@ -86,34 +95,35 @@ export class IngestaoService {
       });
       const dataFinal = paraFormatoPncp(somarDias(new Date(), config.pncp.janelaDias));
 
+      const pendentes: { uf: string; modalidades: number[] }[] = [];
+
       for (const uf of ufs) {
-        const { contratacoes, falhas } = await cliente.contratacoesComPropostaAberta({
-          dataFinal, modalidades: MODALIDADES, uf,
-        });
-
-        resumo.falhas.push(...falhas);
-        resumo.consultadas += contratacoes.length;
-
-        const normalizadas = normalizarLote(contratacoes);
-
-        for (const oportunidade of normalizadas) {
-          const novo = await this.gravar(oportunidade);
-          if (novo) resumo.novas += 1;
-          else resumo.atualizadas += 1;
+        const falhas = await this.coletar(cliente, { dataFinal, modalidades: MODALIDADES, uf }, resumo);
+        if (falhas.length > 0) {
+          pendentes.push({ uf, modalidades: falhas.map((f) => f.modalidade) });
         }
+      }
 
-        // A normalização descarta registro sem identificação
-        // mínima — de propósito. Mas descartar em silêncio faz
-        // "consultadas 40, novas 0" parecer defeito de gravação
-        // quando é o formato do que veio.
-        const descartadas = contratacoes.length - normalizadas.length;
-        if (descartadas > 0) {
-          this.logger.warn(
-            `${uf}: ${descartadas} de ${contratacoes.length} sem CNPJ, ano, sequencial ou objeto — descartadas.`,
-          );
+      // Repescagem. Uma modalidade que cai na página 1 por 503
+      // fica perdida até as 5h do dia seguinte — foi assim que a
+      // Bahia, com mais de mil contratações disponíveis, voltou
+      // zero. Uma segunda passada só sobre o que falhou custa
+      // poucos pedidos e recupera a oscilação, que é a falha mais
+      // comum aqui.
+      if (pendentes.length > 0) {
+        const quanto = pendentes.reduce((soma, p) => soma + p.modalidades.length, 0);
+        this.logger.warn(
+          `${quanto} consulta(s) falharam. Repescando em ${PAUSA_REPESCAGEM / 1000}s: ` +
+            pendentes.map((p) => `${p.uf} (${p.modalidades.join(', ')})`).join('; '),
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, PAUSA_REPESCAGEM));
+
+        for (const { uf, modalidades } of pendentes) {
+          const falhas = await this.coletar(cliente, { dataFinal, modalidades, uf }, resumo, true);
+          // Só o que falhou nas duas passadas é falha de verdade.
+          resumo.falhas.push(...falhas.map((f) => ({ uf, ...f })));
         }
-
-        this.logger.log(`${uf}: ${contratacoes.length} contratações`);
       }
 
       resumo.avaliacoes = await this.avaliarTodas();
@@ -127,17 +137,19 @@ export class IngestaoService {
           atualizadas: resumo.atualizadas,
           avaliacoes: resumo.avaliacoes,
           erro: resumo.falhas.length
-            ? resumo.falhas.map((f) => `modalidade ${f.modalidade}: ${f.erro}`).join(' | ')
+            ? resumo.falhas.map((f) => `${f.uf} modalidade ${f.modalidade}: ${f.erro}`).join(' | ')
             : null,
         },
       });
 
-      // As falhas por modalidade eram gravadas em
-      // `execucoes_ingestao.erro` e nunca apareciam no log — então
-      // "0 contratações" ficava indistinguível de "o PNCP recusou
-      // o pedido três vezes". Quem lê o log é quem precisa saber.
+      // O que sobra depois da repescagem. Estas falhas eram
+      // gravadas em `execucoes_ingestao.erro` e nunca apareciam no
+      // log — então "0 contratações" ficava indistinguível de "o
+      // PNCP recusou o pedido". Quem lê o log é quem precisa saber.
       for (const falha of resumo.falhas) {
-        this.logger.error(`PNCP recusou a modalidade ${falha.modalidade}: ${falha.erro}`);
+        this.logger.error(
+          `${falha.uf}, modalidade ${falha.modalidade}, falhou nas duas passadas: ${falha.erro}`,
+        );
       }
 
       // Se o cliente teve de afrouxar o passo, o limite do PNCP
@@ -166,6 +178,47 @@ export class IngestaoService {
     } finally {
       this.rodando = false;
     }
+  }
+
+  /**
+   * Consulta, normaliza e grava um lote. Devolve as falhas para
+   * quem chamou decidir se repesca ou se registra — as duas
+   * passadas usam exatamente este caminho, e é por isso que ele
+   * não sabe em qual das duas está, além do rótulo do log.
+   */
+  private async coletar(
+    cliente: ClientePncp,
+    consulta: { dataFinal: string; modalidades: number[]; uf: string },
+    resumo: ResumoIngestao,
+    repescagem = false,
+  ): Promise<{ modalidade: number; erro: string }[]> {
+    const { contratacoes, falhas } = await cliente.contratacoesComPropostaAberta(consulta);
+
+    resumo.consultadas += contratacoes.length;
+
+    const normalizadas = normalizarLote(contratacoes);
+
+    for (const oportunidade of normalizadas) {
+      const novo = await this.gravar(oportunidade);
+      if (novo) resumo.novas += 1;
+      else resumo.atualizadas += 1;
+    }
+
+    // A normalização descarta registro sem identificação mínima —
+    // de propósito. Mas descartar em silêncio faz "consultadas 40,
+    // novas 0" parecer defeito de gravação quando é o formato do
+    // que veio.
+    const descartadas = contratacoes.length - normalizadas.length;
+    if (descartadas > 0) {
+      this.logger.warn(
+        `${consulta.uf}: ${descartadas} de ${contratacoes.length} sem CNPJ, ano, sequencial ou objeto — descartadas.`,
+      );
+    }
+
+    const rotulo = repescagem ? `${consulta.uf} (repescagem)` : consulta.uf;
+    this.logger.log(`${rotulo}: ${contratacoes.length} contratações`);
+
+    return falhas;
   }
 
   /** Devolve `true` quando a licitação era nova. */

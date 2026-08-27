@@ -395,3 +395,48 @@ describe('limite de requisições do PNCP', () => {
     assert.match(falhas[0].erro, /dataFinal inválida/, 'o corpo diz qual parâmetro caiu');
   });
 });
+
+describe('PNCP sobrecarregado (5xx)', () => {
+  function relogio() {
+    const esperas: number[] = [];
+    return { esperas, aguardar: async (ms: number) => void esperas.push(ms) };
+  }
+
+  test('503 recua a partir do ritmo, não em 500ms fixos', async () => {
+    const { fetchImpl } = espiao([
+      resposta('<h1>503 Service Unavailable</h1>', 503),
+      resposta({ data: [contratacao(1)], paginasRestantes: 0 }),
+    ]);
+    const { esperas, aguardar } = relogio();
+    const cliente = new ClientePncp({ fetchImpl, aguardar, intervaloMs: 900, tentativas: 3 });
+
+    const { contratacoes, falhas } = await cliente.contratacoesComPropostaAberta({
+      dataFinal: '20260930',
+      modalidades: [8],
+      uf: 'BA',
+    });
+
+    assert.equal(falhas.length, 0, '503 é transitório: a segunda tentativa vale');
+    assert.equal(contratacoes.length, 1);
+    // 900 × 2¹ na primeira tentativa; depois o ritmo normal.
+    assert.deepEqual(esperas, [1800, 900]);
+    assert.equal(cliente.intervaloAtual, 900, '5xx não é limite: o ritmo não muda');
+  });
+
+  test('502 esgota as tentativas e vira falha com o corpo do erro', async () => {
+    const { urls, fetchImpl } = espiao([
+      resposta('<h1>502 Bad Gateway</h1>', 502),
+      resposta('<h1>502 Bad Gateway</h1>', 502),
+    ]);
+    const cliente = new ClientePncp({ fetchImpl, aguardar: semEspera, tentativas: 2 });
+
+    const { falhas } = await cliente.contratacoesComPropostaAberta({
+      dataFinal: '20260930',
+      modalidades: [6],
+      uf: 'BA',
+    });
+
+    assert.equal(urls.length, 2, 'as duas tentativas devem ser gastas');
+    assert.match(falhas[0].erro, /502 Bad Gateway/);
+  });
+});

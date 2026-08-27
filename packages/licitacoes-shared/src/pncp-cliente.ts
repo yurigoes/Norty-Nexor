@@ -198,8 +198,12 @@ export class ClientePncp {
     for (let tentativa = 1; tentativa <= this.tentativas; tentativa += 1) {
       await this.respeitarORitmo();
 
-      // Recuo do 500: falha de servidor costuma passar rápido.
-      let recuo = 500 * 2 ** (tentativa - 1);
+      // 502 e 503 do PNCP são sobrecarga, não defeito do pedido:
+      // repetir três vezes em 1,5s empurra um servidor que já está
+      // dizendo "no server is available". O recuo parte do ritmo
+      // atual, que é a única medida que temos de quanto ele
+      // aguenta.
+      let recuo = Math.min(this.intervaloMs * 2 ** tentativa, RECUO_MAXIMO);
 
       try {
         const resposta = await this.fetchImpl(url, {
