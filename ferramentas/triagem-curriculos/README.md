@@ -19,7 +19,13 @@ npm install
 npm start
 ```
 
-O navegador abre em <http://localhost:5199>. Então:
+O navegador abre em <http://localhost:5199>. Se não abrir sozinho, é só digitar
+o endereço.
+
+O terminal fica parado mostrando o endereço — isso é o servidor rodando, não
+travamento. Deixe a janela aberta enquanto usa a ferramenta; `Ctrl+C` encerra.
+
+Então:
 
 1. **Descreva a vaga** na coluna da esquerda: os termos que você precisa
    encontrar, o peso de cada um e quais são obrigatórios.

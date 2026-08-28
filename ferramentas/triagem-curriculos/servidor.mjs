@@ -171,11 +171,23 @@ const servidor = http.createServer((requisicao, resposta) => {
 });
 
 function abrirNavegador(endereco) {
-  const comando =
-    process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+  // No Windows, `start` é embutido do cmd, não um executável — por isso vai
+  // via `cmd /c`. O argumento vazio depois de `start` é obrigatório: sem ele,
+  // o cmd trata o endereço como título da janela e não abre nada. Nada disso
+  // usa `shell: true`, que concatena argumentos sem escapar.
+  const [comando, argumentos] =
+    process.platform === 'win32'
+      ? ['cmd', ['/c', 'start', '', endereco]]
+      : process.platform === 'darwin'
+        ? ['open', [endereco]]
+        : ['xdg-open', [endereco]];
+
   try {
-    spawn(comando, [endereco], { detached: true, stdio: 'ignore', shell: process.platform === 'win32' })
-      .unref();
+    const processo = spawn(comando, argumentos, { detached: true, stdio: 'ignore' });
+    // Falha assíncrona (comando inexistente) chega como evento, não exceção;
+    // sem este ouvinte ela derrubaria o servidor.
+    processo.on('error', () => {});
+    processo.unref();
   } catch {
     // Sem navegador acessível: o endereço já foi impresso no terminal.
   }
@@ -188,6 +200,8 @@ servidor.listen(PORTA, '127.0.0.1', async () => {
   const ia = await estadoDaIa();
   console.log(`\n  Triagem de currículos rodando em ${endereco}`);
   console.log(`  ${ia.mensagem}${ia.disponivel ? '' : ' — a triagem por critérios funciona normalmente'}`);
-  console.log('  Ctrl+C para encerrar.\n');
+  console.log('\n  Deixe esta janela aberta — é ela que roda a ferramenta.');
+  console.log('  Se o navegador não abrir sozinho, acesse o endereço acima.');
+  console.log('  Ctrl+C encerra.\n');
   if (!process.env.TRIAGEM_SEM_NAVEGADOR) abrirNavegador(endereco);
 });
