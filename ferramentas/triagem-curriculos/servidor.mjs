@@ -17,7 +17,7 @@ import { spawn } from 'node:child_process';
 import { extrairTexto } from './src/extrair.mjs';
 import { extrairContato } from './src/contato.mjs';
 import { pontuar } from './src/pontuar.mjs';
-import { analisarComIa, credencialNoAmbiente } from './src/ia.mjs';
+import { analisarComIa, estadoDaIa } from './src/ia.mjs';
 import {
   apagarVaga, listarVagas, lerVaga, salvarVaga, sanearVaga, vagaEmBranco,
 } from './src/vagas.mjs';
@@ -105,10 +105,11 @@ async function rotear(requisicao, resposta, url) {
   }
 
   if (requisicao.method === 'GET' && pathname === '/api/estado') {
+    const ia = await estadoDaIa();
     return responderJson(resposta, 200, {
       vagas: await listarVagas(PASTA_VAGAS),
-      iaConfigurada: credencialNoAmbiente(),
-      modelo: 'claude-opus-5',
+      iaConfigurada: ia.disponivel,
+      mensagemIa: ia.mensagem,
       vagaEmBranco: vagaEmBranco(),
     });
   }
@@ -182,10 +183,11 @@ function abrirNavegador(endereco) {
 
 // `127.0.0.1` e não `0.0.0.0`: currículo é dado pessoal e não deve ficar
 // exposto para a rede local só porque a ferramenta está aberta.
-servidor.listen(PORTA, '127.0.0.1', () => {
+servidor.listen(PORTA, '127.0.0.1', async () => {
   const endereco = `http://localhost:${PORTA}`;
+  const ia = await estadoDaIa();
   console.log(`\n  Triagem de currículos rodando em ${endereco}`);
-  console.log(`  Análise por IA: ${credencialNoAmbiente() ? 'disponível' : 'sem ANTHROPIC_API_KEY (a triagem por critérios funciona normalmente)'}`);
+  console.log(`  ${ia.mensagem}${ia.disponivel ? '' : ' — a triagem por critérios funciona normalmente'}`);
   console.log('  Ctrl+C para encerrar.\n');
   if (!process.env.TRIAGEM_SEM_NAVEGADOR) abrirNavegador(endereco);
 });

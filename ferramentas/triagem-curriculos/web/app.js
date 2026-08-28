@@ -173,14 +173,12 @@ async function carregarEstado(slugPreferido) {
   estado.iaConfigurada = dados.iaConfigurada;
   estado.vagaEmBranco = dados.vagaEmBranco;
 
-  el.estadoIa.textContent = dados.iaConfigurada
-    ? `IA disponível · ${dados.modelo}`
-    : 'IA desligada (sem ANTHROPIC_API_KEY)';
+  el.estadoIa.textContent = dados.mensagemIa;
   el.estadoIa.className = `etiqueta ${dados.iaConfigurada ? 'etiqueta--ok' : 'etiqueta--neutra'}`;
   el.analisarIa.disabled = !dados.iaConfigurada;
   el.analisarIa.title = dados.iaConfigurada
     ? 'Lê os currículos visíveis com a IA e traz um parecer'
-    : 'Defina ANTHROPIC_API_KEY e reinicie a ferramenta para habilitar';
+    : `${dados.mensagemIa} — a triagem por critérios não depende disso`;
 
   el.seletorVaga.replaceChildren(
     ...dados.vagas.map((v) => new Option(v.titulo, v.slug)),

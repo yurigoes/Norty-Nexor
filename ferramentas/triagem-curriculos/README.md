@@ -87,6 +87,15 @@ Sem a chave, o botão fica desabilitado e o resto funciona normalmente. A análi
 é cobrada por currículo, então use nos finalistas, não no lote inteiro — o botão
 "Analisar visíveis com IA" respeita os filtros da tela justamente para isso.
 
+O `@anthropic-ai/sdk` é dependência **opcional**: se a instalação dele falhar
+(rede ruim, proxy, antivírus), a ferramenta sobe do mesmo jeito e a triagem por
+critérios funciona inteira — só o botão da IA fica desabilitado, dizendo o
+motivo. Para instalar só o essencial:
+
+```bash
+npm install --omit=optional
+```
+
 Variáveis aceitas:
 
 | Variável | Para quê |
@@ -104,6 +113,8 @@ Variáveis aceitas:
 | "Formato .doc não é lido" | Word 97-2003. Abra e salve como `.docx` ou PDF. |
 | "Nome não identificado" | O currículo começa com um cabeçalho fora do comum. O nome do arquivo é usado como segunda opção; confira em "Detalhes". |
 | "Sem telefone no currículo" | Não havia número em formato brasileiro reconhecível. O texto extraído está em "Detalhes". |
+| "IA indisponível (pacote não instalado)" | O `npm install` não terminou de baixar o SDK opcional. Rode de novo; nada mais é afetado. |
+| `npm install` termina com `ECONNRESET` | Download cortado no meio. Apague `node_modules`, rode `npm cache clean --force` e instale de novo. |
 
 Um arquivo ilegível nunca derruba o lote: ele aparece na lista marcado como não
 lido, com o motivo.

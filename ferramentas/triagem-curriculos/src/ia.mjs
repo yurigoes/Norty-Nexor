@@ -8,23 +8,19 @@
  * objetiva: as duas aparecem lado a lado na tela.
  */
 
-import Anthropic from '@anthropic-ai/sdk';
-import { z } from 'zod';
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
-import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
-
 const MODELO = 'claude-opus-5';
 const ESFORCO = process.env.TRIAGEM_ESFORCO_IA ?? 'medium';
 const BETA_FALLBACK = 'server-side-fallback-2026-07-01';
 
-const AnaliseSchema = z.object({
-  nota: z.number().int().min(0).max(100),
-  veredito: z.enum(['forte', 'medio', 'fraco']),
-  resumo: z.string(),
-  pontosFortes: z.array(z.string()),
-  pontosDeAtencao: z.array(z.string()),
-  perguntasParaEntrevista: z.array(z.string()),
-});
+const montarSchema = (z) =>
+  z.object({
+    nota: z.number().int().min(0).max(100),
+    veredito: z.enum(['forte', 'medio', 'fraco']),
+    resumo: z.string(),
+    pontosFortes: z.array(z.string()),
+    pontosDeAtencao: z.array(z.string()),
+    perguntasParaEntrevista: z.array(z.string()),
+  });
 
 const INSTRUCOES = `Você é analista de recrutamento e avalia currículos para uma vaga específica.
 
@@ -57,15 +53,47 @@ O que a vaga exige:
 ${criterios || '- (nenhum critério cadastrado)'}${experiencia}`;
 }
 
+const SEM_PACOTE =
+  'O pacote @anthropic-ai/sdk não está instalado. Rode `npm install` de novo nesta pasta para habilitar a análise por IA — a triagem por critérios funciona sem ele.';
+
+/**
+ * Carrega o SDK só quando a IA é realmente usada.
+ *
+ * O SDK e o zod são dependências opcionais: se a instalação deles falhar (rede
+ * ruim, proxy, antivírus), a ferramenta inteira ainda precisa subir e ler
+ * currículos. Import estático aqui derrubaria o servidor no boot.
+ */
+let dependencias = null;
+async function carregarDependencias() {
+  if (dependencias) return dependencias;
+  try {
+    const [sdk, zod, ajuda, ajudaBeta] = await Promise.all([
+      import('@anthropic-ai/sdk'),
+      import('zod'),
+      import('@anthropic-ai/sdk/helpers/zod'),
+      import('@anthropic-ai/sdk/helpers/beta/zod'),
+    ]);
+    dependencias = {
+      Anthropic: sdk.default,
+      zodOutputFormat: ajuda.zodOutputFormat,
+      betaZodOutputFormat: ajudaBeta.betaZodOutputFormat,
+      AnaliseSchema: montarSchema(zod.z),
+    };
+  } catch {
+    return null;
+  }
+  return dependencias;
+}
+
 let clienteEmCache = null;
-function obterCliente() {
+function obterCliente(Anthropic) {
   // O SDK resolve a credencial sozinho: ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN
   // ou o perfil gravado por `ant auth login`.
   clienteEmCache ??= new Anthropic();
   return clienteEmCache;
 }
 
-function erroLegivel(erro) {
+function erroLegivel(Anthropic, erro) {
   if (erro instanceof Anthropic.AuthenticationError) {
     return 'Credencial da API inválida ou ausente. Defina ANTHROPIC_API_KEY antes de iniciar a ferramenta.';
   }
@@ -84,9 +112,19 @@ function erroLegivel(erro) {
   return erro.message;
 }
 
-/** `true` quando há credencial visível no ambiente. */
-export function credencialNoAmbiente() {
-  return Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
+/**
+ * Se a análise por IA está utilizável, e por que não está quando não está.
+ * A interface usa isso para rotular o botão em vez de deixar o usuário
+ * descobrir o problema só depois de clicar.
+ */
+export async function estadoDaIa() {
+  if (!(await carregarDependencias())) {
+    return { disponivel: false, mensagem: 'IA indisponível (pacote não instalado)' };
+  }
+  if (!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN)) {
+    return { disponivel: false, mensagem: 'IA desligada (sem ANTHROPIC_API_KEY)' };
+  }
+  return { disponivel: true, mensagem: `IA disponível · ${MODELO}` };
 }
 
 /**
@@ -95,7 +133,16 @@ export function credencialNoAmbiente() {
  * que a falha de um candidato não derrube a triagem dos outros.
  */
 export async function analisarComIa({ vaga, texto, nome }) {
-  const cliente = obterCliente();
+  const deps = await carregarDependencias();
+  if (!deps) return { ok: false, erro: SEM_PACOTE };
+
+  const { Anthropic, zodOutputFormat, betaZodOutputFormat, AnaliseSchema } = deps;
+  let cliente;
+  try {
+    cliente = obterCliente(Anthropic);
+  } catch (erro) {
+    return { ok: false, erro: erroLegivel(Anthropic, erro) };
+  }
 
   const requisicao = {
     model: MODELO,
@@ -160,6 +207,6 @@ export async function analisarComIa({ vaga, texto, nome }) {
       },
     };
   } catch (erro) {
-    return { ok: false, erro: erroLegivel(erro) };
+    return { ok: false, erro: erroLegivel(Anthropic, erro) };
   }
 }
