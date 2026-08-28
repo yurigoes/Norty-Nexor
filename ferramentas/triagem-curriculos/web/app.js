@@ -475,7 +475,7 @@ function desenharCandidato(resultado) {
             ? `<p class="ajuda" style="color:var(--danger)">IA: ${esc(ia.erro)}</p>`
             : ia?.analise
               ? `<div class="ia">
-                   <div class="ia__topo"><strong>Leitura da IA${ia.provedor ? ` · ${esc(ia.provedor)}` : ''}</strong>
+                   <div class="ia__topo"><strong>Leitura da IA${ia.provedor ? ` · ${esc(ia.provedor)}` : ''}${ia.modelo ? ` <span class="ajuda">(${esc(ia.modelo)})</span>` : ''}</strong>
                      <span class="ia__nota">${ia.analise.nota}/100 · ${esc(ROTULOS[ia.analise.veredito] ?? ia.analise.veredito)}</span>
                    </div>
                    <p>${esc(ia.analise.resumo)}</p>

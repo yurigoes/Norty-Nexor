@@ -40,6 +40,11 @@
 
 * { box-sizing: border-box; }
 
+/* `hidden` é a forma como o JS esconde blocos. Sem esta regra, qualquer
+   classe que declare `display` vence o padrão do navegador e o elemento
+   continua na tela — foi o que segurava a barra de progresso depois do fim. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   background: var(--mh-background);

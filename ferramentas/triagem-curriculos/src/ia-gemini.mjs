@@ -12,7 +12,7 @@ const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const ESQUEMA = {
   type: 'object',
   properties: {
-    nota: { type: 'integer' },
+    nota: { type: 'integer', minimum: 0, maximum: 100 },
     veredito: { type: 'string', enum: ['forte', 'medio', 'fraco'] },
     resumo: { type: 'string' },
     pontosFortes: { type: 'array', items: { type: 'string' } },
@@ -73,15 +73,20 @@ function ranquear(id) {
   return { faixa, estavel: experimental, versao };
 }
 
-let modeloEmCache = null;
+/** Um modelo listado pode estar sobrecarregado, ou nem liberado para a conta. */
+const INDISPONIVEL = new Set([404, 429, 500, 503]);
+const MAXIMO_DE_TENTATIVAS = 4;
 
-/** Modelo a usar: o configurado à mão, ou o melhor do catálogo da conta. */
-export async function descobrirModelo() {
-  if (process.env.TRIAGEM_MODELO_IA) return process.env.TRIAGEM_MODELO_IA;
-  if (modeloEmCache) return modeloEmCache;
+let candidatosEmCache = null;
+let modeloQueRespondeu = null;
+
+/** Modelos a tentar, do preferido para o menos preferido. */
+export async function listarCandidatos() {
+  if (process.env.TRIAGEM_MODELO_IA) return [process.env.TRIAGEM_MODELO_IA];
+  if (candidatosEmCache) return candidatosEmCache;
 
   const { models = [] } = await pedirAoGoogle('/models');
-  const candidatos = models
+  candidatosEmCache = models
     .filter((m) => (m.supportedGenerationMethods ?? []).includes('generateContent'))
     .map((m) => ({ id: m.name.replace(/^models\//, '') }))
     .map((m) => ({ ...m, peso: ranquear(m.id) }))
@@ -92,16 +97,21 @@ export async function descobrirModelo() {
         b.peso.estavel - a.peso.estavel ||
         b.peso.versao - a.peso.versao ||
         a.id.localeCompare(b.id),
-    );
+    )
+    .map((m) => m.id);
 
-  if (!candidatos.length) {
+  if (!candidatosEmCache.length) {
+    candidatosEmCache = null;
     throw new Error(
       'Nenhum modelo de texto do Gemini está liberado para esta chave. Defina TRIAGEM_MODELO_IA com o nome do modelo que você tem.',
     );
   }
+  return candidatosEmCache;
+}
 
-  modeloEmCache = candidatos[0].id;
-  return modeloEmCache;
+/** Só para exibir na etiqueta de estado. */
+export async function descobrirModelo() {
+  return modeloQueRespondeu ?? (await listarCandidatos())[0];
 }
 
 function erroLegivel(erro) {
@@ -140,42 +150,81 @@ function validar(bruto) {
   };
 }
 
+/** Uma chamada a um modelo específico. Lança em erro de rede ou HTTP. */
+async function gerar(modelo, instrucoes, conteudo) {
+  const resposta = await pedirAoGoogle(`/models/${modelo}:generateContent`, {
+    method: 'POST',
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: instrucoes }] },
+      contents: [{ role: 'user', parts: [{ text: conteudo }] }],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseSchema: ESQUEMA,
+        // Triagem precisa ser reproduzível: o mesmo currículo não pode
+        // mudar de veredito entre duas execuções.
+        temperature: 0.2,
+      },
+    }),
+  });
+
+  if (resposta.promptFeedback?.blockReason) {
+    return { ok: false, erro: `O Gemini bloqueou a análise (${resposta.promptFeedback.blockReason}).` };
+  }
+
+  const candidato = resposta.candidates?.[0];
+  if (!candidato || (candidato.finishReason && candidato.finishReason !== 'STOP')) {
+    return {
+      ok: false,
+      erro: `O Gemini interrompeu a resposta (${candidato?.finishReason ?? 'sem resposta'}).`,
+    };
+  }
+
+  const texto = (candidato.content?.parts ?? []).map((p) => p.text ?? '').join('');
+  const analise = validar(JSON.parse(texto));
+  if (!analise) return { ok: false, erro: 'A resposta do Gemini não veio no formato esperado.' };
+
+  return { ok: true, analise, modelo };
+}
+
+/**
+ * Analisa, caindo para o próximo modelo quando o preferido não atende.
+ *
+ * O catálogo lista modelos que a conta não pode usar (404) e o modelo mais
+ * novo é justamente o que mais vive sobrecarregado (503). Desistir na primeira
+ * negativa deixaria a triagem parada por um problema que o modelo seguinte
+ * resolve. O que respondeu fica guardado e vira a primeira tentativa dos
+ * próximos currículos.
+ */
 export async function analisar({ instrucoes, conteudo }) {
+  let candidatos;
   try {
-    const modelo = await descobrirModelo();
-    const resposta = await pedirAoGoogle(`/models/${modelo}:generateContent`, {
-      method: 'POST',
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: instrucoes }] },
-        contents: [{ role: 'user', parts: [{ text: conteudo }] }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          responseSchema: ESQUEMA,
-          // Triagem precisa ser reproduzível: o mesmo currículo não pode
-          // mudar de veredito entre duas execuções.
-          temperature: 0.2,
-        },
-      }),
-    });
-
-    if (resposta.promptFeedback?.blockReason) {
-      return { ok: false, erro: `O Gemini bloqueou a análise (${resposta.promptFeedback.blockReason}).` };
-    }
-
-    const candidato = resposta.candidates?.[0];
-    if (!candidato || (candidato.finishReason && candidato.finishReason !== 'STOP')) {
-      return { ok: false, erro: `O Gemini interrompeu a resposta (${candidato?.finishReason ?? 'sem resposta'}).` };
-    }
-
-    const texto = (candidato.content?.parts ?? []).map((p) => p.text ?? '').join('');
-    const analise = validar(JSON.parse(texto));
-    if (!analise) return { ok: false, erro: 'A resposta do Gemini não veio no formato esperado.' };
-
-    return { ok: true, analise, modelo };
+    candidatos = await listarCandidatos();
   } catch (erro) {
-    if (erro instanceof SyntaxError) {
-      return { ok: false, erro: 'A resposta do Gemini não era um JSON válido.' };
-    }
     return { ok: false, erro: erroLegivel(erro) };
   }
+
+  const fila = modeloQueRespondeu
+    ? [modeloQueRespondeu, ...candidatos.filter((m) => m !== modeloQueRespondeu)]
+    : candidatos;
+
+  let ultimoErro = null;
+  for (const modelo of fila.slice(0, MAXIMO_DE_TENTATIVAS)) {
+    try {
+      const resultado = await gerar(modelo, instrucoes, conteudo);
+      if (resultado.ok) modeloQueRespondeu = modelo;
+      return resultado;
+    } catch (erro) {
+      if (erro instanceof SyntaxError) {
+        return { ok: false, erro: 'A resposta do Gemini não era um JSON válido.' };
+      }
+      // Chave inválida ou pedido malformado não melhora trocando de modelo.
+      if (!INDISPONIVEL.has(erro.status)) return { ok: false, erro: erroLegivel(erro) };
+      ultimoErro = erro;
+    }
+  }
+
+  return {
+    ok: false,
+    erro: `Nenhum modelo do Gemini respondeu (${fila.slice(0, MAXIMO_DE_TENTATIVAS).join(', ')}). Último erro: ${erroLegivel(ultimoErro)}`,
+  };
 }
