@@ -1,0 +1,15 @@
+{
+  "titulo": "Assistente Administrativo — Administradora de Condomínios",
+  "descricao": "Rotinas de cobrança, conciliação e atendimento a síndicos e moradores.",
+  "criterios": [
+    { "termo": "Excel", "sinonimos": ["planilha", "planilhas", "tabela dinâmica", "procv"], "peso": 5, "obrigatorio": true },
+    { "termo": "cobrança", "sinonimos": ["inadimplência", "boleto", "boletos"], "peso": 4, "obrigatorio": false },
+    { "termo": "conciliação bancária", "sinonimos": ["conciliação", "balancete", "prestação de contas"], "peso": 4, "obrigatorio": false },
+    { "termo": "condomínio", "sinonimos": ["condomínios", "condominial", "síndico", "síndicos"], "peso": 4, "obrigatorio": true },
+    { "termo": "Superlógica", "sinonimos": ["sistema condominial", "Group Software"], "peso": 3, "obrigatorio": false },
+    { "termo": "atendimento", "sinonimos": ["atendimento ao cliente", "atendimento a moradores"], "peso": 3, "obrigatorio": false },
+    { "termo": "ensino superior", "sinonimos": ["tecnólogo", "bacharel", "graduação", "pós-graduação"], "peso": 2, "obrigatorio": false }
+  ],
+  "experiencia": { "anosMinimos": 2, "peso": 6 },
+  "mensagemWhatsapp": "Olá {primeiroNome}, tudo bem? Aqui é do RH da my Home by norty. Recebemos seu currículo para a vaga de {vaga} e gostaríamos de convidar você para uma entrevista. Qual o melhor dia e horário para conversarmos?"
+}

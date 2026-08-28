@@ -16,6 +16,7 @@ apps/api        API REST: auth, RBAC, multi-tenant, módulos de negócio
 packages/shared Domínio, matriz de permissões e contratos de API
 infra           docker-compose, Caddy, Dockerfiles, .env.example
 scripts         bootstrap.sh — instala e atualiza a stack num comando
+ferramentas     utilitários locais de RH e operação, fora dos workspaces
 ```
 
 ## Comandos

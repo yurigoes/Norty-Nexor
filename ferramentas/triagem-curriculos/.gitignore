@@ -1,0 +1,6 @@
+node_modules/
+
+# Currículos nunca devem entrar no repositório: são dados pessoais de
+# terceiros. A ferramenta não grava nada em disco — esta pasta existe só
+# para quem preferir deixar os arquivos por perto na hora de arrastar.
+curriculos/

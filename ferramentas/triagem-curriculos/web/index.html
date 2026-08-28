@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Triagem de currículos — my Home by norty</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231a1d24'/%3E%3Cpath d='M9 8h11l4 4v12H9z' fill='none' stroke='%23c9a227' stroke-width='2'/%3E%3Cpath d='M12 15h9M12 19h6' stroke='%23c9a227' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="/estilo.css" />
+  </head>
+  <body>
+    <header class="cabecalho">
+      <div class="cabecalho__marca">
+        <span class="cabecalho__selo">norty</span>
+        <div>
+          <h1>Triagem de currículos</h1>
+          <p class="cabecalho__linha">Leitura local de PDF e Word · nota de aderência · convite por WhatsApp</p>
+        </div>
+      </div>
+      <div class="cabecalho__estado">
+        <span id="estado-ia" class="etiqueta etiqueta--neutra">verificando IA…</span>
+      </div>
+    </header>
+
+    <main class="painel">
+      <aside class="coluna-vaga" id="coluna-vaga">
+        <div class="cartao">
+          <div class="cartao__topo">
+            <h2>Vaga</h2>
+            <button type="button" class="botao botao--fantasma" id="nova-vaga">Nova</button>
+          </div>
+
+          <label class="campo">
+            <span>Vaga salva</span>
+            <select id="seletor-vaga"></select>
+          </label>
+
+          <label class="campo">
+            <span>Título</span>
+            <input type="text" id="titulo-vaga" placeholder="Ex.: Assistente Administrativo" />
+          </label>
+
+          <label class="campo">
+            <span>Descrição <small>(usada só pela análise por IA)</small></span>
+            <textarea id="descricao-vaga" rows="2" placeholder="O que a pessoa vai fazer no dia a dia"></textarea>
+          </label>
+
+          <div class="criterios">
+            <div class="criterios__topo">
+              <h3>O que preciso encontrar</h3>
+              <button type="button" class="botao botao--fantasma" id="novo-criterio">+ critério</button>
+            </div>
+            <p class="ajuda">
+              Peso de 1 a 10. Marcado como <strong>obrigatório</strong>, o candidato que não tiver
+              o requisito é reprovado mesmo com nota alta.
+            </p>
+            <div class="criterios__cabecalho">
+              <span>Termo</span><span>Também vale (vírgula)</span><span>Peso</span><span>Obrig.</span><span></span>
+            </div>
+            <div id="lista-criterios"></div>
+          </div>
+
+          <fieldset class="experiencia">
+            <legend>Experiência</legend>
+            <div class="experiencia__linhas">
+              <label class="campo campo--curto">
+                <span>Anos mínimos</span>
+                <input type="number" id="anos-minimos" min="0" max="40" step="1" />
+              </label>
+              <label class="campo campo--curto">
+                <span>Peso</span>
+                <input type="number" id="peso-experiencia" min="1" max="20" step="1" />
+              </label>
+            </div>
+            <p class="ajuda">Zero em “anos mínimos” tira a experiência do cálculo da nota.</p>
+          </fieldset>
+
+          <label class="campo">
+            <span>Mensagem do convite</span>
+            <textarea id="mensagem-whatsapp" rows="5"></textarea>
+          </label>
+          <p class="ajuda">
+            Use <code>{primeiroNome}</code>, <code>{nome}</code> e <code>{vaga}</code> — são
+            trocados na hora de abrir o WhatsApp.
+          </p>
+
+          <div class="cartao__acoes">
+            <button type="button" class="botao botao--primario" id="salvar-vaga">Salvar vaga</button>
+            <button type="button" class="botao botao--perigo-fantasma" id="excluir-vaga">Excluir</button>
+          </div>
+          <p class="aviso-salvar" id="aviso-vaga"></p>
+        </div>
+      </aside>
+
+      <section class="coluna-resultados">
+        <div class="cartao">
+          <div id="area-solta" class="solta">
+            <div class="solta__conteudo">
+              <strong>Arraste os currículos aqui</strong>
+              <span>PDF, DOCX, TXT ou RTF — pode soltar a pasta inteira</span>
+              <div class="solta__botoes">
+                <button type="button" class="botao botao--primario" id="escolher-arquivos">Escolher arquivos</button>
+                <button type="button" class="botao botao--fantasma" id="escolher-pasta">Escolher pasta</button>
+              </div>
+            </div>
+            <input type="file" id="entrada-arquivos" multiple accept=".pdf,.docx,.txt,.rtf,.md,.doc" hidden />
+            <input type="file" id="entrada-pasta" multiple webkitdirectory hidden />
+          </div>
+          <div class="progresso" id="progresso" hidden>
+            <div class="progresso__barra"><i id="progresso-preenchido"></i></div>
+            <span id="progresso-texto"></span>
+          </div>
+        </div>
+
+        <div class="cartao cartao--filtros" id="barra-filtros" hidden>
+          <div class="filtros">
+            <input type="search" id="busca" class="filtros__busca" placeholder="Buscar por nome, arquivo ou termo…" />
+            <label class="filtros__nota">
+              Nota mínima <output id="valor-nota">0</output>
+              <input type="range" id="nota-minima" min="0" max="100" step="5" value="0" />
+            </label>
+            <label class="alternador">
+              <input type="checkbox" id="so-aptos" />
+              <span>Só quem atende os obrigatórios</span>
+            </label>
+            <label class="alternador">
+              <input type="checkbox" id="esconder-convidados" />
+              <span>Esconder já convidados</span>
+            </label>
+            <select id="ordenacao" class="filtros__ordem">
+              <option value="nota">Maior nota</option>
+              <option value="nome">Nome (A–Z)</option>
+              <option value="experiencia">Mais experiência</option>
+            </select>
+          </div>
+          <div class="filtros__acoes">
+            <span class="resumo" id="resumo-lista"></span>
+            <button type="button" class="botao botao--fantasma" id="analisar-ia">Analisar visíveis com IA</button>
+            <button type="button" class="botao botao--fantasma" id="exportar-csv">Exportar CSV</button>
+            <button type="button" class="botao botao--fantasma" id="limpar">Limpar</button>
+          </div>
+        </div>
+
+        <div id="resultados" class="resultados"></div>
+        <div id="vazio" class="vazio">
+          <p>Nenhum currículo analisado ainda.</p>
+          <p class="ajuda">Os arquivos são lidos na sua máquina e não são gravados em disco nem enviados para lugar nenhum.</p>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
