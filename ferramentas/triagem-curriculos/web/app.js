@@ -294,7 +294,7 @@ async function analisarUmComIa(resultado) {
         nome: resultado.contato?.nome,
       }),
     });
-    resultado.ia = { analise: resposta.analise };
+    resultado.ia = { analise: resposta.analise, provedor: resposta.provedor, modelo: resposta.modelo };
   } catch (erro) {
     resultado.ia = { erro: erro.message };
   }
@@ -475,7 +475,7 @@ function desenharCandidato(resultado) {
             ? `<p class="ajuda" style="color:var(--danger)">IA: ${esc(ia.erro)}</p>`
             : ia?.analise
               ? `<div class="ia">
-                   <div class="ia__topo"><strong>Leitura da IA</strong>
+                   <div class="ia__topo"><strong>Leitura da IA${ia.provedor ? ` · ${esc(ia.provedor)}` : ''}</strong>
                      <span class="ia__nota">${ia.analise.nota}/100 · ${esc(ROTULOS[ia.analise.veredito] ?? ia.analise.veredito)}</span>
                    </div>
                    <p>${esc(ia.analise.resumo)}</p>

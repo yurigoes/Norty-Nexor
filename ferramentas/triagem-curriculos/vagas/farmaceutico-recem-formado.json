@@ -1,0 +1,56 @@
+{
+  "titulo": "Farmacêutico Recém-Formado — Primeira Atuação",
+  "descricao": "Farmácia Preço Justo. Vaga de primeira atuação para farmacêutico(a) recém-formado(a): dispensação de medicamentos, orientação e atendimento ao cliente na loja, com treinamento e acompanhamento. Buscamos comprometimento, responsabilidade, ética, vontade de aprender, boa comunicação e trabalho em equipe.",
+  "criterios": [
+    {
+      "termo": "Farmácia",
+      "sinonimos": ["farmacêutico", "farmacêutica", "ciências farmacêuticas", "bacharel em farmácia"],
+      "peso": 8,
+      "obrigatorio": true
+    },
+    {
+      "termo": "CRF",
+      "sinonimos": ["conselho regional de farmácia", "registro profissional", "inscrição no conselho"],
+      "peso": 6,
+      "obrigatorio": false
+    },
+    {
+      "termo": "estágio",
+      "sinonimos": ["estagiário", "estagiária", "drogaria", "farmácia de manipulação", "farmácia comercial"],
+      "peso": 5,
+      "obrigatorio": false
+    },
+    {
+      "termo": "dispensação",
+      "sinonimos": ["dispensação de medicamentos", "atenção farmacêutica", "orientação farmacêutica", "medicamentos"],
+      "peso": 5,
+      "obrigatorio": false
+    },
+    {
+      "termo": "atendimento",
+      "sinonimos": ["atendimento ao cliente", "atendimento ao público", "balcão"],
+      "peso": 4,
+      "obrigatorio": false
+    },
+    {
+      "termo": "comunicação",
+      "sinonimos": ["boa comunicação", "comunicativo", "comunicativa", "oratória"],
+      "peso": 3,
+      "obrigatorio": false
+    },
+    {
+      "termo": "trabalho em equipe",
+      "sinonimos": ["equipe", "colaborativo", "colaborativa"],
+      "peso": 3,
+      "obrigatorio": false
+    },
+    {
+      "termo": "cursos",
+      "sinonimos": ["capacitação", "treinamento", "congresso", "certificação", "curso complementar"],
+      "peso": 2,
+      "obrigatorio": false
+    }
+  ],
+  "experiencia": { "anosMinimos": 0, "peso": 5 },
+  "mensagemWhatsapp": "Olá {primeiroNome}, tudo bem? Aqui é do RH da Farmácia Preço Justo. Recebemos seu currículo para a vaga de {vaga} e gostaríamos de convidar você para uma entrevista. Qual o melhor dia e horário para conversarmos?"
+}

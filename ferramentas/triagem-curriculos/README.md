@@ -78,30 +78,53 @@ Para esses casos existe um segundo parecer, lido por IA, com resumo, pontos
 fortes, pontos de atenção e perguntas para a entrevista. Ele **não substitui** a
 nota objetiva: as duas ficam lado a lado.
 
+Funciona com **Gemini** ou com **Claude** — basta ter a chave de um dos dois.
+
+### Gemini (Google AI Studio)
+
+Não precisa instalar nada além do que já vem: a chamada é feita direto na API.
+
+```bash
+export GEMINI_API_KEY=...        # PowerShell: $env:GEMINI_API_KEY="..."
+npm start
+```
+
+O modelo é descoberto na sua própria conta — a ferramenta lista o que a chave
+tem acesso e escolhe o melhor da faixa "flash", que é a certa para classificar
+currículo. Para fixar um modelo específico, use `TRIAGEM_MODELO_IA`.
+
+### Claude (Anthropic)
+
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
 npm start
 ```
 
-Sem a chave, o botão fica desabilitado e o resto funciona normalmente. A análise
-é cobrada por currículo, então use nos finalistas, não no lote inteiro — o botão
-"Analisar visíveis com IA" respeita os filtros da tela justamente para isso.
-
-O `@anthropic-ai/sdk` é dependência **opcional**: se a instalação dele falhar
-(rede ruim, proxy, antivírus), a ferramenta sobe do mesmo jeito e a triagem por
-critérios funciona inteira — só o botão da IA fica desabilitado, dizendo o
-motivo. Para instalar só o essencial:
+Este caminho usa o `@anthropic-ai/sdk`, que é dependência **opcional**: se a
+instalação dele falhar (rede ruim, proxy, antivírus), a ferramenta sobe do mesmo
+jeito e a triagem por critérios funciona inteira. Para instalar só o essencial:
 
 ```bash
 npm install --omit=optional
 ```
 
+### Comum aos dois
+
+Sem chave nenhuma, o botão fica desabilitado e o resto funciona normalmente. A
+análise é cobrada por currículo, então use nos finalistas, não no lote inteiro —
+o botão "Analisar visíveis com IA" respeita os filtros da tela justamente para
+isso. Com as duas chaves definidas, o Gemini é o padrão; `TRIAGEM_IA=anthropic`
+inverte.
+
 Variáveis aceitas:
 
 | Variável | Para quê |
 |---|---|
-| `ANTHROPIC_API_KEY` | Habilita a análise por IA |
-| `TRIAGEM_ESFORCO_IA` | Profundidade da análise: `low`, `medium` (padrão), `high` |
+| `GEMINI_API_KEY` | Habilita a análise por IA via Gemini |
+| `ANTHROPIC_API_KEY` | Habilita a análise por IA via Claude |
+| `TRIAGEM_IA` | `gemini` ou `anthropic`, quando as duas chaves existem |
+| `TRIAGEM_MODELO_IA` | Fixa o modelo em vez de descobrir automaticamente |
+| `TRIAGEM_ESFORCO_IA` | Só no Claude: `low`, `medium` (padrão), `high` |
 | `PORT` | Porta do servidor (padrão `5199`) |
 | `TRIAGEM_SEM_NAVEGADOR` | Não abrir o navegador sozinho |
 
@@ -113,7 +136,7 @@ Variáveis aceitas:
 | "Formato .doc não é lido" | Word 97-2003. Abra e salve como `.docx` ou PDF. |
 | "Nome não identificado" | O currículo começa com um cabeçalho fora do comum. O nome do arquivo é usado como segunda opção; confira em "Detalhes". |
 | "Sem telefone no currículo" | Não havia número em formato brasileiro reconhecível. O texto extraído está em "Detalhes". |
-| "IA indisponível (pacote não instalado)" | O `npm install` não terminou de baixar o SDK opcional. Rode de novo; nada mais é afetado. |
+| "Claude indisponível (pacote não instalado)" | O `npm install` não terminou de baixar o SDK opcional. Rode de novo, ou use o Gemini, que não precisa de pacote. |
 | `npm install` termina com `ECONNRESET` | Download cortado no meio. Apague `node_modules`, rode `npm cache clean --force` e instale de novo. |
 
 Um arquivo ilegível nunca derruba o lote: ele aparece na lista marcado como não
@@ -128,4 +151,4 @@ Currículo é dado pessoal de terceiro. Por isso:
   quando ela fecha;
 - `curriculos/` está no `.gitignore` — se você deixar os arquivos por perto para
   arrastar, eles não vão para o repositório por acidente;
-- o texto do currículo só sai da máquina quando você pede a análise por IA.
+- o texto do currículo só sai da máquina quando você pede a análise por IA — e vai só para o provedor cuja chave você configurou.
