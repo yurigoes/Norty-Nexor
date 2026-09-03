@@ -213,6 +213,13 @@ justamente a volta física que prova que o produto não saiu pela porta.
 
 ## 5. Máquina de estados da etiqueta
 
+Toda etiqueta nasce com o operador que a pesou — ou com a marca de que
+**não houve identificação**. `operacao_sem_identificacao` não é um estado
+da etiqueta: é um atributo dela, que vale vermelho no overlay e alerta
+próprio, independente de a etiqueta conciliar ou não depois. Ver §5.7 do
+estudo (bloqueio da balança e por que a detecção não pode depender dele).
+
+
 ```
                      ┌──────────────┐
                      │   EMITIDA    │ ← pesagem registrada

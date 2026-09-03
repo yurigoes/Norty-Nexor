@@ -27,6 +27,31 @@ desenvolvimento enquanto não forem respondidas.
 
 ## A. Identificação do operador por RFID
 
+### A.0 — Bloqueio da balança (a pergunta mais importante do documento)
+
+Se a balança opera sem identificação, o leitor RFID não previne nada:
+basta não se identificar. Todo o valor do controle depende desta
+resposta.
+
+0.1. **[BLOQUEANTE]** A balança pode ser configurada para **exigir
+   identificação do operador** antes de qualquer pesagem ou impressão de
+   etiqueta — ou seja, o teclado fica bloqueado até a autenticação? Em
+   quais modelos e versões de firmware?
+0.2. **[BLOQUEANTE]** Onde vive essa configuração: na própria balança, no
+   MGV, ou nos dois? **Quem pode alterá-la** — exige senha de supervisor?
+   A alteração fica **registrada em log** acessível por integração?
+0.3. Como a **sessão do operador** encerra: por tempo de inatividade, por
+   número de transações, por nova leitura de crachá, por fim de turno? É
+   configurável?
+0.4. Se o leitor RFID falhar, existe **fallback por código numérico**? Ele
+   pode ser habilitado ou desabilitado por configuração? A transação
+   registra **qual método** autenticou o operador (RFID x código)?
+0.5. A balança expõe o **evento de login do operador** em tempo real —
+   separado da transação de pesagem? Isso nos permitiria mostrar o nome
+   do funcionário na câmera no instante do crachá, antes da pesagem.
+
+### A.1 — Modelos e credenciais
+
 1. **[BLOQUEANTE]** Quais modelos da linha Prix saem de fábrica com
    **leitor RFID integrado** para controle de operador? Pedimos o código
    de produto exato de cada um (identificamos a **Prix 5 Plus 32 kg com
@@ -134,6 +159,24 @@ peso e horário. Ambas funcionam no nosso desenho; a primeira é melhor.
 
 ## E. Hardware e instalação
 
+### E.0 — Leitor USB ligado direto na balança
+
+Um leitor RFID USB-HID se comporta como um teclado: digita o número do
+cartão e dá Enter. Se a balança aceitar isso no campo de código do
+operador, o retrofit das balanças já instaladas fica trivial — sem
+integração, sem rede, sem código nosso.
+
+0.6. **[BLOQUEANTE para o retrofit]** A porta USB da Prix 5 / Prix 6
+   aceita **dispositivo HID** (teclado, leitor de código de barras,
+   leitor RFID), ou é exclusiva para carga de dados e pen drive?
+0.7. Qual a **largura do campo de código do operador**, em dígitos?
+   Precisamos saber se cabe o valor emitido por um leitor RFID (UID de
+   MIFARE pode chegar a 10 dígitos decimais).
+0.8. Havendo leitor USB conectado, o comportamento de bloqueio de A0.1
+   continua valendo — isto é, a balança segue exigindo a identificação
+   antes de liberar o teclado?
+
+
 27. **Prix 5 Plus com RFID** — pedimos a ficha técnica: dimensões,
     alimentação, e a lista de **portas disponíveis** (USB, serial,
     Ethernet, Wi-Fi). Sobra alguma porta USB livre para uso do
@@ -161,6 +204,12 @@ peso e horário. Ambas funcionam no nosso desenho; a primeira é melhor.
 | C16/C17 = não existe | **Cenário B**: conciliação por SKU + peso + janela de tempo, com fila de revisão humana |
 | A2 = 13,56 MHz MIFARE | Credencial segura; seguimos |
 | A2 = 125 kHz | Credencial clonável; o crachá deixa de ser prova e vira só conveniência — o vídeo assume o papel de evidência |
+| **A0.1 = a balança bloqueia** | O controle é real e local, funciona com a rede caída. Topologia 1 do §5.7 do estudo |
+| **A0.1 = não bloqueia** | O RFID vira só rastreio, não prevenção. O produto passa a depender inteiramente da detecção (`operacao_sem_identificacao` em vermelho + alerta) |
+| A0.2 = supervisor pode desligar sem log | Precisamos detectar a mudança pelo dado: transações chegando sem operador viram alerta de configuração alterada |
+| A0.5 = há evento de login em tempo real | Nome do funcionário aparece na câmera no instante do crachá, independente da latência da transação |
+| E0.6 = a porta USB aceita HID | **Retrofit trivial** do parque instalado: leitor plugado na balança, sem integração nenhuma |
+| E0.6 = porta só para carga | Retrofit fica na topologia 3 (leitor no *edge*): identifica e registra, mas não bloqueia |
 
 **Ressalva importante sobre C16/C17:** mesmo que a balança imprima um
 serial, ele só serve para baixa unitária se **sobreviver até o registro

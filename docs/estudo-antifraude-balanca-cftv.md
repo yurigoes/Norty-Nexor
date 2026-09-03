@@ -242,6 +242,125 @@ parque de balanças antes dele.
 
 ---
 
+### 5.7 A balança bloqueia sem identificação?
+
+**A pergunta está certa: se a balança opera sem identificação, o RFID é
+decoração.** Mas a resposta tem uma condição dura embutida.
+
+#### O bloqueio é sempre local — nunca passa pelo servidor
+
+Não existe caminho "leitor → rede → servidor → volta e destrava a
+balança". As balanças da linha não expõem comando remoto de
+destravamento, e mesmo que expusessem seria um desenho ruim: bastaria a
+rede cair para o açougue parar.
+
+**O bloqueio tem de acontecer dentro do firmware da balança.** Ou o
+equipamento sabe exigir operador, ou nenhum sistema externo consegue
+impor isso. É por isso que a topologia do leitor decide o produto — e
+não o contrário.
+
+A boa notícia dessa restrição: quando o bloqueio é local, ele funciona
+com a rede caída, com o servidor fora do ar e com o nosso sistema
+desligado. É o único lugar onde ele deveria estar.
+
+#### As três topologias
+
+| | Leitor onde | Bloqueia? | Overlay instantâneo do nome | Rede necessária |
+|---|---|---|---|---|
+| **1. Integrado** | Dentro da balança (Prix 5 Plus RFID) | **Sim** | Não — só quando a transação chegar | Não |
+| **2. USB-HID direto** | Porta USB da balança | Provável — a confirmar | Não | Não |
+| **2b. Edge em modo teclado** | Leitor → *edge* → balança | Sim | **Sim** | Não |
+| **3. Só no edge** | Mini-PC ao lado | **Não** | Sim | Não |
+
+**Topologia 1 — integrada.** É a resposta direta à pergunta "posso
+comprar o leitor e ligar na balança?": a versão de fábrica *é* isso. O
+crachá é lido, o firmware autentica contra a tabela local de operadores e
+libera. Zero latência, zero dependência. Nosso sistema só lê o operador
+que já vem na transação.
+
+**Topologia 2 — leitor USB-HID na porta da balança.** Um leitor RFID
+USB-HID é, para o computador, um teclado que digita o número do cartão e
+dá Enter. Se a balança pedir código de operador e aceitar entrada de
+teclado USB, plugar o leitor **é** o login por crachá — sem integração,
+sem código nosso, sem rede. Seria o retrofit perfeito.
+
+Dois "se" que precisam ser confirmados com a Toledo: (a) a porta USB
+aceita dispositivo HID ou é só para carga/pen drive? e (b) o campo de
+código do operador tem dígitos suficientes para o valor que o leitor
+digita? UID de MIFARE dá até 10 dígitos decimais e o código de operador
+costuma ter 3 ou 4 — resolve-se com leitor configurável (a maioria
+permite emitir só parte do UID ou um valor mapeado), mas é preciso saber
+o tamanho do campo antes de comprar.
+
+**Topologia 2b — *edge* em modo teclado.** O leitor liga no mini-PC, e o
+mini-PC se apresenta à balança como teclado USB (modo *gadget* HID, que
+um Raspberry Pi faz nativamente). O *edge* vê o crachá — logo, o nome
+sobe na câmera **na hora** — e digita o código na balança, que bloqueia
+normalmente. Uma tapa só, os dois benefícios.
+
+O preço: o *edge* entra no caminho crítico. Se ele travar, o açougue
+para. Isso é aceitável num sistema com *watchdog* e *bypass* físico, mas
+não é coisa de v1. Fica registrado como evolução, não como plano.
+
+**Topologia 3 — leitor só no *edge*.** A balança não sabe de nada; nosso
+sistema sabe quem está ali por correlação de tempo. Serve para o overlay
+e para o painel, **não bloqueia**. É o retrofit garantido, que funciona
+em qualquer balança de qualquer fabricante.
+
+#### O trade-off que ninguém contorna
+
+Topologia 1 bloqueia mas não dá o nome instantâneo (ele só chega com a
+transação, e aí valem as latências de §5.6). Topologia 3 dá o nome
+instantâneo mas não bloqueia.
+
+**Prefira sempre o bloqueio.** Nome atrasado alguns segundos no overlay é
+perda cosmética; balança aceitando pesagem anônima é perda estrutural. E
+se a Toledo confirmar *push* por transação (pergunta B8), o dilema
+desaparece: tudo fica instantâneo de qualquer jeito.
+
+#### Não faça o produto depender do bloqueio
+
+Mesmo com a topologia 1, o desenho não pode assumir que toda pesagem vem
+identificada. Três motivos:
+
+1. **Risco operacional.** Leitor com defeito, crachá perdido, cartão
+   desmagnetizado — e o açougue para. Nenhum supermercado aceita "o setor
+   de carnes está parado porque o antifraude está de mau humor". Isso
+   mata a venda mais rápido do que qualquer fraude.
+2. **A configuração pode ser desligada.** Se um supervisor consegue
+   desativar a exigência de operador na própria balança, o bloqueio cai
+   em silêncio. Precisamos saber quem pode alterar isso e se a alteração
+   fica registrada (perguntas A9/A10 à Toledo).
+3. **Detecção é mais robusta que bloqueio.** Bloqueio falha aberto;
+   detecção não falha.
+
+Por isso: **bloquear onde o firmware permitir, detectar sempre.**
+Pesagem sem operador identificado é evento de primeira classe —
+`operacao_sem_identificacao` — vai **vermelho no overlay**, abre alerta e
+entra no KPI do turno. O caminho "é só não me identificar" deixa de ser
+atalho e vira o sinal mais barulhento do sistema.
+
+E mais: se transações começarem a chegar sem operador numa balança que
+antes exigia, isso é **alerta de configuração alterada**. O sistema
+percebe que o controle foi desligado — que é exatamente o momento em que
+a fraude costuma começar.
+
+#### Código numérico como secundário
+
+Faz sentido, e por uma razão operacional: crachá esquecido em casa não
+pode parar o balcão.
+
+Mas código se empresta, se anota no balcão e se digita pelo colega. Então
+o código **não é bloqueado, é marcado**: a transação registra qual método
+autenticou, e o painel separa. Um operador que de repente passa a
+trabalhar sempre por código é um sinal — não uma infração, mas algo que o
+gerente deve enxergar.
+
+Regra prática sugerida: código habilitado, com aviso no painel acima de
+um limiar por operador/dia (padrão: 10% das pesagens do turno).
+
+---
+
 ## 6. LGPD e direito do trabalho
 
 Decisões que não devem ser desfeitas depois:
