@@ -4,6 +4,14 @@ Documento para enviar ao contato técnico/comercial da Toledo. As
 respostas dos blocos **A** e **B** decidem a arquitetura; as demais
 decidem custo e prazo.
 
+> **Atualização:** lemos o manual oficial da Prix 5 Plus (guia rápido +
+> manual do usuário, rev. 05-25, firmware 8.7). Isso já respondeu boa
+> parte do bloco A e todo o C15/C16/C17/E0.6/E0.7. As perguntas abaixo
+> foram atualizadas — as respondidas ficam marcadas **[RESPONDIDA PELO
+> MANUAL]** com a resposta entre colchetes, e não precisam ir para a
+> Toledo. Detalhe completo em
+> [`homologacao-toledo-prix5plus.md`](./homologacao-toledo-prix5plus.md).
+
 Marcadas com **[BLOQUEANTE]** as perguntas que impedem o início do
 desenvolvimento enquanto não forem respondidas.
 
@@ -33,29 +41,40 @@ Se a balança opera sem identificação, o leitor RFID não previne nada:
 basta não se identificar. Todo o valor do controle depende desta
 resposta.
 
-0.1. **[BLOQUEANTE]** A balança pode ser configurada para **exigir
-   identificação do operador** antes de qualquer pesagem ou impressão de
-   etiqueta — ou seja, o teclado fica bloqueado até a autenticação? Em
-   quais modelos e versões de firmware?
+0.1. **[RESPONDIDA PELO MANUAL]** A balança pode ser configurada para
+   **exigir identificação do operador**, com o teclado bloqueado até a
+   autenticação? **[Não, na Prix 5 Plus documentada, firmware 8.7. O
+   parâmetro C14 faz a balança *pedir* o código depois da pesagem, mas
+   um toque de tecla pula o pedido e a venda é concluída sem operador.
+   Pergunta que sobra: existe, em firmware mais recente, algum modo que
+   remova essa saída?]**
 0.2. **[BLOQUEANTE]** Onde vive essa configuração: na própria balança, no
    MGV, ou nos dois? **Quem pode alterá-la** — exige senha de supervisor?
    A alteração fica **registrada em log** acessível por integração?
 0.3. Como a **sessão do operador** encerra: por tempo de inatividade, por
    número de transações, por nova leitura de crachá, por fim de turno? É
    configurável?
-0.4. Se o leitor RFID falhar, existe **fallback por código numérico**? Ele
-   pode ser habilitado ou desabilitado por configuração? A transação
-   registra **qual método** autenticou o operador (RFID x código)?
+0.4. **[PARCIALMENTE RESPONDIDA]** O código numérico é o **único**
+   método documentado nesta linha — não há RFID para ter fallback dele.
+   Pergunta que sobra: nas balanças com RFID (se confirmado SKU de
+   fábrica — ver A1.x abaixo), a transação registra qual dos dois
+   métodos autenticou?
 0.5. A balança expõe o **evento de login do operador** em tempo real —
    separado da transação de pesagem? Isso nos permitiria mostrar o nome
    do funcionário na câmera no instante do crachá, antes da pesagem.
 
 ### A.1 — Modelos e credenciais
 
-1. **[BLOQUEANTE]** Quais modelos da linha Prix saem de fábrica com
-   **leitor RFID integrado** para controle de operador? Pedimos o código
-   de produto exato de cada um (identificamos a **Prix 5 Plus 32 kg com
-   leitor RFID**, mas queremos a lista completa e atual).
+1. **[BLOQUEANTE — reforçada]** O manual oficial da Prix 5 Plus
+   (rev. 05-25, firmware 8.7) que temos em mãos **não menciona RFID em
+   nenhuma das 118 páginas**, e o diagrama do painel mostra só teclado
+   numérico. Perguntamos direto: a "Prix 5 Plus com leitor RFID"
+   anunciada por revendedores (ex.: Digimaq) é **SKU de fábrica
+   Toledo**, com manual próprio, ou é **retrofit do integrador** (leitor
+   externo apresentado comercialmente como parte da balança)? Se for de
+   fábrica, pedimos o código de produto exato e o manual específico —
+   este documento não a cobre. Quais outros modelos da linha Prix saem
+   de fábrica com leitor integrado?
 2. Qual a **frequência e o padrão** do leitor: 125 kHz (EM4100/proximidade)
    ou 13,56 MHz (MIFARE Classic / DESFire)? Precisamos saber por uma
    razão de segurança: credencial de 125 kHz é clonável com equipamento
@@ -118,21 +137,35 @@ Este bloco decide se conseguimos uma **baixa unitária exata** (cada
 etiqueta identificada individualmente) ou se ficamos na conciliação por
 peso e horário. Ambas funcionam no nosso desenho; a primeira é melhor.
 
-15. **[BLOQUEANTE]** Confirmar, **por modelo**, quais simbologias a
-    etiqueta suporta: EAN-13, **Code 128**, **GS1 DataBar Expanded**,
-    outras. (Vimos Code 128 e GS1 DataBar Expanded na documentação do
-    MGV7.)
-16. **[BLOQUEANTE]** Na composição do Code 128 / GS1 DataBar Expanded,
-    existe um campo de **número sequencial da transação** ou contador
-    incremental que possa entrar no código impresso?
+15. **[RESPONDIDA PELO MANUAL]** Quais simbologias a etiqueta suporta?
+    **[EAN-13 (padrão) + um segundo código Code 128, parâmetro C18,
+    com 13 composições pré-definidas. GS1 DataBar Expanded aparece só
+    em marketing, sem parâmetro local documentado — ver pergunta 15b.]**
+15b. GS1 DataBar Expanded é citado na descrição geral da Prix 5 Plus
+    ("para a gestão da validade de produtos, com o MGV 7") mas não tem
+    parâmetro local equivalente ao C18. Ele existe como opção real de
+    impressão, e se sim, é configurado onde — na balança ou só via
+    MGV7? Ele aceita Identificadores de Aplicação GS1 (AI 21 serial),
+    ou é usado só para validade?
+16. **[RESPONDIDA PELO MANUAL]** Existe sequencial na composição?
+    **[Sim — parâmetro C18, Tipo 3 (`EAN13+DATA+HORA+ENDEREÇO+
+    SEQUENCIAL`) e Tipo 7 (`EAN13+PESO/QUANTIDADE+DATA+HORA+
+    END.BALANÇA+SEQUENCIAL`). É local, não depende de GS1 nem de AI
+    21.]**
 17. É possível compor o código com **Identificadores de Aplicação GS1** —
     especificamente **AI (21) número de série** e **AI (10) lote** — ao
     lado do GTIN (01) e do peso líquido (3103)?
 18. Se não houver sequencial nativo: os **campos extras** de layout
     (`Campext1.txt`, `Campext2.txt`) aceitam valor **dinâmico por
     transação**, ou são estáticos por produto?
-19. O sequencial da transação **reinicia**? Em que evento (diário, por
-    carga, por operador)? Qual a largura em dígitos?
+19. **[REFINADA]** No sequencial do Tipo 3/Tipo 7 do parâmetro C18:
+    qual a **largura em dígitos**? Ele **reinicia** — e em que evento
+    (diário, por carga do MGV7, nunca, só ao estourar a largura)?
+19b. O parâmetro **C18 é ajustável localmente** pelo técnico na
+    balança (com a senha de programação), ou depende de configuração
+    feita pelo MGV7? Se for puramente local, qualquer balança em campo
+    pode ir para Tipo 7 sem depender do software de retaguarda — muda
+    o plano de implantação do piloto.
 20. A balança pode imprimir um **QR Code** na etiqueta com **conteúdo
     dinâmico** por transação?
 21. A Toledo tem **clientes em produção** usando serial ou lote no código
@@ -161,20 +194,12 @@ peso e horário. Ambas funcionam no nosso desenho; a primeira é melhor.
 
 ### E.0 — Leitor USB ligado direto na balança
 
-Um leitor RFID USB-HID se comporta como um teclado: digita o número do
-cartão e dá Enter. Se a balança aceitar isso no campo de código do
-operador, o retrofit das balanças já instaladas fica trivial — sem
-integração, sem rede, sem código nosso.
-
-0.6. **[BLOQUEANTE para o retrofit]** A porta USB da Prix 5 / Prix 6
-   aceita **dispositivo HID** (teclado, leitor de código de barras,
-   leitor RFID), ou é exclusiva para carga de dados e pen drive?
-0.7. Qual a **largura do campo de código do operador**, em dígitos?
-   Precisamos saber se cabe o valor emitido por um leitor RFID (UID de
-   MIFARE pode chegar a 10 dígitos decimais).
-0.8. Havendo leitor USB conectado, o comportamento de bloqueio de A0.1
-   continua valendo — isto é, a balança segue exigindo a identificação
-   antes de liberar o teclado?
+0.6. **[RESPONDIDA PELO MANUAL]** A porta USB da Prix 5 aceita
+   dispositivo HID? **[Não há porta USB documentada na Prix 5 Plus —
+   a ficha técnica lista só Ethernet e Wi-Fi como interface de
+   comunicação. Pergunta que sobra, só se A1.x confirmar variante de
+   fábrica com RFID: aquela variante tem alguma porta que este manual
+   não cobre?]**
 
 
 27. **Prix 5 Plus com RFID** — pedimos a ficha técnica: dimensões,

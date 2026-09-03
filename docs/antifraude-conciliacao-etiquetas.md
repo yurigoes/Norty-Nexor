@@ -71,11 +71,21 @@ A balança imprime um serial no código de barras. A baixa é **unitária e
 determinística**: esta etiqueta passou ou não passou. A fila de revisão
 humana praticamente desaparece.
 
-Depende de duas coisas, e a segunda não é com a Toledo: a balança
-imprimir o serial **e** o PDV do cliente preservá-lo até o registro da
-venda. Muitos PDVs traduzem o código de pesável para o código interno e
-descartam o original — e aí o serial não chega ao XML. Por isso o
-Cenário A é um *upgrade* negociado loja a loja, nunca a base.
+**Deixou de ser hipotético.** O manual da Toledo Prix 5 Plus confirma um
+segundo código de barras, Code 128, com uma composição — **Tipo 7**:
+`EAN13 + peso/quantidade + data + hora + endereço da balança +
+sequencial` — configurável localmente por parâmetro (C18), sem depender
+do MGV7. Detalhe em
+[`homologacao-toledo-prix5plus.md`](./homologacao-toledo-prix5plus.md)
+§6. Falta confirmar largura e comportamento de reinício do contador,
+mas a capacidade existe e é de fábrica.
+
+Ainda depende de uma coisa que não é com a Toledo: o PDV do cliente
+precisa **preservar** esse código até o registro da venda. Muitos PDVs
+traduzem o código de pesável para o código interno e descartam o
+original — e aí o serial não chega ao XML. Por isso o Cenário A é um
+*upgrade* configurado balança a balança e validado PDV a PDV, nunca a
+base do produto.
 
 ### Cenário B — etiqueta convencional
 

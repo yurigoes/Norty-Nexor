@@ -244,6 +244,18 @@ parque de balanças antes dele.
 
 ### 5.7 A balança bloqueia sem identificação?
 
+> **Atualização com fonte primária.** Lemos o manual oficial da Toledo
+> Prix 5 Plus (guia rápido e manual do usuário, rev. 05-25). Achado
+> central, registrado em detalhe em
+> [`homologacao-toledo-prix5plus.md`](./homologacao-toledo-prix5plus.md):
+> **este modelo não bloqueia**. Ele pede o código do operador e um
+> único toque de tecla pula o pedido, completando a venda sem
+> identificação. Também não há RFID nem porta USB documentados nesta
+> linha — a "Prix 5 Plus com RFID" da seção 5.1 precisa ser tratada
+> como retrofit de integrador a confirmar, não como SKU de fábrica
+> comprovado. A leitura abaixo permanece como análise de topologias em
+> tese; a leitura acima é o que sabemos de fato sobre esta balança.
+
 **A pergunta está certa: se a balança opera sem identificação, o RFID é
 decoração.** Mas a resposta tem uma condição dura embutida.
 
