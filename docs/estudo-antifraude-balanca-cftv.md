@@ -5,6 +5,12 @@ momento**, gravando os três juntos e tornando o conjunto pesquisável.
 
 > Status: estudo de viabilidade. Nada implementado. Este documento existe
 > para decidir hardware e escopo antes de escrever a primeira linha.
+>
+> Produto **SaaS para o varejo** — não há parque instalado de cliente
+> ainda, então as decisões abaixo valem como padrão de referência.
+>
+> A lógica de baixa, cancelamento e alerta está em
+> [`antifraude-conciliacao-etiquetas.md`](./antifraude-conciliacao-etiquetas.md).
 
 ---
 
@@ -244,7 +250,7 @@ Decisões que não devem ser desfeitas depois:
 |---|---|---|---|
 | **0 — PoC** | 2–3 sem | 1 balança + 1 câmera numa bancada | Crachá → nome na tela em < 1 s; pesagem → produto/peso/valor na tela e na gravação; **latência medida e registrada** |
 | **1 — MVP** | 4–6 sem | Correlator, evento persistido, clipe de evidência, painel com busca | 1 loja, 3 balanças, 7 dias sem perda de evento |
-| **2 — Antifraude** | 4–6 sem | Reconciliação etiqueta × PDV, motor de regras, alertas, relatório de perda por operador/setor | Detectar os casos 1–4 da seção 2 em dados reais |
+| **2 — Antifraude** | 4–6 sem | Conciliação etiqueta × NFC-e, posto de estorno, motor de regras, alertas, relatório de perda por operador/setor — detalhado em [`antifraude-conciliacao-etiquetas.md`](./antifraude-conciliacao-etiquetas.md) | Detectar os casos 1–4 da seção 2 em dados reais |
 | **3 — Escala** | 6–8 sem | Multi-loja, RBAC, retenção/auditoria LGPD, provisionamento e monitoramento do *edge* | Instalar uma loja nova sem engenheiro no local |
 | **4 — Visão** *(opcional)* | — | Verificar por imagem que há produto na bandeja; detectar bandeja vazia com etiqueta emitida | — |
 
@@ -309,12 +315,15 @@ Vite no painel, TypeScript ponta a ponta, mais os agentes de *edge*
 
 ## 11. Perguntas em aberto
 
-1. Qual fabricante e modelo de balança o cliente já tem instalado?
+1. Qual fabricante e modelo de balança predominam no cliente piloto?
    (define retrofit × troca de parque)
-2. Já existe CFTV Intelbras? Qual gravador e qual firmware?
-3. Qual ERP/PDV? Há acesso ao cupom fiscal para a reconciliação da Fase 2?
-4. Quantas lojas e quantas bancadas por loja?
-5. É produto para um cliente específico ou SaaS para o varejo?
+2. Já existe CFTV Intelbras no piloto? Qual gravador e qual firmware?
+3. Quantas bancadas por loja no perfil de cliente alvo?
+
+Respondidas: é **SaaS para o varejo**, sem parque instalado — o que torna
+o *retrofit* (§5.3) obrigatório, não opcional, porque o produto tem de
+entrar em loja que já tem balança. A fonte do caixa é a **NFC-e/SAT**,
+não a integração com cada PDV — ver §3 do documento de conciliação.
 
 ---
 
