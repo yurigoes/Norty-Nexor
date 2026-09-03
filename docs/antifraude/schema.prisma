@@ -1,0 +1,925 @@
+// =========================================================
+//  Antifraude de pesagem — Schema do banco (PostgreSQL)
+// ---------------------------------------------------------
+//  Cenário B: a etiqueta não tem identidade nativa. A baixa se
+//  dá por SKU + peso + janela de tempo, com fila de revisão
+//  humana para o ambíguo. O Cenário A (serial no código de
+//  barras) entra pelo campo `Label.serial` como atalho — mesmo
+//  motor, um sinal forte a mais.
+//
+//  Desenho em ../antifraude-conciliacao-etiquetas.md.
+//
+//  Multi-tenant por linha: quase toda tabela carrega `storeId`
+//  e o guard injeta esse filtro em cada consulta. Todo índice
+//  composto começa por `storeId` — nenhuma leitura legítima
+//  atravessa lojas.
+//
+//  Dinheiro é Decimal(12,2), nunca Float.
+//  Peso é Int em GRAMAS, nunca Float: peso é meia chave de
+//  conciliação, e chave que não é exata destrói o produto.
+// =========================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------- Estrutura e cadastro ----------------
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  legalName String
+  document  String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stores    Store[]
+  users     User[]
+
+  @@map("tenants")
+}
+
+model Store {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  shortName String
+  document  String
+  city      String
+  state     String   @db.Char(2)
+  // Fuso da loja: define a virada da data operacional. Rede que
+  // cruza fusos quebra o fechamento diário se isso for global.
+  timezone  String   @default("America/Sao_Paulo")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  departments  Department[]
+  scales       Scale[]
+  stations     ReturnStation[]
+  cameras      Camera[]
+  operators    Operator[]
+  badges       Badge[]
+  products     Product[]
+  labels       Label[]
+  cancellations Cancellation[]
+  documents    FiscalDocument[]
+  fiscalItems  FiscalItem[]
+  matches      Match[]
+  candidates   MatchCandidate[]
+  alerts       Alert[]
+  evidences    Evidence[]
+  sessions     OperatorSession[]
+  settings     DepartmentSettings[]
+  closings     DailyClosing[]
+  ingestions   Ingestion[]
+  audits       AccessAudit[]
+  userAccess   UserStore[]
+
+  @@index([tenantId])
+  @@map("stores")
+}
+
+enum DepartmentKind {
+  acougue
+  padaria
+  hortifruti
+  peixaria
+  rotisseria
+  frios
+  outro
+}
+
+model Department {
+  id      String         @id @default(cuid())
+  storeId String
+  kind    DepartmentKind
+  name    String
+  active  Boolean        @default(true)
+
+  store     Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  settings  DepartmentSettings?
+  scales    Scale[]
+  stations  ReturnStation[]
+  cameras   Camera[]
+  products  Product[]
+  labels    Label[]
+  alerts    Alert[]
+  closings  DailyClosing[]
+
+  @@unique([storeId, kind, name])
+  @@map("departments")
+}
+
+// Parâmetros que mudam de setor para setor. Açougue e padaria têm
+// ritmos e janelas diferentes; travar isso em constante no código é
+// garantir que o motor erre em metade dos setores.
+model DepartmentSettings {
+  id           String @id @default(cuid())
+  storeId      String
+  departmentId String @unique
+
+  // Quanto tempo uma etiqueta pode levar até aparecer no caixa antes
+  // de virar alerta. Perecível embalado precisa de janela maior.
+  matchWindowMinutes    Int @default(720)
+  // Estorno fora desta janela continua aceito, mas entra marcado.
+  cancelWindowMinutes   Int @default(60)
+  // Alguns PDVs arredondam o peso. 0 exige casamento exato.
+  weightToleranceGrams  Int @default(0)
+
+  // Pesos da função de custo do casamento:
+  //   custo = weightCostWeight * |Δgramas| + timeCostWeight * |Δsegundos|
+  // Calibrados pelas decisões da fila de revisão (ver `Match.reviewedById`).
+  weightCostWeight      Float @default(1.0)
+  timeCostWeight        Float @default(0.002)
+  // Abaixo deste custo o casamento é automático (confiança alta).
+  autoMatchMaxCost      Float @default(5.0)
+
+  // Controles do posto de estorno — ligados por cliente, não por produto.
+  requireReweigh        Boolean @default(false)
+  requireBadgeOnCancel  Boolean @default(false)
+
+  // Código numérico é permitido para não parar o balcão, mas acima
+  // deste percentual de pesagens no turno o painel avisa.
+  allowNumericCode      Boolean @default(true)
+  numericCodeAlertPct   Int     @default(10)
+
+  evidenceSecondsBefore Int @default(5)
+  evidenceSecondsAfter  Int @default(10)
+  retentionDays         Int @default(60)
+
+  updatedAt DateTime @updatedAt
+
+  store      Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@map("department_settings")
+}
+
+enum ScaleVendor {
+  toledo
+  urano
+  filizola
+  outro
+}
+
+model Scale {
+  id           String      @id @default(cuid())
+  storeId      String
+  departmentId String
+  identifier   String
+  vendor       ScaleVendor
+  model        String?
+  ipAddress    String?
+
+  // Estado OBSERVADO da configuração da balança, não desejado.
+  // Se transações passam a chegar sem operador numa balança que
+  // exigia identificação, o controle foi desligado — e isso é
+  // alerta (`configuracao_alterada`), porque costuma ser o momento
+  // exato em que a fraude começa.
+  requiresOperator        Boolean   @default(false)
+  requiresOperatorSeenAt  DateTime?
+
+  lastSeenAt DateTime?
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+
+  store      Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  department Department        @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  labels     Label[]
+  sessions   OperatorSession[]
+  alerts     Alert[]
+
+  @@unique([storeId, identifier])
+  @@index([storeId, departmentId])
+  @@map("scales")
+}
+
+model ReturnStation {
+  id           String  @id @default(cuid())
+  storeId      String
+  departmentId String
+  identifier   String
+  cameraId     String?
+  hasScale     Boolean @default(false)
+  active       Boolean @default(true)
+
+  store         Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  department    Department     @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  camera        Camera?        @relation(fields: [cameraId], references: [id], onDelete: SetNull)
+  cancellations Cancellation[]
+
+  @@unique([storeId, identifier])
+  @@map("return_stations")
+}
+
+enum OverlayMode {
+  pos_gravador
+  cgi_camera
+  somente_player
+}
+
+model Camera {
+  id           String      @id @default(cuid())
+  storeId      String
+  departmentId String?
+  identifier   String
+  overlayMode  OverlayMode @default(pos_gravador)
+  channel      Int?
+
+  // Host e caminho do RTSP, SEM credencial. Usuário e senha vivem no
+  // cofre de segredos e são referenciados por `credentialRef` — URL
+  // com senha embutida vaza em log, em backup e em tela de suporte.
+  rtspHost   String
+  rtspPath   String
+  credentialRef String?
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  store      Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  department Department?     @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  stations   ReturnStation[]
+  evidences  Evidence[]
+
+  @@unique([storeId, identifier])
+  @@map("cameras")
+}
+
+// ---------------- Pessoas ----------------
+
+model Operator {
+  id           String    @id @default(cuid())
+  storeId      String
+  registration String
+  name         String
+  active       Boolean   @default(true)
+  hiredAt      DateTime?
+  createdAt    DateTime  @default(now())
+
+  store    Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  identity OperatorIdentity?
+  badges   Badge[]
+  labels   Label[]
+  sessions OperatorSession[]
+  alerts   Alert[]
+  audits   AccessAudit[]
+
+  @@unique([storeId, registration])
+  @@index([storeId, name])
+  @@map("operators")
+}
+
+// CPF mora em tabela separada de propósito. O overlay usa matrícula e
+// primeiro nome; nenhuma consulta do dia a dia precisa do documento, e
+// separar garante que ele não vaze por descuido num `select *`.
+// Toda leitura passa por serviço auditado (ver AccessAudit).
+model OperatorIdentity {
+  id         String   @id @default(cuid())
+  operatorId String   @unique
+  document   String
+  createdAt  DateTime @default(now())
+
+  operator Operator @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+
+  @@map("operator_identities")
+}
+
+enum BadgeTech {
+  mifare_desfire
+  mifare_classic
+  em4100
+  outro
+}
+
+model Badge {
+  id         String    @id @default(cuid())
+  storeId    String
+  operatorId String
+  uid        String
+  // 125 kHz (em4100) é clonável com equipamento barato. O crachá
+  // continua útil como conveniência, mas deixa de ser prova — o
+  // painel precisa saber disso para não superestimar a evidência.
+  technology BadgeTech @default(mifare_desfire)
+  active     Boolean   @default(true)
+  issuedAt   DateTime  @default(now())
+  revokedAt  DateTime?
+
+  store    Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  operator Operator          @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+  labels   Label[]
+  sessions OperatorSession[]
+
+  @@unique([storeId, uid])
+  @@index([storeId, operatorId])
+  @@map("badges")
+}
+
+model Product {
+  id           String  @id @default(cuid())
+  storeId      String
+  departmentId String?
+  plu          String
+  gtin         String?
+  name         String
+  pricePerKg   Decimal? @db.Decimal(12, 2)
+
+  // Faixa de plausibilidade: peso fora dela é candidato a troca de
+  // etiqueta — que a conciliação NÃO pega, porque as duas etiquetas
+  // fecham. É outra família de regra, e vive aqui.
+  minWeightGrams Int?
+  maxWeightGrams Int?
+
+  // Porcionado/padronizado (bandeja de 500 g, frios em porção fixa)
+  // colide muito mais no peso e joga mais casos para a fila de
+  // revisão. Marcar permite ajustar o custo e prever a fila.
+  portioned Boolean @default(false)
+
+  active    Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+
+  store       Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  department  Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  labels      Label[]
+  fiscalItems FiscalItem[]
+
+  @@unique([storeId, plu])
+  @@index([storeId, gtin])
+  @@map("products")
+}
+
+// ---------------- Pesagem ----------------
+
+enum AuthMethod {
+  rfid
+  codigo
+  nenhum
+}
+
+enum LabelState {
+  emitida
+  conciliada
+  cancelada
+  nao_conciliada
+  divergente
+  reimpressa
+  expirada
+}
+
+model Label {
+  id           String @id @default(cuid())
+  storeId      String
+  departmentId String
+  scaleId      String
+
+  // Nulo quando a balança operou sem identificação. Não é erro de
+  // captura: é o evento `operacao_sem_identificacao`, que vai
+  // vermelho no overlay e abre alerta. Bloquear a balança é bom
+  // quando o firmware permite, mas o produto nunca depende disso —
+  // bloqueio falha aberto, detecção não falha.
+  operatorId String?
+  badgeId    String?
+  authMethod AuthMethod @default(nenhum)
+
+  // O sequencial reinicia (diário, por carga ou por operador,
+  // conforme o fabricante). Por isso a unicidade inclui a data
+  // operacional — só o par identifica a transação.
+  transactionSeq Int
+  businessDate   DateTime @db.Date
+
+  // `plu` guarda o código cru mesmo quando não há produto cadastrado:
+  // etiqueta de produto desconhecido ainda precisa entrar na conta,
+  // senão o fechamento fecha errado e ninguém entende por quê.
+  productId String?
+  plu       String
+
+  weightGrams Int
+  pricePerKg  Decimal @db.Decimal(12, 2)
+  totalValue  Decimal @db.Decimal(12, 2)
+  tareGrams   Int?
+
+  barcode String
+  // Atalho do Cenário A. Quando chega e casa, vai direto para
+  // conciliada com confiança alta, pulando o custo por peso.
+  serial  String?
+
+  issuedAt         DateTime
+  // Derivado das configurações do setor no momento da emissão, e
+  // gravado: mudar a janela depois não pode reescrever o passado.
+  matchWindowUntil DateTime
+
+  state LabelState @default(emitida)
+
+  // Reimpressão: a filha aponta para a mãe, e a mãe vai para
+  // `reimpressa`. Se uma mãe invalidada aparecer conciliada depois,
+  // são duas etiquetas para um produto — alerta duro.
+  parentLabelId String?
+  reprintCount  Int     @default(0)
+
+  // Código queimado após o cancelamento. Se reaparecer num XML, alerta.
+  burned Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store        Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  department   Department       @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  scale        Scale            @relation(fields: [scaleId], references: [id], onDelete: Cascade)
+  operator     Operator?        @relation(fields: [operatorId], references: [id], onDelete: SetNull)
+  badge        Badge?           @relation(fields: [badgeId], references: [id], onDelete: SetNull)
+  product      Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
+  parent       Label?           @relation("Reimpressao", fields: [parentLabelId], references: [id], onDelete: SetNull)
+  reprints     Label[]          @relation("Reimpressao")
+  cancellation Cancellation?
+  match        Match?
+  candidates   MatchCandidate[]
+  evidences    Evidence[]
+  alerts       Alert[]
+
+  // Uma pesagem, uma etiqueta: reenvio do agente de coleta não
+  // duplica linha, e duplicata é o que mais estraga a conta de
+  // fechamento.
+  @@unique([scaleId, businessDate, transactionSeq])
+  @@unique([storeId, serial])
+  // O índice que sustenta o casamento do Cenário B.
+  @@index([storeId, productId, weightGrams, state])
+  // Varredura do job que expira janelas e abre os alertas.
+  @@index([storeId, state, matchWindowUntil])
+  @@index([storeId, businessDate, departmentId])
+  @@index([storeId, operatorId, issuedAt(sort: Desc)])
+  @@map("labels")
+}
+
+enum CancellationReason {
+  codigo_errado
+  peso_errado
+  desistencia
+  avaria
+  nao_informado
+}
+
+// Estorno em um passo: passa a etiqueta no leitor e pronto. Não pede
+// crachá por padrão — quem responde é quem PESOU, e a etiqueta já
+// carrega isso. Atrito no cancelamento faz ninguém cancelar, e aí todo
+// cancelamento legítimo vira alerta falso e a fila afoga o cliente.
+// A responsabilização vem do clipe da câmera do posto.
+model Cancellation {
+  id        String @id @default(cuid())
+  storeId   String
+  labelId   String @unique
+  stationId String
+
+  reason CancellationReason @default(nao_informado)
+
+  // Repesagem é opcional (§6.2): onde a operação aceita, é o controle
+  // mais forte do desenho — exige o produto fisicamente na mão.
+  reweighGrams Int?
+  reweighOk    Boolean?
+
+  // Preenchido só quando `requireBadgeOnCancel` está ligado.
+  confirmedByOperatorId String?
+
+  withinWindow Boolean  @default(true)
+  cancelledAt  DateTime @default(now())
+
+  store   Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  label   Label         @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  station ReturnStation @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  evidences Evidence[]
+  alerts    Alert[]
+
+  @@index([storeId, cancelledAt(sort: Desc)])
+  @@map("cancellations")
+}
+
+enum SessionEndReason {
+  novo_cracha
+  inatividade
+  fim_turno
+  manual
+}
+
+// Topologia 3 (leitor no edge): a balança não sabe quem está ali, nós
+// sabemos. A sessão é o que liga o crachá às pesagens seguintes.
+// Na topologia integrada esta tabela fica vazia — o operador vem
+// direto na transação.
+model OperatorSession {
+  id         String     @id @default(cuid())
+  storeId    String
+  scaleId    String
+  operatorId String
+  badgeId    String?
+  authMethod AuthMethod @default(rfid)
+
+  startedAt DateTime
+  endedAt   DateTime?
+  endReason SessionEndReason?
+
+  store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  scale    Scale    @relation(fields: [scaleId], references: [id], onDelete: Cascade)
+  operator Operator @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+  badge    Badge?   @relation(fields: [badgeId], references: [id], onDelete: SetNull)
+
+  @@index([storeId, scaleId, startedAt(sort: Desc)])
+  // Mesmo crachá aberto em duas balanças ao mesmo tempo é empréstimo
+  // de credencial — esta é a consulta que enxerga isso.
+  @@index([storeId, badgeId, startedAt(sort: Desc)])
+  @@map("operator_sessions")
+}
+
+// ---------------- Caixa ----------------
+
+enum FiscalDocumentKind {
+  nfce
+  sat
+  interno
+}
+
+// Fonte da verdade do caixa é o documento fiscal, não a integração com
+// cada PDV: uma integração serve Consinco, Linx, VR, CISS e o resto,
+// que é o que torna o SaaS viável.
+model FiscalDocument {
+  id        String             @id @default(cuid())
+  storeId   String
+  kind      FiscalDocumentKind @default(nfce)
+  accessKey String
+  number    String?
+  series    String?
+  issuedAt  DateTime
+
+  // Cancelamento do documento inteiro (evento fiscal). Item cancelado
+  // no meio da venda NÃO aparece aqui — ele simplesmente não existe no
+  // XML, e é exatamente por isso que o posto de estorno precisa existir.
+  cancelled   Boolean   @default(false)
+  cancelledAt DateTime?
+
+  checkoutId String?
+  rawPath    String?
+  ingestedAt DateTime  @default(now())
+
+  store Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  items FiscalItem[]
+
+  @@unique([storeId, accessKey])
+  @@index([storeId, issuedAt(sort: Desc)])
+  @@map("fiscal_documents")
+}
+
+model FiscalItem {
+  id         String @id @default(cuid())
+  storeId    String
+  documentId String
+  itemNumber Int
+
+  // Código lido no caixa, cru. Muitos PDVs traduzem o EAN pesável para
+  // o código interno e descartam o original — quando isso acontece o
+  // serial do Cenário A morre aqui, e a loja fica no Cenário B.
+  rawBarcode String?
+  plu        String?
+  productId  String?
+
+  weighable   Boolean  @default(false)
+  quantity    Decimal? @db.Decimal(12, 4)
+  weightGrams Int?
+  unitValue   Decimal  @db.Decimal(12, 2)
+  totalValue  Decimal  @db.Decimal(12, 2)
+  serial      String?
+
+  store      Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  document   FiscalDocument   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  product    Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
+  match      Match?
+  candidates MatchCandidate[]
+
+  @@unique([documentId, itemNumber])
+  // Espelha o índice de `Label`: é o outro lado do casamento.
+  @@index([storeId, productId, weightGrams])
+  @@index([storeId, serial])
+  @@map("fiscal_items")
+}
+
+// ---------------- Conciliação ----------------
+
+enum MatchConfidence {
+  alta
+  media
+  baixa
+  manual
+}
+
+enum MatchOrigin {
+  automatico
+  manual
+  serial
+}
+
+// Um para um nos dois sentidos, garantido pelo banco: uma etiqueta não
+// baixa duas vendas, e uma venda não baixa duas etiquetas. Validar só
+// na aplicação deixa duas requisições simultâneas passarem juntas.
+model Match {
+  id           String @id @default(cuid())
+  storeId      String
+  labelId      String @unique
+  fiscalItemId String @unique
+
+  confidence MatchConfidence
+  origin     MatchOrigin     @default(automatico)
+
+  cost             Float?
+  weightDeltaGrams Int?
+  timeDeltaSeconds Int?
+
+  // Preenchido quando veio da fila de revisão. É o dado que calibra
+  // `weightCostWeight`, `timeCostWeight` e `autoMatchMaxCost`: se o
+  // revisor confirma sempre o primeiro candidato, o limiar sobe e a
+  // fila encolhe sozinha.
+  reviewedById String?
+  reviewedAt   DateTime?
+
+  createdAt DateTime @default(now())
+
+  store      Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  label      Label      @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  fiscalItem FiscalItem @relation(fields: [fiscalItemId], references: [id], onDelete: Cascade)
+  reviewedBy User?      @relation(fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([storeId, confidence, createdAt(sort: Desc)])
+  @@map("matches")
+}
+
+// Os candidatos que o motor achou, ordenados por custo. É o que a fila
+// de revisão mostra ao lado do clipe: o revisor compara dois vídeos e
+// clica, em vez de seguir o cliente pela loja — que leva minutos por
+// caso e não escala.
+model MatchCandidate {
+  id           String @id @default(cuid())
+  storeId      String
+  labelId      String
+  fiscalItemId String
+
+  rank             Int
+  cost             Float
+  weightDeltaGrams Int
+  timeDeltaSeconds Int
+  createdAt        DateTime @default(now())
+
+  store      Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  label      Label      @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  fiscalItem FiscalItem @relation(fields: [fiscalItemId], references: [id], onDelete: Cascade)
+
+  @@unique([labelId, fiscalItemId])
+  @@index([storeId, labelId, rank])
+  @@map("match_candidates")
+}
+
+// Fechamento agregado do dia: emitidas − conciliadas − canceladas.
+// Serve de conferência contra o casamento item a item; se um fecha e o
+// outro não, há erro no motor ou buraco na captura do XML.
+//
+// `autoMatchRate` é a métrica de saúde do produto, não número de
+// relatório: 95% num açougue de 300 etiquetas/dia dá fila de ~15 itens
+// e o cliente usa; 70% dá 90 por dia e o cliente abandona.
+model DailyClosing {
+  id           String   @id @default(cuid())
+  storeId      String
+  departmentId String
+  businessDate DateTime @db.Date
+
+  issued    Int
+  matched   Int
+  cancelled Int
+  unmatched Int
+
+  issuedValue    Decimal @db.Decimal(12, 2)
+  unmatchedValue Decimal @db.Decimal(12, 2)
+
+  autoMatchRate Float
+  reviewedCount Int      @default(0)
+  computedAt    DateTime @default(now())
+
+  store      Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@unique([departmentId, businessDate])
+  @@index([storeId, businessDate(sort: Desc)])
+  @@map("daily_closings")
+}
+
+// ---------------- Alertas ----------------
+
+enum AlertKind {
+  nao_conciliada
+  operacao_sem_identificacao
+  divergencia_peso
+  peso_implausivel
+  reimpressao_acima_baseline
+  estorno_fora_janela
+  estorno_acima_baseline
+  cracha_simultaneo
+  configuracao_alterada
+  codigo_numerico_excessivo
+  fechamento_negativo
+  balanca_sem_comunicacao
+}
+
+enum AlertState {
+  aberto
+  em_analise
+  procedente
+  improcedente
+}
+
+model Alert {
+  id           String @id @default(cuid())
+  storeId      String
+  departmentId String?
+
+  kind     AlertKind
+  state    AlertState @default(aberto)
+  severity Int        @default(3)
+
+  labelId        String?
+  cancellationId String?
+  scaleId        String?
+  operatorId     String?
+
+  title       String
+  detail      Json?
+  valueAtRisk Decimal? @db.Decimal(12, 2)
+
+  openedAt     DateTime  @default(now())
+  resolvedAt   DateTime?
+  resolvedById String?
+  resolution   String?
+
+  store        Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  department   Department?   @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  label        Label?        @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  cancellation Cancellation? @relation(fields: [cancellationId], references: [id], onDelete: Cascade)
+  scale        Scale?        @relation(fields: [scaleId], references: [id], onDelete: SetNull)
+  operator     Operator?     @relation(fields: [operatorId], references: [id], onDelete: SetNull)
+  resolvedBy   User?         @relation(fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  // Um alerta por etiqueta e por tipo: o job de janela roda de novo e
+  // não pode reabrir o que já está na mesa de alguém.
+  @@unique([labelId, kind])
+  @@index([storeId, state, openedAt(sort: Desc)])
+  @@index([storeId, kind, openedAt(sort: Desc)])
+  @@index([storeId, operatorId, openedAt(sort: Desc)])
+  @@map("alerts")
+}
+
+// ---------------- Evidência ----------------
+
+// O clipe não tem o texto queimado: o overlay é renderizado no player a
+// partir do evento. Assim o vídeo original fica íntegro (vale mais como
+// prova), o overlay é pesquisável, e nenhum dado pessoal fica gravado
+// dentro do arquivo.
+model Evidence {
+  id             String  @id @default(cuid())
+  storeId        String
+  cameraId       String
+  labelId        String?
+  cancellationId String?
+
+  startedAt DateTime
+  endedAt   DateTime
+
+  storageKey String
+  sha256     String
+  sizeBytes  Int?
+
+  // Expurgo automático. Retenção indefinida não é zelo, é passivo.
+  retainUntil DateTime
+  createdAt   DateTime @default(now())
+
+  store        Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  camera       Camera        @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  label        Label?        @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  cancellation Cancellation? @relation(fields: [cancellationId], references: [id], onDelete: Cascade)
+  audits       AccessAudit[]
+
+  @@index([storeId, retainUntil])
+  @@index([storeId, labelId])
+  @@index([storeId, sha256])
+  @@map("evidences")
+}
+
+// ---------------- Painel e auditoria ----------------
+
+enum UserRole {
+  administrador
+  gerente
+  prevencao
+  revisor
+  leitura
+}
+
+model User {
+  id           String   @id @default(cuid())
+  tenantId     String
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(leitura)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant  Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  stores  UserStore[]
+  matches Match[]
+  alerts  Alert[]
+  audits  AccessAudit[]
+
+  @@index([tenantId, role])
+  @@map("users")
+}
+
+// Escopo de acesso por loja. Rede tem gente que vê tudo e gente que vê
+// uma loja só; o guard resolve por aqui e nunca por id vindo do corpo
+// da requisição.
+model UserStore {
+  id      String @id @default(cuid())
+  userId  String
+  storeId String
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storeId])
+  @@index([storeId])
+  @@map("user_stores")
+}
+
+enum AuditAction {
+  visualizou_clipe
+  exportou_clipe
+  consultou_documento
+  exportou_relatorio
+}
+
+// Quem assistiu qual clipe e quando. Sistema que vigia funcionário
+// precisa registrar quem o opera — é exigência de LGPD e é o que
+// sustenta o argumento de monitoramento proporcional se a coisa
+// chegar à Justiça do Trabalho.
+model AccessAudit {
+  id      String @id @default(cuid())
+  storeId String
+  userId  String
+
+  action     AuditAction
+  evidenceId String?
+  operatorId String?
+
+  at        DateTime @default(now())
+  ipAddress String?
+  userAgent String?
+
+  store    Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  evidence Evidence? @relation(fields: [evidenceId], references: [id], onDelete: SetNull)
+  operator Operator? @relation(fields: [operatorId], references: [id], onDelete: SetNull)
+
+  @@index([storeId, at(sort: Desc)])
+  @@index([storeId, userId, at(sort: Desc)])
+  @@map("access_audits")
+}
+
+// ---------------- Ingestão ----------------
+
+enum IngestionSource {
+  balanca
+  fiscal
+  estorno
+}
+
+// Idempotência do agente de borda. A loja fica offline, o edge
+// reenvia a fila, e o mesmo lote não pode entrar duas vezes — o que
+// duplicaria etiquetas e estouraria o fechamento.
+model Ingestion {
+  id        String          @id @default(cuid())
+  storeId   String
+  source    IngestionSource
+  reference String
+  sha256    String
+
+  recordCount Int       @default(0)
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+  error       String?
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, source, reference])
+  @@index([storeId, receivedAt(sort: Desc)])
+  @@map("ingestions")
+}
