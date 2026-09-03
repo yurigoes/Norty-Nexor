@@ -164,7 +164,7 @@ transação registrada pela própria balança.
 |---|---|---|---|---|
 | Toledo | **Prix 5 Plus c/ leitor RFID** | **Sim** | Ethernet / Wi-Fi | Primeira opção |
 | Toledo | Prix 6 | A confirmar | Ethernet / Wi-Fi | Linux, touch, linha topo |
-| Toledo | Prix 5 | Não | Ethernet / Wi-Fi | Mesma família, sem o leitor |
+| Toledo | **Prix 5** | Não | Ethernet / Wi-Fi | **Já em uso num mercado do piloto** — serve para tudo menos o RFID (ver §5.6) |
 | Toledo | Prix 4 Uno / Due | Não | Ethernet / Wi-Fi | Base instalada enorme — alvo de *retrofit* |
 | Urano | BA37 / BA37C | Não confirmado | Wi-Fi / Ethernet | Urano Integra tem *status monitor* e API |
 | Urano | Topmax-SS Plus / B40 | Não confirmado | Wi-Fi / Ethernet | Linha atual |
@@ -184,7 +184,29 @@ RFID vai no *edge*, não na balança:
 - Se a loja já usa controle de acesso Intelbras, o mesmo crachá pode
   servir — desde que seja MIFARE, não proximidade 125 kHz.
 
-### 5.4 Fonte dos dados de pesagem
+### 5.4 A Prix 5 comum serve?
+
+Sim, para quase tudo. A Prix 5 tem Ethernet/Wi-Fi e está coberta pelo
+MGV6/MGV7, que é de onde sai a transação com operador, peso e valor — ou
+seja, a **fonte de dados do sistema está atendida**. O que falta nela é
+só o leitor RFID de fábrica, que é exclusivo da variante **Prix 5 Plus
+com leitor RFID**.
+
+Para uma loja que já tem Prix 5 instalada, o caminho é o *retrofit* de
+§5.3: leitor RFID externo no *edge*, ao lado da balança. Custa uma
+fração de trocar a balança e não mexe no equipamento homologado do
+cliente — o que, para venda de SaaS, é uma vantagem e não um remendo.
+
+**A confirmar** (pergunta A6 em [`perguntas-toledo.md`](./perguntas-toledo.md)):
+se a Toledo oferece kit de adaptação de RFID para Prix 5 em campo. Se
+oferecer, é o melhor dos dois mundos.
+
+Alternativa que **não** recomendo: o login do operador por código
+numérico que a balança já tem. Código se empresta, se anota no balcão e
+se digita pelo colega — a rastreabilidade vira ficção justamente no
+sistema cujo propósito é rastrear.
+
+### 5.5 Fonte dos dados de pesagem
 
 **Toledo (MGV6/MGV7):** cadastra até 500 operadores na própria balança e
 registra transação, peso, quantidade e valor acumulado **por operador**.
@@ -197,7 +219,7 @@ atualização de dados na rede, integração por API.
 
 **Filizola:** rede/serial, integração a levantar com o fabricante.
 
-### 5.5 O risco número um: latência
+### 5.6 O risco número um: latência
 
 A "coleta de vendas" dos softwares de gerenciamento é pensada para
 **lote** (agendada), não para *streaming*. O overlay ao vivo precisa de

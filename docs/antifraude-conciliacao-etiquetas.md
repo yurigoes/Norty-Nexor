@@ -1,12 +1,16 @@
 # Conciliação de etiquetas — baixa, cancelamento e alerta
 
-Desenho do mecanismo central do produto: cada pesagem vira uma **etiqueta
-com identidade**, que precisa ser **baixada** no caixa. O que não baixa,
-alerta. O que é cancelado, volta ao setor e é registrado com o produto na
-mão.
+Desenho do mecanismo central do produto: cada pesagem gera uma etiqueta
+que precisa ser **baixada** no caixa. O que não baixa, alerta. O que é
+cancelado volta ao setor e é dado baixa passando a etiqueta num leitor.
 
-> Complementa `estudo-antifraude-balanca-cftv.md`. Aqui está a lógica de
-> negócio; lá estão hardware, CFTV e fases.
+Dois cenários, um motor só: balança que imprime **código único** (baixa
+unitária exata) e balança convencional, onde a baixa se dá por **SKU +
+peso + janela de tempo**, com fila de revisão humana para o ambíguo.
+
+> Complementa [`estudo-antifraude-balanca-cftv.md`](./estudo-antifraude-balanca-cftv.md)
+> (hardware, CFTV, fases) e [`perguntas-toledo.md`](./perguntas-toledo.md)
+> (o que precisa ser confirmado com o fabricante).
 
 ---
 
@@ -55,53 +59,119 @@ existir.
 
 ---
 
-## 2. Conciliação por multiset
+## 2. Os dois cenários
 
-### 2.1 A conta
+O produto tem de funcionar nos dois, e o desenho é **um motor só** — o
+serial, quando existe, é apenas um sinal forte a mais na função de
+custo do casamento. Não são dois produtos.
 
-Por loja, por SKU, por dia (ou turno):
+### Cenário A — etiqueta com código único
 
-```
-não_baixadas(sku, peso) = emitidas − vendidas − canceladas
-```
+A balança imprime um serial no código de barras. A baixa é **unitária e
+determinística**: esta etiqueta passou ou não passou. A fila de revisão
+humana praticamente desaparece.
 
-- **> 0** → saiu produto sem passar no caixa → **ALERTA**
-- **= 0** → fechou
-- **< 0** → vendeu mais do que pesou → etiqueta de outro dia, reimpressão
-  não registrada ou falha de captura → **INVESTIGAR** (não é fraude do
-  açougue, mas é buraco no dado)
+Depende de duas coisas, e a segunda não é com a Toledo: a balança
+imprimir o serial **e** o PDV do cliente preservá-lo até o registro da
+venda. Muitos PDVs traduzem o código de pesável para o código interno e
+descartam o original — e aí o serial não chega ao XML. Por isso o
+Cenário A é um *upgrade* negociado loja a loja, nunca a base.
 
-A chave é `(lojaId, sku, peso)` — e o peso tem três casas, então dentro
-de um dia a colisão é rara. Onde colide, a contagem resolve: se foram
-impressas 3 etiquetas de "picanha 0,842 kg" e o caixa registrou 2, falta
-uma. Não sabemos *qual* das três — mas sabemos que falta uma, e as três
-têm clipe de vídeo, operador e horário.
+### Cenário B — etiqueta convencional
 
-### 2.2 Atribuição ao evento
+Código com PLU + peso, sem identidade. É o caso universal e é o que
+sustenta o produto. Casa por **SKU + peso + janela de tempo**, com fila
+de revisão humana para o que ficar ambíguo.
 
-Para investigar, o alerta precisa apontar para uma pesagem específica.
-Dentro da mesma chave, casamento **FIFO por horário**: a etiqueta mais
-antiga casa com a venda mais antiga. É heurística e está documentado que
-é. O que a prevenção de perdas precisa é "sobrou uma picanha de 0,842 kg
-pesada pelo operador X por volta das 14h32" — e disso a heurística dá
-conta.
-
-Onde o PDV arredonda peso ou valor, o casamento é por **menor diferença**
-dentro da mesma SKU e da janela de tempo, com tolerância configurável.
-
-### 2.3 Janela de conciliação
-
-Etiqueta pesada às 14h32 pode passar no caixa às 15h10 — ou no dia
-seguinte, se for produto embalado com validade longa. A janela é
-**configurável por setor/SKU** (padrão sugerido: fim do dia + 4 h para
-açougue/padaria; até a validade impressa para embalados). Só ao fim da
-janela a etiqueta vira `NAO_CONCILIADA` e abre alerta.
+Todo o resto deste documento descreve o Cenário B. O Cenário A entra
+como atalho: chegou serial e casou, vai direto para `CONCILIADA` com
+confiança alta, pulando o casamento por peso.
 
 ---
 
-## 3. De onde vem o dado do caixa
+## 3. Conciliação por peso e tempo (Cenário B)
 
-### 3.1 NFC-e / SAT — a integração que faz o SaaS existir
+### 3.1 O peso já é um quase-identificador
+
+Corte de carne é irregular: o peso quase nunca se repete. Na prática,
+`(SKU, peso em gramas)` é praticamente único dentro de um dia — o que
+torna o casamento muito melhor do que o pior caso teórico.
+
+A colisão real acontece em **porcionado e padronizado**: bandeja de
+500 g de frango, frios fatiados em porção fixa, pão de forma. Nesses
+casos o desempate é temporal.
+
+### 3.2 O casamento
+
+Dentro de cada SKU, casamento por **menor custo**:
+
+```
+custo(etiqueta, item_vendido) = w₁·|Δpeso| + w₂·|Δtempo|
+```
+
+com `Δtempo ≥ 0` (venda depois da pesagem) e dentro da janela do setor.
+Etiqueta emitida às 14h32 casa com a venda das 15h10 sem drama. Onde o
+PDV arredonda peso ou valor, a tolerância entra em `w₁`.
+
+### 3.3 Níveis de confiança — o número que decide o produto
+
+| Confiança | Condição | Destino |
+|---|---|---|
+| **Alta** | Peso exato, único naquela SKU no dia, dentro da janela | Conciliada automaticamente |
+| **Média** | Peso exato mas repetido na SKU/dia; desempate temporal | Conciliada automaticamente, marcada |
+| **Baixa** | Peso aproximado, fora da janela, ou sobra/falta na contagem | **Fila de revisão humana** |
+| **Nenhuma** | Sem candidato até o fim da janela | Alerta direto |
+
+A métrica de produto é a **taxa de auto-conciliação**, e ela é
+existencial. Um açougue com 300 etiquetas/dia:
+
+- 95% de auto-conciliação → fila de ~15 itens/dia → meia hora de
+  trabalho, o cliente usa
+- 70% → fila de 90 itens/dia → o cliente abandona no primeiro mês
+
+Essa taxa precisa ser medida no piloto, monitorada por loja e por SKU, e
+tratada como incidente quando cair. É o indicador de saúde do produto,
+não um número de relatório.
+
+### 3.4 A fila de revisão
+
+É aqui que entra o operador do CFTV — mas o trabalho dele não pode ser
+*seguir o cliente pela loja no vídeo*. Isso leva minutos por caso e não
+escala.
+
+O que a fila entrega em cada item:
+
+- o **clipe da pesagem** (bancada, operador, produto, peso)
+- os **candidatos de venda** que o motor achou no XML, ordenados por custo
+- o **clipe do caixa** no horário de cada candidato
+
+O revisor compara dois clipes e clica: **confirma** (vira `CONCILIADA`),
+**rejeita** (vira `NAO_CONCILIADA` e abre alerta) ou **marca como
+cancelada**. Segundos por caso, não minutos.
+
+As decisões humanas alimentam o ajuste de `w₁`, `w₂` e da janela por
+setor. Se o revisor confirma sempre o primeiro candidato, os pesos estão
+bons e o limiar de "alta confiança" pode subir — encolhendo a fila
+sozinho.
+
+### 3.5 O fechamento agregado
+
+Independente do casamento item a item, o fechamento do dia é uma conta
+simples, por SKU:
+
+```
+não_baixadas = emitidas − vendidas − canceladas
+```
+
+Serve de conferência: se o casamento diz que fechou mas a contagem
+agregada não fecha, há erro no motor ou buraco na captura do XML. Valor
+negativo (vendeu mais do que pesou) aponta etiqueta de outro dia,
+reimpressão não registrada ou falha de coleta — não é fraude do setor,
+mas é dado furado e precisa aparecer.
+
+## 4. De onde vem o dado do caixa
+
+### 4.1 NFC-e / SAT — a integração que faz o SaaS existir
 
 Toda venda no varejo brasileiro emite **NFC-e** (ou **SAT-CF-e** em SP).
 O XML autorizado traz item a item: código, EAN, quantidade, valor.
@@ -124,7 +194,7 @@ arquitetural mais importante do projeto.
 3. **Item cancelado no meio da venda nunca aparece no XML.** Ele
    simplesmente não está lá — indistinguível de um item que nunca passou.
 
-### 3.2 O item 3 é a razão do posto de estorno
+### 4.2 O item 3 é a razão do posto de estorno
 
 Do ponto de vista fiscal, "cancelado no caixa" e "nunca passou no caixa"
 são o **mesmo dado**: ausência. Sem uma segunda fonte, todo cancelamento
@@ -141,7 +211,7 @@ justamente a volta física que prova que o produto não saiu pela porta.
 
 ---
 
-## 4. Máquina de estados da etiqueta
+## 5. Máquina de estados da etiqueta
 
 ```
                      ┌──────────────┐
@@ -165,9 +235,9 @@ justamente a volta física que prova que o produto não saiu pela porta.
 
  Estado especial:
  ┌────────────────────┐
- │  ESTORNO_ORFAO     │ ← estorno registrado para etiqueta que não tem
- │  ALERTA            │   sinal de passagem no caixa. Não absolve —
- └────────────────────┘   é suspeita própria (ver §6.1).
+ │  ESTORNO_ORFAO     │ ← estorno de etiqueta sem passagem no caixa.
+ │  ALERTA (premium)  │   Só é detectável com integração de PDV que
+ └────────────────────┘   exponha cancelamento de item — ver §7.1.
 ```
 
 Regras que vivem **no banco**, não só na aplicação (regra 4 do
@@ -182,57 +252,92 @@ Regras que vivem **no banco**, não só na aplicação (regra 4 do
 
 ---
 
-## 5. O posto de estorno
+## 6. O posto de estorno
 
-Um mini-PC com leitor de código de barras, leitor RFID e **balança** no
-setor. O leitor sozinho não basta — e o motivo está abaixo.
+Um mini-PC com leitor de código de barras no setor, ao lado da balança,
+e uma câmera apontada para ele.
 
-### 5.1 Fluxo
+### 6.1 Fluxo — um segundo, sem identificação
 
-1. Operador aproxima o **crachá RFID**. Sem identificação não há estorno.
-2. Lê o **código da etiqueta** com o scanner.
-3. **Repesagem obrigatória:** põe o produto na balança do posto. O peso
-   tem de bater com o da etiqueta dentro da tolerância.
-4. Escolhe o **motivo** em lista fechada: desistência do cliente,
-   código/peso errado, produto avariado, troca.
-5. Sistema registra o estorno, dispara o overlay **em vermelho** na
-   câmera do posto e grava o clipe.
-6. Etiqueta física é invalidada (corte/carimbo) e o código é **queimado**
-   no sistema — se reaparecer num XML depois, alerta.
+1. Passa a **etiqueta no leitor**.
+2. Confirmação na tela e bipe.
+3. Overlay **vermelho** na câmera do posto + clipe gravado.
+4. Etiqueta invalidada; o código é **queimado** — se reaparecer num XML
+   depois, alerta.
 
-### 5.2 Por que a repesagem não é opcional
+Pronto. Sem crachá, sem menu, sem motivo obrigatório.
 
-Sem ela, "cancelar" é clicar num botão. Com ela, o funcionário precisa
-ter o produto na mão — é a prova física de que a mercadoria voltou. É o
-controle mais barato e mais forte do desenho inteiro, e a balança já
-está a dois metros do posto.
+### 6.2 Por que o estorno não pede identificação
 
-### 5.3 Janela de estorno
+Decisão deliberada, e ela se sustenta em três pontos:
 
-Estorno só é considerado normal dentro de X minutos da passagem no caixa
-(padrão sugerido: 30 min). Fora disso continua sendo registrado, mas
-entra como `estorno_fora_de_janela` no painel — porque produto perecível
-que passeia pela loja por duas horas e volta é, no mínimo, um problema
+1. **Quem responde é quem pesou.** A etiqueta já carrega o operador da
+   pesagem. O cancelamento entra no KPI de quem *pesou*, não de quem
+   *cancelou* — que é exatamente onde a responsabilidade deve estar.
+2. **Atrito no estorno destrói o dado.** Se cancelar for chato, ninguém
+   cancela; todo cancelamento legítimo vira alerta falso, a fila
+   explode e o produto morre em um mês. Um fluxo de um segundo é o que
+   garante adesão — e adesão é o que faz a conciliação fechar.
+3. **A responsabilização vem do vídeo.** A câmera do posto grava quem
+   passou a etiqueta e se havia produto na mão. Para saber quem foi, o
+   clipe basta; o crachá seria redundância cara.
+
+**Repesagem é opcional, não obrigatória.** Onde houver balança livre no
+posto e a operação aceitar, ligar — é um controle forte de graça. Onde
+o ritmo do setor não permitir, desligar e confiar no vídeo. Vira uma
+configuração por cliente, não uma regra do produto.
+
+### 6.3 Motivo do cancelamento
+
+Opcional, em lista fechada de um toque (código errado, peso errado,
+desistência, avaria). Se o operador não escolher em 3 segundos, grava
+como `nao_informado` e segue. Motivo é dado de gestão, não pode virar
+bloqueio de fluxo.
+
+### 6.4 Janela de estorno
+
+Estorno é normal dentro de X minutos da emissão da etiqueta (padrão
+sugerido: 60 min, ajustável por setor). Fora disso continua sendo
+aceito, mas entra como `estorno_fora_de_janela` no painel — perecível
+que passeia pela loja por horas e volta é, no mínimo, um problema
 operacional.
 
----
-
-## 6. Fraudes que o próprio sistema cria
+## 7. Fraudes que o próprio sistema cria
 
 Todo controle novo vira alvo. Estas precisam estar fechadas na v1:
 
-### 6.1 Estorno fantasma
+### 7.1 Estorno fantasma
 
-Cancelar etiquetas que nunca chegaram ao caixa, só para zerar o alerta de
-"não passou". É o ataque óbvio.
+Cancelar etiquetas cujo produto nunca voltou, só para zerar o alerta de
+"não passou". É o ataque óbvio ao desenho sem crachá.
 
-Fechamento: (a) repesagem obrigatória — o produto tem de existir; (b)
-estorno de etiqueta sem sinal de passagem no caixa vira
-`ESTORNO_ORFAO`, que é alerta próprio e **não** limpa a pendência; (c)
-taxa de estorno por operador é KPI no painel — quem estorna muito
-aparece.
+**Correção de uma afirmação anterior deste documento:** eu havia escrito
+que o estorno de etiqueta "sem sinal de passagem no caixa" seria
+detectável automaticamente. Não é — e a razão é a mesma do §4.2: item
+cancelado no caixa e item que nunca passou são ambos *ausência* no XML.
+No Cenário B sem integração com o PDV, **o sistema não distingue os
+dois**. Melhor deixar isso explícito do que descobrir no piloto.
 
-### 6.2 Reimpressão
+O que de fato fecha a brecha, em ordem de custo:
+
+1. **KPI por quem pesou.** Taxa de estorno por operador contra o
+   *baseline* do setor. Quem pesa e estorna muito acima da média
+   aparece, mesmo que o estorno seja anônimo. É o controle mais forte e
+   custa zero.
+2. **Amostragem de vídeo.** Os clipes do posto existem; auditar uma
+   fração aleatória mostra se havia produto na mão. Uma revisão semanal
+   por setor já muda comportamento.
+3. **Repesagem** (§6.2), onde a operação aceitar: elimina o ataque,
+   porque exige o produto fisicamente.
+4. **Integração com o PDV** expondo o cancelamento de item em tempo real
+   (tier premium): aí o cruzamento passa a existir e `ESTORNO_ORFAO`
+   vira detectável de verdade.
+
+O estado `ESTORNO_ORFAO` continua no modelo — ele só é **preenchível no
+tier premium**. No tier base, ele fica vazio, e é honesto dizer isso ao
+cliente na proposta.
+
+### 7.2 Reimpressão
 
 Imprimir duas etiquetas para um produto: uma vai no produto, outra é
 "cancelada" para fechar a conta.
@@ -241,7 +346,7 @@ Fechamento: reimpressão gera vínculo mãe→filha, invalida a mãe, conta no
 KPI do operador e alerta acima do *baseline* do setor. Se a mãe
 invalidada aparecer conciliada depois, é alerta duro.
 
-### 6.3 Troca de etiqueta
+### 7.3 Troca de etiqueta
 
 Etiqueta de osso em peça de picanha. **A conciliação não pega** — as duas
 etiquetas fecham perfeitamente.
@@ -251,7 +356,7 @@ Fechamento: é outra família de regra — plausibilidade de peso por SKU
 faixa. Está no motor de regras, não na conciliação. Importante não
 prometer ao cliente que a baixa resolve isso.
 
-### 6.4 Conluio com o caixa
+### 7.4 Conluio com o caixa
 
 O caixa registra e cancela o item para o cúmplice. Esse **a conciliação
 pega**: sem estorno físico no setor, a etiqueta vence a janela e vira
@@ -259,7 +364,7 @@ pega**: sem estorno físico no setor, a etiqueta vence a janela e vira
 
 ---
 
-## 7. Overlay: cores e um detalhe de implementação
+## 8. Overlay: cores e um detalhe de implementação
 
 - **Branco/verde** — pesagem registrada (bancada da balança)
 - **Vermelho** — cancelamento (posto de estorno)
@@ -276,7 +381,7 @@ conforme o evento. A segunda é mais robusta e serve nos dois caminhos.
 
 ---
 
-## 8. O painel
+## 9. O painel
 
 O que o gerente/prevenção de perdas abre de manhã:
 
@@ -294,7 +399,7 @@ usado**. A investigação tem de caber em um clique.
 
 ---
 
-## 9. Modelo de dados (esboço)
+## 10. Modelo de dados (esboço)
 
 ```
 Loja ─┬─ Setor ─┬─ Balanca ─── Etiqueta ─┬─ Estorno
@@ -317,7 +422,7 @@ Todo `where` começa por `lojaId`, resolvido no *guard* (regra 3 do
 
 ---
 
-## 10. Consequências para o SaaS
+## 11. Consequências para o SaaS
 
 1. **Instalação sem engenheiro.** Loja nova = ligar o *edge*, ler um QR de
    provisionamento, apontar a pasta de XMLs. Se precisar de um técnico
@@ -344,33 +449,40 @@ Todo `where` começa por `lojaId`, resolvido no *guard* (regra 3 do
 
 ---
 
-## 11. O que muda nas fases
+## 12. O que muda nas fases
 
 A Fase 2 do outro documento deixa de ser "reconciliação" genérica e passa
 a ser este documento inteiro. Ordem sugerida:
 
 1. Agente NFC-e/SAT + conciliação multiset + estados + alerta de não
    conciliada. *(sem isso, nada mais importa)*
-2. Posto de estorno com crachá, repesagem e overlay vermelho.
-3. Painel de fechamento e fila de alertas com vídeo.
-4. KPIs por operador e *baselines* de reimpressão/estorno.
+2. Posto de estorno: leitor, cancelamento em um passo, overlay
+   vermelho e clipe (§6).
+3. Painel de fechamento, **fila de revisão** (§3.4) e fila de alertas
+   com vídeo — a fila de revisão é o que torna o Cenário B usável.
+4. KPIs por operador que **pesou** e *baselines* de reimpressão e
+   estorno por setor.
 5. Serial GS1 onde o PDV suportar (tier Prevenção).
 
 ---
 
-## 12. A confirmar antes de codar
+## 13. A confirmar antes de codar
 
-1. Toledo: a composição do Code 128 / GS1 DataBar Expanded aceita um
-   campo de **sequencial da transação** (ou AI 21)? Se sim, temos baixa
-   unitária exata sem tocar no PDV.
-2. Em que formato a balança expõe as transações emitidas e com que
-   latência (item 5.5 do outro documento — segue sendo o risco nº 1).
-3. O XML da NFC-e do PDV alvo traz o **EAN pesável completo** no item ou
-   já o traduz para o código interno? Muda a chave de conciliação.
-4. Prazo real entre pesagem e caixa em açougue/padaria/hortifruti — mede
-   a janela padrão. Levantar com um cliente piloto, não chutar.
+As perguntas técnicas para a Toledo estão consolidadas em
+[`perguntas-toledo.md`](./perguntas-toledo.md) — bloco **C** decide se
+uma loja entra no Cenário A ou B, bloco **B** decide a latência do
+overlay.
 
----
+Além delas:
+
+1. O XML da NFC-e do PDV alvo traz o **EAN pesável completo** no item ou
+   já o traduz para o código interno? Muda a chave de conciliação e
+   define se o Cenário A é sequer possível naquele cliente.
+2. Prazo real entre pesagem e caixa em açougue, padaria e hortifruti —
+   é o que calibra a janela padrão. Medir num piloto, não chutar.
+3. Taxa de porcionados/padronizados no mix do cliente — é o que
+   determina quanta colisão de peso teremos e, portanto, o tamanho da
+   fila de revisão.
 
 ## Fontes
 
