@@ -1,0 +1,37 @@
+{
+  "lojaId": "loja-centro-01",
+  "geradoEm": "2026-09-03T18:00:00-03:00",
+  "itens": [
+    {
+      "lojaId": "loja-centro-01",
+      "sku": "00017",
+      "nome": "Picanha",
+      "categoria": "acougue",
+      "precoPorKgCentavos": 5990,
+      "unidade": "kg",
+      "atualizadoEm": "2026-09-03T17:55:00-03:00",
+      "origem": "toledo_mgv7"
+    },
+    {
+      "lojaId": "loja-centro-01",
+      "sku": "00042",
+      "nome": "Alcatra",
+      "categoria": "acougue",
+      "precoPorKgCentavos": 4390,
+      "unidade": "kg",
+      "validoAte": "2026-09-10T23:59:59-03:00",
+      "atualizadoEm": "2026-09-03T17:55:00-03:00",
+      "origem": "toledo_mgv7"
+    },
+    {
+      "lojaId": "loja-centro-01",
+      "sku": "00099",
+      "nome": "Bandeja de Frango",
+      "categoria": "acougue",
+      "precoPorKgCentavos": 1290,
+      "unidade": "kg",
+      "atualizadoEm": "2026-09-01T09:00:00-03:00",
+      "origem": "toledo_mgv7"
+    }
+  ]
+}

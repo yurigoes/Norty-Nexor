@@ -125,6 +125,19 @@ ajuda mais do que a resposta otimista.
     - tara utilizada
     - tipo de operação e indicador de **reimpressão**
     - indicador de **cancelamento feito na própria balança**
+13b. **Layout do arquivo de CATÁLOGO/PREÇO** — distinto do arquivo de
+    coleta de vendas da pergunta 13. É o arquivo que o MGV7 exporta (ou
+    de onde carrega a balança) com PLU, descrição, categoria e preço
+    por kg. Motivo: além da conciliação de vendas, queremos alimentar
+    um segundo consumidor — o sistema de mídia indoor do cliente, que
+    mostra o preço atualizado num telão da loja (ver
+    [`../integracao-midia-indoor.md`](../integracao-midia-indoor.md)).
+    Não precisa de tempo real — só o layout do arquivo e a frequência
+    com que ele é regravado.
+13c. O **MGV Cloud** (citado no manual ao lado do MGV7) expõe uma API
+    própria para leitura de catálogo, separada da pergunta 12 sobre
+    web service de transações? Se sim, é o caminho preferido para
+    clientes com múltiplas lojas.
 14. A balança registra **reimpressão de etiqueta** e **cancelamento**
     como eventos próprios? Eles saem na coleta e são distinguíveis de uma
     pesagem normal?
