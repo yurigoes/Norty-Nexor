@@ -1,0 +1,5 @@
+# Dados pessoais de clientes não entram no repositório.
+saida/
+*.csv
+extrair_fbk/mapa_tabelas.txt
+extrair_fbk/*.fdb
