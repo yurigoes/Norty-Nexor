@@ -139,6 +139,24 @@ CSVs. O `conferencia.txt` sai junto e serve para validar: os totais dele têm
 que bater com os R$ 40.356,65 em 90 clientes dos relatórios em HTML antes de
 qualquer número novo ser levado a sério.
 
+## Recorte de 2026
+
+`FARMAX_2026.bat` + `04_crediario_2026.sql` respondem à pergunta que decide a
+migração: *quem comprou a prazo de 01/01/2026 em diante tem cadastro completo
+o bastante para virar cliente no Norty Farma?*
+
+Elegível é o cliente com ao menos um título **em aberto** lançado de
+01/01/2026 em diante — `CONTAS_RECEBER.DT_LANCAMENTO`, a data real da compra.
+Quem só deve de 2025 para trás fica de fora.
+
+Um elegível pode arrastar dívida antiga, e isso não o desqualifica: ele
+comprou em 2026. O saldo sai partido em `saldo_2026` e `saldo_anterior`
+justamente para dívida velha não ser lida como consumo novo.
+
+O `auditoria_2026.txt` sai sem nenhum dado pessoal — só contagens de
+preenchimento por campo — e é o arquivo a examinar antes de mover qualquer
+CSV com nome e CPF.
+
 ## Dados pessoais
 
 Os CSVs gerados têm nome e telefone de clientes reais e estão no `.gitignore`
