@@ -22,19 +22,26 @@ echo.
 REM ---------- Ajuste aqui se os caminhos forem outros ----------
 set "BACKUP=A:\Farmax ok\FarmaxWin\19FARMAX.fbk"
 set "DESTINO=C:\temp\farmax_analise.fdb"
-set "SENHA=masterkey"
 REM -------------------------------------------------------------
+
+REM Variaveis de ambiente do Firebird atrapalham a deteccao de senha.
+set ISC_USER=
+set ISC_PASSWORD=
+
+if exist restauracao.log del /q restauracao.log
 
 REM ---------- 1/4 Achar o Firebird ----------
 REM  As chamadas ficam fora de blocos entre parenteses de proposito:
 REM  %ProgramFiles(x86)% tem um ")" que fecharia o bloco antes da hora.
+REM  O Firebird que vem com o Farmax vem primeiro: ele e da mesma
+REM  versao que gerou o backup.
 set FBDIR=
+call :testa_fb "A:\Farmax ok\FarmaxWin"
+call :testa_fb "C:\FarmaxWin"
+call :testa_fb "C:\Farmax"
 call :busca_fb "%ProgramFiles%\Firebird"
 call :busca_fb "%ProgramFiles(x86)%\Firebird"
 call :busca_fb "C:\Firebird"
-call :testa_fb "C:\FarmaxWin"
-call :testa_fb "C:\Farmax"
-call :testa_fb "A:\Farmax ok\FarmaxWin"
 if not defined FBDIR call :varre_fb
 if not defined FBDIR goto :sem_firebird
 echo [1/4] Firebird encontrado em: %FBDIR%
@@ -46,20 +53,30 @@ echo [2/4] Backup encontrado: %BACKUP%
 REM ---------- 3/4 Restaurar numa copia ----------
 if not exist C:\temp mkdir C:\temp
 if exist "%DESTINO%" del /q "%DESTINO%"
-echo [3/4] Restaurando para %DESTINO% ...
-"%FBDIR%\gbak.exe" -c -user SYSDBA -password "%SENHA%" "%BACKUP%" "%DESTINO%" >restauracao.log 2>&1
-REM O Firebird trunca a senha em 8 caracteres; masterkey = masterke.
-if not exist "%DESTINO%" "%FBDIR%\gbak.exe" -c -user SYSDBA -password masterke "%BACKUP%" "%DESTINO%" >>restauracao.log 2>&1
+echo [3/4] Restaurando para %DESTINO%
+echo       (testando as formas de autenticacao, uma de cada vez)
+
+set "CRED="
+REM Embedded: sem credencial nenhuma, e o caso de quem "nao tem senha".
+call :restaura ""
+REM Embedded tambem aceita qualquer usuario/senha.
+call :restaura "-user SYSDBA -password masterkey"
+REM O Firebird corta a senha em 8 caracteres.
+call :restaura "-user SYSDBA -password masterke"
+call :restaura "-user SYSDBA"
+call :restaura "-user SYSDBA -password x"
+call :restaura "-user SYSDBA -password farmax"
+call :restaura "-user SYSDBA -password advogado"
 if not exist "%DESTINO%" goto :falha_restauracao
+echo       OK com: [%CRED%]
 
 REM ---------- 4/4 Ler a estrutura ----------
 call :escreve_sql
 echo [4/4] Lendo a estrutura do banco...
 if exist mapa_tabelas.txt del /q mapa_tabelas.txt
-"%FBDIR%\isql.exe" -user SYSDBA -password "%SENHA%" "%DESTINO%" -i _mapa.sql -o mapa_tabelas.txt >>restauracao.log 2>&1
-if not exist mapa_tabelas.txt "%FBDIR%\isql.exe" -user SYSDBA -password masterke "%DESTINO%" -i _mapa.sql -o mapa_tabelas.txt >>restauracao.log 2>&1
-del /q _mapa.sql 2>nul
+"%FBDIR%\isql.exe" %CRED% "%DESTINO%" -i _mapa.sql -o mapa_tabelas.txt >>restauracao.log 2>&1
 if not exist mapa_tabelas.txt goto :falha_leitura
+del /q _mapa.sql 2>nul
 
 echo.
 echo ==================================================
@@ -98,6 +115,17 @@ echo       (pode levar um minuto)
 for /f "delims=" %%F in ('dir /b /s "C:\gbak.exe" 2^>nul') do call :testa_fb "%%~dpF."
 exit /b 0
 
+REM  Tenta uma forma de autenticacao. Para na primeira que funcionar
+REM  e guarda em CRED, para o isql usar a mesma depois.
+:restaura
+if exist "%DESTINO%" exit /b 0
+echo. >>restauracao.log
+echo === tentativa: [%~1] === >>restauracao.log
+"%FBDIR%\gbak.exe" -c %~1 "%BACKUP%" "%DESTINO%" >>restauracao.log 2>&1
+if not exist "%DESTINO%" exit /b 0
+set "CRED=%~1"
+exit /b 0
+
 :escreve_sql
 REM Consulta so o catalogo do Firebird: nenhuma tabela de dados e lida.
 > _mapa.sql echo SET LIST OFF;
@@ -127,8 +155,10 @@ REM ================= erros =================
 :sem_firebird
 echo.
 echo [ERRO] Nao achei o gbak.exe nesta maquina.
-echo Ache onde o Firebird esta instalado e acrescente a pasta
-echo na lista de "call :testa_fb" no topo deste arquivo.
+echo.
+echo Se o Farmax usa Firebird embedded, pode nao existir gbak.exe aqui.
+echo Nesse caso baixe o Firebird 2.5 em firebirdsql.org, instale, e
+echo rode este arquivo de novo.
 echo.
 pause
 exit /b 1
@@ -144,15 +174,17 @@ exit /b 1
 
 :falha_restauracao
 echo.
-echo [ERRO] A restauracao falhou. Abra restauracao.log para ver o motivo.
-echo Se a senha do SYSDBA nao for a padrao, edite "set SENHA=" no topo.
+echo [ERRO] A restauracao nao funcionou em nenhuma tentativa.
+echo Abra restauracao.log: cada tentativa esta registrada com o erro
+echo que o Firebird devolveu. Me mande esse log que eu ajusto.
 echo.
 pause
 exit /b 1
 
 :falha_leitura
 echo.
-echo [ERRO] A leitura da estrutura falhou. Veja restauracao.log
+echo [ERRO] A restauracao funcionou mas a leitura falhou.
+echo Veja restauracao.log
 echo.
 pause
 exit /b 1

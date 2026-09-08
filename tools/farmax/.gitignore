@@ -1,5 +1,10 @@
 # Dados pessoais de clientes não entram no repositório.
 saida/
 *.csv
+
+# Gerados pelos scripts na máquina do Farmax.
 extrair_fbk/mapa_tabelas.txt
+extrair_fbk/restauracao.log
+extrair_fbk/_cred.txt
+extrair_fbk/_mapa.sql
 extrair_fbk/*.fdb

@@ -86,6 +86,18 @@ para a máquina do Farmax e clique duas vezes — ele acha o Firebird instalado
 (2.1 a 5.0, incluindo o que vem embutido com o Farmax), restaura numa cópia e
 gera `mapa_tabelas.txt`.
 
+### Senha do banco
+
+Farmax que "não pede senha" quase sempre roda o Firebird em **modo embedded**,
+onde a autenticação é desligada e a conexão vai sem credencial nenhuma. Os
+scripts tentam as formas em sequência — sem credencial primeiro, depois
+`SYSDBA/masterkey`, `masterke` (o Firebird trunca a senha em 8 caracteres) e
+mais algumas — e param na primeira que conecta, registrando cada tentativa em
+`restauracao.log`.
+
+A busca pelo Firebird começa pela pasta do próprio Farmax, que costuma trazer
+uma cópia embutida: é a da mesma versão que gerou o backup.
+
 Ajuste no topo dos `.bat` o caminho do Firebird e do backup. Os nomes de
 tabela em `03`/`04` são um chute informado — o passo `02` é que revela os
 corretos.
