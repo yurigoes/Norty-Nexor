@@ -117,6 +117,28 @@ Ajuste no topo dos `.bat` o caminho do Firebird e do backup. Os nomes de
 tabela em `03`/`04` são um chute informado — o passo `02` é que revela os
 corretos.
 
+## Estrutura real do banco
+
+O mapeamento confirmou os nomes desta instalação (Firebird 4.0, base
+`19FARMAX`), e eles resolvem as duas ressalvas da análise por HTML:
+
+| Tabela | O que resolve |
+|---|---|
+| `CLIENTES` | `CPF`, `RG`, `DT_NASCIMENTO`, `EMAIL`, `ENDERECO`/`NUMERO`/`COMPLEMENTO`/`BAIRRO`/`CIDADE`/`UF`/`CEP`, `DATA_FICHA`, `LIMITE_CREDITO`, `SALDO` e `DT_ULTIMA_COMPRA` |
+| `CONTAS_RECEBER` | `DT_LANCAMENTO` (data real da compra), `DT_VENCIMENTO`, `VALOR`, `DT_PAGAMENTO`, `VL_PAGAMENTO`, `VL_SALDO` — título a título |
+| `VENDAS` | venda item a item, com `DATA_CAIXA`; inclui as compras à vista |
+
+Existe também uma tabela `CADASTROCLIENTES`, mas ela é outra coisa: importação
+de representantes e distribuidores. A do cadastro de verdade é `CLIENTES`.
+
+Com `CONTAS_RECEBER.DT_LANCAMENTO` o corte de janeiro de 2026 deixa de ser
+dedução a partir de "dias em atraso" e passa a ser a data real da compra.
+
+`FARMAX_EXPORTAR.bat` + `03_exportar.sql` (os dois na mesma pasta) geram os
+CSVs. O `conferencia.txt` sai junto e serve para validar: os totais dele têm
+que bater com os R$ 40.356,65 em 90 clientes dos relatórios em HTML antes de
+qualquer número novo ser levado a sério.
+
 ## Dados pessoais
 
 Os CSVs gerados têm nome e telefone de clientes reais e estão no `.gitignore`
