@@ -86,6 +86,21 @@ para a máquina do Farmax e clique duas vezes — ele acha o Firebird instalado
 (2.1 a 5.0, incluindo o que vem embutido com o Farmax), restaura numa cópia e
 gera `mapa_tabelas.txt`.
 
+### Quando o gbak pede "o próximo volume"
+
+`Done with volume #1 ... Press return to reopen that file` é o prompt de
+backup multi-volume: o `gbak` leu o arquivo até o fim e o fluxo não terminou.
+Ou o backup foi dividido em vários arquivos, ou o `.fbk` está truncado.
+
+O script trata os dois: copia o backup para o disco local antes de restaurar
+(ler direto de drive de rede ou removível é a causa mais comum de leitura
+truncada), confere se a cópia saiu com o mesmo tamanho do original e, se o
+arquivo único não bastar, tenta de novo com todos os volumes da pasta na
+linha de comando.
+
+Toda chamada ao `gbak` leva `<nul` na entrada. Sem isso, esse prompt trava o
+script indefinidamente em vez de falhar e seguir para a tentativa seguinte.
+
 ### Senha do banco
 
 Farmax que "não pede senha" quase sempre roda o Firebird em **modo embedded**,

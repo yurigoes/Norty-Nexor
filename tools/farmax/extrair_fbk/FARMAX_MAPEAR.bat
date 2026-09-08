@@ -1,17 +1,17 @@
 @echo off
 REM ================================================================
-REM  FARMAX - PASSOS 1 e 2 NUM ARQUIVO SO
+REM  FARMAX - restaura o backup e le a estrutura do banco.
 REM
-REM  Restaura o backup numa copia de trabalho e le a estrutura do
-REM  banco. Nao encosta no banco de producao e nao le nenhum dado
-REM  de cliente: so nomes de tabela e coluna.
+REM  Nao encosta no banco de producao e nao le nenhum dado de
+REM  cliente: so nomes de tabela e coluna.
 REM
 REM  Uso: copie este arquivo sozinho para a maquina do Farmax e
 REM       clique duas vezes.
 REM
-REM  Saida: mapa_tabelas.txt, na mesma pasta deste arquivo.
+REM  Saida: mapa_tabelas.txt  (o que me interessa)
+REM         restauracao.log   (diagnostico, se algo falhar)
 REM ================================================================
-setlocal
+setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
 echo ==================================================
@@ -22,19 +22,15 @@ echo.
 REM ---------- Ajuste aqui se os caminhos forem outros ----------
 set "BACKUP=A:\Farmax ok\FarmaxWin\19FARMAX.fbk"
 set "DESTINO=C:\temp\farmax_analise.fdb"
+set "LOCAL=C:\temp\19FARMAX.fbk"
 REM -------------------------------------------------------------
 
-REM Variaveis de ambiente do Firebird atrapalham a deteccao de senha.
 set ISC_USER=
 set ISC_PASSWORD=
-
 if exist restauracao.log del /q restauracao.log
+if not exist C:\temp mkdir C:\temp
 
-REM ---------- 1/4 Achar o Firebird ----------
-REM  As chamadas ficam fora de blocos entre parenteses de proposito:
-REM  %ProgramFiles(x86)% tem um ")" que fecharia o bloco antes da hora.
-REM  O Firebird que vem com o Farmax vem primeiro: ele e da mesma
-REM  versao que gerou o backup.
+REM ---------- 1/5 Achar o Firebird ----------
 set FBDIR=
 call :testa_fb "A:\Farmax ok\FarmaxWin"
 call :testa_fb "C:\FarmaxWin"
@@ -44,35 +40,59 @@ call :busca_fb "%ProgramFiles(x86)%\Firebird"
 call :busca_fb "C:\Firebird"
 if not defined FBDIR call :varre_fb
 if not defined FBDIR goto :sem_firebird
-echo [1/4] Firebird encontrado em: %FBDIR%
+echo [1/5] Firebird: %FBDIR%
 
-REM ---------- 2/4 Conferir o backup ----------
+REM ---------- 2/5 Inventario da pasta do backup ----------
 if not exist "%BACKUP%" goto :sem_backup
-echo [2/4] Backup encontrado: %BACKUP%
+for %%F in ("%BACKUP%") do set "TAM=%%~zF"
+for %%F in ("%BACKUP%") do set "PASTA=%%~dpF"
+for %%F in ("%BACKUP%") do set "BASE=%%~nF"
+echo [2/5] Backup: %TAM% bytes
+echo === conteudo da pasta do backup === >>restauracao.log
+dir "%PASTA%" >>restauracao.log 2>&1
 
-REM ---------- 3/4 Restaurar numa copia ----------
-if not exist C:\temp mkdir C:\temp
+REM Backup dividido em volumes: o Farmax costuma numerar .fbk .fbk2 ...
+REM Se houver mais de um arquivo com o mesmo nome base, todos entram
+REM na linha de comando, na ordem - e assim que o gbak remonta.
+set "VOLUMES="
+for /f "delims=" %%F in ('dir /b /o:n "%PASTA%%BASE%.*" 2^>nul') do call :junta_vol "%PASTA%%%F"
+echo       volumes encontrados: %VOLUMES%
+echo === volumes montados: %VOLUMES% === >>restauracao.log
+
+REM ---------- 3/5 Copiar para disco local ----------
+REM  Ler direto de A: (rede ou removivel) e a causa mais comum de
+REM  leitura truncada, que faz o gbak pedir o "proximo volume".
+echo [3/5] Copiando o backup para o disco local...
+if exist "%LOCAL%" del /q "%LOCAL%"
+copy /b /y "%BACKUP%" "%LOCAL%" >>restauracao.log 2>&1
+if not exist "%LOCAL%" goto :falha_copia
+for %%F in ("%LOCAL%") do set "TAMLOCAL=%%~zF"
+echo       copia local: %TAMLOCAL% bytes
+if not "%TAM%"=="%TAMLOCAL%" goto :copia_truncada
+
+REM ---------- 4/5 Restaurar ----------
+REM  "<nul" e essencial: sem isso o gbak fica parado num prompt
+REM  interativo pedindo o proximo volume, e o script trava.
+echo [4/5] Restaurando para %DESTINO%
 if exist "%DESTINO%" del /q "%DESTINO%"
-echo [3/4] Restaurando para %DESTINO%
-echo       (testando as formas de autenticacao, uma de cada vez)
 
 set "CRED="
-REM Embedded: sem credencial nenhuma, e o caso de quem "nao tem senha".
-call :restaura ""
-REM Embedded tambem aceita qualquer usuario/senha.
-call :restaura "-user SYSDBA -password masterkey"
-REM O Firebird corta a senha em 8 caracteres.
-call :restaura "-user SYSDBA -password masterke"
-call :restaura "-user SYSDBA"
-call :restaura "-user SYSDBA -password x"
-call :restaura "-user SYSDBA -password farmax"
-call :restaura "-user SYSDBA -password advogado"
+call :restaura "" "%LOCAL%"
+call :restaura "-user SYSDBA -password masterkey" "%LOCAL%"
+call :restaura "-user SYSDBA -password masterke" "%LOCAL%"
+call :restaura "-user SYSDBA" "%LOCAL%"
+
+REM Se a copia unica nao bastou, tenta com todos os volumes juntos.
+if not exist "%DESTINO%" echo       tentando com os volumes da pasta original...
+if not exist "%DESTINO%" call :restaura_vol ""
+if not exist "%DESTINO%" call :restaura_vol "-user SYSDBA -password masterkey"
+
 if not exist "%DESTINO%" goto :falha_restauracao
 echo       OK com: [%CRED%]
 
-REM ---------- 4/4 Ler a estrutura ----------
+REM ---------- 5/5 Ler a estrutura ----------
 call :escreve_sql
-echo [4/4] Lendo a estrutura do banco...
+echo [5/5] Lendo a estrutura do banco...
 if exist mapa_tabelas.txt del /q mapa_tabelas.txt
 "%FBDIR%\isql.exe" %CRED% "%DESTINO%" -i _mapa.sql -o mapa_tabelas.txt >>restauracao.log 2>&1
 if not exist mapa_tabelas.txt goto :falha_leitura
@@ -85,9 +105,8 @@ echo ==================================================
 echo.
 echo Gerado: %~dp0mapa_tabelas.txt
 echo.
-echo O arquivo tem so nomes de tabela e coluna, nenhum dado de
-echo cliente. Envie ele no chat para os SQLs de exportacao serem
-echo ajustados aos nomes reais desta instalacao do Farmax.
+echo So nomes de tabela e coluna, nenhum dado de cliente.
+echo Envie esse arquivo no chat.
 echo.
 pause
 exit /b 0
@@ -110,24 +129,40 @@ set "FBDIR=%~1\bin"
 exit /b 0
 
 :varre_fb
-echo       Firebird nao esta nos lugares comuns, varrendo o disco C:
-echo       (pode levar um minuto)
+echo       procurando o Firebird no disco C:, aguarde...
 for /f "delims=" %%F in ('dir /b /s "C:\gbak.exe" 2^>nul') do call :testa_fb "%%~dpF."
 exit /b 0
 
-REM  Tenta uma forma de autenticacao. Para na primeira que funcionar
-REM  e guarda em CRED, para o isql usar a mesma depois.
+REM Acumula um volume na lista, ignorando o que nao e arquivo de backup.
+:junta_vol
+set "EXT=%~x1"
+if /i "%EXT%"==".fdb" exit /b 0
+if /i "%EXT%"==".gdb" exit /b 0
+if /i "%EXT%"==".log" exit /b 0
+set "VOLUMES=!VOLUMES! "%~1""
+exit /b 0
+
+REM Restaura de um arquivo unico.
 :restaura
 if exist "%DESTINO%" exit /b 0
 echo. >>restauracao.log
-echo === tentativa: [%~1] === >>restauracao.log
-"%FBDIR%\gbak.exe" -c %~1 "%BACKUP%" "%DESTINO%" >>restauracao.log 2>&1
+echo === tentativa [%~1] em "%~2" === >>restauracao.log
+"%FBDIR%\gbak.exe" -c -v %~1 "%~2" "%DESTINO%" >>restauracao.log 2>&1 <nul
+if not exist "%DESTINO%" exit /b 0
+set "CRED=%~1"
+exit /b 0
+
+REM Restaura de todos os volumes da pasta original, em ordem.
+:restaura_vol
+if exist "%DESTINO%" exit /b 0
+echo. >>restauracao.log
+echo === tentativa [%~1] multi-volume: %VOLUMES% === >>restauracao.log
+"%FBDIR%\gbak.exe" -c -v %~1 %VOLUMES% "%DESTINO%" >>restauracao.log 2>&1 <nul
 if not exist "%DESTINO%" exit /b 0
 set "CRED=%~1"
 exit /b 0
 
 :escreve_sql
-REM Consulta so o catalogo do Firebird: nenhuma tabela de dados e lida.
 > _mapa.sql echo SET LIST OFF;
 >>_mapa.sql echo /* ---------- Tabelas do sistema ---------- */
 >>_mapa.sql echo SELECT TRIM(rdb$relation_name) AS TABELA FROM rdb$relations
@@ -155,29 +190,43 @@ REM ================= erros =================
 :sem_firebird
 echo.
 echo [ERRO] Nao achei o gbak.exe nesta maquina.
-echo.
-echo Se o Farmax usa Firebird embedded, pode nao existir gbak.exe aqui.
-echo Nesse caso baixe o Firebird 2.5 em firebirdsql.org, instale, e
-echo rode este arquivo de novo.
-echo.
 pause
 exit /b 1
 
 :sem_backup
 echo.
-echo [ERRO] Backup nao encontrado em:
-echo    "%BACKUP%"
+echo [ERRO] Backup nao encontrado em "%BACKUP%"
 echo Edite a linha "set BACKUP=" no topo deste arquivo.
+pause
+exit /b 1
+
+:falha_copia
 echo.
+echo [ERRO] Nao consegui copiar o backup para %LOCAL%
+echo Veja restauracao.log
+pause
+exit /b 1
+
+:copia_truncada
+echo.
+echo [ERRO] A copia saiu com tamanho diferente do original:
+echo    origem %TAM% bytes, copia %TAMLOCAL% bytes
+echo O arquivo em A: nao esta sendo lido por inteiro. Copie o .fbk
+echo para o disco local pelo Explorer e rode de novo apontando
+echo BACKUP para a copia.
 pause
 exit /b 1
 
 :falha_restauracao
 echo.
-echo [ERRO] A restauracao nao funcionou em nenhuma tentativa.
-echo Abra restauracao.log: cada tentativa esta registrada com o erro
-echo que o Firebird devolveu. Me mande esse log que eu ajusto.
+echo [ERRO] A restauracao nao funcionou.
 echo.
+echo Abra restauracao.log. Se aparecer "Done with volume #1" seguido
+echo de pedido de outro arquivo, o backup esta incompleto: o .fbk foi
+echo cortado na copia ou a rotina de backup do Farmax nao terminou.
+echo Nesse caso gere um backup novo pelo proprio Farmax e use ele.
+echo.
+echo Me mande o restauracao.log que eu digo qual dos dois e.
 pause
 exit /b 1
 
@@ -185,6 +234,5 @@ exit /b 1
 echo.
 echo [ERRO] A restauracao funcionou mas a leitura falhou.
 echo Veja restauracao.log
-echo.
 pause
 exit /b 1
