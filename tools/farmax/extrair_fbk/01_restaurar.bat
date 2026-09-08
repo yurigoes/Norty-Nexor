@@ -1,41 +1,51 @@
 @echo off
 REM ============================================================
-REM  Restaura o backup do Farmax numa copia de trabalho.
-REM  NUNCA restaure por cima do banco em producao.
+REM  PASSO 1 - Restaura o backup do Farmax numa copia de trabalho.
+REM  NUNCA restaura por cima do banco de producao.
 REM ============================================================
-setlocal
+setlocal enabledelayedexpansion
 
-REM Ajuste estes tres caminhos se necessario:
-set FB=C:\Program Files\Firebird\Firebird_3_0
-set BACKUP=A:\Farmax ok\FarmaxWin\19FARMAX.fbk
-set DESTINO=C:\temp\farmax_analise.fdb
+set "BACKUP=A:\Farmax ok\FarmaxWin\19FARMAX.fbk"
+set "DESTINO=C:\temp\farmax_analise.fdb"
 
-if not exist "%FB%\gbak.exe" (
-  echo [ERRO] gbak.exe nao encontrado em "%FB%".
-  echo Procure a pasta do Firebird e ajuste a variavel FB no topo deste arquivo.
-  exit /b 1
-)
+call "%~dp0_localiza_firebird.bat"
+if errorlevel 1 exit /b 1
+
 if not exist "%BACKUP%" (
-  echo [ERRO] Backup nao encontrado: "%BACKUP%"
-  exit /b 1
-)
-if exist "%DESTINO%" (
-  echo [ERRO] "%DESTINO%" ja existe. Apague ou troque o nome antes de restaurar.
+  echo.
+  echo [ERRO] Backup nao encontrado em:
+  echo   "%BACKUP%"
+  echo Ajuste a variavel BACKUP no topo deste arquivo.
   exit /b 1
 )
 
 if not exist C:\temp mkdir C:\temp
+if exist "%DESTINO%" (
+  echo Ja existe "%DESTINO%" de uma execucao anterior. Apagando...
+  del /q "%DESTINO%"
+)
 
+echo.
 echo Restaurando "%BACKUP%"
-echo        para "%DESTINO%" ...
-"%FB%\gbak.exe" -c -v -user SYSDBA -password masterkey "%BACKUP%" "%DESTINO%"
+echo        para "%DESTINO%"
+echo.
 
-if errorlevel 1 (
+REM O Firebird trunca a senha em 8 caracteres, entao masterkey = masterke.
+for %%S in (masterkey masterke) do (
+  if not exist "%DESTINO%" (
+    "%FBDIR%\gbak.exe" -c -user SYSDBA -password %%S "%BACKUP%" "%DESTINO%" 2>&1
+  )
+)
+
+if not exist "%DESTINO%" (
   echo.
-  echo [ERRO] Falha na restauracao. Se a senha nao for a padrao, edite -password.
+  echo [ERRO] A restauracao falhou.
+  echo Se a senha do SYSDBA nao for a padrao, edite a linha "for %%S in (...)"
+  echo acima e coloque a senha correta.
   exit /b 1
 )
+
 echo.
-echo OK. Banco de trabalho pronto em %DESTINO%
-echo Proximo passo: execute 02_mapear.bat
+echo OK. Banco de trabalho criado em %DESTINO%
+echo Agora rode: 02_mapear.bat
 endlocal

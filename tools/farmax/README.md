@@ -80,6 +80,12 @@ endereço, nascimento, e-mail e as datas reais de compra. A pasta
 4. `04_datas_reais.sql` — opcional e o mais valioso: troca a dedução por
    datas de venda reais.
 
+Para só mapear a estrutura, há o atalho **`FARMAX_MAPEAR.bat`**: um arquivo
+único e autossuficiente que faz os passos 1 e 2 de uma vez. Copie ele sozinho
+para a máquina do Farmax e clique duas vezes — ele acha o Firebird instalado
+(2.1 a 5.0, incluindo o que vem embutido com o Farmax), restaura numa cópia e
+gera `mapa_tabelas.txt`.
+
 Ajuste no topo dos `.bat` o caminho do Firebird e do backup. Os nomes de
 tabela em `03`/`04` são um chute informado — o passo `02` é que revela os
 corretos.
