@@ -46,8 +46,8 @@ export function Sidebar() {
 
   const configuracao = [
     { rotulo: 'Marca', para: '/config/marca', permissao: 'organizacao:gerenciar' as const },
-    { rotulo: 'Categorias', para: null, permissao: 'config:categorias' as const },
-    { rotulo: 'SLA e calendários', para: null, permissao: 'config:sla' as const },
+    { rotulo: 'Categorias', para: '/config/categorias', permissao: 'config:categorias' as const },
+    { rotulo: 'SLA e calendários', para: '/config/sla', permissao: 'config:sla' as const },
     { rotulo: 'Canais', para: '/config/canais', permissao: 'config:canais' as const },
     {
       rotulo: 'Diagnóstico',

@@ -143,10 +143,14 @@ navegador em cada tela nova.
 - **A trilha registra o diff, e segredo nunca entra nela** — nem o
   valor antigo.
 
-**O que ficou de fora e por quê:** as telas de configuração de
-categorias, acordos de SLA, calendários e motivos de pendência. A API
-das quatro existe desde a Fase 1 e é usada pela suíte; falta o formulário
-visual, que é a tarefa seguinte. Até lá elas se configuram pela API.
+**Também entrou nesta fase:** as telas de configuração de categorias,
+acordos de SLA, calendários e motivos de pendência — as quatro que a
+barra lateral mostrava apagadas desde a Fase 1. A API dos acordos,
+calendários e motivos não existia: eles só se criavam por SQL, o que na
+prática significa que ninguém os configurava.
+
+**O que continua de fora:** a tela de pessoas e times (a API existe), e
+o construtor visual de regras de entrada (o motor e a API existem).
 
 ---
 

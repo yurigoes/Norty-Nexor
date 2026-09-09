@@ -13,6 +13,8 @@ import { useAutenticacao } from '../auth/Autenticacao';
 const TITULOS: { prefixo: string; titulo: string }[] = [
   { prefixo: '/config/canais/diagnostico', titulo: 'Diagnóstico de canais' },
   { prefixo: '/config/canais', titulo: 'Canais' },
+  { prefixo: '/config/categorias', titulo: 'Categorias' },
+  { prefixo: '/config/sla', titulo: 'SLA e calendários' },
   { prefixo: '/config/marca', titulo: 'Marca' },
   { prefixo: '/config/webhooks', titulo: 'Webhooks' },
   { prefixo: '/config/auditoria', titulo: 'Auditoria' },

@@ -391,11 +391,10 @@ laço não abra mil chamados do mesmo incidente.
 ```
 GET|POST|PATCH|DELETE /v1/categories
 GET|POST|PATCH|DELETE /v1/forms
-GET|POST|PATCH|DELETE /v1/agreements          (SLA e OLA)
-GET|POST|PATCH|DELETE /v1/agreements/:id/niveis
-GET|POST|PATCH|DELETE /v1/calendars
-GET|POST|PATCH|DELETE /v1/calendars/:id/segmentos
-GET|POST|PATCH|DELETE /v1/calendars/:id/feriados
+GET|POST|PATCH|DELETE /v1/agreements          (SLA e OLA; DELETE desativa)
+POST|DELETE           /v1/agreements/:id/niveis
+GET|POST|PATCH        /v1/calendars
+POST|DELETE           /v1/calendars/:id/feriados
 GET|POST|PATCH|DELETE /v1/pending-reasons
 GET|POST|PATCH|DELETE /v1/intake-rules
 GET|POST|PATCH|DELETE /v1/teams
@@ -405,6 +404,46 @@ GET|POST|DELETE       /v1/api-keys
 GET                   /v1/audit-logs?entity=&entityId=&actorId=&limit=
 POST                  /v1/tickets/lote
 ```
+
+### 7.0 Configuração de SLA
+
+A configuração errada é recusada **na hora de salvar**, e não semanas
+depois num prazo calculado errado:
+
+- **Fuso desconhecido é 400.** `Intl.DateTimeFormat` com fuso inválido
+  lança — e lançaria no cron de SLA, longe da causa.
+- **Expediente que termina antes de começar é 400.**
+- **Duas faixas sobrepostas no mesmo dia são 400.** Elas não quebram
+  nada visivelmente: o prazo sai menor do que o real e ninguém liga o
+  defeito à configuração. Duas faixas *separadas* passam — é o horário
+  de almoço.
+- **Nível de escalonamento sem ação é 400.** Ele não faria nada ao
+  disparar.
+- **Motivo de pendência com "resolver após N cobranças" e intervalo
+  zero é 400.** Cobrar sem nunca resolver é insistir para sempre;
+  resolver sem cobrar é encerrar sem avisar.
+
+`PATCH /calendars/:id` **substitui os segmentos inteiros**. Editar
+expediente item a item é como se acaba com duas faixas sobrepostas na
+terça-feira.
+
+`DELETE /agreements/:id` **desativa**: compromissos gravados apontam para
+o acordo e o relatório histórico precisa do nome dele. Excluir apagaria
+a explicação de um número que continua no relatório.
+
+`DELETE /pending-reasons/:id` recusa (409) o motivo em uso: chamado
+pausado aponta para ele, e excluí-lo deixaria a tela do chamado sem
+explicar por que ele está parado.
+
+**O prazo é `durationSeconds` na API e horas na tela.** É como se
+contrata SLA ("resolução em 8 horas") e como o cálculo trabalha
+(segundos); a conversão mora num arquivo só, porque duas conversões
+espalhadas viram duas verdades sobre o mesmo prazo.
+
+Mudar o prazo de um acordo entra na trilha de auditoria — é a alteração
+que mais dói num relatório de SLA, e a trilha responde "quem afrouxou
+isto" seis meses depois. Os compromissos já gravados não mudam
+(`docs/05-sla.md`, seção 7).
 
 ### 7.1 Ação em lote
 
