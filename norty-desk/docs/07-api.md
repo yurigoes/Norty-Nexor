@@ -823,7 +823,94 @@ existir.
 
 ---
 
-## 12. Saúde
+## 12. Mudança
+
+```
+GET    /v1/changes?q=...&status=...&kind=...&abertas=true&de=...&ate=...
+GET    /v1/changes/:id
+GET    /v1/changes/:id/eventos
+POST   /v1/changes                  { title, description, kind?, risk?, ticketIds? }
+PATCH  /v1/changes/:id
+POST   /v1/changes/:id/aprovacoes   { approverIds, quorum?, step?, comment? }
+POST   /v1/changes/:id/executar     { acao: INICIAR|CONCLUIR|REVERTER, outcome? }
+POST   /v1/changes/:id/notas        { body }
+
+POST   /v1/changes/:id/tickets      { ticketId }
+DELETE /v1/changes/:id/tickets/:ticketId
+```
+
+**O GLPI tem a tabela e a tela; o que ele não tem é a regra.** Lá, uma
+mudança sem plano de recuo entra em produção do mesmo jeito que uma com
+— e a diferença entre as duas é justamente o que a gestão de mudança
+existe para garantir. Três regras sustentam isso aqui:
+
+1. **Sem plano de implementação e de recuo, não sai do rascunho.**
+   Cobrado ao sair, não na criação: rascunho existe para o plano ser
+   escrito aos poucos. Cancelar continua possível — desistir não exige
+   plano. A regra é `podeSairDoRascunho` em `packages/shared`, e é ela
+   que acende o selo "pronta para pedir aval" na tela.
+
+2. **Mudança normal não executa sem aval.** A `PADRAO` é pré-aprovada
+   por definição — trocar um teclado não vai a comitê. A `EMERGENCIAL`
+   executa primeiro e o aval vem depois, registrado: é o registro da
+   aprovação atrasada que impede "emergencial" de virar o caminho de
+   fuga de todo mundo. Por isso a lista mostra o tipo em coluna fixa —
+   uma fila de emergenciais é o sinal de que o processo virou fachada.
+
+3. **Agendada exige janela.** "Agendada para quando?" precisa de
+   resposta antes de virar status. `windowEnd > windowStart` é `CHECK`
+   no banco (`changes_janela`); a API recusa antes, com uma frase em
+   português em vez do nome da restrição.
+
+O ciclo:
+
+```
+RASCUNHO → EM_APROVACAO → APROVADA → AGENDADA → EM_EXECUCAO → CONCLUIDA
+                       ↘ RECUSADA                           ↘ REVERTIDA
+```
+
+`CONCLUIDA → REVERTIDA` existe porque o recuo quase sempre acontece
+depois de alguém declarar sucesso: é de madrugada, no dia seguinte,
+quando o efeito aparece. Fechar a porta ali obrigaria a abrir outra
+mudança para desfazer esta, e o histórico perderia o vínculo. `RECUSADA`
+e `CANCELADA` voltam a `RASCUNHO`: refazer o plano e pedir de novo é o
+caminho normal, e abrir outro registro perderia a discussão que levou à
+recusa.
+
+**Executar é rota própria, e permissão própria** (`mudanca:executar`).
+Os três atos carimbam horário e escrevem o desfecho — três efeitos que um
+`PATCH` de status genérico não deve poder disparar por descuido. E a
+permissão é outra de propósito: quem passa a madrugada aplicando a
+mudança é quem sabe dizer se ela deu certo, e obrigar um supervisor a
+marcar "concluída" às três da manhã só produz registro atrasado. O aval
+continua sendo de outro. Concluir e reverter exigem `outcome` escrito: é
+o registro que a próxima mudança parecida vai ler, e o campo em branco é
+justamente o que o GLPI aceita.
+
+**A aprovação é a mesma máquina do chamado.** `Approval` ganhou
+`changeId` ao lado de `ticketId`, com o mesmo `CHECK` de exclusividade, e
+`ApprovalView` passou a carregar `alvo` — uma união discriminada
+`CHAMADO | MUDANCA` no lugar do campo `ticket` obrigatório. Foi o que
+permitiu `/aprovacoes/minhas` listar as duas coisas juntas: são as duas
+que esperam a mesma pessoa, e separá-las em duas telas faria uma delas
+ser a que ninguém abre. O quórum, a ordem das etapas e o desfecho vêm das
+mesmas funções puras de `packages/shared`.
+
+Onde chamado e mudança diferem: o chamado **volta** para o status de
+onde saiu quando a aprovação se resolve; a mudança **é** o objeto em
+aprovação, e o desfecho é o próximo estado dela — `APROVADA` ou
+`RECUSADA`.
+
+`TicketDetail` carrega `change` além de `problem`: a janela da mudança é
+o que responde "quando isso vai ser resolvido?" sem sair da tela do
+chamado.
+
+Eventos de webhook: `mudanca.executada` e `mudanca.revertida` — o recuo é
+o que a operação quer saber na hora.
+
+---
+
+## 13. Saúde
 
 ```
 GET /v1/health        → { status, uptime }

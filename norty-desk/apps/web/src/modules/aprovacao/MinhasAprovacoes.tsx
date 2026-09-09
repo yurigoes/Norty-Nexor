@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { ApprovalView } from '@norty-desk/shared';
+import type { ApprovalTarget, ApprovalView } from '@norty-desk/shared';
 
 import { decidirAprovacao, minhasAprovacoes } from '../../api/aprovacoes';
 import { ErroDaApi } from '../../api/cliente';
@@ -74,13 +74,9 @@ export function MinhasAprovacoes({ noPortal = false }: { noPortal?: boolean }) {
                       aprova: ser validador autoriza a decidir, não a ler
                       o chamado inteiro. Por isso aqui é texto, não link. */}
                   {noPortal ? (
-                    <span>
-                      #{linha.ticket.number} · {linha.ticket.subject}
-                    </span>
+                    <span>{rotuloDoAlvo(linha.alvo)}</span>
                   ) : (
-                    <Link to={`/chamados/${linha.ticket.id}`}>
-                      #{linha.ticket.number} · {linha.ticket.subject}
-                    </Link>
+                    <Link to={caminhoDoAlvo(linha.alvo)}>{rotuloDoAlvo(linha.alvo)}</Link>
                   )}
                 </h3>
                 <p className="card-sub">
@@ -129,4 +125,20 @@ export function MinhasAprovacoes({ noPortal = false }: { noPortal?: boolean }) {
       )}
     </div>
   );
+}
+
+/**
+ * Chamado e mudança dividem esta tela.
+ *
+ * São as duas coisas que esperam a mesma pessoa, e separá-las em duas
+ * telas faria uma delas ser a que ninguém abre. O prefixo do número diz
+ * qual é sem precisar de mais uma coluna.
+ */
+function rotuloDoAlvo(alvo: ApprovalTarget): string {
+  const etiqueta = alvo.kind === 'CHAMADO' ? `#${alvo.number}` : `M#${alvo.number}`;
+  return `${etiqueta} · ${alvo.title}`;
+}
+
+function caminhoDoAlvo(alvo: ApprovalTarget): string {
+  return alvo.kind === 'CHAMADO' ? `/chamados/${alvo.id}` : `/mudancas/${alvo.id}`;
 }

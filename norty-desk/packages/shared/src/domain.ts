@@ -61,6 +61,7 @@ export const EVENT_TYPES = [
    * um chamado nunca tem.
    */
   'MUDANCA_STATUS_PROBLEMA',
+  'MUDANCA_STATUS_MUDANCA',
   'MUDANCA_ATRIBUICAO',
   'MUDANCA_CLASSIFICACAO',
   'PAUSA_SLA',
@@ -114,6 +115,51 @@ export const OPEN_PROBLEM_STATUSES: readonly ProblemStatus[] = [
   'INVESTIGANDO',
   'CAUSA_IDENTIFICADA',
   'CONTORNO_PUBLICADO',
+];
+
+/**
+ * Ciclo da mudança.
+ *
+ * `REVERTIDA` é um estado, não uma anotação: uma mudança desfeita e uma
+ * mudança que nunca saiu do papel não são a mesma coisa, e o indicador
+ * de taxa de recuo — o número que diz se a gestão de mudança está
+ * funcionando — depende de saber a diferença.
+ */
+export const CHANGE_STATUSES = [
+  'RASCUNHO',
+  'EM_APROVACAO',
+  'APROVADA',
+  'AGENDADA',
+  'EM_EXECUCAO',
+  'CONCLUIDA',
+  'REVERTIDA',
+  'RECUSADA',
+  'CANCELADA',
+] as const;
+export type ChangeStatus = (typeof CHANGE_STATUSES)[number];
+
+/**
+ * O tipo decide se a mudança passa por aprovação, e é o ponto do ITIL
+ * que o GLPI não modela.
+ *
+ * - `PADRAO`: pré-aprovada. Trocar um teclado não vai a comitê.
+ * - `NORMAL`: precisa de aval antes de executar.
+ * - `EMERGENCIAL`: executa primeiro. O aval vem depois, e é registrado
+ *   — o que se recusa a aceitar é que ele nunca venha.
+ */
+export const CHANGE_KINDS = ['PADRAO', 'NORMAL', 'EMERGENCIAL'] as const;
+export type ChangeKind = (typeof CHANGE_KINDS)[number];
+
+export const CHANGE_RISKS = ['BAIXO', 'MEDIO', 'ALTO'] as const;
+export type ChangeRisk = (typeof CHANGE_RISKS)[number];
+
+/** Status em que a mudança ainda está viva. */
+export const OPEN_CHANGE_STATUSES: readonly ChangeStatus[] = [
+  'RASCUNHO',
+  'EM_APROVACAO',
+  'APROVADA',
+  'AGENDADA',
+  'EM_EXECUCAO',
 ];
 
 /** Urgência, impacto e prioridade vão de 1 (muito baixa) a 5 (muito alta). */
@@ -191,6 +237,18 @@ export type ProblemStatusChangePayload = {
   to: ProblemStatus;
 };
 
+/*
+ * O nome dobra a palavra porque a regra de nomeação é
+ * `MUDANCA_STATUS_<ENTIDADE>`, e a entidade aqui se chama Mudança.
+ * Trocar a regra por um nome mais bonito custaria a previsibilidade dos
+ * outros dois.
+ */
+export type ChangeStatusChangePayload = {
+  type: 'MUDANCA_STATUS_MUDANCA';
+  from: ChangeStatus;
+  to: ChangeStatus;
+};
+
 export type AssignmentChangePayload = {
   type: 'MUDANCA_ATRIBUICAO';
   fromTeamId?: string;
@@ -239,6 +297,7 @@ export type EventPayload =
   | SolutionPayload
   | StatusChangePayload
   | ProblemStatusChangePayload
+  | ChangeStatusChangePayload
   | AssignmentChangePayload
   | ClassificationChangePayload
   | ApprovalPayload
@@ -369,6 +428,30 @@ export const ROTULO_PROBLEMA_STATUS: Record<ProblemStatus, string> = {
   FECHADO: 'Fechado',
 };
 
+export const ROTULO_MUDANCA_STATUS: Record<ChangeStatus, string> = {
+  RASCUNHO: 'Rascunho',
+  EM_APROVACAO: 'Em aprovação',
+  APROVADA: 'Aprovada',
+  AGENDADA: 'Agendada',
+  EM_EXECUCAO: 'Em execução',
+  CONCLUIDA: 'Concluída',
+  REVERTIDA: 'Revertida',
+  RECUSADA: 'Recusada',
+  CANCELADA: 'Cancelada',
+};
+
+export const ROTULO_MUDANCA_TIPO: Record<ChangeKind, string> = {
+  PADRAO: 'Padrão',
+  NORMAL: 'Normal',
+  EMERGENCIAL: 'Emergencial',
+};
+
+export const ROTULO_MUDANCA_RISCO: Record<ChangeRisk, string> = {
+  BAIXO: 'Baixo',
+  MEDIO: 'Médio',
+  ALTO: 'Alto',
+};
+
 export const ROTULO_CANAL: Record<Channel, string> = {
   WEB: 'Portal',
   EMAIL: 'E-mail',
@@ -453,6 +536,74 @@ export function podeSerErroConhecido(problema: {
 /** O `[P#7]` do problema, irmão do `[#1042]` do chamado. */
 export function problemTag(number: number): string {
   return `[P#${number}]`;
+}
+
+/**
+ * Para onde uma mudança pode ir.
+ *
+ * `CONCLUIDA → REVERTIDA` existe porque o recuo quase sempre acontece
+ * depois de alguém declarar sucesso: é de madrugada, no dia seguinte,
+ * quando o efeito aparece. Fechar a porta ali obrigaria a abrir outra
+ * mudança para desfazer esta — e o histórico perderia o vínculo entre
+ * as duas.
+ *
+ * `RECUSADA` e `CANCELADA` voltam para `RASCUNHO`: refazer o plano e
+ * pedir de novo é o caminho normal, e abrir outro registro perderia a
+ * discussão que levou à recusa.
+ */
+export const ALLOWED_CHANGE_TRANSITIONS: Record<ChangeStatus, readonly ChangeStatus[]> = {
+  RASCUNHO: ['EM_APROVACAO', 'APROVADA', 'AGENDADA', 'EM_EXECUCAO', 'CANCELADA'],
+  EM_APROVACAO: ['APROVADA', 'RECUSADA', 'CANCELADA'],
+  APROVADA: ['AGENDADA', 'EM_EXECUCAO', 'CANCELADA'],
+  AGENDADA: ['EM_EXECUCAO', 'APROVADA', 'CANCELADA'],
+  EM_EXECUCAO: ['CONCLUIDA', 'REVERTIDA'],
+  CONCLUIDA: ['REVERTIDA'],
+  REVERTIDA: [],
+  RECUSADA: ['RASCUNHO', 'CANCELADA'],
+  CANCELADA: ['RASCUNHO'],
+};
+
+export function canTransitionChange(from: ChangeStatus, to: ChangeStatus): boolean {
+  return ALLOWED_CHANGE_TRANSITIONS[from].includes(to);
+}
+
+/**
+ * A mudança normal não executa sem aval.
+ *
+ * É a única regra da gestão de mudança que não se pode contornar por
+ * pressa — e é justamente a que o GLPI deixa como convenção de
+ * processo, sem nada no sistema que a sustente. A padrão é
+ * pré-aprovada por definição; a emergencial executa primeiro e aprova
+ * depois, e o registro da aprovação atrasada é o que impede
+ * "emergencial" de virar o caminho de fuga de todo mundo.
+ */
+export function exigeAprovacaoAntesDeExecutar(kind: ChangeKind): boolean {
+  return kind === 'NORMAL';
+}
+
+/**
+ * Plano de recuo é o que separa mudança de aposta.
+ *
+ * Cobrado ao sair do rascunho, não na criação: rascunho existe
+ * justamente para o plano ser escrito aos poucos.
+ */
+export function podeSairDoRascunho(mudanca: {
+  implementationPlan?: string | null;
+  rollbackPlan?: string | null;
+}): boolean {
+  return (
+    Boolean(mudanca.implementationPlan?.trim()) && Boolean(mudanca.rollbackPlan?.trim())
+  );
+}
+
+/** Agendar exige janela: "agendada para quando?" precisa de resposta. */
+export function exigeJanela(status: ChangeStatus): boolean {
+  return status === 'AGENDADA';
+}
+
+/** O `[M#12]` da mudança. */
+export function changeTag(number: number): string {
+  return `[M#${number}]`;
 }
 
 // ---------------------------------------------------------------------

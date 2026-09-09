@@ -86,7 +86,7 @@ export function Chamado() {
 
       <div className="grade-conteudo-trilho">
         <div className="pilha">
-          <Aprovacoes ticketId={chamado.id} aoMudar={revalidar} />
+          <Aprovacoes alvo={{ kind: 'CHAMADO', id: chamado.id }} aoMudar={revalidar} />
           <ErrosConhecidosDoChamado
             ticketId={chamado.id}
             problemaVinculado={chamado.problem?.id ?? null}
@@ -156,6 +156,21 @@ export function Chamado() {
                   <span className="mono">P#{chamado.problem.number}</span>{' '}
                   {chamado.problem.title}
                 </Link>
+              </Linha>
+            ) : null}
+
+            {chamado.change ? (
+              <Linha rotulo="Mudança">
+                <Link to={`/mudancas/${chamado.change.id}`}>
+                  <span className="mono">M#{chamado.change.number}</span> {chamado.change.title}
+                </Link>
+                {/* A janela é o que quem pergunta "quando isso vai ser
+                    resolvido?" está querendo saber. */}
+                {chamado.change.windowStart ? (
+                  <span className="campo-ajuda" style={{ display: 'block' }}>
+                    janela em {dataCurta(chamado.change.windowStart)}
+                  </span>
+                ) : null}
               </Linha>
             ) : null}
 

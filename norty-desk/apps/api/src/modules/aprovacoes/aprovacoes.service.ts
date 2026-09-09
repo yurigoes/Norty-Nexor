@@ -7,14 +7,20 @@ import {
 } from '@nestjs/common';
 import {
   type ApprovalStatus,
+  type ApprovalTarget,
   type ApprovalView,
+  type ChangeStatus,
   type TicketStatus,
   canTransition,
+  canTransitionChange,
+  changeTag,
   desfechoDaAprovacao,
   estadoDaEtapa,
   faltamParaOQuorum,
   ticketTag,
 } from '@norty-desk/shared';
+
+import { Prisma } from '@prisma/client';
 
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -32,25 +38,37 @@ type LinhaDeAprovacao = {
   status: ApprovalStatus;
 };
 
-type ResumoDoChamado = { id: string; number: number; subject: string };
-
 /**
- * Traduz para o TypeScript o que o banco já garante.
+ * De quem é a aprovação.
  *
- * Desde a Fase 4 uma aprovação pertence a um chamado **ou** a uma
- * mudança — o CHECK `approvals_dono_unico` impede as duas e impede
- * nenhuma. Numa consulta filtrada por chamado a coluna nunca vem nula,
- * mas o Prisma tipa a coluna, não a consulta. Filtrar é mais honesto que
- * um `as`: se um dia a consulta mudar, some a linha em vez de estourar.
+ * O CHECK `approvals_dono_unico` garante que é exatamente um: um
+ * chamado ou uma mudança, nunca os dois nem nenhum. O tipo aqui só diz
+ * ao TypeScript o que o banco já sustenta.
  */
-function somenteDeChamado<T extends { ticketId: string | null; ticket: ResumoDoChamado | null }>(
-  linhas: readonly T[],
-): (T & { ticketId: string; ticket: ResumoDoChamado })[] {
-  return linhas.flatMap((linha) =>
-    linha.ticket && linha.ticketId
-      ? [{ ...linha, ticketId: linha.ticketId, ticket: linha.ticket }]
-      : [],
-  );
+export type DonoDaAprovacao = { kind: 'CHAMADO'; id: string } | { kind: 'MUDANCA'; id: string };
+
+const INCLUDE = {
+  approver: true,
+  ticket: { select: { id: true, number: true, subject: true, organizationId: true } },
+  change: { select: { id: true, number: true, title: true, organizationId: true, status: true } },
+} satisfies Prisma.ApprovalInclude;
+
+type LinhaComRelacoes = Prisma.ApprovalGetPayload<{ include: typeof INCLUDE }>;
+
+/** O `where` que isola as aprovações de um dono. */
+function ondeDoDono(dono: DonoDaAprovacao): Prisma.ApprovalWhereInput {
+  return dono.kind === 'CHAMADO' ? { ticketId: dono.id } : { changeId: dono.id };
+}
+
+/** A coluna de dono, para escrever. */
+function colunaDoDono(dono: DonoDaAprovacao): { ticketId: string } | { changeId: string } {
+  return dono.kind === 'CHAMADO' ? { ticketId: dono.id } : { changeId: dono.id };
+}
+
+function donoDaLinha(linha: LinhaComRelacoes): DonoDaAprovacao | null {
+  if (linha.ticket) return { kind: 'CHAMADO', id: linha.ticket.id };
+  if (linha.change) return { kind: 'MUDANCA', id: linha.change.id };
+  return null;
 }
 
 /**
@@ -76,11 +94,21 @@ export class AprovacoesService {
 
   async listarDoChamado(usuario: UsuarioAutenticado, ticketId: string): Promise<ApprovalView[]> {
     await this.exigirChamado(usuario, ticketId);
-    return this.listar(ticketId);
+    return this.listar({ kind: 'CHAMADO', id: ticketId });
   }
 
   /**
-   * As aprovações de um chamado, sem conferir o escopo de leitura.
+   * As aprovações de uma mudança.
+   *
+   * Quem chama já conferiu o escopo — é sempre o serviço de mudanças,
+   * que acabou de carregar a mudança da organização.
+   */
+  async listarDaMudanca(changeId: string): Promise<ApprovalView[]> {
+    return this.listar({ kind: 'MUDANCA', id: changeId });
+  }
+
+  /**
+   * As aprovações de um dono, sem conferir o escopo de leitura.
    *
    * Quem já foi autorizado por outro caminho usa esta. É o caso de quem
    * acabou de decidir: um solicitante pode ser validador de um chamado
@@ -88,14 +116,17 @@ export class AprovacoesService {
    * recusaria — devolvendo 404 logo depois de a decisão dele ter sido
    * gravada.
    */
-  private async listar(ticketId: string): Promise<ApprovalView[]> {
+  private async listar(dono: DonoDaAprovacao): Promise<ApprovalView[]> {
     const linhas = await this.prisma.approval.findMany({
-      where: { ticketId },
-      include: { approver: true, ticket: { select: { id: true, number: true, subject: true } } },
-      orderBy: [{ step: 'asc' }, { requestedAt: 'asc' }],
+      where: ondeDoDono(dono),
+      include: INCLUDE,
+      // O `id` desempata: as linhas de uma etapa nascem no mesmo
+      // `createMany` e carimbam o mesmo instante, e sem ele a lista
+      // troca de ordem entre duas leituras da mesma tela.
+      orderBy: [{ step: 'asc' }, { requestedAt: 'asc' }, { id: 'asc' }],
     });
 
-    return somenteDeChamado(linhas).map((l) => AprovacoesService.paraView(l));
+    return AprovacoesService.paraViews(linhas);
   }
 
   /**
@@ -106,45 +137,56 @@ export class AprovacoesService {
    * decidir fora de ordem.
    */
   async minhas(usuario: UsuarioAutenticado): Promise<ApprovalView[]> {
-    const minhas = somenteDeChamado(
-      await this.prisma.approval.findMany({
-        where: {
-          approverId: usuario.userId,
-          status: 'AGUARDANDO',
-          ticket: { organizationId: usuario.organizationId },
-        },
-        include: { approver: true, ticket: { select: { id: true, number: true, subject: true } } },
-        orderBy: { requestedAt: 'asc' },
-      }),
-    );
+    const minhas = await this.prisma.approval.findMany({
+      where: {
+        approverId: usuario.userId,
+        status: 'AGUARDANDO',
+        // A aprovação de mudança entra na mesma lista: são as duas
+        // coisas que esperam a mesma pessoa, e separá-las em duas telas
+        // faria uma delas ser a que ninguém abre.
+        OR: [
+          { ticket: { organizationId: usuario.organizationId } },
+          { change: { organizationId: usuario.organizationId } },
+        ],
+      },
+      include: INCLUDE,
+      orderBy: { requestedAt: 'asc' },
+    });
 
     if (minhas.length === 0) return [];
 
-    // Uma consulta para todas as linhas dos chamados envolvidos: sem
-    // isso seria uma consulta por aprovação para descobrir a etapa
-    // corrente de cada chamado.
-    const ticketIds = [...new Set(minhas.map((m) => m.ticketId))];
+    // Uma consulta para todas as linhas dos donos envolvidos: sem isso
+    // seria uma consulta por aprovação para descobrir a etapa corrente
+    // de cada um.
+    const ticketIds = minhas.flatMap((m) => (m.ticketId ? [m.ticketId] : []));
+    const changeIds = minhas.flatMap((m) => (m.changeId ? [m.changeId] : []));
+
     const todas = await this.prisma.approval.findMany({
-      where: { ticketId: { in: ticketIds } },
-      select: { ticketId: true, step: true, quorum: true, status: true },
+      where: {
+        OR: [{ ticketId: { in: ticketIds } }, { changeId: { in: changeIds } }],
+      },
+      select: { ticketId: true, changeId: true, step: true, quorum: true, status: true },
     });
 
-    const porChamado = new Map<string, LinhaDeAprovacao[]>();
+    const porDono = new Map<string, LinhaDeAprovacao[]>();
     for (const linha of todas) {
-      if (!linha.ticketId) continue;
-      const lista = porChamado.get(linha.ticketId) ?? [];
+      const chave = linha.ticketId ?? linha.changeId;
+      if (!chave) continue;
+      const lista = porDono.get(chave) ?? [];
       lista.push(linha);
-      porChamado.set(linha.ticketId, lista);
+      porDono.set(chave, lista);
     }
 
-    return minhas
-      .filter((m) => {
-        const desfecho = desfechoDaAprovacao(
-          AprovacoesService.agruparEtapas(porChamado.get(m.ticketId) ?? []),
-        );
-        return desfecho.estado === 'AGUARDANDO' && desfecho.etapaAtual === m.step;
-      })
-      .map((l) => AprovacoesService.paraView(l));
+    const naVez = minhas.filter((m) => {
+      const chave = m.ticketId ?? m.changeId;
+      if (!chave) return false;
+      const desfecho = desfechoDaAprovacao(
+        AprovacoesService.agruparEtapas(porDono.get(chave) ?? []),
+      );
+      return desfecho.estado === 'AGUARDANDO' && desfecho.etapaAtual === m.step;
+    });
+
+    return AprovacoesService.paraViews(naVez);
   }
 
   // -------------------------------------------------------------------
@@ -162,38 +204,9 @@ export class AprovacoesService {
       throw new ConflictException('Chamado fechado. Reabra antes de pedir aprovação.');
     }
 
-    const quorum = dto.quorum ?? dto.approverIds.length;
-    if (quorum > dto.approverIds.length) {
-      throw new BadRequestException(
-        `O quórum é ${quorum} mas a etapa tem ${dto.approverIds.length} validador(es): ` +
-          'ela nunca poderia ser aprovada.',
-      );
-    }
-
-    // Validador tem de ser da organização. Sem esta checagem, um id de
-    // usuário de outra empresa entraria pelo corpo da requisição.
-    const validos = await this.prisma.user.findMany({
-      where: {
-        id: { in: dto.approverIds },
-        memberships: { some: { organizationId: usuario.organizationId } },
-      },
-      select: { id: true },
-    });
-
-    if (validos.length !== dto.approverIds.length) {
-      const encontrados = new Set(validos.map((v) => v.id));
-      const faltando = dto.approverIds.filter((id) => !encontrados.has(id));
-      throw new BadRequestException(
-        `Estes validadores não pertencem à organização: ${faltando.join(', ')}.`,
-      );
-    }
-
-    const ultima = await this.prisma.approval.aggregate({
-      where: { ticketId },
-      _max: { step: true },
-    });
-
-    const step = dto.step ?? (ultima._max.step ?? 0) + 1;
+    const quorum = AprovacoesService.exigirQuorumPossivel(dto);
+    await this.exigirValidadoresDaOrganizacao(usuario, dto.approverIds);
+    const step = await this.proximaEtapa({ kind: 'CHAMADO', id: ticketId }, dto.step);
 
     // O status de origem vai no evento porque é para ele que o chamado
     // volta quando a aprovação se resolve. Guardar isso numa coluna nova
@@ -253,7 +266,16 @@ export class AprovacoesService {
       });
     });
 
-    await this.avisarValidadores(ticketId, step, dto.approverIds);
+    await this.avisarValidadores(
+      {
+        organizationId: usuario.organizationId,
+        etiqueta: ticketTag(chamado.number),
+        titulo: chamado.subject,
+        ticketId,
+      },
+      step,
+      dto.approverIds,
+    );
 
     await this.webhooks.emitir(usuario.organizationId, 'aprovacao.solicitada', {
       ticketId,
@@ -263,7 +285,104 @@ export class AprovacoesService {
       validadores: dto.approverIds,
     });
 
-    return this.listar(ticketId);
+    return this.listar({ kind: 'CHAMADO', id: ticketId });
+  }
+
+  /**
+   * Pede aprovação de uma mudança.
+   *
+   * A mudança não tem `EM_APROVACAO` "de passagem" como o chamado: ela
+   * **é** o objeto em aprovação, e o status vai para lá e fica. Quem
+   * confere o escopo é o serviço de mudanças, que já carregou a
+   * mudança da organização antes de chamar.
+   */
+  async solicitarDaMudanca(
+    usuario: UsuarioAutenticado,
+    mudanca: { id: string; number: number; title: string; status: ChangeStatus },
+    dto: SolicitarAprovacaoDto,
+  ): Promise<ApprovalView[]> {
+    const quorum = AprovacoesService.exigirQuorumPossivel(dto);
+    await this.exigirValidadoresDaOrganizacao(usuario, dto.approverIds);
+
+    const dono: DonoDaAprovacao = { kind: 'MUDANCA', id: mudanca.id };
+    const step = await this.proximaEtapa(dono, dto.step);
+
+    const vaiParaAprovacao =
+      mudanca.status !== 'EM_APROVACAO' && canTransitionChange(mudanca.status, 'EM_APROVACAO');
+
+    if (mudanca.status !== 'EM_APROVACAO' && !vaiParaAprovacao) {
+      throw new ConflictException(
+        `Uma mudança ${mudanca.status} não volta para aprovação.`,
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.approval.createMany({
+        data: dto.approverIds.map((approverId) => ({
+          changeId: mudanca.id,
+          step,
+          quorum,
+          approverId,
+        })),
+        skipDuplicates: true,
+      });
+
+      if (vaiParaAprovacao) {
+        await tx.change.update({
+          where: { id: mudanca.id },
+          data: { status: 'EM_APROVACAO' },
+        });
+        await tx.ticketEvent.create({
+          data: {
+            changeId: mudanca.id,
+            type: 'MUDANCA_STATUS_MUDANCA',
+            visibility: 'INTERNA',
+            authorId: usuario.userId,
+            channel: 'WEB',
+            payload: {
+              type: 'MUDANCA_STATUS_MUDANCA',
+              from: mudanca.status,
+              to: 'EM_APROVACAO',
+            },
+          },
+        });
+      }
+
+      await tx.ticketEvent.create({
+        data: {
+          changeId: mudanca.id,
+          type: 'APROVACAO',
+          visibility: 'INTERNA',
+          authorId: usuario.userId,
+          channel: 'WEB',
+          body:
+            dto.comment ??
+            `Aprovação da etapa ${step} pedida a ${dto.approverIds.length} validador(es); ` +
+              `${quorum} "sim" necessário(s).`,
+          payload: { type: 'APROVACAO', approvalId: `etapa-${step}`, decision: 'AGUARDANDO' },
+        },
+      });
+    });
+
+    await this.avisarValidadores(
+      {
+        organizationId: usuario.organizationId,
+        etiqueta: changeTag(mudanca.number),
+        titulo: mudanca.title,
+      },
+      step,
+      dto.approverIds,
+    );
+
+    await this.webhooks.emitir(usuario.organizationId, 'aprovacao.solicitada', {
+      changeId: mudanca.id,
+      numero: mudanca.number,
+      etapa: step,
+      quorum,
+      validadores: dto.approverIds,
+    });
+
+    return this.listar(dono);
   }
 
   // -------------------------------------------------------------------
@@ -277,16 +396,15 @@ export class AprovacoesService {
   ): Promise<ApprovalView[]> {
     const linha = await this.prisma.approval.findUnique({
       where: { id: approvalId },
-      include: { ticket: { select: { id: true, organizationId: true, status: true } } },
+      include: INCLUDE,
     });
 
-    // Sem `ticket` a aprovação é de uma mudança, e esta rota é a do
-    // chamado: para quem pergunta, ela simplesmente não existe aqui.
-    if (!linha?.ticket || linha.ticket.organizationId !== usuario.organizationId) {
+    const dono = linha ? donoDaLinha(linha) : null;
+    const organizationId = linha?.ticket?.organizationId ?? linha?.change?.organizationId;
+
+    if (!linha || !dono || organizationId !== usuario.organizationId) {
       throw new NotFoundException('Aprovação não encontrada.');
     }
-
-    const ticketId = linha.ticket.id;
 
     // Decidir é pessoal: nem supervisor decide no lugar de quem foi
     // designado. Permissão diz que a rota abre; isto diz de quem é a vez.
@@ -299,7 +417,7 @@ export class AprovacoesService {
     }
 
     const todas = await this.prisma.approval.findMany({
-      where: { ticketId },
+      where: ondeDoDono(dono),
       select: { id: true, step: true, quorum: true, status: true },
     });
 
@@ -328,21 +446,22 @@ export class AprovacoesService {
       ),
     );
 
-    await this.registrarDecisao(ticketId, approvalId, usuario, dto, linha.step);
+    await this.registrarDecisao(dono, approvalId, usuario, dto, linha.step);
 
     if (depois.estado !== 'AGUARDANDO') {
-      await this.encerrar(ticketId, depois.estado, usuario);
+      if (dono.kind === 'CHAMADO') await this.encerrar(dono.id, depois.estado, usuario);
+      else await this.encerrarMudanca(dono.id, depois.estado, usuario);
     }
 
     await this.webhooks.emitir(usuario.organizationId, 'aprovacao.decidida', {
-      ticketId,
+      ...(dono.kind === 'CHAMADO' ? { ticketId: dono.id } : { changeId: dono.id }),
       aprovacaoId: approvalId,
       etapa: linha.step,
       decisao: dto.decision,
       desfecho: depois.estado,
     });
 
-    return this.listar(ticketId);
+    return this.listar(dono);
   }
 
   // -------------------------------------------------------------------
@@ -369,7 +488,7 @@ export class AprovacoesService {
   }
 
   private async registrarDecisao(
-    ticketId: string,
+    dono: DonoDaAprovacao,
     approvalId: string,
     usuario: UsuarioAutenticado,
     dto: DecidirAprovacaoDto,
@@ -381,7 +500,7 @@ export class AprovacoesService {
 
     await this.prisma.ticketEvent.create({
       data: {
-        ticketId,
+        ...colunaDoDono(dono),
         type: 'APROVACAO',
         visibility: 'INTERNA',
         authorId: usuario.userId,
@@ -390,6 +509,61 @@ export class AprovacoesService {
         payload: { type: 'APROVACAO', approvalId, decision: dto.decision },
       },
     });
+  }
+
+  /**
+   * Encerra a aprovação de uma mudança.
+   *
+   * Diferente do chamado, a mudança não "volta" para lugar nenhum: o
+   * desfecho da aprovação **é** o próximo estado dela. Aprovada segue
+   * para execução; recusada para porque a decisão foi essa — refazer o
+   * plano e pedir de novo é uma transição explícita de quem a conduz,
+   * não um efeito colateral do "não".
+   */
+  private async encerrarMudanca(
+    changeId: string,
+    desfecho: 'APROVADA' | 'RECUSADA',
+    usuario: UsuarioAutenticado,
+  ): Promise<void> {
+    const mudanca = await this.prisma.change.findUniqueOrThrow({
+      where: { id: changeId },
+      select: { status: true },
+    });
+
+    if (mudanca.status !== 'EM_APROVACAO') return;
+
+    const destino: ChangeStatus = desfecho === 'APROVADA' ? 'APROVADA' : 'RECUSADA';
+
+    await this.prisma.$transaction([
+      this.prisma.change.update({ where: { id: changeId }, data: { status: destino } }),
+      this.prisma.ticketEvent.create({
+        data: {
+          changeId,
+          type: 'MUDANCA_STATUS_MUDANCA',
+          visibility: 'INTERNA',
+          authorId: usuario.userId,
+          channel: 'WEB',
+          payload: { type: 'MUDANCA_STATUS_MUDANCA', from: 'EM_APROVACAO', to: destino },
+        },
+      }),
+      this.prisma.ticketEvent.create({
+        data: {
+          changeId,
+          type: 'APROVACAO',
+          visibility: 'INTERNA',
+          channel: 'SISTEMA',
+          body:
+            desfecho === 'APROVADA'
+              ? 'Aprovação concluída: a mudança está liberada para execução.'
+              : 'Aprovação recusada. A mudança não vai a campo como está.',
+          payload: {
+            type: 'APROVACAO',
+            approvalId: 'conjunto',
+            decision: desfecho === 'APROVADA' ? 'APROVADO' : 'RECUSADO',
+          },
+        },
+      }),
+    ]);
   }
 
   /**
@@ -453,17 +627,19 @@ export class AprovacoesService {
     ]);
   }
 
-  /** Avisa por e-mail quem tem de decidir. Sem isso ninguém sabe que foi chamado. */
+  /**
+   * Avisa por e-mail quem tem de decidir. Sem isso ninguém sabe que foi
+   * chamado.
+   *
+   * O `ticketId` é opcional porque a fila de saída o usa para amarrar a
+   * mensagem ao chamado — e aprovação de mudança não tem chamado a que
+   * se amarrar. O aviso continua saindo; o que muda é o vínculo.
+   */
   private async avisarValidadores(
-    ticketId: string,
+    alvo: { organizationId: string; etiqueta: string; titulo: string; ticketId?: string },
     step: number,
     approverIds: readonly string[],
   ): Promise<void> {
-    const chamado = await this.prisma.ticket.findUniqueOrThrow({
-      where: { id: ticketId },
-      select: { organizationId: true, number: true, subject: true },
-    });
-
     const pessoas = await this.prisma.user.findMany({
       where: { id: { in: [...approverIds] } },
       select: { email: true, name: true },
@@ -471,44 +647,119 @@ export class AprovacoesService {
 
     for (const pessoa of pessoas) {
       await this.saida.enfileirarAviso({
-        organizationId: chamado.organizationId,
-        ticketId,
+        organizationId: alvo.organizationId,
+        ticketId: alvo.ticketId ?? null,
         channel: 'EMAIL',
         para: pessoa.email,
-        assunto: `Aprovação pendente ${ticketTag(chamado.number)} ${chamado.subject}`,
+        assunto: `Aprovação pendente ${alvo.etiqueta} ${alvo.titulo}`,
         corpo:
           `Olá, ${pessoa.name}.\n\n` +
-          `Sua aprovação foi pedida no chamado ${ticketTag(chamado.number)} — ` +
-          `${chamado.subject} (etapa ${step}).\n\n` +
+          `Sua aprovação foi pedida em ${alvo.etiqueta} — ` +
+          `${alvo.titulo} (etapa ${step}).\n\n` +
           'Abra o Norty Desk para aprovar ou recusar.',
       });
     }
   }
 
+  /** O quórum não pode ser maior que o número de validadores da etapa. */
+  private static exigirQuorumPossivel(dto: SolicitarAprovacaoDto): number {
+    const quorum = dto.quorum ?? dto.approverIds.length;
+    if (quorum > dto.approverIds.length) {
+      throw new BadRequestException(
+        `O quórum é ${quorum} mas a etapa tem ${dto.approverIds.length} validador(es): ` +
+          'ela nunca poderia ser aprovada.',
+      );
+    }
+    return quorum;
+  }
+
+  /**
+   * Validador tem de ser da organização. Sem esta checagem, um id de
+   * usuário de outra empresa entraria pelo corpo da requisição.
+   */
+  private async exigirValidadoresDaOrganizacao(
+    usuario: UsuarioAutenticado,
+    approverIds: readonly string[],
+  ): Promise<void> {
+    const validos = await this.prisma.user.findMany({
+      where: {
+        id: { in: [...approverIds] },
+        memberships: { some: { organizationId: usuario.organizationId } },
+      },
+      select: { id: true },
+    });
+
+    if (validos.length !== new Set(approverIds).size) {
+      const encontrados = new Set(validos.map((v) => v.id));
+      const faltando = approverIds.filter((id) => !encontrados.has(id));
+      throw new BadRequestException(
+        `Estes validadores não pertencem à organização: ${faltando.join(', ')}.`,
+      );
+    }
+  }
+
+  /**
+   * A etapa. Omitida, entra depois da última existente — que é o que se
+   * quer ao encadear "gerente, depois diretor".
+   */
+  private async proximaEtapa(dono: DonoDaAprovacao, pedida?: number): Promise<number> {
+    if (pedida) return pedida;
+    const ultima = await this.prisma.approval.aggregate({
+      where: ondeDoDono(dono),
+      _max: { step: true },
+    });
+    return (ultima._max.step ?? 0) + 1;
+  }
+
   private async exigirChamado(usuario: UsuarioAutenticado, ticketId: string) {
     const chamado = await this.prisma.ticket.findFirst({
       where: { AND: [escopoDeLeitura(usuario), { id: ticketId }] },
-      select: { id: true, status: true, number: true },
+      select: { id: true, status: true, number: true, subject: true },
     });
 
     if (!chamado) throw new NotFoundException('Chamado não encontrado.');
     return chamado;
   }
 
-  private static paraView(linha: {
-    id: string;
-    step: number;
-    quorum: number;
-    status: ApprovalStatus;
-    comment: string | null;
-    requestedAt: Date;
-    decidedAt: Date | null;
-    approver: { id: string; name: string; email: string };
-    ticket: { id: string; number: number; subject: string };
-  }): ApprovalView {
+  /**
+   * A linha vira contrato.
+   *
+   * Linha sem dono não existe — o CHECK `approvals_dono_unico` garante.
+   * Filtrar em vez de afirmar com `as` mantém a função total: se a
+   * consulta mudar e deixar de trazer a relação, some a linha em vez de
+   * estourar na serialização.
+   */
+  private static paraViews(linhas: readonly LinhaComRelacoes[]): ApprovalView[] {
+    return linhas.flatMap((linha) => {
+      const alvo = AprovacoesService.alvo(linha);
+      return alvo ? [AprovacoesService.paraView(linha, alvo)] : [];
+    });
+  }
+
+  private static alvo(linha: LinhaComRelacoes): ApprovalTarget | null {
+    if (linha.ticket) {
+      return {
+        kind: 'CHAMADO',
+        id: linha.ticket.id,
+        number: linha.ticket.number,
+        title: linha.ticket.subject,
+      };
+    }
+    if (linha.change) {
+      return {
+        kind: 'MUDANCA',
+        id: linha.change.id,
+        number: linha.change.number,
+        title: linha.change.title,
+      };
+    }
+    return null;
+  }
+
+  private static paraView(linha: LinhaComRelacoes, alvo: ApprovalTarget): ApprovalView {
     return {
       id: linha.id,
-      ticket: linha.ticket,
+      alvo,
       step: linha.step,
       quorum: linha.quorum,
       approver: {

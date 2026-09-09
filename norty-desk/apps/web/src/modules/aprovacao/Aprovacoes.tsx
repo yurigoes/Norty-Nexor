@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ApprovalView } from '@norty-desk/shared';
+import type { ApprovalTarget, ApprovalView } from '@norty-desk/shared';
 import { estadoDaEtapa, faltamParaOQuorum } from '@norty-desk/shared';
 
 import {
@@ -10,11 +10,12 @@ import {
   type PessoaView,
 } from '../../api/aprovacoes';
 import { ErroDaApi } from '../../api/cliente';
+import { obterMudanca, solicitarAprovacaoDaMudanca } from '../../api/mudancas';
 import { useAutenticacao } from '../../auth/Autenticacao';
 import { dataCurta } from '../../lib/formato';
 
 /**
- * Aprovação de um chamado.
+ * Aprovação de um chamado ou de uma mudança.
  *
  * O desenho é `.timeline` — a linha de etapas com ponto e conector, não
  * `.conversa`, que é a linha do tempo do chamado. São coisas
@@ -24,16 +25,30 @@ import { dataCurta } from '../../lib/formato';
  * que a API usa para decidir o status do chamado. No GLPI a interface
  * calcula o desfecho por conta própria, e por isso a tela e o relatório
  * às vezes discordam.
+ *
+ * O alvo é parâmetro porque a mudança usa a mesma máquina de quórum:
+ * duas cópias desta tela divergiriam na primeira correção, e a etapa
+ * apareceria certa num lugar e errada no outro.
  */
-export function Aprovacoes({ ticketId, aoMudar }: { ticketId: string; aoMudar: () => void }) {
+export function Aprovacoes({
+  alvo,
+  aoMudar,
+}: {
+  alvo: { kind: ApprovalTarget['kind']; id: string };
+  aoMudar: () => void;
+}) {
   const { can, perfil } = useAutenticacao();
   const [linhas, setLinhas] = useState<ApprovalView[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [pedindo, setPedindo] = useState(false);
 
   const recarregar = useCallback(async () => {
-    setLinhas(await aprovacoesDoChamado(ticketId));
-  }, [ticketId]);
+    setLinhas(
+      alvo.kind === 'CHAMADO'
+        ? await aprovacoesDoChamado(alvo.id)
+        : (await obterMudanca(alvo.id)).approvals,
+    );
+  }, [alvo.kind, alvo.id]);
 
   useEffect(() => {
     void recarregar().catch(() => setLinhas([]));
@@ -63,8 +78,9 @@ export function Aprovacoes({ ticketId, aoMudar }: { ticketId: string; aoMudar: (
   // A maioria dos chamados nunca precisa de aprovação. Um cartão
   // inteiro dizendo "nenhuma aprovação pedida" empurraria a conversa
   // para baixo em toda tela para não informar nada: sem etapas, o bloco
-  // é só a ação.
-  if (linhas.length === 0 && !pedindo) {
+  // é só a ação. Na mudança é o contrário — lá a aprovação é o assunto
+  // da tela, e o cartão aparece mesmo vazio.
+  if (alvo.kind === 'CHAMADO' && linhas.length === 0 && !pedindo) {
     return (
       <div className="linha" style={{ justifyContent: 'flex-end' }}>
         <button type="button" className="btn -fantasma -sm" onClick={() => setPedindo(true)}>
@@ -80,12 +96,14 @@ export function Aprovacoes({ ticketId, aoMudar }: { ticketId: string; aoMudar: (
         <div>
           <h3 className="card-titulo">Aprovação</h3>
           <p className="card-sub">
-            Etapas em sequência: a seguinte só começa quando a anterior passa.
+            {linhas.length === 0
+              ? 'Nenhuma etapa pedida ainda.'
+              : 'Etapas em sequência: a seguinte só começa quando a anterior passa.'}
           </p>
         </div>
         {podePedir && !pedindo ? (
           <button type="button" className="btn -secundario -sm" onClick={() => setPedindo(true)}>
-            Nova etapa
+            {linhas.length === 0 ? 'Pedir aprovação' : 'Nova etapa'}
           </button>
         ) : null}
       </div>
@@ -118,11 +136,14 @@ export function Aprovacoes({ ticketId, aoMudar }: { ticketId: string; aoMudar: (
 
       {pedindo ? (
         <Pedido
-          ticketId={ticketId}
           proximaEtapa={(etapas.at(-1)?.step ?? 0) + 1}
           aoCancelar={() => setPedindo(false)}
           aoPedir={async (dados) => {
-            setLinhas(await solicitarAprovacao(ticketId, dados));
+            setLinhas(
+              alvo.kind === 'CHAMADO'
+                ? await solicitarAprovacao(alvo.id, dados)
+                : await solicitarAprovacaoDaMudanca(alvo.id, dados),
+            );
             setPedindo(false);
             aoMudar();
           }}
@@ -275,7 +296,6 @@ function Pedido({
   aoCancelar,
   aoPedir,
 }: {
-  ticketId: string;
   proximaEtapa: number;
   aoCancelar: () => void;
   aoPedir: (dados: {

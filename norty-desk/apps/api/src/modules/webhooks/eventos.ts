@@ -21,6 +21,9 @@ export const EVENTOS_DE_WEBHOOK = [
   'problema.criado',
   /** O contorno acabou de ser publicado: é o aviso que vale rebroadcast. */
   'problema.erro-conhecido',
+  'mudanca.executada',
+  /** O recuo é o evento que a operação quer saber na hora. */
+  'mudanca.revertida',
 ] as const;
 
 export type EventoDeWebhook = (typeof EVENTOS_DE_WEBHOOK)[number];

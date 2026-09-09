@@ -9,6 +9,9 @@ import type {
   ActorRole,
   AgreementKind,
   ApprovalStatus,
+  ChangeKind,
+  ChangeRisk,
+  ChangeStatus,
   Channel,
   EventPayload,
   EventType,
@@ -146,6 +149,8 @@ export type TicketDetail = TicketListItem & {
    * sair da tela — e é daqui que a sugestão sabe qual já foi vinculado.
    */
   problem: TicketProblemRef | null;
+  /** A mudança que vai resolver este chamado, quando há uma. */
+  change: TicketChangeRef | null;
 };
 
 export type TicketProblemRef = {
@@ -154,6 +159,14 @@ export type TicketProblemRef = {
   title: string;
   isKnownError: boolean;
   workaround: string | null;
+};
+
+export type TicketChangeRef = {
+  id: string;
+  number: number;
+  title: string;
+  status: ChangeStatus;
+  windowStart: string | null;
 };
 
 export type AttachmentView = {
@@ -241,9 +254,21 @@ export type TicketQuery = {
 // Aprovação
 // ---------------------------------------------------------------------
 
+/**
+ * O que espera aprovação.
+ *
+ * Desde a Fase 4 são dois: chamado e mudança. A união discriminada
+ * substituiu um campo `ticket` obrigatório — que obrigaria a tela de
+ * "minhas aprovações" a mentir sobre metade das linhas, ou a existir
+ * duas vezes.
+ */
+export type ApprovalTarget =
+  | { kind: 'CHAMADO'; id: string; number: number; title: string }
+  | { kind: 'MUDANCA'; id: string; number: number; title: string };
+
 export type ApprovalView = {
   id: string;
-  ticket: { id: string; number: number; subject: string };
+  alvo: ApprovalTarget;
   step: number;
   quorum: number;
   approver: PartyRef;
@@ -551,6 +576,72 @@ export type ErroConhecidoSugerido = {
   status: ProblemStatus;
   /** Aderência da busca de texto, de 0 a 1. */
   score: number;
+};
+
+// ---------------------------------------------------------------------
+// Mudança
+// ---------------------------------------------------------------------
+
+export type MudancaResumo = {
+  id: string;
+  number: number;
+  title: string;
+  status: ChangeStatus;
+  kind: ChangeKind;
+  risk: ChangeRisk;
+  category: CategoryRef | null;
+  assignedTeam: PartyRef | null;
+  assignedUser: PartyRef | null;
+  windowStart: string | null;
+  windowEnd: string | null;
+  /** Quantos chamados esta mudança carrega. */
+  ticketCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MudancaDetalhe = MudancaResumo & {
+  description: string;
+  implementationPlan: string | null;
+  testPlan: string | null;
+  rollbackPlan: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  /** O que de fato aconteceu, escrito depois da execução. */
+  outcome: string | null;
+  problem: { id: string; number: number; title: string } | null;
+  tickets: ProblemaChamadoRef[];
+  approvals: ApprovalView[];
+};
+
+export type EscreverMudancaRequest = {
+  title: string;
+  description: string;
+  status?: ChangeStatus;
+  kind?: ChangeKind;
+  risk?: ChangeRisk;
+  categoryId?: string | null;
+  assignedTeamId?: string | null;
+  assignedUserId?: string | null;
+  implementationPlan?: string | null;
+  testPlan?: string | null;
+  rollbackPlan?: string | null;
+  windowStart?: string | null;
+  windowEnd?: string | null;
+  outcome?: string | null;
+  problemId?: string | null;
+};
+
+export type MudancaQuery = {
+  q?: string;
+  status?: ChangeStatus;
+  kind?: ChangeKind;
+  risk?: ChangeRisk;
+  abertas?: boolean;
+  /** Só as com janela dentro do intervalo — é o que a agenda pede. */
+  de?: string;
+  ate?: string;
+  limit?: number;
 };
 
 // ---------------------------------------------------------------------

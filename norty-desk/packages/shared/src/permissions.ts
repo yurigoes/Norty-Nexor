@@ -66,6 +66,12 @@ export const PERMISSIONS = [
   'problema:ler',
   'problema:gerenciar',
 
+  // --- Mudança --------------------------------------------------------
+  'mudanca:ler',
+  'mudanca:gerenciar',
+  /** Declarar executada, concluída ou revertida. */
+  'mudanca:executar',
+
   // --- Base de conhecimento -------------------------------------------
   'artigo:ler',
   'artigo:ler:interno',
@@ -127,6 +133,8 @@ const IMPLICA: Partial<Record<Permission, readonly Permission[]>> = {
   'artigo:ler:interno': ['artigo:ler'],
   'ativo:gerenciar': ['ativo:ler'],
   'problema:gerenciar': ['problema:ler'],
+  'mudanca:gerenciar': ['mudanca:ler'],
+  'mudanca:executar': ['mudanca:ler'],
   'satisfacao:configurar': ['satisfacao:ler'],
 };
 
@@ -193,6 +201,13 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
      * raiz é outra conversa, e o GLPI acerta ao separar as duas.
      */
     'problema:ler',
+    /**
+     * Executar sem poder aprovar: quem passa a madrugada aplicando a
+     * mudança é quem sabe dizer se ela deu certo, e obrigar um
+     * supervisor a marcar "concluída" às três da manhã só produz
+     * registro atrasado. O aval continua sendo de outro.
+     */
+    'mudanca:executar',
   ],
 
   SUPERVISOR: [
@@ -236,6 +251,9 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'ativo:gerenciar',
     'problema:ler',
     'problema:gerenciar',
+    'mudanca:ler',
+    'mudanca:gerenciar',
+    'mudanca:executar',
     'satisfacao:ler',
   ],
 
@@ -259,6 +277,7 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'auditoria:ler',
     'ativo:ler',
     'problema:ler',
+    'mudanca:ler',
     'satisfacao:ler',
   ],
 

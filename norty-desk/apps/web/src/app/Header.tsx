@@ -23,6 +23,8 @@ const TITULOS: { prefixo: string; titulo: string }[] = [
   { prefixo: '/problemas/erros-conhecidos', titulo: 'Erros conhecidos' },
   { prefixo: '/problemas/', titulo: 'Problema' },
   { prefixo: '/problemas', titulo: 'Problemas' },
+  { prefixo: '/mudancas/', titulo: 'Mudança' },
+  { prefixo: '/mudancas', titulo: 'Mudanças' },
   { prefixo: '/aprovacoes', titulo: 'Aprovações' },
   { prefixo: '/conhecimento', titulo: 'Base de conhecimento' },
   { prefixo: '/chamados/novo', titulo: 'Abrir chamado' },

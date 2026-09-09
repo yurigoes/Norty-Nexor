@@ -159,6 +159,7 @@ o construtor visual de regras de entrada (o motor e a API existem).
 - **Problema** — causa raiz, chamados vinculados, base de erros
   conhecidos. ✅ *(entregue — `docs/07-api.md`, seção 11)*
 - **Mudança** — aprovação, janela de execução, plano de recuo.
+  ✅ *(entregue — `docs/07-api.md`, seção 12)*
 - **Chamado recorrente** — manutenção preventiva em agenda.
 - **Formulário dinâmico por categoria** — o `TicketForm` que ficou da
   Fase 1, com a tela de configuração que o alimenta.

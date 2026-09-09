@@ -127,6 +127,16 @@ export function Sidebar() {
           </Link>
         ) : null}
 
+        {can('mudanca:ler') ? (
+          <Link
+            to="/mudancas"
+            className="nav-item"
+            aria-current={local.pathname.startsWith('/mudancas') ? 'page' : undefined}
+          >
+            <span>Mudanças</span>
+          </Link>
+        ) : null}
+
         {can('artigo:ler') ? (
           <Link
             to="/conhecimento"

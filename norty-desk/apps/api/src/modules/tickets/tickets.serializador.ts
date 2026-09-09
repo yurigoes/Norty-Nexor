@@ -29,6 +29,7 @@ export const INCLUDE_DETALHE = {
   pendingReason: true,
   links: { include: { target: true } },
   problem: { select: { id: true, number: true, title: true, isKnownError: true, workaround: true } },
+  change: { select: { id: true, number: true, title: true, status: true, windowStart: true } },
   _count: { select: { attachments: true } },
 } satisfies Prisma.TicketInclude;
 
@@ -157,6 +158,9 @@ export function paraDetalhe(chamado: ChamadoDetalhe): TicketDetail {
     })),
     attachmentCount: chamado._count.attachments,
     problem: chamado.problem,
+    change: chamado.change
+      ? { ...chamado.change, windowStart: chamado.change.windowStart?.toISOString() ?? null }
+      : null,
   };
 }
 
