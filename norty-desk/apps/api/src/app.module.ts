@@ -16,7 +16,18 @@ import { TicketsModule } from './modules/tickets/tickets.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    /**
+     * `NODE_ENV=test` lê `.env.test`, e só ele.
+     *
+     * Sem esta linha o `ConfigModule` cai no `.env` de
+     * desenvolvimento: a suíte apontaria para o banco de trabalho —
+     * que ela trunca a cada execução — e usaria os transportes de
+     * verdade em vez do simulado. Aconteceu.
+     */
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: process.env.NODE_ENV === 'test' ? '.env.test' : '.env',
+    }),
     ScheduleModule.forRoot(),
     PrismaModule,
     HealthModule,

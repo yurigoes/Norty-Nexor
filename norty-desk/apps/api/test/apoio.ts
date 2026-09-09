@@ -42,12 +42,34 @@ export async function subirApi(): Promise<Api> {
 }
 
 /**
+ * Recusa apagar um banco que não seja o da suíte.
+ *
+ * `limparBanco` trunca tudo. Se a suíte subir com a configuração de
+ * desenvolvimento — bastou `.env.test` não ser carregado — ela apaga o
+ * banco de trabalho sem avisar. Aconteceu, e o custo de conferir o nome
+ * é uma consulta.
+ */
+function exigirBancoDeTeste(): void {
+  const url = process.env.DATABASE_URL ?? '';
+  const nome = url.split('?')[0]?.split('/').pop() ?? '';
+
+  if (!nome.endsWith('_test')) {
+    throw new Error(
+      `A suíte está apontada para o banco "${nome}", que não termina em "_test". ` +
+        'Recusei truncar. Rode com `npm run test:e2e`, que carrega o `.env.test`.',
+    );
+  }
+}
+
+/**
  * Limpa o banco entre execuções.
  *
  * `TRUNCATE ... CASCADE` numa lista montada do catálogo: acrescentar uma
  * tabela ao schema não exige lembrar de acrescentá-la aqui.
  */
 export async function limparBanco(): Promise<void> {
+  exigirBancoDeTeste();
+
   const tabelas = await prisma.$queryRaw<{ tablename: string }[]>`
     SELECT tablename FROM pg_tables
     WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'
@@ -245,4 +267,6 @@ export class Cliente {
 
   get = <T = unknown>(caminho: string) => this.chamar<T>('GET', caminho);
   post = <T = unknown>(caminho: string, corpo?: unknown) => this.chamar<T>('POST', caminho, corpo);
+  patch = <T = unknown>(caminho: string, corpo?: unknown) => this.chamar<T>('PATCH', caminho, corpo);
+  del = <T = unknown>(caminho: string) => this.chamar<T>('DELETE', caminho);
 }

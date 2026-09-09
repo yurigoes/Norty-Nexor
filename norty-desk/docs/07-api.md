@@ -253,10 +253,46 @@ POST /v1/channels/whatsapp/accounts/:id/qrcode   → pareia a instância
 POST /v1/channels/whatsapp/enviar                → envio avulso (uso interno)
 ```
 
-### 5.3 Diagnóstico (comum aos dois)
+### 5.3 Contas de canal
+
+Todas exigem `config:canais`, que só o administrador tem: configurar
+canal é mexer em credencial da empresa inteira.
+
+```
+GET    /v1/channels/accounts
+POST   /v1/channels/accounts            { kind, name, config, defaultTeamId? }
+PATCH  /v1/channels/accounts/:id
+DELETE /v1/channels/accounts/:id        → desativa; não exclui
+POST   /v1/channels/accounts/:id/testar
+POST   /v1/channels/accounts/:id/coletar
+```
+
+`kind` é `EMAIL_IMAP`, `EMAIL_SMTP`, `EMAIL_WEBHOOK` ou
+`WHATSAPP_EVOLUTION`, e decide quais campos `config` aceita.
+
+**O segredo nunca sai.** `password`, `apiKey`, `webhookSecret`, `secret`
+e `token` são cifrados em AES-256-GCM antes de gravar, no formato
+`v1:<iv>:<tag>:<cifrado>` (base64url), com a chave em
+`CHANNEL_SECRET_KEY`. Na resposta cada um desses campos vira `true` ou
+`false`: a tela aprende **se** existe segredo, nunca **qual** é.
+
+Devolver esse booleano no `PATCH` significa "não mexi nisso", e a API
+preserva o valor guardado. Sem essa regra, salvar só o nome do canal
+apagaria a senha do IMAP.
+
+`DELETE` desativa em vez de excluir: as mensagens recebidas apontam para
+a conta, e o diagnóstico precisa dela para explicar o passado.
+
+`testar` responde `{ ok, detalhe }` — a conexão com a Evolution para
+WhatsApp, uma coleta para IMAP, e "nada a testar daqui" para webhook.
+Existe porque a alternativa é o operador salvar, ir embora e descobrir
+dois dias depois — pelo cliente reclamando — que a senha estava errada.
+
+### 5.4 Diagnóstico (comum aos dois)
 
 ```
 GET /v1/channels/inbound?processed=false&limit=50
+GET /v1/channels/inbound?processed=descartadas
 GET /v1/channels/inbound/:id            → mensagem original íntegra
 POST /v1/channels/inbound/:id/reprocessar
 GET /v1/channels/outbound?status=FALHOU
@@ -264,7 +300,13 @@ POST /v1/channels/outbound/:id/reenviar
 ```
 
 Esta é a tela que o GLPI não tem: **quando um e-mail não virou chamado,
-dá para ver por quê.**
+dá para ver por quê.** A mensagem fica gravada com corpo e cabeçalhos,
+o motivo do descarte aparece na lista, e `reprocessar` a roda de novo
+depois de o operador corrigir a regra que a descartou errado.
+
+`reenviar` passa pela mesma verificação de nota interna do despacho
+normal: uma linha de saída que aponte para evento interno falha aqui
+também.
 
 ---
 

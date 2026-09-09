@@ -213,6 +213,9 @@
   flex: none;
 }
 .switch-bolinha {
+  /* `<span>` é inline: sem isto, `width` e `height` não valem e o
+     trilho aparece sem a bolinha. Mesmo defeito que `.conta-nome`. */
+  display: block;
   width: 17px; height: 17px;
   border-radius: 50%;
   background: var(--branco);
@@ -628,7 +631,13 @@
   border-bottom: 1px solid var(--borda-suave);
   flex: none;
 }
-.modal-corpo { padding: var(--e-5); overflow-y: auto; flex: 1; }
+.modal-corpo { padding: var(--e-5); overflow-y: auto; flex: 1; min-height: 0; }
+
+/* O modal é uma coluna de três partes. Quando o conteúdo é um
+   formulário, o `<form>` fica no meio do caminho e quebra a coluna: o
+   corpo deixa de rolar e o rodapé — onde está "Salvar" — é empurrado
+   para fora da tela. Esta classe devolve o elo. */
+.modal-forma { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .modal-rodape {
   display: flex;
   align-items: center;
@@ -965,6 +974,48 @@
 .paginacao-num[aria-current='page'] { background: var(--azul-600); color: var(--branco); }
 .paginacao-num:disabled { opacity: .4; cursor: not-allowed; }
 
+/* ---------- [DESK] Lista de definição ----------
+   Configuração de canal e cabeçalho de mensagem: pares
+   rótulo/valor que não são formulário nem tabela. Em duas
+   colunas o rótulo alinha e o olho desce por uma coluna só. */
+
+.lista-definicao { display: flex; flex-direction: column; gap: var(--e-2); margin: 0; }
+
+.lista-definicao-item {
+  display: grid;
+  grid-template-columns: minmax(120px, 200px) minmax(0, 1fr);
+  gap: var(--e-3);
+  align-items: baseline;
+  font-size: var(--t-corpo-sm);
+}
+.lista-definicao-item dt { color: var(--texto-suave); }
+.lista-definicao-item dd { margin: 0; color: var(--texto-forte); word-break: break-word; }
+.lista-definicao-item dd.-mono { font-family: var(--fonte-mono); font-size: var(--t-micro); }
+
+/* [DESK] Texto bruto: corpo de e-mail e cabeçalhos no
+   diagnóstico. Rola no eixo próprio — a mensagem que chega tem
+   linha de 300 caracteres, e ela não pode empurrar a página. */
+.bloco-bruto {
+  margin: 0;
+  padding: var(--e-3);
+  max-height: 320px;
+  overflow: auto;
+  background: var(--superficie-afundada);
+  border: 1px solid var(--borda-suave);
+  border-radius: var(--r-md);
+  font-family: var(--fonte-mono);
+  font-size: var(--t-micro);
+  line-height: 1.6;
+  color: var(--texto-forte);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Régua simples entre blocos de um mesmo formulário. O
+   `.divisor-texto` já existia, mas ele carrega rótulo — aqui
+   só se quer separar. */
+.divisor { height: 1px; border: 0; background: var(--borda-suave); margin: var(--e-2) 0; }
+
 /* ---------- Animações de entrada ---------- */
 
 .aparece { animation: aparecer var(--tr-lenta) both; }
@@ -991,6 +1042,8 @@
      a fila é `.chamado-card`, montada pelo componente. */
   .chamado-card { grid-template-columns: minmax(0, 1fr); }
   .chamado-card-lado { flex-direction: row; align-items: center; justify-content: space-between; width: 100%; }
+
+  .lista-definicao-item { grid-template-columns: minmax(0, 1fr); gap: 0; }
 
   .responder-acoes .select { flex: 1 1 140px; }
   .responder-enviar { flex: 1 0 100%; margin-left: 0; }

@@ -2,6 +2,8 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import { ProvedorDeAutenticacao, useAutenticacao } from '../auth/Autenticacao';
 import { Login } from '../modules/auth/Login';
+import { Canais } from '../modules/canais/Canais';
+import { Diagnostico } from '../modules/canais/Diagnostico';
 import { Chamado } from '../modules/chamado/Chamado';
 import { NovoChamado } from '../modules/chamado/NovoChamado';
 import { MarcaConfig } from '../modules/config/MarcaConfig';
@@ -58,6 +60,8 @@ function Aplicativo() {
             <Route path="/chamados/novo" element={<NovoChamado />} />
             <Route path="/chamados/:id" element={<Chamado />} />
             <Route path="/config/marca" element={<MarcaConfig />} />
+            <Route path="/config/canais" element={<Canais />} />
+            <Route path="/config/canais/diagnostico" element={<Diagnostico />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

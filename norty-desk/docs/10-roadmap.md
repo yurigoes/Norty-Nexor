@@ -56,27 +56,47 @@ abrir chamado já funciona sem ele.
 
 ---
 
-## Fase 2 — Canais e prazos
+## Fase 2 — Canais e prazos — **entregue**
 
 O que diferencia o Desk do GLPI.
 
-| Entrega | Detalhe |
-|---|---|
-| **E-mail entrada** | IMAP + webhook, threading, limpeza de citação |
-| **E-mail saída** | fila, `Message-ID`, `In-Reply-To`, remetente do time |
-| **WhatsApp entrada** | webhook da Evolution, janela de conversa, menu |
-| **WhatsApp saída** | texto e mídia, retentativa com backoff |
-| **Anexo por canal** | foto e PDF do WhatsApp, anexo de e-mail |
-| Diagnóstico de canal | mensagem original, motivo do descarte, reprocessar |
-| SLA e OLA | aplicação, pausa, retomada, cumprimento, violação |
-| Escalonamento | níveis com critérios e ações, cron |
-| Motivos de pendência | cobrança automática e resolução por inatividade |
-| Regras de entrada | classificação automática na abertura |
-| Intake público | `ApiKey` com escopos, `Idempotency-Key` |
+| Entrega | Detalhe | Situação |
+|---|---|---|
+| **E-mail entrada** | IMAP + webhook, threading, limpeza de citação | pronto |
+| **E-mail saída** | fila, `Message-ID`, `In-Reply-To`, remetente do time | pronto |
+| **WhatsApp entrada** | webhook da Evolution, janela de conversa, menu | pronto |
+| **WhatsApp saída** | texto e mídia, retentativa com backoff | pronto |
+| **Anexo por canal** | foto e PDF do WhatsApp, anexo de e-mail | pronto |
+| Diagnóstico de canal | mensagem original, motivo do descarte, reprocessar | pronto |
+| Configuração de canal | conta por tipo, segredo cifrado, testar e coletar | pronto |
+| SLA e OLA | aplicação, pausa, retomada, cumprimento, violação | pronto |
+| Escalonamento | níveis com critérios e ações, cron | pronto |
+| Motivos de pendência | cobrança automática e resolução por inatividade | pronto |
+| Regras de entrada | classificação automática na abertura | pronto |
+| Intake público | `ApiKey` com escopos, `Idempotency-Key` | pronto |
 
 **Pronto quando:** um cliente abre chamado por WhatsApp, manda uma foto,
 recebe resposta no WhatsApp, e o SLA é medido corretamente com o
-expediente do calendário.
+expediente do calendário. — **atingido.**
+
+**Verificação:** 151 testes de ponta a ponta e de unidade contra
+Postgres real. Cobrem o threading de e-mail, a janela de conversa do
+WhatsApp, a cifragem dos segredos de canal, a idempotência da entrada, o
+escalonamento e a cobrança de pendência. Dois deles existem só para
+provar que nota interna não sai por canal externo — um pela fila normal,
+outro forjando a linha de saída para exercitar a segunda verificação.
+
+**Segredo de canal.** Senha de IMAP, chave da Evolution e segredo de
+webhook são cifrados em AES-256-GCM (`v1:<iv>:<tag>:<cifrado>`) com
+`CHANNEL_SECRET_KEY`. A API nunca devolve o valor: a tela recebe `true`
+ou `false` — se existe, não qual é — e devolver o booleano ao salvar
+preserva o que já estava lá. Sem isso, renomear um canal apagaria a
+senha da caixa.
+
+**O que ficou de fora e por quê:** a tela de configuração de regras de
+entrada. O motor, a API e os testes existem; falta o construtor visual
+de critérios, que pertence à mesma tela de configuração de categorias da
+Fase 3. Até lá as regras se criam pela API.
 
 ---
 

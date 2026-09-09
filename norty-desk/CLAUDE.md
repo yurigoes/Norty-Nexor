@@ -18,6 +18,39 @@ docs            Discovery: mapa do GLPI, gap analysis, especificações
 infra           docker-compose, Caddy, Dockerfiles, .env.example
 ```
 
+## Comandos
+
+```bash
+npm install              # instala o monorepo inteiro
+npm run dev:api          # API em http://localhost:3061/v1
+npm run dev:web          # aplicativo em http://localhost:5174
+npm run build            # shared → api → web, nesta ordem
+npm run typecheck
+
+# Banco (precisa de DATABASE_URL em apps/api/.env)
+npm run db:migrate       # aplica migrações
+npm run db:seed          # estrutura base; DEMO=1 popula dados fictícios
+npm run db:test:migrate  # migra o banco da suíte
+
+# Suíte
+npm run test -w @norty-desk/api
+```
+
+Duas armadilhas que já custaram caro aqui:
+
+1. **A suíte precisa do `.env.test`.** Ela roda com
+   `node --env-file=.env.test`, e o `ConfigModule` escolhe o arquivo por
+   `NODE_ENV`. Sem isso ela apontava para o banco de desenvolvimento —
+   que ela trunca a cada execução — e usava os transportes de verdade em
+   vez do simulado. `limparBanco` agora recusa qualquer banco cujo nome
+   não termine em `_test`.
+
+2. **`typecheck` não pode emitir.** Era `tsc -b --noEmit false`, que
+   escrevia `.js` ao lado de cada `.tsx`; o Vite resolve `./Componente`
+   para o `.js` velho antes do `.tsx`, e o aplicativo congelava na versão
+   do momento em que alguém rodou o typecheck. Hoje é
+   `tsc -p tsconfig.json --noEmit`.
+
 ## Regras de arquitetura
 
 1. **O domínio mora em `packages/shared`.**

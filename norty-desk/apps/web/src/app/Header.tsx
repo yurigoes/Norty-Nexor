@@ -1,18 +1,50 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAutenticacao } from '../auth/Autenticacao';
 
+/**
+ * O título de cada rota.
+ *
+ * A barra ficava escrita "Chamados" em toda tela, inclusive na
+ * configuração de canais — e a busca, que só faz sentido na fila,
+ * escrevia `?q=` na URL da configuração e não acontecia nada.
+ */
+const TITULOS: { prefixo: string; titulo: string }[] = [
+  { prefixo: '/config/canais/diagnostico', titulo: 'Diagnóstico de canais' },
+  { prefixo: '/config/canais', titulo: 'Canais' },
+  { prefixo: '/config/marca', titulo: 'Marca' },
+  { prefixo: '/chamados/novo', titulo: 'Abrir chamado' },
+  { prefixo: '/chamados/', titulo: 'Chamado' },
+  { prefixo: '/', titulo: 'Chamados' },
+];
+
+function tituloDa(caminho: string): string {
+  return TITULOS.find((t) => caminho.startsWith(t.prefixo))?.titulo ?? 'Chamados';
+}
+
 export function Header() {
   const navegar = useNavigate();
+  const local = useLocation();
   const { can } = useAutenticacao();
   const [parametros, definirParametros] = useSearchParams();
   const [busca, setBusca] = useState(parametros.get('q') ?? '');
 
+  const naFila = local.pathname === '/';
+
   function pesquisar(evento: FormEvent) {
     evento.preventDefault();
+    const termo = busca.trim();
+
+    // Fora da fila, buscar leva para a fila com o termo aplicado. Antes
+    // a busca escrevia na URL da tela em que estava e não fazia nada.
+    if (!naFila) {
+      navegar(termo ? `/?q=${encodeURIComponent(termo)}` : '/');
+      return;
+    }
+
     const proximos = new URLSearchParams(parametros);
-    if (busca.trim()) proximos.set('q', busca.trim());
+    if (termo) proximos.set('q', termo);
     else proximos.delete('q');
     definirParametros(proximos);
   }
@@ -20,7 +52,7 @@ export function Header() {
   return (
     <header className="header">
       <div className="header-titulo">
-        <h1>Chamados</h1>
+        <h1>{tituloDa(local.pathname)}</h1>
       </div>
 
       <div className="header-acoes">
@@ -30,12 +62,11 @@ export function Header() {
           </label>
           <input
             id="busca-global"
-            className="input"
+            className="input busca-global"
             type="search"
             placeholder="Número, assunto ou solicitante"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
-            style={{ minWidth: 280, paddingLeft: 'var(--e-3)' }}
           />
         </form>
 

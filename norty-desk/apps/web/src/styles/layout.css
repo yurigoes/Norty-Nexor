@@ -182,6 +182,10 @@
 
 .header-acoes { display: flex; align-items: center; gap: var(--e-2); flex: none; }
 
+/* A largura da busca mora aqui, e não num `style` embutido: embutida,
+   nenhuma media query conseguiria encolhê-la no celular. */
+.busca-global { min-width: 280px; padding-left: var(--e-3); }
+
 .conteudo {
   flex: 1;
   padding: var(--e-5) var(--e-6) var(--e-16);
@@ -279,6 +283,19 @@
 
   .header { padding: 0 var(--e-4); gap: var(--e-3); }
   .header-titulo h1 { font-size: var(--t-h4); }
+
+  /* Num celular não cabem título, busca de 280px e botão na mesma
+     linha: a busca passava por cima do título. Aqui a busca encolhe —
+     ela é a única do produto e não pode sumir — e o título corta. */
+  /* `flex: none` no bloco de ações fazia o botão sair pela direita:
+     encolher a busca por dentro não adianta se o bloco não cede. */
+  .header-acoes { flex: 1 1 auto; min-width: 0; justify-content: flex-end; }
+  .header .busca { flex: 1 1 90px; min-width: 0; }
+  .busca-global { min-width: 0; }
+  /* O título tem prioridade sobre a busca: sem um piso ele encolhe a
+     zero e a tela fica sem dizer onde se está. */
+  .header-titulo { flex: 1 1 auto; min-width: 72px; }
+  .header-titulo h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .trilha { display: none; }
   .conteudo { padding: var(--e-4) var(--e-4) 96px; }
 

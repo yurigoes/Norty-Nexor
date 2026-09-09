@@ -2,7 +2,7 @@ import { Link, useLocation, useSearchParams } from 'react-router-dom';
 
 import { useMarca } from '../api/marca';
 import { useAutenticacao } from '../auth/Autenticacao';
-import { Marca } from '../components/Marca';
+import { MarcaCompleta } from '../components/Marca';
 import { iniciais } from '../lib/formato';
 
 /**
@@ -48,17 +48,29 @@ export function Sidebar() {
     { rotulo: 'Marca', para: '/config/marca', permissao: 'organizacao:gerenciar' as const },
     { rotulo: 'Categorias', para: null, permissao: 'config:categorias' as const },
     { rotulo: 'SLA e calendários', para: null, permissao: 'config:sla' as const },
-    { rotulo: 'Canais', para: null, permissao: 'config:canais' as const },
+    { rotulo: 'Canais', para: '/config/canais', permissao: 'config:canais' as const },
+    {
+      rotulo: 'Diagnóstico',
+      para: '/config/canais/diagnostico',
+      permissao: 'config:canais' as const,
+    },
     { rotulo: 'Pessoas e times', para: null, permissao: 'pessoa:gerenciar' as const },
   ].filter((item) => can(item.permissao));
 
   return (
     <aside className="sidebar">
       <div className="sidebar-topo">
-        <Marca logoUrl={marca.logoUrl} nome={marca.productName} tamanho={28} />
-        {!marca.logoUrl ? (
-          <span className="marca-texto conta-nome">{marca.productName}</span>
-        ) : null}
+        {/* `MarcaCompleta` com `inversa`: o nome ao lado do símbolo
+            precisa do modificador claro. Antes a barra emprestava a cor
+            de `.conta-nome`, e `publico.css` — que vem depois na
+            cascata — a devolvia para `--azul-900`: azul-marinho sobre
+            azul-marinho. */}
+        <MarcaCompleta
+          logoUrl={marca.logoUrl}
+          nome={marca.productName}
+          tamanho={28}
+          inversa
+        />
       </div>
 
       <nav className="sidebar-nav" aria-label="Navegação principal">

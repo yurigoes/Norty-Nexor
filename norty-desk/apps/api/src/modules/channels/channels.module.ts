@@ -6,6 +6,9 @@ import { RegrasModule } from '../regras/regras.module';
 import { TicketsModule } from '../tickets/tickets.module';
 import { PORTAS_DE_ENVIO, type PortasDeEnvio } from './canais.tokens';
 import { ProcessamentoService } from './processamento.service';
+import { AuthModule } from '../auth/auth.module';
+import { CanaisController } from './canais.controller';
+import { ColetaJob } from './coleta.job';
 import { DespachoJob } from './despacho.job';
 import { EmailController } from './email.controller';
 import { EntradaService } from './entrada.service';
@@ -48,14 +51,21 @@ function criarPortas(
    * abrir. O ciclo é real e é do domínio — resolvê-lo movendo código
    * criaria um terceiro módulo que não corresponde a nada.
    */
-  imports: [ConfigModule, AttachmentsModule, RegrasModule, forwardRef(() => TicketsModule)],
-  controllers: [EmailController, WhatsappController],
+  imports: [
+    ConfigModule,
+    AttachmentsModule,
+    RegrasModule,
+    AuthModule,
+    forwardRef(() => TicketsModule),
+  ],
+  controllers: [EmailController, WhatsappController, CanaisController],
   providers: [
     EntradaService,
     SaidaService,
     EvolutionClient,
     EnvioSimulado,
     DespachoJob,
+    ColetaJob,
     ProcessamentoService,
     {
       provide: PORTAS_DE_ENVIO,
@@ -63,6 +73,6 @@ function criarPortas(
       useFactory: criarPortas,
     },
   ],
-  exports: [EntradaService, SaidaService, EvolutionClient, EnvioSimulado, DespachoJob, ProcessamentoService],
+  exports: [EntradaService, SaidaService, EvolutionClient, EnvioSimulado, DespachoJob, ColetaJob, ProcessamentoService],
 })
 export class ChannelsModule {}
