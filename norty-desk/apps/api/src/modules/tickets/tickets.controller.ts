@@ -1,5 +1,19 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import type {
+  Paginated,
+  TicketDetail,
+  TicketEventView,
+  TicketListItem,
+} from '@norty-desk/shared';
 
 import { CurrentUser, type UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
@@ -9,6 +23,7 @@ import {
   AtribuirDto,
   ClassificarDto,
   CriarChamadoDto,
+  FiltroFilaDto,
   PausarDto,
   ReabrirDto,
   ResolverDto,
@@ -18,10 +33,11 @@ import {
 import { TicketsService } from './tickets.service';
 
 /**
- * Rotas de chamado. A especificação está em `docs/07-api.md`, seção 3.
+ * Rotas de chamado (`docs/07-api.md`, seção 3).
  *
- * Toda rota carrega a permissão nomeada que a protege; o escopo de
- * leitura é aplicado dentro do service, sempre.
+ * Toda rota carrega a permissão nomeada que a protege. O escopo de
+ * leitura é aplicado dentro do service, sempre — autorização diz se a
+ * rota abre, escopo diz quais linhas voltam.
  */
 @Controller('tickets')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -30,58 +46,88 @@ export class TicketsController {
 
   @Get()
   @RequirePermission('chamado:ler:proprios')
-  listar(@CurrentUser() usuario: UsuarioAutenticado, @Query('limit') limite?: string) {
-    return this.tickets.listar(usuario, {}, limite ? Number(limite) : 50);
+  listar(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Query() filtro: FiltroFilaDto,
+  ): Promise<Paginated<TicketListItem>> {
+    return this.tickets.listar(usuario, filtro);
   }
 
   @Get(':id')
   @RequirePermission('chamado:ler:proprios')
-  obter(@CurrentUser() usuario: UsuarioAutenticado, @Param('id', ParseUUIDPipe) id: string) {
+  obter(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<TicketDetail> {
     return this.tickets.obter(usuario, id);
+  }
+
+  @Get(':id/eventos')
+  @RequirePermission('chamado:ler:proprios')
+  eventos(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('limit') limite?: string,
+  ): Promise<TicketEventView[]> {
+    return this.tickets.eventos(usuario, id, limite ? Number(limite) : 100);
   }
 
   @Post()
   @RequirePermission('chamado:criar')
-  criar(@CurrentUser() usuario: UsuarioAutenticado, @Body() dto: CriarChamadoDto) {
-    return this.tickets.abrir(usuario.organizationId, {
-      subject: dto.subject,
-      description: dto.description,
-      type: dto.type ?? 'INCIDENTE',
-      urgency: TicketsService.exigirEscala(dto.urgency ?? 3, 'urgency'),
-      impact: TicketsService.exigirEscala(dto.impact ?? 3, 'impact'),
-      categoryId: dto.categoryId,
-      formId: dto.formId,
-      originChannel: 'WEB',
-      customFields: (dto.customFields as Prisma.InputJsonValue | undefined) ?? undefined,
-    });
+  criar(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Body() dto: CriarChamadoDto,
+  ): Promise<TicketDetail> {
+    return this.tickets.abrir(usuario, dto);
   }
 
   @Post(':id/responder')
   @RequirePermission('chamado:responder')
   responder(
-    @CurrentUser() _usuario: UsuarioAutenticado,
-    @Param('id', ParseUUIDPipe) _id: string,
-    @Body() _dto: ResponderDto,
-  ): never {
-    throw new Error('Não implementado — Fase 1 do roadmap (docs/10-roadmap.md).');
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ResponderDto,
+  ): Promise<TicketEventView> {
+    return this.tickets.responder(usuario, id, dto);
   }
 
   @Post(':id/atribuir')
-  @RequirePermission('chamado:atribuir')
-  atribuir(@Param('id', ParseUUIDPipe) _id: string, @Body() _dto: AtribuirDto): never {
-    throw new Error('Não implementado — Fase 1 do roadmap (docs/10-roadmap.md).');
+  @RequirePermission('chamado:atribuir:a-mim')
+  atribuir(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AtribuirDto,
+  ): Promise<TicketDetail> {
+    return this.tickets.atribuir(usuario, id, dto);
   }
 
   @Post(':id/classificar')
   @RequirePermission('chamado:classificar')
-  classificar(@Param('id', ParseUUIDPipe) _id: string, @Body() _dto: ClassificarDto): never {
-    throw new Error('Não implementado — Fase 1 do roadmap (docs/10-roadmap.md).');
+  classificar(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ClassificarDto,
+  ): Promise<TicketDetail> {
+    return this.tickets.classificar(usuario, id, dto);
   }
 
   @Post(':id/pausar')
   @RequirePermission('chamado:pausar')
-  pausar(@Param('id', ParseUUIDPipe) _id: string, @Body() _dto: PausarDto): never {
-    throw new Error('Não implementado — Fase 2 do roadmap (docs/10-roadmap.md).');
+  pausar(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PausarDto,
+  ): Promise<TicketDetail> {
+    return this.tickets.pausar(usuario, id, dto.pendingReasonId, dto.body);
+  }
+
+  @Post(':id/retomar')
+  @RequirePermission('chamado:pausar')
+  retomar(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<TicketDetail> {
+    return this.tickets.retomar(usuario, id);
   }
 
   @Post(':id/resolver')
@@ -89,14 +135,17 @@ export class TicketsController {
   resolver(
     @CurrentUser() usuario: UsuarioAutenticado,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() _dto: ResolverDto,
-  ) {
-    return this.tickets.mudarStatus(usuario, id, 'SOLUCIONADO');
+    @Body() dto: ResolverDto,
+  ): Promise<TicketDetail> {
+    return this.tickets.mudarStatus(usuario, id, 'SOLUCIONADO', dto.body);
   }
 
   @Post(':id/fechar')
   @RequirePermission('chamado:fechar')
-  fechar(@CurrentUser() usuario: UsuarioAutenticado, @Param('id', ParseUUIDPipe) id: string) {
+  fechar(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<TicketDetail> {
     return this.tickets.mudarStatus(usuario, id, 'FECHADO');
   }
 
@@ -105,14 +154,18 @@ export class TicketsController {
   reabrir(
     @CurrentUser() usuario: UsuarioAutenticado,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() _dto: ReabrirDto,
-  ) {
-    return this.tickets.mudarStatus(usuario, id, 'ATRIBUIDO');
+    @Body() dto: ReabrirDto,
+  ): Promise<TicketDetail> {
+    return this.tickets.mudarStatus(usuario, id, 'ATRIBUIDO', dto.body);
   }
 
   @Post(':id/vincular')
   @RequirePermission('chamado:vincular')
-  vincular(@Param('id', ParseUUIDPipe) _id: string, @Body() _dto: VincularDto): never {
-    throw new Error('Não implementado — Fase 1 do roadmap (docs/10-roadmap.md).');
+  vincular(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: VincularDto,
+  ): Promise<TicketDetail> {
+    return this.tickets.vincular(usuario, id, dto);
   }
 }

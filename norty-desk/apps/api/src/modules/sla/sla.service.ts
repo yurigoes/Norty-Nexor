@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { TargetKind } from '@norty-desk/shared';
 
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { type Calendario, calcularVencimento, segundosDeExpediente } from './calendario';
@@ -62,6 +63,34 @@ export class SlaService {
           dueAt,
         },
         update: { agreementId: acordo.id, startedAt: inicio, dueAt, escalationLevel: 0 },
+      });
+    }
+  }
+
+  /**
+   * Marca um compromisso como cumprido.
+   *
+   * `achievedAt` e `breachedAt` são gravados uma única vez, no momento
+   * do fato — relatório de SLA lê essas duas colunas e nunca recalcula
+   * prazo histórico. Mudar o acordo hoje não pode reescrever o
+   * desempenho de ontem (`docs/05-sla.md`, seção 7).
+   */
+  async cumprir(ticketId: string, target: TargetKind, quando = new Date()): Promise<void> {
+    const compromissos = await this.prisma.slaCommitment.findMany({
+      where: { ticketId, target, achievedAt: null },
+    });
+
+    for (const compromisso of compromissos) {
+      await this.prisma.slaCommitment.update({
+        where: { id: compromisso.id },
+        data: {
+          achievedAt: quando,
+          // A violação só é registrada aqui se ainda não estava: o cron
+          // de escalonamento pode ter marcado antes, e a hora dele é a
+          // que vale.
+          breachedAt:
+            compromisso.breachedAt ?? (quando > compromisso.dueAt ? compromisso.dueAt : null),
+        },
       });
     }
   }

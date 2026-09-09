@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
 
+import { SlaModule } from '../sla/sla.module';
 import { TicketsController } from './tickets.controller';
 import { TicketsService } from './tickets.service';
 
 @Module({
-  imports: [JwtModule.register({ secret: process.env.JWT_SECRET })],
+  imports: [SlaModule],
   controllers: [TicketsController],
   providers: [TicketsService],
   exports: [TicketsService],

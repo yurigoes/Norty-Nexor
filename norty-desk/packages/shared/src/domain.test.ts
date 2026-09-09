@@ -85,3 +85,29 @@ test('administrador tem todas as permissões', () => {
   assert.equal(can('ADMINISTRADOR', 'config:canais'), true);
   assert.equal(can('ADMINISTRADOR', 'auditoria:ler'), true);
 });
+
+test('quem lê todos os chamados também lê os do time e os próprios', () => {
+  // A rota de leitura exige o escopo mais estreito. Sem a implicação, um
+  // gestor com `ler:todos` levava 403 em `GET /tickets/:id` — defeito
+  // real, pego pela suíte de ponta a ponta.
+  for (const role of ['SUPERVISOR', 'GESTOR', 'ADMINISTRADOR'] as const) {
+    assert.equal(can(role, 'chamado:ler:todos'), true, role);
+    assert.equal(can(role, 'chamado:ler:time'), true, role);
+    assert.equal(can(role, 'chamado:ler:proprios'), true, role);
+  }
+});
+
+test('a implicação não alarga escopo de escrita', () => {
+  // Ler tudo não é escrever em tudo: o gestor continua sem responder.
+  assert.equal(can('GESTOR', 'chamado:responder'), false);
+  assert.equal(can('GESTOR', 'chamado:atribuir'), false);
+  // E o agente, que atribui só a si, não ganha a atribuição ampla.
+  assert.equal(can('AGENTE', 'chamado:atribuir:a-mim'), true);
+  assert.equal(can('AGENTE', 'chamado:atribuir'), false);
+});
+
+test('o escopo de leitura continua sendo o mais amplo do perfil', () => {
+  assert.equal(ticketReadScope('SOLICITANTE'), 'PROPRIOS');
+  assert.equal(ticketReadScope('AGENTE'), 'TIME');
+  assert.equal(ticketReadScope('GESTOR'), 'TODOS');
+});

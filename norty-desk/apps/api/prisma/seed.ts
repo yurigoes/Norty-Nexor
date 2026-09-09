@@ -65,8 +65,9 @@ async function main() {
     { name: 'Interno — resolução', kind: 'OLA' as const, target: 'TTR' as const, durationSeconds: 2 * 9 * 3600 },
   ];
 
+  const acordosCriados = [];
   for (const acordo of acordos) {
-    await prisma.agreement.upsert({
+    acordosCriados.push(await prisma.agreement.upsert({
       where: {
         organizationId_name_kind_target: {
           organizationId: organizacao.id,
@@ -77,8 +78,13 @@ async function main() {
       },
       update: {},
       create: { ...acordo, organizationId: organizacao.id, calendarId: calendario.id },
-    });
+    }));
   }
+
+  // Os acordos externos valem para todo o catálogo. Os internos (OLA)
+  // ficam de fora do padrão: quem os usa, usa por time, e ligá-los a
+  // tudo mediria uma promessa que ninguém fez.
+  const padrao = acordosCriados.filter((a) => a.kind === 'SLA').map((a) => ({ id: a.id }));
 
   // --- Motivos de pendência -----------------------------------------
   await prisma.pendingReason.upsert({
@@ -119,9 +125,19 @@ async function main() {
       select: { id: true },
     });
 
-    if (!existente) {
+    if (existente) {
+      await prisma.category.update({
+        where: { id: existente.id },
+        data: { defaultAgreements: { set: padrao } },
+      });
+    } else {
       await prisma.category.create({
-        data: { organizationId: organizacao.id, name: nome, defaultTeamId: suporte.id },
+        data: {
+          organizationId: organizacao.id,
+          name: nome,
+          defaultTeamId: suporte.id,
+          defaultAgreements: { connect: padrao },
+        },
       });
     }
   }

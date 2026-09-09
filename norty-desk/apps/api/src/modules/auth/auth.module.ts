@@ -1,24 +1,47 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 
-/**
- * Decisões que não devem ser desfeitas (`docs/11-infra.md`, seção 6):
- *
- * - senha em Argon2id; a API nunca devolve o hash;
- * - access token de 15 min em memória no cliente;
- * - refresh token em cookie httpOnly, com rotação a cada uso e hash no
- *   banco;
- * - login com mensagem idêntica para e-mail inexistente e senha errada.
- *
- * Implementação na Fase 1 (`docs/10-roadmap.md`).
- */
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+
 @Module({
   imports: [
-    JwtModule.register({
-      secret: process.env.JWT_SECRET,
-      signOptions: { expiresIn: process.env.JWT_ACCESS_TTL ?? '15m' },
+    /**
+     * `registerAsync`, não `register`.
+     *
+     * O decorador `@Module` é avaliado quando o arquivo é importado —
+     * antes de o `ConfigModule` ter lido o `.env`. Com `register`, o
+     * `process.env.JWT_SECRET` chega vazio e a aplicação sobe inteira
+     * para só falhar no primeiro login, com "secretOrPrivateKey must
+     * have a value". A fábrica assíncrona resolve depois da
+     * configuração, que é quando o valor existe.
+     */
+    JwtModule.registerAsync({
+      global: true,
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const secret = config.get<string>('JWT_SECRET');
+
+        // Falhar aqui é falhar na subida, com a causa escrita. Subir
+        // sem segredo e assinar token vazio seria pior.
+        if (!secret || secret.length < 32) {
+          throw new Error(
+            'JWT_SECRET ausente ou curto demais (mínimo 32 caracteres). ' +
+              'Gere um com: openssl rand -hex 48',
+          );
+        }
+
+        return {
+          secret,
+          signOptions: { expiresIn: config.get<string>('JWT_ACCESS_TTL') ?? '15m' },
+        };
+      },
     }),
   ],
-  exports: [JwtModule],
+  controllers: [AuthController],
+  providers: [AuthService],
+  exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

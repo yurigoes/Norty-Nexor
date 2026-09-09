@@ -1,38 +1,195 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   DEFAULT_PRIORITY_MATRIX,
+  type Paginated,
   type PriorityMatrix,
   type Scale,
+  type TicketDetail,
+  type TicketEventView,
+  type TicketListItem,
   type TicketStatus,
   canTransition,
   computePriority,
 } from '@norty-desk/shared';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
-import { PrismaService } from '../../common/prisma/prisma.service';
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
+import { PrismaService } from '../../common/prisma/prisma.service';
+import { SlaService } from '../sla/sla.service';
 import { escopoDeLeitura } from './tickets.escopo';
+import {
+  INCLUDE_DETALHE,
+  INCLUDE_EVENTO,
+  INCLUDE_LISTA,
+  paraDetalhe,
+  paraEvento,
+  paraLista,
+} from './tickets.serializador';
+import type {
+  AtribuirDto,
+  ClassificarDto,
+  CriarChamadoDto,
+  FiltroFilaDto,
+  ParteDto,
+  ResponderDto,
+  VincularDto,
+} from './dto';
+
+/** O cursor é opaco de propósito: hoje é um id, amanhã pode ser outra coisa. */
+function paraCursor(id: string): string {
+  return Buffer.from(id, 'utf8').toString('base64url');
+}
+function doCursor(cursor: string): string {
+  return Buffer.from(cursor, 'base64url').toString('utf8');
+}
 
 @Injectable()
 export class TicketsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sla: SlaService,
+  ) {}
+
+  // -------------------------------------------------------------------
+  // Leitura
+  // -------------------------------------------------------------------
 
   /**
-   * Aloca o próximo número da organização.
+   * A fila.
    *
-   * `MAX(number) + 1` corre sob concorrência: duas aberturas simultâneas
-   * pegam o mesmo número e uma delas viola `@@unique`. O bloqueio de
-   * linha resolve, e a transação é curta o bastante para não pesar.
+   * O escopo do perfil entra por cima dos filtros, sempre — autorização
+   * diz se a rota abre, escopo diz quais linhas voltam
+   * (`docs/04-rbac.md`, seção 3).
    */
-  private async proximoNumero(tx: Prisma.TransactionClient, organizationId: string): Promise<number> {
-    const [linha] = await tx.$queryRaw<{ proximo: number }[]>`
-      SELECT COALESCE(MAX(number), 0) + 1 AS proximo
-      FROM tickets
-      WHERE "organizationId" = ${organizationId}::uuid
-      FOR UPDATE
-    `;
-    return linha?.proximo ?? 1;
+  async listar(
+    usuario: UsuarioAutenticado,
+    filtro: FiltroFilaDto,
+  ): Promise<Paginated<TicketListItem>> {
+    const limite = Math.min(filtro.limit ?? 50, 200);
+    const where: Prisma.TicketWhereInput = {
+      AND: [escopoDeLeitura(usuario), this.filtros(usuario, filtro)],
+    };
+
+    const chamados = await this.prisma.ticket.findMany({
+      where,
+      include: INCLUDE_LISTA,
+      // O `id` fecha a ordenação: sem um critério único no fim, dois
+      // chamados de mesma prioridade e mesma data podem trocar de lugar
+      // entre páginas e um deles some.
+      orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
+      take: limite + 1,
+      ...(filtro.cursor ? { cursor: { id: doCursor(filtro.cursor) }, skip: 1 } : {}),
+    });
+
+    const temMais = chamados.length > limite;
+    const pagina = temMais ? chamados.slice(0, limite) : chamados;
+
+    return {
+      data: pagina.map(paraLista),
+      nextCursor: temMais ? paraCursor(pagina[pagina.length - 1]!.id) : null,
+    };
   }
+
+  private filtros(usuario: UsuarioAutenticado, filtro: FiltroFilaDto): Prisma.TicketWhereInput {
+    const where: Prisma.TicketWhereInput = {};
+
+    if (filtro.status?.length) where.status = { in: filtro.status };
+    if (filtro.type) where.type = filtro.type;
+    if (filtro.priority?.length) where.priority = { in: filtro.priority };
+    if (filtro.channel?.length) where.originChannel = { in: filtro.channel };
+    if (filtro.categoryId) where.categoryId = filtro.categoryId;
+
+    if (filtro.assignedTeamId) {
+      where.actors = { some: { role: 'ATRIBUIDO', teamId: filtro.assignedTeamId } };
+    }
+
+    if (filtro.assignedUserId) {
+      const id = filtro.assignedUserId === 'me' ? usuario.userId : filtro.assignedUserId;
+      where.actors = { some: { role: 'ATRIBUIDO', userId: id } };
+    }
+
+    if (filtro.requesterId) {
+      const id = filtro.requesterId === 'me' ? usuario.userId : filtro.requesterId;
+      where.actors = { some: { role: 'REQUERENTE', userId: id } };
+    }
+
+    if (filtro.semAtribuicao) {
+      where.actors = { none: { role: 'ATRIBUIDO' } };
+    }
+
+    // "SLA estourado" e "vence antes de" olham só o que ainda corre:
+    // compromisso cumprido não é problema de ninguém.
+    if (filtro.slaBreached) {
+      where.commitments = { some: { achievedAt: null, dueAt: { lt: new Date() } } };
+    }
+    if (filtro.slaDueBefore) {
+      where.commitments = {
+        some: { achievedAt: null, dueAt: { lt: new Date(filtro.slaDueBefore) } },
+      };
+    }
+
+    if (filtro.q) {
+      const texto = filtro.q.trim();
+      const numero = Number(texto.replace('#', ''));
+      where.OR = [
+        { subject: { contains: texto, mode: 'insensitive' } },
+        { description: { contains: texto, mode: 'insensitive' } },
+        ...(Number.isInteger(numero) && numero > 0 ? [{ number: numero }] : []),
+      ];
+    }
+
+    return where;
+  }
+
+  /** 404, não 403, quando o chamado existe mas está fora do escopo. */
+  async obter(usuario: UsuarioAutenticado, id: string): Promise<TicketDetail> {
+    const chamado = await this.prisma.ticket.findFirst({
+      where: { AND: [escopoDeLeitura(usuario), { id }] },
+      include: INCLUDE_DETALHE,
+    });
+
+    if (!chamado) throw new NotFoundException('Chamado não encontrado.');
+    return paraDetalhe(chamado);
+  }
+
+  /**
+   * A timeline.
+   *
+   * Quem não pode ver nota interna não recebe nota interna — o filtro é
+   * de consulta, não de renderização. Um cliente curioso que chame a API
+   * direto recebe a mesma coisa que a tela mostra.
+   */
+  async eventos(
+    usuario: UsuarioAutenticado,
+    id: string,
+    limite = 100,
+  ): Promise<TicketEventView[]> {
+    await this.obter(usuario, id);
+
+    const podeVerInterno = usuario.role !== 'SOLICITANTE';
+
+    const eventos = await this.prisma.ticketEvent.findMany({
+      where: {
+        ticketId: id,
+        ...(podeVerInterno ? {} : { visibility: 'PUBLICA' }),
+      },
+      include: INCLUDE_EVENTO,
+      orderBy: { createdAt: 'asc' },
+      take: limite,
+    });
+
+    return eventos.map(paraEvento);
+  }
+
+  // -------------------------------------------------------------------
+  // Abertura
+  // -------------------------------------------------------------------
 
   /**
    * Prioridade é derivada, nunca digitada (CLAUDE.md, regra 7).
@@ -48,24 +205,351 @@ export class TicketsService {
     return computePriority(urgency, impact, matriz);
   }
 
-  /** Lista aplicando o escopo do perfil por cima dos filtros pedidos. */
-  async listar(usuario: UsuarioAutenticado, filtros: Prisma.TicketWhereInput, limite = 50) {
-    return this.prisma.ticket.findMany({
-      where: { AND: [escopoDeLeitura(usuario), filtros] },
-      orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
-      take: limite,
-    });
+  /**
+   * Aloca o próximo número da organização.
+   *
+   * `MAX(number) + 1` corre sob concorrência: duas aberturas simultâneas
+   * pegam o mesmo número e uma viola o `@@unique`. O bloqueio consultivo
+   * serializa só as aberturas da mesma organização, e some no fim da
+   * transação.
+   */
+  private async proximoNumero(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+  ): Promise<number> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${organizationId}))`;
+    const [linha] = await tx.$queryRaw<{ proximo: number }[]>`
+      SELECT COALESCE(MAX(number), 0) + 1 AS proximo
+      FROM tickets WHERE "organizationId" = ${organizationId}::uuid
+    `;
+    return Number(linha?.proximo ?? 1);
   }
 
-  /** 404 em vez de 403 quando o chamado existe mas está fora do escopo. */
-  async obter(usuario: UsuarioAutenticado, id: string) {
-    const chamado = await this.prisma.ticket.findFirst({
-      where: { AND: [escopoDeLeitura(usuario), { id }] },
-      include: { actors: true, commitments: true, category: true },
+  /**
+   * Resolve a parte informada num alvo de ator.
+   *
+   * Contato por e-mail ou telefone é criado se não existir: é assim que
+   * quem escreve de fora entra no chamado sem ter conta
+   * (`docs/03-modelo-de-dados.md`, tabela de rastreabilidade).
+   */
+  private async resolverParte(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    parte: ParteDto,
+  ): Promise<Prisma.TicketActorUncheckedCreateWithoutTicketInput> {
+    if (parte.kind === 'USER') {
+      if (!parte.id) throw new BadRequestException('Informe o id do usuário.');
+      const vinculo = await tx.membership.findUnique({
+        where: { userId_organizationId: { userId: parte.id, organizationId } },
+      });
+      if (!vinculo) throw new BadRequestException('Usuário sem vínculo com esta organização.');
+      return { role: 'REQUERENTE', userId: parte.id };
+    }
+
+    if (parte.kind === 'TEAM') {
+      if (!parte.id) throw new BadRequestException('Informe o id do time.');
+      const time = await tx.team.findFirst({ where: { id: parte.id, organizationId } });
+      if (!time) throw new BadRequestException('Time não encontrado nesta organização.');
+      return { role: 'ATRIBUIDO', teamId: parte.id };
+    }
+
+    if (parte.kind === 'SUPPLIER') {
+      if (!parte.id) throw new BadRequestException('Informe o id do fornecedor.');
+      return { role: 'OBSERVADOR', supplierId: parte.id };
+    }
+
+    const email = parte.email?.toLowerCase().trim();
+    const phone = parte.phone?.trim();
+    if (!parte.id && !email && !phone) {
+      throw new BadRequestException('Contato precisa de id, e-mail ou telefone.');
+    }
+
+    if (parte.id) return { role: 'REQUERENTE', contactId: parte.id };
+
+    const existente = await tx.contact.findFirst({
+      where: { organizationId, ...(email ? { email } : { phone }) },
     });
 
+    const contato =
+      existente ??
+      (await tx.contact.create({
+        data: { organizationId, name: parte.name, email, phone },
+      }));
+
+    return { role: 'REQUERENTE', contactId: contato.id };
+  }
+
+  async abrir(
+    usuario: UsuarioAutenticado,
+    dto: CriarChamadoDto,
+  ): Promise<TicketDetail> {
+    const urgency = (dto.urgency ?? 3) as Scale;
+    const impact = (dto.impact ?? 3) as Scale;
+    const priority = await this.derivarPrioridade(usuario.organizationId, urgency, impact);
+
+    const categoria = dto.categoryId
+      ? await this.prisma.category.findFirst({
+          where: { id: dto.categoryId, organizationId: usuario.organizationId },
+          include: { defaultAgreements: { where: { isActive: true }, select: { id: true } } },
+        })
+      : null;
+
+    if (dto.categoryId && !categoria) {
+      throw new BadRequestException('Categoria não encontrada nesta organização.');
+    }
+
+    const id = await this.prisma.$transaction(async (tx) => {
+      const number = await this.proximoNumero(tx, usuario.organizationId);
+
+      const atores: Prisma.TicketActorUncheckedCreateWithoutTicketInput[] = [];
+
+      // Sem requerente informado, quem abre é quem pede. É o caso do
+      // portal, e é o padrão que evita chamado órfão.
+      atores.push(
+        dto.requester
+          ? { ...(await this.resolverParte(tx, usuario.organizationId, dto.requester)), role: 'REQUERENTE' }
+          : { role: 'REQUERENTE', userId: usuario.userId },
+      );
+
+      for (const observador of dto.observers ?? []) {
+        atores.push({
+          ...(await this.resolverParte(tx, usuario.organizationId, observador)),
+          role: 'OBSERVADOR',
+        });
+      }
+
+      // A categoria carrega o time que atende. Cai na fila certa sem o
+      // agente precisar distribuir na mão.
+      if (categoria?.defaultTeamId) {
+        atores.push({ role: 'ATRIBUIDO', teamId: categoria.defaultTeamId });
+      }
+
+      const chamado = await tx.ticket.create({
+        data: {
+          organizationId: usuario.organizationId,
+          number,
+          subject: dto.subject.trim(),
+          description: dto.description,
+          type: dto.type ?? 'INCIDENTE',
+          status: categoria?.defaultTeamId ? 'ATRIBUIDO' : 'NOVO',
+          urgency,
+          impact,
+          priority,
+          categoryId: categoria?.id,
+          formId: dto.formId,
+          originChannel: 'WEB',
+          customFields: (dto.customFields as Prisma.InputJsonValue) ?? undefined,
+          actors: { create: atores },
+        },
+        select: { id: true },
+      });
+
+      return chamado.id;
+    });
+
+    // Os acordos vêm da categoria: TTO e TTR (e os internos, quando
+    // houver) nascem com o chamado, não numa segunda chamada que alguém
+    // pode esquecer de fazer.
+    if (categoria?.defaultAgreements.length) {
+      await this.sla.aplicarAcordos(
+        id,
+        categoria.defaultAgreements.map((a) => a.id),
+      );
+    }
+
+    return this.obter(usuario, id);
+  }
+
+  // -------------------------------------------------------------------
+  // Comandos
+  // -------------------------------------------------------------------
+
+  private async carregar(usuario: UsuarioAutenticado, id: string) {
+    const chamado = await this.prisma.ticket.findFirst({
+      where: { AND: [escopoDeLeitura(usuario), { id }] },
+      include: { actors: true },
+    });
     if (!chamado) throw new NotFoundException('Chamado não encontrado.');
     return chamado;
+  }
+
+  /**
+   * Chamado fechado não recebe evento: reabrir primeiro
+   * (`docs/04-rbac.md`, seção 6).
+   */
+  private exigirAberto(status: TicketStatus): void {
+    if (status === 'FECHADO') {
+      throw new ConflictException('Chamado fechado. Reabra antes de escrever nele.');
+    }
+  }
+
+  async responder(
+    usuario: UsuarioAutenticado,
+    id: string,
+    dto: ResponderDto,
+  ): Promise<TicketEventView> {
+    const chamado = await this.carregar(usuario, id);
+    this.exigirAberto(chamado.status);
+
+    const interna = dto.visibility === 'INTERNA';
+
+    if (interna && usuario.role === 'SOLICITANTE') {
+      throw new ForbiddenException('Solicitante não escreve nota interna.');
+    }
+
+    const evento = await this.prisma.ticketEvent.create({
+      data: {
+        ticketId: id,
+        type: interna ? 'NOTA_INTERNA' : 'MENSAGEM',
+        visibility: interna ? 'INTERNA' : 'PUBLICA',
+        authorId: usuario.userId,
+        // Sem canal escolhido, responde pelo canal em que o solicitante
+        // falou. É o que impede mandar e-mail para quem escreveu pelo
+        // WhatsApp (`docs/06-canais.md`, seção 3).
+        channel: interna ? 'WEB' : (dto.channel ?? chamado.originChannel),
+        body: dto.body,
+      },
+      include: INCLUDE_EVENTO,
+    });
+
+    await this.prisma.ticket.update({ where: { id }, data: { updatedAt: new Date() } });
+
+    // A primeira resposta pública de quem atende cumpre o TTO. A do
+    // próprio requerente não conta: responder a si mesmo não é
+    // atendimento.
+    const ehRequerente = chamado.actors.some(
+      (a) => a.role === 'REQUERENTE' && a.userId === usuario.userId,
+    );
+
+    if (!interna && !ehRequerente && !chamado.firstResponseAt) {
+      await this.prisma.ticket.update({
+        where: { id },
+        data: { firstResponseAt: evento.createdAt },
+      });
+      await this.sla.cumprir(id, 'TTO', evento.createdAt);
+    }
+
+    return paraEvento(evento);
+  }
+
+  async atribuir(usuario: UsuarioAutenticado, id: string, dto: AtribuirDto): Promise<TicketDetail> {
+    const chamado = await this.carregar(usuario, id);
+    this.exigirAberto(chamado.status);
+
+    if (!dto.teamId && !dto.userId) {
+      throw new BadRequestException('Informe um time, um usuário, ou os dois.');
+    }
+
+    // Atribuir a si mesmo é permissão à parte: um agente pode puxar
+    // chamado para si sem poder distribuir a fila dos outros.
+    if (dto.userId && dto.userId !== usuario.userId && usuario.role === 'AGENTE') {
+      throw new ForbiddenException('Agente só atribui chamado a si mesmo.');
+    }
+
+    const anteriores = chamado.actors.filter((a) => a.role === 'ATRIBUIDO');
+
+    await this.prisma.$transaction(async (tx) => {
+      if (dto.teamId) {
+        const time = await tx.team.findFirst({
+          where: { id: dto.teamId, organizationId: usuario.organizationId },
+        });
+        if (!time) throw new BadRequestException('Time não encontrado nesta organização.');
+      }
+
+      if (dto.userId) {
+        const vinculo = await tx.membership.findUnique({
+          where: {
+            userId_organizationId: { userId: dto.userId, organizationId: usuario.organizationId },
+          },
+        });
+        if (!vinculo) throw new BadRequestException('Usuário sem vínculo com esta organização.');
+      }
+
+      await tx.ticketActor.deleteMany({ where: { ticketId: id, role: 'ATRIBUIDO' } });
+      await tx.ticketActor.createMany({
+        data: [
+          ...(dto.teamId ? [{ ticketId: id, role: 'ATRIBUIDO' as const, teamId: dto.teamId }] : []),
+          ...(dto.userId ? [{ ticketId: id, role: 'ATRIBUIDO' as const, userId: dto.userId }] : []),
+        ],
+      });
+
+      await tx.ticketEvent.create({
+        data: {
+          ticketId: id,
+          type: 'MUDANCA_ATRIBUICAO',
+          visibility: 'PUBLICA',
+          authorId: usuario.userId,
+          channel: 'WEB',
+          payload: {
+            type: 'MUDANCA_ATRIBUICAO',
+            fromTeamId: anteriores.find((a) => a.teamId)?.teamId ?? undefined,
+            toTeamId: dto.teamId,
+            fromUserId: anteriores.find((a) => a.userId)?.userId ?? undefined,
+            toUserId: dto.userId,
+          },
+        },
+      });
+
+      // Atribuir tira o chamado de "Novo": alguém agora é responsável.
+      if (chamado.status === 'NOVO') {
+        await tx.ticket.update({ where: { id }, data: { status: 'ATRIBUIDO' } });
+      }
+    });
+
+    return this.obter(usuario, id);
+  }
+
+  async classificar(
+    usuario: UsuarioAutenticado,
+    id: string,
+    dto: ClassificarDto,
+  ): Promise<TicketDetail> {
+    const chamado = await this.carregar(usuario, id);
+    this.exigirAberto(chamado.status);
+
+    const urgency = (dto.urgency ?? chamado.urgency) as Scale;
+    const impact = (dto.impact ?? chamado.impact) as Scale;
+    const priority = await this.derivarPrioridade(usuario.organizationId, urgency, impact);
+
+    if (dto.categoryId) {
+      const categoria = await this.prisma.category.findFirst({
+        where: { id: dto.categoryId, organizationId: usuario.organizationId },
+      });
+      if (!categoria) throw new BadRequestException('Categoria não encontrada nesta organização.');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.ticket.update({
+        where: { id },
+        data: {
+          categoryId: dto.categoryId ?? chamado.categoryId,
+          urgency,
+          impact,
+          priority,
+          type: dto.type ?? chamado.type,
+        },
+      }),
+      this.prisma.ticketEvent.create({
+        data: {
+          ticketId: id,
+          type: 'MUDANCA_CLASSIFICACAO',
+          visibility: 'INTERNA',
+          authorId: usuario.userId,
+          channel: 'WEB',
+          payload: {
+            type: 'MUDANCA_CLASSIFICACAO',
+            fromCategoryId: chamado.categoryId ?? undefined,
+            toCategoryId: dto.categoryId,
+            fromUrgency: chamado.urgency as Scale,
+            toUrgency: urgency,
+            fromImpact: chamado.impact as Scale,
+            toImpact: impact,
+          },
+        },
+      }),
+    ]);
+
+    return this.obter(usuario, id);
   }
 
   /**
@@ -74,11 +558,16 @@ export class TicketsService {
    * O GLPI permite quase tudo e deixa a coerência para o operador. Aqui
    * a transição inválida é 409, não um chamado em estado impossível.
    */
-  async mudarStatus(usuario: UsuarioAutenticado, id: string, destino: TicketStatus) {
-    const chamado = await this.obter(usuario, id);
+  async mudarStatus(
+    usuario: UsuarioAutenticado,
+    id: string,
+    destino: TicketStatus,
+    corpo?: string,
+  ): Promise<TicketDetail> {
+    const chamado = await this.carregar(usuario, id);
     const origem = chamado.status as TicketStatus;
 
-    if (origem === destino) return chamado;
+    if (origem === destino) return this.obter(usuario, id);
 
     if (!canTransition(origem, destino)) {
       throw new ConflictException(
@@ -87,15 +576,38 @@ export class TicketsService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const atualizado = await tx.ticket.update({
+    const agora = new Date();
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.ticket.update({
         where: { id },
         data: {
           status: destino,
-          solvedAt: destino === 'SOLUCIONADO' ? new Date() : chamado.solvedAt,
-          closedAt: destino === 'FECHADO' ? new Date() : chamado.closedAt,
+          solvedAt: destino === 'SOLUCIONADO' ? agora : chamado.solvedAt,
+          closedAt: destino === 'FECHADO' ? agora : chamado.closedAt,
+          // Reabrir zera as marcas de encerramento: o chamado voltou a
+          // correr, e um relatório que somasse as duas datas mentiria.
+          ...(destino === 'ATRIBUIDO' && origem === 'FECHADO'
+            ? { solvedAt: null, closedAt: null }
+            : {}),
         },
       });
+
+      if (corpo) {
+        await tx.ticketEvent.create({
+          data: {
+            ticketId: id,
+            type: destino === 'SOLUCIONADO' ? 'SOLUCAO' : 'MENSAGEM',
+            visibility: 'PUBLICA',
+            authorId: usuario.userId,
+            channel: chamado.originChannel,
+            body: corpo,
+            ...(destino === 'SOLUCIONADO'
+              ? { payload: { type: 'SOLUCAO', accepted: false } }
+              : {}),
+          },
+        });
+      }
 
       await tx.ticketEvent.create({
         data: {
@@ -107,32 +619,113 @@ export class TicketsService {
           payload: { type: 'MUDANCA_STATUS', from: origem, to: destino },
         },
       });
-
-      return atualizado;
     });
-  }
 
-  /** Valida a escala 1..5 na fronteira, antes de qualquer cálculo. */
-  static exigirEscala(valor: number, campo: string): Scale {
-    if (!Number.isInteger(valor) || valor < 1 || valor > 5) {
-      throw new BadRequestException(`${campo} deve ser um inteiro de 1 a 5.`);
+    if (destino === 'SOLUCIONADO' || destino === 'FECHADO') {
+      await this.sla.cumprir(id, 'TTR', agora);
     }
-    return valor as Scale;
+
+    return this.obter(usuario, id);
   }
 
-  /** Reserva o número e cria o chamado numa transação só. */
-  async abrir(
-    organizationId: string,
-    dados: Omit<Prisma.TicketUncheckedCreateInput, 'number' | 'organizationId' | 'priority'> & {
-      urgency: Scale;
-      impact: Scale;
-    },
-  ) {
-    const priority = await this.derivarPrioridade(organizationId, dados.urgency, dados.impact);
+  /** Pausa o relógio do SLA com um motivo. */
+  async pausar(
+    usuario: UsuarioAutenticado,
+    id: string,
+    pendingReasonId: string,
+    corpo?: string,
+  ): Promise<TicketDetail> {
+    const chamado = await this.carregar(usuario, id);
 
-    return this.prisma.$transaction(async (tx) => {
-      const number = await this.proximoNumero(tx, organizationId);
-      return tx.ticket.create({ data: { ...dados, organizationId, number, priority } });
+    if (!canTransition(chamado.status as TicketStatus, 'PENDENTE')) {
+      throw new ConflictException(`Um chamado ${chamado.status} não pode ir para PENDENTE.`);
+    }
+
+    const motivo = await this.prisma.pendingReason.findFirst({
+      where: { id: pendingReasonId, organizationId: usuario.organizationId },
     });
+    if (!motivo) throw new BadRequestException('Motivo de pendência não encontrado.');
+
+    const agora = new Date();
+
+    await this.prisma.$transaction([
+      this.prisma.ticket.update({
+        where: { id },
+        data: {
+          status: 'PENDENTE',
+          pendingReasonId,
+          pendingSince: agora,
+          pendingRemindersSent: 0,
+        },
+      }),
+      this.prisma.ticketEvent.create({
+        data: {
+          ticketId: id,
+          type: 'PAUSA_SLA',
+          visibility: 'PUBLICA',
+          authorId: usuario.userId,
+          channel: 'WEB',
+          body: corpo,
+          payload: { type: 'PAUSA_SLA', pendingReasonId },
+        },
+      }),
+    ]);
+
+    return this.obter(usuario, id);
+  }
+
+  /** Retoma e desconta dos compromissos o tempo parado, em expediente. */
+  async retomar(usuario: UsuarioAutenticado, id: string): Promise<TicketDetail> {
+    const chamado = await this.carregar(usuario, id);
+
+    if (chamado.status !== 'PENDENTE' || !chamado.pendingSince) {
+      throw new ConflictException('O chamado não está pendente.');
+    }
+
+    const agora = new Date();
+    const descontado = await this.sla.retomarAposPendencia(id, chamado.pendingSince, agora);
+
+    await this.prisma.$transaction([
+      this.prisma.ticket.update({
+        where: { id },
+        data: { status: 'ATRIBUIDO', pendingSince: null, pendingReasonId: null },
+      }),
+      this.prisma.ticketEvent.create({
+        data: {
+          ticketId: id,
+          type: 'RETOMADA_SLA',
+          visibility: 'PUBLICA',
+          authorId: usuario.userId,
+          channel: 'WEB',
+          payload: { type: 'RETOMADA_SLA', pausedSeconds: descontado },
+        },
+      }),
+    ]);
+
+    return this.obter(usuario, id);
+  }
+
+  async vincular(usuario: UsuarioAutenticado, id: string, dto: VincularDto): Promise<TicketDetail> {
+    await this.carregar(usuario, id);
+
+    if (dto.targetTicketId === id) {
+      throw new BadRequestException('Um chamado não se vincula a si mesmo.');
+    }
+
+    const alvo = await this.prisma.ticket.findFirst({
+      where: { id: dto.targetTicketId, organizationId: usuario.organizationId },
+      select: { id: true },
+    });
+    if (!alvo) throw new BadRequestException('Chamado de destino não encontrado.');
+
+    await this.prisma.ticketLink.upsert({
+      where: {
+        sourceId_targetId_type: { sourceId: id, targetId: alvo.id, type: dto.type },
+      },
+      create: { sourceId: id, targetId: alvo.id, type: dto.type },
+      update: {},
+    });
+
+    return this.obter(usuario, id);
   }
 }

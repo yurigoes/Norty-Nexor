@@ -98,13 +98,40 @@ export const PERMISSIONS = [
 export type Permission = (typeof PERMISSIONS)[number];
 
 /**
+ * Permissões que uma outra permissão já contém.
+ *
+ * Os três escopos de leitura de chamado são uma hierarquia, não um
+ * conjunto: quem lê todos os chamados evidentemente lê os do seu time e
+ * os seus. Declarar isso aqui evita repetir as três em cada perfil — e
+ * evita o defeito que essa repetição esquecida causa: uma rota que
+ * exige o escopo mais estreito recusar justamente quem tem o mais
+ * amplo.
+ */
+const IMPLICA: Partial<Record<Permission, readonly Permission[]>> = {
+  'chamado:ler:todos': ['chamado:ler:time', 'chamado:ler:proprios'],
+  'chamado:ler:time': ['chamado:ler:proprios'],
+  'chamado:atribuir': ['chamado:atribuir:a-mim'],
+  'artigo:publicar': ['artigo:escrever'],
+  'artigo:ler:interno': ['artigo:ler'],
+};
+
+/** Fecha a lista sobre as implicações. */
+function expandir(permissoes: readonly Permission[]): readonly Permission[] {
+  const conjunto = new Set<Permission>(permissoes);
+  for (const permissao of permissoes) {
+    for (const implicada of IMPLICA[permissao] ?? []) conjunto.add(implicada);
+  }
+  return [...conjunto];
+}
+
+/**
  * O que cada perfil pode fazer.
  *
  * A granularidade de leitura (proprios / time / todos) é herdada do
  * GLPI, que acertou nesse ponto: um agente não precisa ver a fila
  * inteira, e um solicitante nunca vê a de ninguém.
  */
-export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
+const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
   SOLICITANTE: [
     'chamado:ler:proprios',
     'chamado:criar',
@@ -200,6 +227,10 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
 
   ADMINISTRADOR: [...PERMISSIONS],
 };
+
+export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = Object.fromEntries(
+  ROLES.map((role) => [role, expandir(MATRIZ_DECLARADA[role])]),
+) as Record<Role, readonly Permission[]>;
 
 /** O perfil tem esta permissão? */
 export function can(role: Role, permission: Permission): boolean {

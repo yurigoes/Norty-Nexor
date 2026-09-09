@@ -197,8 +197,6 @@ model Category {
   name           String
   /// Time que recebe o chamado quando cai nesta categoria.
   defaultTeamId  String?  @db.Uuid
-  /// Acordo aplicado por padrão.
-  defaultAgreementId String? @db.Uuid
   defaultUrgency Int?
   isActive       Boolean  @default(true)
 
@@ -206,7 +204,13 @@ model Category {
   parent       Category?    @relation("Subcategoria", fields: [parentId], references: [id])
   children     Category[]   @relation("Subcategoria")
   defaultTeam  Team?        @relation(fields: [defaultTeamId], references: [id])
-  defaultAgreement Agreement? @relation(fields: [defaultAgreementId], references: [id])
+  /// Os acordos aplicados por padrão a um chamado desta categoria.
+  ///
+  /// É lista, não um só: um chamado precisa de TTO *e* TTR, e quem
+  /// vende SLA externo com OLA interno precisa dos quatro. Um `Agreement`
+  /// aqui é uma linha de (kind, target) — a "política de atendimento" do
+  /// catálogo é o conjunto delas.
+  defaultAgreements Agreement[] @relation("AcordosPadraoDaCategoria")
   tickets      Ticket[]
   forms        TicketForm[]
 
@@ -481,7 +485,7 @@ model Agreement {
   calendar     Calendar?         @relation(fields: [calendarId], references: [id])
   levels       EscalationLevel[]
   commitments  SlaCommitment[]
-  categories   Category[]
+  categories   Category[] @relation("AcordosPadraoDaCategoria")
 
   @@unique([organizationId, name, kind, target])
   @@map("agreements")
