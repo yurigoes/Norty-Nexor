@@ -321,6 +321,28 @@ Regras de saída:
 - Se a Evolution devolver "número não existe no WhatsApp", o canal do
   chamado cai para e-mail quando houver e-mail no contato.
 
+### 3.6.1 Áudio vira texto
+
+O áudio recebido pelo WhatsApp é transcrito antes de qualquer decisão
+sobre a mensagem: sem isso ele não entra na regra de entrada, não vira
+assunto do chamado, e o agente precisa ouvir quarenta segundos para
+saber do que se trata. O áudio original continua anexado.
+
+O modelo roda no **Ollama do CT 102** (`docs/11-infra.md`): áudio de
+cliente não sai para serviço de terceiro.
+
+O texto entra marcado como transcrição, e não como se a pessoa o
+tivesse digitado — quem lê precisa saber que aquilo saiu de um modelo e
+pode estar errado. Nome próprio e número são justamente o que a
+transcrição erra.
+
+**Falhar é silencioso, e é o comportamento certo.** Ollama fora do ar,
+modelo não baixado, áudio grande demais, `OLLAMA_BASE_URL` em branco: em
+todos os casos a mensagem vira chamado com o áudio anexado, exatamente
+como antes de existir transcrição. O cliente já mandou o áudio e está
+esperando atendimento, não uma mensagem de erro sobre um recurso
+interno.
+
 ### 3.7 Limites conhecidos
 
 - **Janela de 24 h do WhatsApp Business.** Se a Norty migrar para a API

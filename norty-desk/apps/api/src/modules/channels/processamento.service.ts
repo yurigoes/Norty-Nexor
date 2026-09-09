@@ -9,6 +9,7 @@ import {
 import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { TranscricaoService } from '../transcricao/transcricao.service';
 import { PORTA_DE_ARMAZENAMENTO, type PortaDeArmazenamento } from '../attachments/armazenamento';
 import { RegrasService } from '../regras/regras.service';
 import { TicketsService } from '../tickets/tickets.service';
@@ -43,6 +44,7 @@ export class ProcessamentoService {
     private readonly regras: RegrasService,
     private readonly evolution: EvolutionClient,
     @Inject(PORTA_DE_ARMAZENAMENTO) private readonly armazenamento: PortaDeArmazenamento,
+    private readonly transcricao: TranscricaoService,
   ) {}
 
   @Cron(CronExpression.EVERY_30_SECONDS)
@@ -213,6 +215,12 @@ export class ProcessamentoService {
 
     const midia = await this.baixarMidiaSeHouver(mensagem, config);
 
+    // Áudio vira texto antes de qualquer decisão: sem isso ele não entra
+    // na regra de entrada, não vira assunto e o agente precisa ouvir
+    // quarenta segundos para saber do que se trata.
+    const transcrito = await this.transcreverSeForAudio(midia);
+    const textoEfetivo = transcrito ? TranscricaoService.comMarca(transcrito, texto) : texto;
+
     // 1. Comando explícito ganha da conversa em andamento. O bot não
     //    tenta interpretar linguagem natural: comando é previsível, e
     //    previsível é o que faz o cliente confiar no canal.
@@ -277,7 +285,7 @@ export class ProcessamentoService {
         ticketId: alvo.ticketId,
         contactId: contato.id,
         channel: 'WHATSAPP',
-        body: texto || '(mídia)',
+        body: textoEfetivo || '(mídia)',
       });
 
       await this.vincularAnexos(
@@ -296,11 +304,13 @@ export class ProcessamentoService {
       return;
     }
 
-    const assunto = ProcessamentoService.assuntoDeTexto(texto);
+    // O assunto sai da transcrição quando o áudio veio sem legenda: um
+    // chamado chamado "(mídia sem texto)" não se acha na fila.
+    const assunto = ProcessamentoService.assuntoDeTexto(transcrito || texto);
 
     const decisao = await this.regras.classificar(mensagem.organizationId, {
       assunto,
-      corpo: texto,
+      corpo: textoEfetivo,
       remetente: telefone,
       canal: 'WHATSAPP',
     });
@@ -317,7 +327,7 @@ export class ProcessamentoService {
       // O WhatsApp não tem assunto: a primeira linha vira o título e o
       // texto inteiro vira a descrição.
       subject: assunto,
-      description: texto || '(mídia sem texto)',
+      description: textoEfetivo || '(mídia sem texto)',
       teamId: decisao.timeId ?? mensagem.channelAccount.defaultTeamId,
       categoryId: decisao.categoriaId,
       urgency: decisao.urgencia,
@@ -489,6 +499,31 @@ export class ProcessamentoService {
     });
 
     await this.descartar(mensagem.id, 'Mais de um chamado aberto: pedi desambiguação.');
+  }
+
+  /**
+   * Transcreve o áudio recebido, quando houver.
+   *
+   * Lê o arquivo já guardado — não o baixa de novo. Devolve `null` em
+   * tudo que não for áudio e em qualquer falha: o chamado abre com o
+   * áudio anexado exatamente como antes de existir transcrição.
+   */
+  private async transcreverSeForAudio(midia: AnexoRecebido | null): Promise<string | null> {
+    if (!midia || !this.transcricao.habilitada) return null;
+    if (!this.transcricao.ehAudio(midia.contentType)) return null;
+
+    try {
+      // `ler` devolve um `Readable` — o driver de disco e o do MinIO
+      // transmitem. Aqui o áudio inteiro precisa ir junto para o modelo.
+      const fluxo = await this.armazenamento.ler(midia.storageKey);
+      const pedacos: Buffer[] = [];
+      for await (const pedaco of fluxo) pedacos.push(Buffer.from(pedaco as Buffer));
+
+      return await this.transcricao.transcrever(Buffer.concat(pedacos), midia.contentType);
+    } catch (erro) {
+      this.logger.warn(`Não consegui ler o áudio para transcrever: ${(erro as Error).message}`);
+      return null;
+    }
   }
 
   private async baixarMidiaSeHouver(

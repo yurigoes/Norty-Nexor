@@ -21,6 +21,7 @@ import { SatisfacaoModule } from './modules/satisfacao/satisfacao.module';
 import { SlaModule } from './modules/sla/sla.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { TicketsModule } from './modules/tickets/tickets.module';
+import { TranscricaoModule } from './modules/transcricao/transcricao.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { TicketsModule } from './modules/tickets/tickets.module';
     RegrasModule,
     WebhooksModule,
     AuditoriaModule,
+    TranscricaoModule,
     LoteModule,
   ],
 })

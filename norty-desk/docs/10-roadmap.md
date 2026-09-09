@@ -100,22 +100,53 @@ Fase 3. Até lá as regras se criam pela API.
 
 ---
 
-## Fase 3 — Operação madura
+## Fase 3 — Operação madura — **entregue**
 
 O que faz a operação escalar.
 
-| Entrega | Detalhe |
-|---|---|
-| Aprovações | etapas com quórum, decisão pelo portal |
-| Base de conhecimento | artigos, revisões, sugestão por similaridade |
-| Painéis | agente, time, organização |
-| Relatório de SLA | cumprimento por período, categoria, time |
-| Ativo simples | equipamento vinculável a chamado (sem CMDB) |
-| Satisfação | pesquisa pós-fechamento, pelo canal de origem |
-| Webhooks de saída | assinatura HMAC, retentativa, log |
-| Ações em lote | atribuir, classificar, fechar em massa |
-| Auditoria | trilha de configuração |
-| Transcrição de áudio | Ollama do CT 102 sobre áudio do WhatsApp |
+| Entrega | Detalhe | Situação |
+|---|---|---|
+| Aprovações | etapas com quórum, decisão pelo portal | pronto |
+| Base de conhecimento | artigos, revisões, sugestão por similaridade | pronto |
+| Painéis | agente, time, organização | pronto |
+| Relatório de SLA | cumprimento por período, categoria, time, acordo | pronto |
+| Ativo simples | equipamento vinculável a chamado (sem CMDB) | pronto |
+| Satisfação | pesquisa pós-fechamento, pelo canal de origem | pronto |
+| Webhooks de saída | assinatura HMAC, retentativa, log | pronto |
+| Ações em lote | atribuir, classificar, mudar status em massa | pronto |
+| Auditoria | trilha de configuração | pronto |
+| Transcrição de áudio | Ollama do CT 102 sobre áudio do WhatsApp | pronto |
+
+**Verificação:** 255 testes contra Postgres real, mais passeios de
+navegador em cada tela nova.
+
+**As decisões que mais importam desta fase**
+
+- **O quórum de aprovação encerra a etapa nas duas pontas**: quando os
+  "sim" chegam, e quando eles se tornam impossíveis. Sem a segunda, um
+  chamado esperaria para sempre por quem nunca respondesse.
+
+- **Todo indicador do painel carrega o filtro que o reproduz.** Número
+  sem caminho de volta para as linhas que o formaram é número que
+  ninguém confere.
+
+- **O ativo é raso de propósito.** O inventário do GLPI são 60 tabelas e
+  um agente de coleta, e é por isso que o campo do chamado fica vazio.
+
+- **A pesquisa de satisfação abre sem login.** Exigir senha de quem só
+  quer dar uma nota é o jeito mais eficiente de não receber nota
+  nenhuma.
+
+- **Webhook não entrega para rede interna.** Sem essa recusa, quem
+  tivesse `config:webhooks` transformaria a API num scanner da rede.
+
+- **A trilha registra o diff, e segredo nunca entra nela** — nem o
+  valor antigo.
+
+**O que ficou de fora e por quê:** as telas de configuração de
+categorias, acordos de SLA, calendários e motivos de pendência. A API
+das quatro existe desde a Fase 1 e é usada pela suíte; falta o formulário
+visual, que é a tarefa seguinte. Até lá elas se configuram pela API.
 
 ---
 
