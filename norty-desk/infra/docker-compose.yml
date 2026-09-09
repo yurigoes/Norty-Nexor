@@ -1,8 +1,27 @@
-# Norty Desk — CT 105 Asgard (norty-apps-fase3), 192.168.15.75
+# =========================================================
+#  NORTY DESK — Thor / Proxmox
+# ---------------------------------------------------------
+#  Segue a convenção da infra Norty: o código mora no host em
+#  /srv/apps-fase3/norty-desk e entra no CT 105 por bind-mount
+#  em /opt/fase3/norty-desk. Edita-se no host, reconstrói-se
+#  dentro do container.
 #
-# Banco, Redis, MinIO e Evolution NÃO sobem aqui: são a infra
-# compartilhada do CT 102 Yggdrasil (192.168.15.72).
-# Ver docs/11-infra.md.
+#  Banco, Redis, MinIO e Evolution NÃO sobem aqui: são a infra
+#  compartilhada do CT 102 Yggdrasil (192.168.15.72).
+#
+#  Publica só uma porta alta, nunca 80 ou 443: quem termina TLS
+#  e resolve o domínio é o ingress da Norty. A API **não publica
+#  porta nenhuma** — ela só é alcançável pelo nginx do front,
+#  pela rede interna do compose. É o mesmo desenho do LICITA+, e
+#  é o que garante que não exista caminho até a API que não passe
+#  pelo mesmo domínio (e, portanto, pelo mesmo cookie de sessão).
+#
+#  Subir:
+#    pct exec 105 -- bash -c \
+#      'cd /opt/fase3/norty-desk && docker compose up -d --build'
+# =========================================================
+
+name: norty-desk
 
 services:
   desk-api:
@@ -12,18 +31,26 @@ services:
     container_name: desk-api
     restart: unless-stopped
     env_file: ../apps/api/.env
-    ports:
-      - "3061:3061"
+    environment:
+      TZ: America/Bahia
+    # Sem `ports`: quem alcança a API é o nginx do desk-web.
+    expose:
+      - "3061"
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3061/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3061/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 20s
+    logging:
+      # Sem limite, o json-file cresce até encher o disco do CT.
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
     networks: [desk]
 
-  # Filas de saída, coleta IMAP, cobrança de pendência e escalonamento.
-  # Mesma imagem da API, sem porta exposta: dois processos, um artefato.
+  # Filas de saída, coleta IMAP, cobrança de pendência e
+  # escalonamento. Mesma imagem da API: dois processos, um
+  # artefato — o worker não pode divergir da API que o gerou.
   desk-worker:
     build:
       context: ..
@@ -32,11 +59,14 @@ services:
     restart: unless-stopped
     env_file: ../apps/api/.env
     environment:
+      TZ: America/Bahia
       MODO: worker
-    command: ["node", "dist/main.js"]
     depends_on:
       desk-api:
         condition: service_healthy
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
     networks: [desk]
 
   desk-web:
@@ -45,9 +75,25 @@ services:
       dockerfile: infra/web.Dockerfile
     container_name: desk-web
     restart: unless-stopped
+    depends_on:
+      # Só `started`, não `healthy`: o front precisa subir mesmo
+      # com a API fora do ar, para exibir o aviso em vez de a
+      # página inteira ficar indisponível por causa do banco.
+      desk-api:
+        condition: service_started
     ports:
-      - "3060:80"
-    depends_on: [desk-api]
+      - "${DESK_PORT:-3060}:80"
+    environment:
+      TZ: America/Bahia
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 4s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
     networks: [desk]
 
 networks:

@@ -64,7 +64,8 @@ export function Fila({
             </button>
           ))}
         </div>
-        <span className="sidebar__contador">
+
+        <span className="fila__resumo">
           {visiveis.length} {visiveis.length === 1 ? 'chamado' : 'chamados'}
         </span>
       </header>
@@ -93,25 +94,32 @@ export function Fila({
               return (
                 <tr key={chamado.id} onClick={() => aoAbrir(chamado.id)}>
                   <td className="tabela__numero">#{chamado.number}</td>
+
                   <td>
-                    <span
-                      className={`canal canal--${chamado.originChannel}`}
-                      title={`Aberto por ${ROTULO_CANAL[chamado.originChannel]}`}
-                    />{' '}
-                    <span className="tabela__assunto">{chamado.subject}</span>
+                    <span className="tabela__assunto">
+                      <span
+                        className={`canal canal--${chamado.originChannel}`}
+                        title={`Aberto por ${ROTULO_CANAL[chamado.originChannel]}`}
+                      />
+                      {chamado.subject}
+                    </span>
                   </td>
+
                   <td>
                     <span className={`etiqueta ${classeStatus(chamado.status)}`}>
                       {ROTULO_STATUS[chamado.status]}
                     </span>
                   </td>
+
                   <td>
                     <span className={`prioridade prioridade--${chamado.priority}`}>
                       {chamado.priority}
                     </span>
                   </td>
+
                   <td>{chamado.requester?.name ?? '—'}</td>
                   <td>{chamado.assignedUser?.name ?? chamado.assignedTeam?.name ?? '—'}</td>
+
                   <td>
                     {compromisso && estado ? (
                       <span className={`sla sla--${estado}`}>
@@ -121,7 +129,8 @@ export function Fila({
                       '—'
                     )}
                   </td>
-                  <td>{dataCurta(chamado.updatedAt)}</td>
+
+                  <td className="numerico">{dataCurta(chamado.updatedAt)}</td>
                 </tr>
               );
             })}

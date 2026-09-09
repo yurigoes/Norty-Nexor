@@ -13,25 +13,36 @@ pela tabela antes de qualquer mudança — não escaneie às cegas.**
 | Código no host | `/srv/apps-fase3/norty-desk` |
 | Caminho no container | `/opt/fase3/norty-desk` |
 | Domínio | `desk.norty.com.br` |
-| API | `api-desk.norty.com.br`, ou `/api/*` no mesmo domínio |
+| API | `/api/*` no mesmo domínio — **sem host próprio** (ver 4) |
 
 **Regra de ouro da Norty:** o código mora **no host thor** em `/srv/...`
 e entra no container por bind-mount em `/opt/...`. Edite no host,
 reconstrua dentro do container com Docker Compose.
 
+### Containers do cluster
+
+O `pct list` de 09/09/2026 mostra **doze** containers, não os oito da
+documentação antiga:
+
+```
+100 niflheim   103 vanaheim   106 midgard    109 norty-pulso
+101 helheim    104 alfheim    107 bifrost    111 norty-suadouro
+102 yggdrasil  105 asgard     108 norty-osrm 112 norty-farmateste
+```
+
 ### Portas
 
-O CT 105 já usa 3000, 3011, 3013, 3025, 3030, 3031. O Desk fica em:
+O CT 105 já usa 3000, 3011, 3013, 3025, 3030, 3031. O CT 103 usa a faixa
+3300–3500 (Bolão, Central de Leads, Sorva e **LICITA+ em 3500/3501**).
+O Desk fica em:
 
-| Serviço | Porta interna |
+| Serviço | Porta |
 |---|---|
-| `desk-web` | **3060** |
-| `desk-api` | **3061** |
-| `desk-worker` | sem porta (filas e crons) |
+| `desk-web` | **3060** publicada no CT |
+| `desk-api` | 3061 **só na rede do compose** |
+| `desk-worker` | nenhuma |
 
-> Confirmar com `pct exec 105 -- ss -ltnp` antes de subir. As portas
-> foram escolhidas fora do que a documentação lista, mas a documentação
-> pode estar defasada.
+> Confirme com `pct exec 105 -- ss -ltnp` antes de subir.
 
 ## 2. Dependências no CT 102 Yggdrasil (`192.168.15.72`)
 
@@ -70,7 +81,7 @@ pct exec 102 -- curl -s -X POST http://localhost:8080/instance/create \
 ```
 
 O webhook aponta para
-`https://api-desk.norty.com.br/v1/channels/whatsapp/inbound/<channelAccountId>`,
+`https://desk.norty.com.br/api/v1/channels/whatsapp/inbound/<channelAccountId>`,
 com o segredo HMAC gravado em `ChannelAccount.config.webhookSecret`.
 
 ## 3. Deploy
@@ -98,31 +109,29 @@ pct exec 105 -- bash -c 'cd /opt/fase3/norty-desk && docker compose exec -T desk
 
 ## 4. Roteamento
 
-O Caddy do CT 105 já atende os domínios da fase 3. O bloco do Desk:
+Um domínio só:
 
 ```caddyfile
 desk.norty.com.br {
     encode gzip zstd
-
-    handle /api/* {
-        uri strip_prefix /api
-        reverse_proxy desk-api:3061
-    }
-
-    handle {
-        reverse_proxy desk-web:3060
-    }
-}
-
-api-desk.norty.com.br {
-    encode gzip zstd
-    reverse_proxy desk-api:3061
+    reverse_proxy 192.168.15.75:3060
 }
 ```
 
-Dois caminhos para a API de propósito: `api-desk.` é o endereço público
-para integração e webhook; `/api/*` no mesmo domínio evita CORS no
-aplicativo.
+**A API não publica porta.** Ela é alcançável apenas pelo nginx do
+`desk-web`, na rede interna do compose, em `/api/*`. É o desenho do
+LICITA+ e a razão é de segurança: assim não existe caminho até a API que
+não passe pelo mesmo domínio — e, portanto, pelo mesmo cookie de sessão.
+
+Isso vale também para os webhooks:
+
+```
+https://desk.norty.com.br/api/v1/channels/email/inbound/<id>
+https://desk.norty.com.br/api/v1/channels/whatsapp/inbound/<id>
+```
+
+O `client_max_body_size` do nginx está em 32 MB: anexo de e-mail e mídia
+de WhatsApp chegam em base64 e passam do padrão de 1 MB.
 
 ## 5. Variáveis de ambiente
 

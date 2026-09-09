@@ -5,7 +5,7 @@ web, a API e o domínio compartilhado entre os dois.
 
 ```
 desk.norty.com.br      → apps/web    (React + Vite)
-api-desk.norty.com.br  → apps/api    (NestJS + Prisma + PostgreSQL)
+desk.norty.com.br/api  → apps/api    (NestJS + Prisma + PostgreSQL)
 ```
 
 ## Estrutura
@@ -48,12 +48,26 @@ infra           docker-compose, Caddy, Dockerfiles, .env.example
    Nunca `Float` para nenhum dos dois. Na fronteira da API o Decimal vira
    `number` uma única vez, no serializador do módulo.
 
-6. **Estilo vem de tokens.**
-   Cores, espaçamento, tipografia, raios e sombras estão em
-   `apps/web/src/styles/tokens.css`. Não introduza valores literais em
-   CSS de módulo. A paleta é preto + dourado: grafite (`--nd-ink`) carrega
-   ação primária e texto, dourado (`--nd-gold`) é acento, vermelho
-   (`--danger`) é só alerta real. Sobre dourado o texto é **preto**.
+6. **Estilo vem de tokens, e os tokens são os do LICITA+.**
+   O sistema de design é o de `@nexor/licita-mais`, adotado inteiro:
+   mesma rampa, mesmos nomes, mesma cascata (`tokens → base → layout →
+   components`). Dois produtos da mesma casa não devem parecer de casas
+   diferentes.
+
+   Nenhum componente escreve valor literal — se um token não existe, ele
+   nasce em `apps/web/src/styles/tokens.css`.
+
+   Papéis da paleta: `--azul-900` é superfície institucional e sidebar,
+   `--azul-600` carrega ação e estado ativo, `--verde-600` é sucesso,
+   `--amarelo` é acento raro.
+
+   **O amarelo `#FFCC00` rende 1.4:1 sobre branco: nunca recebe texto
+   por cima nem carrega texto sozinho.** Onde a cor precisa virar texto,
+   use `--amarelo-texto`. É por isso que o botão primário é azul.
+
+   O que o Desk acrescenta ao sistema está marcado com `[DESK]`:
+   prioridade, SLA, canal e a métrica da fila. Todos derivam das rampas
+   existentes — não invente hex novo.
 
 7. **Prioridade é derivada, nunca digitada.**
    `prioridade = f(urgência, impacto)` pela matriz configurável. O campo

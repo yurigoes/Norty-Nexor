@@ -1,0 +1,420 @@
+/* =========================================================
+   NORTY DESK — Componentes
+   As peças. Cor e forma vêm de tokens.css, sem exceção.
+   ========================================================= */
+
+/* ---------- Campo ---------- */
+
+.campo {
+  width: 100%;
+  height: 38px;
+  padding: 0 var(--e-3);
+  font-size: var(--t-corpo-sm);
+  color: var(--texto-padrao);
+  background: var(--superficie-card);
+  border: 1px solid var(--borda);
+  border-radius: var(--r-md);
+  transition: border-color var(--tr-rapida);
+}
+
+.campo:hover { border-color: var(--borda-forte); }
+.campo:focus { border-color: var(--borda-foco); }
+.campo::placeholder { color: var(--texto-tenue); }
+
+.campo--area {
+  height: auto;
+  min-height: 96px;
+  padding: var(--e-3);
+  line-height: var(--lh-normal);
+  resize: vertical;
+}
+
+.campo--estreito { width: auto; min-width: 170px; }
+
+/* ---------- Botão ---------- */
+
+.botao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--e-2);
+  height: 38px;
+  padding: 0 var(--e-5);
+  font-size: var(--t-corpo-sm);
+  font-weight: var(--p-semi);
+  border-radius: var(--r-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--tr-rapida), border-color var(--tr-rapida);
+}
+
+/* Ação primária é o azul de ação. O amarelo é acento raro e
+   nunca vira botão: não tem contraste para carregar texto. */
+.botao--primario {
+  background: var(--azul-600);
+  color: var(--texto-inverso);
+}
+
+.botao--primario:hover { background: var(--azul-700); }
+
+.botao--secundario {
+  background: var(--superficie-card);
+  color: var(--texto-padrao);
+  border-color: var(--borda);
+}
+
+.botao--secundario:hover {
+  background: var(--superficie-hover);
+  border-color: var(--borda-forte);
+}
+
+.botao--discreto {
+  background: transparent;
+  color: var(--texto-suave);
+  padding: 0 var(--e-3);
+}
+
+.botao--discreto:hover {
+  background: var(--superficie-afundada);
+  color: var(--texto-padrao);
+}
+
+/* ---------- Etiqueta ---------- */
+
+.etiqueta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-1);
+  padding: 2px var(--e-2);
+  font-size: var(--t-micro);
+  font-weight: var(--p-semi);
+  border-radius: var(--r-sm);
+  white-space: nowrap;
+}
+
+.etiqueta--neutro  { background: var(--cinza-100);   color: var(--texto-suave); }
+.etiqueta--info    { background: var(--info-fundo);  color: var(--info); }
+.etiqueta--sucesso { background: var(--sucesso-fundo); color: var(--sucesso); }
+.etiqueta--aviso   { background: var(--aviso-fundo); color: var(--aviso); }
+.etiqueta--erro    { background: var(--erro-fundo);  color: var(--erro); }
+
+/* ---------- Prioridade ----------
+   Um traço, não uma bolha. Cinco bolhas coloridas por linha
+   transformam a fila num carnaval e param de comunicar.
+   O traço usa o tom vivo; o número, o tom de texto. */
+
+.prioridade {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-2);
+  font-size: var(--t-micro);
+  font-weight: var(--p-semi);
+  font-variant-numeric: tabular-nums;
+  color: var(--texto-suave);
+}
+
+.prioridade::before {
+  content: "";
+  width: 3px;
+  height: 16px;
+  border-radius: var(--r-pill);
+  background: var(--prio-3);
+}
+
+.prioridade--1::before { background: var(--prio-1); }
+.prioridade--2::before { background: var(--prio-2); }
+.prioridade--3::before { background: var(--prio-3); }
+.prioridade--4::before { background: var(--prio-4); }
+.prioridade--5::before { background: var(--prio-5); }
+
+.prioridade--5 { color: var(--prio-5); }
+
+/* ---------- SLA ---------- */
+
+.sla {
+  font-size: var(--t-micro);
+  font-weight: var(--p-semi);
+  font-variant-numeric: tabular-nums;
+}
+
+.sla--ok        { color: var(--sla-ok); }
+.sla--atencao   { color: var(--sla-atencao); }
+.sla--estourado { color: var(--sla-estourado); }
+
+/* ---------- Canal ---------- */
+
+.canal {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--r-pill);
+  background: var(--canal-web);
+  flex-shrink: 0;
+}
+
+.canal--EMAIL    { background: var(--canal-email); }
+.canal--WHATSAPP { background: var(--canal-whatsapp); }
+.canal--API      { background: var(--canal-api); }
+.canal--SISTEMA  { background: var(--canal-sistema); }
+
+/* ---------- Cartão ---------- */
+
+.cartao {
+  background: var(--superficie-card);
+  border: 1px solid var(--borda);
+  border-radius: var(--r-lg);
+  padding: var(--e-5);
+}
+
+.cartao__rotulo {
+  font-size: var(--t-micro);
+  font-weight: var(--p-semi);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--texto-tenue);
+}
+
+.cartao__valor {
+  font-size: var(--t-h2);
+  font-weight: var(--p-extra);
+  font-variant-numeric: tabular-nums;
+  color: var(--texto-forte);
+}
+
+/* ---------- Fila ---------- */
+
+.fila {
+  background: var(--superficie-card);
+  border: 1px solid var(--borda);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+
+.fila__cabecalho {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-4);
+  padding: var(--e-3) var(--e-4);
+  border-bottom: 1px solid var(--borda);
+}
+
+.fila__visoes {
+  display: flex;
+  gap: var(--e-1);
+}
+
+.fila__visao {
+  padding: var(--e-2) var(--e-3);
+  font-size: var(--t-corpo-sm);
+  font-weight: var(--p-medio);
+  border-radius: var(--r-md);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--texto-suave);
+  cursor: pointer;
+  transition: background var(--tr-rapida), color var(--tr-rapida);
+}
+
+.fila__visao:hover { background: var(--superficie-hover); }
+
+.fila__visao[aria-pressed="true"] {
+  background: var(--superficie-ativa);
+  color: var(--azul-700);
+  font-weight: var(--p-semi);
+}
+
+.fila__resumo {
+  font-size: var(--t-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--texto-tenue);
+}
+
+/* ---------- Tabela ---------- */
+
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-label);
+}
+
+.tabela th {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  text-align: left;
+  font-size: var(--t-micro);
+  font-weight: var(--p-semi);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--texto-tenue);
+  background: var(--superficie-card);
+  padding: var(--e-2) var(--e-4);
+  border-bottom: 1px solid var(--borda);
+}
+
+.tabela td {
+  height: var(--fila-linha-alt);
+  padding: 0 var(--e-4);
+  border-bottom: 1px solid var(--borda-suave);
+  vertical-align: middle;
+  color: var(--texto-padrao);
+}
+
+.tabela tbody tr {
+  cursor: pointer;
+  transition: background var(--tr-rapida);
+}
+
+.tabela tbody tr:hover { background: var(--superficie-hover); }
+.tabela tbody tr:last-child td { border-bottom: none; }
+
+.tabela__numero {
+  font-family: var(--fonte-mono);
+  font-size: var(--t-micro);
+  color: var(--texto-tenue);
+}
+
+.tabela__assunto {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-2);
+  font-weight: var(--p-semi);
+  color: var(--texto-forte);
+}
+
+.vazio {
+  padding: var(--e-16) var(--e-4);
+  text-align: center;
+  color: var(--texto-suave);
+}
+
+/* ---------- Timeline ---------- */
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+  min-width: 0;
+}
+
+.evento {
+  background: var(--superficie-card);
+  border: 1px solid var(--borda);
+  border-radius: var(--r-lg);
+  padding: var(--e-4) var(--e-5);
+}
+
+/* Nota interna precisa ser inconfundível: mandar comentário
+   interno para o WhatsApp do cliente é o pior erro possível
+   deste produto. Fundo âmbar, borda âmbar e etiqueta escrita —
+   três sinais, nenhum deles só de cor. */
+.evento--interno {
+  background: var(--amarelo-50);
+  border-color: var(--amarelo-100);
+}
+
+/* Evento de sistema é ruído de fundo: registra, não interrompe. */
+.evento--sistema {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--borda);
+}
+
+.evento__cabecalho {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--e-2);
+  margin-bottom: var(--e-2);
+  font-size: var(--t-micro);
+  color: var(--texto-suave);
+}
+
+.evento__autor {
+  font-weight: var(--p-semi);
+  color: var(--texto-forte);
+}
+
+.evento__separador { color: var(--texto-tenue); }
+
+.evento__corpo {
+  font-size: var(--t-corpo);
+  line-height: var(--lh-solta);
+  color: var(--texto-padrao);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.evento--sistema .evento__corpo {
+  font-size: var(--t-corpo-sm);
+  color: var(--texto-suave);
+}
+
+.evento__anexos {
+  margin: var(--e-3) 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-1);
+}
+
+.evento__anexo {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  font-size: var(--t-corpo-sm);
+  color: var(--texto-link);
+}
+
+.evento__anexo-peso {
+  font-size: var(--t-micro);
+  color: var(--texto-tenue);
+}
+
+/* ---------- Caixa de resposta ---------- */
+
+.responder__acoes {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  margin-top: var(--e-3);
+}
+
+.responder__enviar { margin-left: auto; }
+
+/* ---------- Painel de propriedades ---------- */
+
+.painel {
+  position: sticky;
+  top: 0;
+  background: var(--superficie-card);
+  border: 1px solid var(--borda);
+  border-radius: var(--r-lg);
+  padding: var(--e-4) var(--e-5);
+}
+
+.painel__linha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-3);
+  padding: var(--e-3) 0;
+  border-bottom: 1px solid var(--borda-suave);
+  font-size: var(--t-corpo-sm);
+}
+
+.painel__linha:last-child { border-bottom: none; }
+
+.painel__rotulo {
+  color: var(--texto-suave);
+  flex-shrink: 0;
+}
+
+.painel__valor {
+  text-align: right;
+  color: var(--texto-forte);
+  font-weight: var(--p-medio);
+}

@@ -1,21 +1,12 @@
-# Bloco do Norty Desk para o Caddy do CT 105 Asgard.
+# Bloco do Norty Desk para o ingress da Norty.
 # Ver docs/11-infra.md, seção 4.
+#
+# Um domínio só. A API vive em /api/*, servida pelo nginx do
+# desk-web — não há host separado para ela, de propósito: assim
+# não existe caminho até a API que não passe pelo mesmo domínio
+# e pelo mesmo cookie de sessão. É o desenho do LICITA+.
 
 desk.norty.com.br {
     encode gzip zstd
-
-    handle /api/* {
-        uri strip_prefix /api
-        reverse_proxy desk-api:3061
-    }
-
-    handle {
-        reverse_proxy desk-web:3060
-    }
-}
-
-# Endereço público para integração e webhook (e-mail, Evolution).
-api-desk.norty.com.br {
-    encode gzip zstd
-    reverse_proxy desk-api:3061
+    reverse_proxy 192.168.15.75:3060
 }

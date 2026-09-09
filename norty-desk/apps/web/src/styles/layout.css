@@ -1,0 +1,167 @@
+/* =========================================================
+   NORTY DESK — Layout
+   A casca: sidebar, cabeçalho, conteúdo e as duas colunas da
+   tela de chamado. Nada de cor de componente aqui.
+   ========================================================= */
+
+.casca {
+  display: grid;
+  grid-template-columns: var(--sidebar-larg) 1fr;
+  grid-template-rows: var(--header-alt) 1fr;
+  grid-template-areas:
+    "sidebar cabecalho"
+    "sidebar conteudo";
+  height: 100%;
+}
+
+/* ---------- Sidebar ---------- */
+
+.sidebar {
+  grid-area: sidebar;
+  background: var(--grad-sidebar);
+  color: var(--texto-inverso);
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--borda-inversa);
+  overflow: hidden;
+}
+
+.sidebar__marca {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  height: var(--header-alt);
+  padding: 0 var(--e-5);
+  font-size: var(--t-h4);
+  font-weight: var(--p-extra);
+  letter-spacing: -0.01em;
+  border-bottom: 1px solid var(--borda-inversa);
+  flex-shrink: 0;
+}
+
+/* O acento aparece uma vez por tela, no nome do produto. É o
+   uso raro que o sistema pede — e o amarelo aqui é forma, não
+   texto que precise de contraste de leitura. */
+.sidebar__marca-acento {
+  color: var(--amarelo);
+}
+
+.sidebar__nav {
+  padding: var(--e-4) var(--e-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+
+.sidebar__grupo {
+  padding: var(--e-5) var(--e-3) var(--e-2);
+  font-size: var(--t-micro);
+  font-weight: var(--p-semi);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--texto-inverso-suave);
+}
+
+.sidebar__grupo:first-child {
+  padding-top: var(--e-1);
+}
+
+.sidebar__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-2);
+  padding: var(--e-2) var(--e-3);
+  border-radius: var(--r-md);
+  color: var(--texto-inverso-suave);
+  text-decoration: none;
+  font-size: var(--t-corpo-sm);
+  transition: background var(--tr-rapida), color var(--tr-rapida);
+}
+
+.sidebar__item:hover {
+  background: rgba(255, 255, 255, .07);
+  color: var(--texto-inverso);
+  text-decoration: none;
+}
+
+.sidebar__item[aria-current="page"] {
+  background: var(--azul-600);
+  color: var(--texto-inverso);
+  font-weight: var(--p-semi);
+}
+
+.sidebar__contador {
+  font-size: var(--t-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--texto-inverso-suave);
+}
+
+.sidebar__item[aria-current="page"] .sidebar__contador {
+  color: var(--texto-inverso);
+}
+
+/* ---------- Cabeçalho ---------- */
+
+.cabecalho {
+  grid-area: cabecalho;
+  display: flex;
+  align-items: center;
+  gap: var(--e-4);
+  padding: 0 var(--e-6);
+  background: var(--superficie-card);
+  border-bottom: 1px solid var(--borda);
+}
+
+.cabecalho__busca {
+  flex: 1;
+  max-width: 460px;
+}
+
+/* ---------- Conteúdo ---------- */
+
+.conteudo {
+  grid-area: conteudo;
+  overflow: auto;
+  padding: var(--e-6);
+}
+
+.conteudo__interno {
+  max-width: var(--conteudo-max);
+  margin: 0 auto;
+}
+
+.titulo-tela {
+  font-size: var(--t-h3);
+  font-weight: var(--p-bold);
+  color: var(--texto-forte);
+  margin: 0 0 var(--e-5);
+}
+
+/* ---------- Tela de chamado ----------
+   Timeline à esquerda (o que aconteceu), propriedades à direita
+   (o que o chamado é). O painel gruda no topo porque é
+   referência constante; quem rola é a timeline. */
+
+.chamado {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--painel-larg);
+  gap: var(--e-6);
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .chamado {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- Grade de cartões ---------- */
+
+.cartoes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--e-4);
+  margin-bottom: var(--e-6);
+}

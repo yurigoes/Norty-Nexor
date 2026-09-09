@@ -1,7 +1,7 @@
-export function Topbar() {
+export function Cabecalho() {
   return (
-    <header className="topbar">
-      <div className="topbar__busca">
+    <header className="cabecalho">
+      <div className="cabecalho__busca">
         <input
           className="campo"
           type="search"
@@ -9,6 +9,7 @@ export function Topbar() {
           aria-label="Buscar chamados"
         />
       </div>
+
       <button type="button" className="botao botao--primario">
         Novo chamado
       </button>

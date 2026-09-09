@@ -28,36 +28,41 @@ export function Chamado({
 
   return (
     <div>
-      <button type="button" className="botao botao--secundario" onClick={aoVoltar}>
+      <button type="button" className="botao botao--discreto" onClick={aoVoltar}>
         ← Voltar para a fila
       </button>
 
-      <h1 className="titulo-tela" style={{ marginTop: 'var(--space-4)' }}>
+      <h1 className="titulo-tela" style={{ marginTop: 'var(--e-3)' }}>
         <span className="tabela__numero">#{chamado.number}</span> {chamado.subject}
       </h1>
 
       <div className="chamado">
         <Timeline eventos={EVENTOS} />
 
-        <aside className="painel">
+        <aside className="painel" aria-label="Propriedades do chamado">
           <div className="painel__linha">
             <span className="painel__rotulo">Status</span>
             <span className={`etiqueta ${classeStatus(chamado.status)}`}>
               {ROTULO_STATUS[chamado.status]}
             </span>
           </div>
+
           <div className="painel__linha">
             <span className="painel__rotulo">Prioridade</span>
+            {/* A prioridade aparece por extenso: a informação nunca
+                depende só da cor do traço. */}
             <span className={`prioridade prioridade--${chamado.priority}`}>
               {ROTULO_PRIORIDADE[chamado.priority]}
             </span>
           </div>
+
           <div className="painel__linha">
             <span className="painel__rotulo">Urgência × impacto</span>
-            <span>
+            <span className="painel__valor numerico">
               {chamado.urgency} × {chamado.impact}
             </span>
           </div>
+
           {compromisso && estado ? (
             <div className="painel__linha">
               <span className="painel__rotulo">
@@ -68,28 +73,35 @@ export function Chamado({
               </span>
             </div>
           ) : null}
+
           <div className="painel__linha">
             <span className="painel__rotulo">Categoria</span>
-            <span>{chamado.category?.name ?? '—'}</span>
+            <span className="painel__valor">{chamado.category?.name ?? '—'}</span>
           </div>
+
           <div className="painel__linha">
             <span className="painel__rotulo">Solicitante</span>
-            <span>{chamado.requester?.name ?? '—'}</span>
+            <span className="painel__valor">{chamado.requester?.name ?? '—'}</span>
           </div>
+
           <div className="painel__linha">
             <span className="painel__rotulo">Atribuído</span>
-            <span>{chamado.assignedUser?.name ?? chamado.assignedTeam?.name ?? '—'}</span>
+            <span className="painel__valor">
+              {chamado.assignedUser?.name ?? chamado.assignedTeam?.name ?? '—'}
+            </span>
           </div>
+
           <div className="painel__linha">
             <span className="painel__rotulo">Canal de origem</span>
-            <span>
+            <span className="painel__valor">
               <span className={`canal canal--${chamado.originChannel}`} />{' '}
               {ROTULO_CANAL[chamado.originChannel]}
             </span>
           </div>
+
           <div className="painel__linha">
             <span className="painel__rotulo">Aberto em</span>
-            <span>{dataCurta(chamado.createdAt)}</span>
+            <span className="painel__valor numerico">{dataCurta(chamado.createdAt)}</span>
           </div>
         </aside>
       </div>

@@ -1,189 +1,255 @@
 /* =========================================================
-   Norty Desk — Design Tokens
+   NORTY DESK — Design Tokens
+   ---------------------------------------------------------
+   Fonte única de verdade: cor, tipografia, espaço, raio,
+   sombra, camada e transição. Nenhum componente escreve um
+   valor literal — se um token não existe, ele nasce aqui.
 
-   Fonte única de verdade para cores, espaçamento, tipografia,
-   raios, sombras, camadas e transições. Não introduza valores
-   literais em CSS de módulo (CLAUDE.md, regra 6).
+   A base é o sistema do LICITA+ (`@nexor/licita-mais`), adotado
+   inteiro: mesma rampa, mesmos nomes, mesma métrica de layout.
+   Dois produtos da mesma casa não devem parecer de casas
+   diferentes.
 
-   A paleta é preto + dourado, herdada da identidade Norty. A
-   divisão de papéis é rígida:
+   A divisão de papéis da paleta é rígida:
 
-     grafite (--nd-ink)   ação primária, texto, superfícies escuras
-     dourado (--nd-gold)  acento de marca, destaque
-     vermelho (--danger)  só alerta real — nunca decoração
+     azul profundo  (--azul-900)  superfície institucional, sidebar
+     azul principal (--azul-600)  ação, navegação, estado ativo
+     azul técnico   (--azul-500)  dado, gráfico, interação
+     verde Brasil   (--verde-600) sucesso, SLA no prazo
+     amarelo Brasil (--amarelo)   acento raro
 
-   Sobre dourado o texto é preto: branco sobre dourado não atinge
-   contraste.
+   O amarelo #FFCC00 rende 1.4:1 sobre branco: ele nunca recebe
+   texto por cima nem carrega texto sozinho. Onde é preciso
+   escrever "amarelo", entra `--amarelo-texto`.
 
-   A densidade é a de uma ferramenta de trabalho, não a de um site.
-   A fila de chamados é onde o agente passa o dia; linha alta e
-   respiro generoso custam chamados por tela.
+   O que o Desk ACRESCENTA ao sistema do LICITA+ está marcado
+   com [DESK]: prioridade, SLA, canal e a métrica da fila. São
+   escalas ordinais e categóricas que um catálogo de licitações
+   não precisa e uma central de serviços não vive sem. Todas
+   derivam das mesmas rampas — nenhum hex novo foi inventado.
    ========================================================= */
 
 :root {
   /* ---------- Marca ---------- */
-  --nd-black: #0a0b0d;
-  --nd-black-700: #101216;
-  --nd-black-600: #171a20;
-  --nd-black-500: #23272f;
+  --azul-900: #071E3D;
+  --azul-800: #0B2C56;
+  --azul-700: #073E7A;
+  --azul-600: #005CA9;
+  --azul-500: #1677E8;
+  --azul-400: #4A97F0;
+  --azul-200: #B8D6FA;
+  --azul-100: #E3EFFD;
+  --azul-50:  #F1F7FE;
 
-  --nd-ink: #1a1d24;
-  --nd-ink-600: #0e1014;
-  --nd-ink-400: #3a3f49;
-  --nd-ink-100: #ecebe8;
+  --verde-700: #00703A;
+  --verde-600: #008C45;
+  --verde-500: #00A95C;
+  --verde-100: #DFF4E8;
+  --verde-50:  #F0FAF4;
 
-  --nd-gold: #c9a227;
-  --nd-gold-600: #8a6b10;
-  --nd-gold-400: #e3c463;
-  --nd-gold-100: #f7f0da;
+  --amarelo:      #FFCC00;
+  --amarelo-500:  #E5B400;
+  /* Tom legível do amarelo: usado onde a cor precisa virar texto. */
+  --amarelo-texto: #8A6200;
+  --amarelo-100:  #FFF4CC;
+  --amarelo-50:   #FFFBEB;
 
-  --nd-white: #ffffff;
-  --nd-gray: #6b7280;
-  --nd-background: #f4f3f0;
+  --vermelho-600: #C7342F;
+  --vermelho-500: #D14343;
+  --vermelho-100: #FBE3E2;
+
+  /* ---------- Neutros ----------
+     Cinza com viés azul, na direção do acento: cinza puro lê
+     como não escolhido. */
+  --branco:   #FFFFFF;
+  --cinza-50: #F5F7FA;
+  --cinza-100:#EDF1F6;
+  --cinza-200:#E2E8F0;
+  --cinza-300:#CBD5E1;
+  --cinza-400:#94A3B8;
+  --cinza-500:#64748B;
+  --cinza-600:#475569;
+  --cinza-700:#334155;
+  --cinza-900:#10233F;
 
   /* ---------- Superfícies ---------- */
-  --surface-app: var(--nd-background);
-  --surface-card: #ffffff;
-  --surface-raised: #ffffff;
-  --surface-sunken: #edebe7;
-  --surface-inverse: var(--nd-black);
-  --surface-hover: #f5f4f1;
-  --surface-active: #eae8e3;
-  --surface-selected: var(--nd-gold-100);
+  --superficie-app:     var(--cinza-50);
+  --superficie-card:    var(--branco);
+  --superficie-elevada: var(--branco);
+  --superficie-afundada:var(--cinza-100);
+  --superficie-inversa: var(--azul-900);
+  --superficie-hover:   var(--cinza-50);
+  --superficie-ativa:   var(--azul-100);
 
   /* ---------- Texto ---------- */
-  --text-strong: #0e1013;
-  --text-default: #23262c;
-  --text-muted: #6b7280;
-  --text-subtle: #9aa0a8;
-  --text-inverse: #ffffff;
-  --text-inverse-muted: #a9aeb6;
-  --text-brand: var(--nd-gold-600);
+  --texto-forte:    var(--cinza-900);
+  --texto-padrao:   #1E3454;
+  --texto-suave:    var(--cinza-500);
+  --texto-tenue:    var(--cinza-400);
+  --texto-inverso:  var(--branco);
+  --texto-inverso-suave: rgba(255, 255, 255, .68);
+  --texto-link:     var(--azul-600);
 
   /* ---------- Bordas ---------- */
-  --border-subtle: #e8e6e1;
-  --border-default: #dbd9d3;
-  --border-strong: #c4c1ba;
-  --border-inverse: rgba(255, 255, 255, 0.1);
+  --borda:        var(--cinza-200);
+  --borda-suave:  var(--cinza-100);
+  --borda-forte:  var(--cinza-300);
+  --borda-inversa:rgba(255, 255, 255, .12);
+  --borda-foco:   var(--azul-500);
 
-  /* ---------- Semântica ---------- */
-  --success: #0e8f5f;
-  --success-bg: #e6f4ee;
-  --success-border: #a4d6c1;
-  /* Âmbar deliberadamente alaranjado: se ficasse próximo do dourado,
-     um aviso passaria por acento de marca. */
-  --warning: #db6e1e;
-  --warning-bg: #fceee1;
-  --warning-border: #f2c39c;
-  --danger: #c42b2b;
-  --danger-bg: #fbeaea;
-  --danger-border: #efb4b4;
-  --info: #3a5570;
-  --info-bg: #e9eef3;
-  --info-border: #c3d0dc;
-  --neutral: var(--nd-gray);
-  --neutral-bg: #f0efec;
-  --neutral-border: #ddd9d2;
+  /* ---------- Semântica ----------
+     Reservadas. Nunca reaproveitadas como "cor de série". */
+  --sucesso:   var(--verde-600);
+  --sucesso-fundo: var(--verde-50);
+  --aviso:     var(--amarelo-texto);
+  --aviso-fundo: var(--amarelo-50);
+  --erro:      var(--vermelho-600);
+  --erro-fundo:var(--vermelho-100);
+  --info:      var(--azul-600);
+  --info-fundo:var(--azul-50);
 
-  /* ---------- Prioridade ----------
-     Uma escala só, do frio ao quente. Prioridade 5 usa o vermelho de
-     alerta porque, aqui, é alerta real. */
-  --prio-1: #7c8794;
-  --prio-2: #4b7ca8;
-  --prio-3: #b98a1f;
-  --prio-4: #d2691e;
-  --prio-5: var(--danger);
+  /* ---------- [DESK] Prioridade ----------
+     Escala ordinal de 5 passos, do frio ao quente. Segue a
+     convenção das faixas do LICITA+: o traço usa o tom vivo, o
+     texto usa o tom escuro. Por isso a prioridade 4 tem dois
+     tokens — o amarelo não carrega texto.
 
-  /* ---------- SLA ----------
-     Três estados e nada mais: no prazo, apertando, estourado. */
-  --sla-ok: var(--success);
-  --sla-atencao: var(--warning);
-  --sla-estourado: var(--danger);
+     A prioridade também aparece por extenso na tela de chamado
+     ("Alta"), então a informação nunca depende só da cor. */
+  --prio-1:       var(--cinza-400);
+  --prio-2:       var(--azul-400);
+  --prio-3:       var(--azul-600);
+  --prio-4:       var(--amarelo-500);
+  --prio-4-texto: var(--amarelo-texto);
+  --prio-5:       var(--vermelho-600);
 
-  /* ---------- Canal ----------
-     Cada canal tem cor própria na timeline: o agente precisa ver de
-     onde a mensagem veio sem ler o rótulo. */
-  --canal-web: var(--nd-ink-400);
-  --canal-email: #3a5570;
-  --canal-whatsapp: #128c7e;
-  --canal-api: #6b4fa0;
-  --canal-sistema: var(--nd-gray);
+  /* ---------- [DESK] SLA ----------
+     Três estados e nada mais: no prazo, apertando, estourado.
+     Uma barra de progresso contínua não ajuda ninguém a decidir
+     o que fazer agora. */
+  --sla-ok:              var(--verde-600);
+  --sla-ok-fundo:        var(--verde-50);
+  --sla-atencao:         var(--amarelo-texto);
+  --sla-atencao-fundo:   var(--amarelo-50);
+  --sla-estourado:       var(--vermelho-600);
+  --sla-estourado-fundo: var(--vermelho-100);
+
+  /* ---------- [DESK] Canal ----------
+     Cada canal tem cor própria na fila e na timeline: o agente
+     precisa ver de onde veio a mensagem sem ler o rótulo.
+
+     O mais comum recebe o tom mais mudo (web, cinza) e o mais
+     raro recebe o acento (API, amarelo) — que continua raro,
+     como manda o sistema. Sistema é quase invisível de
+     propósito: é ruído de fundo da timeline. */
+  --canal-web:      var(--cinza-500);
+  --canal-email:    var(--azul-600);
+  --canal-whatsapp: var(--verde-500);
+  --canal-api:      var(--amarelo-500);
+  --canal-sistema:  var(--cinza-300);
+
+  /* ---------- Gráficos ----------
+     Passos próprios, derivados das mesmas rampas e validados
+     contra a superfície clara (ΔE CVD ≥ 8 em todos os pares).
+     Não são os mesmos hex da interface de propósito. */
+  --grafico-1: #1677E8;
+  --grafico-2: #00803E;
+  --grafico-3: #D14343;
+  --grafico-grade: var(--cinza-200);
+  --grafico-eixo:  var(--cinza-400);
+  --grafico-superficie: var(--branco);
+
+  /* ---------- Gradientes ----------
+     Destaque, não preenchimento padrão. */
+  --grad-principal:   linear-gradient(135deg, #071E3D 0%, #005CA9 60%, #008C45 100%);
+  --grad-tecnologico: linear-gradient(135deg, #005CA9 0%, #1677E8 100%);
+  --grad-sidebar:     linear-gradient(180deg, #071E3D 0%, #061834 100%);
 
   /* ---------- Tipografia ---------- */
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
-    Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo,
-    Consolas, monospace;
+  --fonte: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --fonte-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  --text-xs: 0.6875rem;   /* 11px — metadado, etiqueta */
-  --text-sm: 0.8125rem;   /* 13px — corpo da tabela */
-  --text-base: 0.875rem;  /* 14px — corpo padrão */
-  --text-md: 1rem;        /* 16px — título de cartão */
-  --text-lg: 1.125rem;    /* 18px — assunto do chamado */
-  --text-xl: 1.375rem;    /* 22px — título de tela */
-  --text-2xl: 1.75rem;    /* 28px — número de painel */
+  --t-h1: 2.25rem;   /* 36 */
+  --t-h2: 1.625rem;  /* 26 */
+  --t-h3: 1.25rem;   /* 20 */
+  --t-h4: 1.0625rem; /* 17 */
+  --t-corpo: 0.9375rem;   /* 15 */
+  --t-corpo-sm: 0.875rem; /* 14 */
+  --t-label: 0.8125rem;   /* 13 */
+  --t-micro: 0.75rem;     /* 12 */
 
-  --weight-regular: 400;
-  --weight-medium: 500;
-  --weight-semibold: 600;
-  --weight-bold: 700;
+  --p-regular: 400;
+  --p-medio: 500;
+  --p-semi: 600;
+  --p-bold: 700;
+  --p-extra: 800;
 
-  --leading-tight: 1.25;
-  --leading-normal: 1.5;
-  --leading-relaxed: 1.65;
+  --lh-justa: 1.25;
+  --lh-normal: 1.5;
+  --lh-solta: 1.65;
 
-  /* ---------- Espaçamento — escala de 4 ---------- */
-  --space-0: 0;
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-5: 1.25rem;
-  --space-6: 1.5rem;
-  --space-8: 2rem;
-  --space-10: 2.5rem;
-  --space-12: 3rem;
-  --space-16: 4rem;
+  /* ---------- Espaço — escala de 4 ---------- */
+  --e-1: 4px;
+  --e-2: 8px;
+  --e-3: 12px;
+  --e-4: 16px;
+  --e-5: 20px;
+  --e-6: 24px;
+  --e-8: 32px;
+  --e-10: 40px;
+  --e-12: 48px;
+  --e-16: 64px;
+  --e-20: 80px;
 
-  /* ---------- Raios ---------- */
-  --radius-sm: 3px;
-  --radius-md: 6px;
-  --radius-lg: 10px;
-  --radius-xl: 14px;
-  --radius-full: 999px;
+  /* ---------- Raio ----------
+     Entre 8 e 16. Nada de pílula em superfície grande. */
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 16px;
+  --r-pill: 999px;
 
-  /* ---------- Sombras ---------- */
-  --shadow-xs: 0 1px 2px rgba(10, 11, 13, 0.05);
-  --shadow-sm: 0 1px 3px rgba(10, 11, 13, 0.08), 0 1px 2px rgba(10, 11, 13, 0.04);
-  --shadow-md: 0 4px 12px rgba(10, 11, 13, 0.1);
-  --shadow-lg: 0 12px 32px rgba(10, 11, 13, 0.14);
-  --focus-ring: 0 0 0 3px rgba(201, 162, 39, 0.35);
+  /* ---------- Sombra ----------
+     Muito suaves. A elevação vem da borda, não da sombra. */
+  --sombra-sm: 0 1px 2px rgba(7, 30, 61, .05);
+  --sombra-md: 0 2px 8px rgba(7, 30, 61, .06);
+  --sombra-lg: 0 8px 24px rgba(7, 30, 61, .09);
+  --sombra-xl: 0 18px 48px rgba(7, 30, 61, .14);
+  --sombra-foco: 0 0 0 3px rgba(22, 119, 232, .28);
 
   /* ---------- Camadas ---------- */
-  --z-base: 0;
-  --z-sticky: 10;
-  --z-dropdown: 100;
-  --z-overlay: 200;
-  --z-modal: 300;
-  --z-toast: 400;
+  --z-base: 1;
+  --z-sticky: 20;
+  --z-drawer: 40;
+  --z-modal: 60;
+  --z-toast: 80;
 
-  /* ---------- Transições ---------- */
-  --ease: cubic-bezier(0.2, 0, 0.15, 1);
-  --duration-fast: 120ms;
-  --duration-normal: 200ms;
+  /* ---------- Transição ----------
+     150–300ms. Nada além disso parece lento. */
+  --tr-rapida: 150ms cubic-bezier(.4, 0, .2, 1);
+  --tr-media: 220ms cubic-bezier(.4, 0, .2, 1);
+  --tr-lenta: 300ms cubic-bezier(.4, 0, .2, 1);
 
-  /* ---------- Medidas do shell ---------- */
-  --sidebar-width: 232px;
-  --sidebar-width-collapsed: 56px;
-  --topbar-height: 52px;
-  --queue-row-height: 44px;
-  --detail-panel-width: 340px;
+  /* ---------- Métrica de layout ---------- */
+  --sidebar-larg: 264px;
+  --sidebar-larg-min: 76px;
+  --header-alt: 68px;
+  --conteudo-max: 1440px;
+
+  /* ---------- [DESK] Métrica da fila ----------
+     A fila é onde o agente passa o dia: linha baixa e fonte de
+     label, para caber chamado na tela. Respiro generoso aqui
+     custa contexto. O painel do chamado tem largura fixa porque
+     ele é referência, não conteúdo — quem rola é a timeline. */
+  --fila-linha-alt: 46px;
+  --painel-larg: 340px;
 }
 
 /* Redução de movimento é preferência de acessibilidade, não de gosto. */
 @media (prefers-reduced-motion: reduce) {
   :root {
-    --duration-fast: 0ms;
-    --duration-normal: 0ms;
+    --tr-rapida: 0ms;
+    --tr-media: 0ms;
+    --tr-lenta: 0ms;
   }
 }

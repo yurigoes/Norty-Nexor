@@ -8,53 +8,52 @@ type Contadores = {
 /**
  * Navegação do agente.
  *
- * As visões de fila vêm primeiro porque é o que o agente abre ao chegar.
- * Configuração fica no fim: entra-se lá uma vez por mês.
+ * As visões de fila vêm primeiro, com contador — é o que o agente olha
+ * ao chegar. Configuração fica no fim: entra-se lá uma vez por mês.
  */
 export function Sidebar({
-  atual,
-  aoNavegar,
   contadores,
+  aoNavegar,
 }: {
-  atual: string;
-  aoNavegar: () => void;
   contadores: Contadores;
+  aoNavegar: () => void;
 }) {
   const visoes = [
     { chave: 'meus', rotulo: 'Meus chamados', contador: contadores.meus },
-    { chave: 'time', rotulo: 'Do meu time', contador: contadores.time },
+    { chave: 'time', rotulo: 'Do meu time', contador: contadores.time, atual: true },
     { chave: 'sem-atribuicao', rotulo: 'Sem atribuição', contador: contadores.semAtribuicao },
     { chave: 'sla', rotulo: 'SLA estourando', contador: contadores.slaEstourando },
   ];
 
-  const secoes = [
-    { rotulo: 'Base de conhecimento', chave: 'artigos' },
-    { rotulo: 'Aprovações', chave: 'aprovacoes' },
-    { rotulo: 'Painéis', chave: 'paineis' },
+  const trabalho = [
+    { chave: 'aprovacoes', rotulo: 'Aprovações' },
+    { chave: 'tarefas', rotulo: 'Minhas tarefas' },
+    { chave: 'artigos', rotulo: 'Base de conhecimento' },
+    { chave: 'paineis', rotulo: 'Painéis' },
   ];
 
   const configuracao = [
-    { rotulo: 'Categorias', chave: 'categorias' },
-    { rotulo: 'SLA e calendários', chave: 'sla-config' },
-    { rotulo: 'Canais', chave: 'canais' },
-    { rotulo: 'Regras de entrada', chave: 'regras' },
-    { rotulo: 'Pessoas e times', chave: 'pessoas' },
+    { chave: 'categorias', rotulo: 'Categorias e formulários' },
+    { chave: 'sla-config', rotulo: 'SLA e calendários' },
+    { chave: 'canais', rotulo: 'Canais' },
+    { chave: 'regras', rotulo: 'Regras de entrada' },
+    { chave: 'pessoas', rotulo: 'Pessoas e times' },
   ];
 
   return (
     <aside className="sidebar">
       <div className="sidebar__marca">
-        Norty <strong>Desk</strong>
+        Norty Desk<span className="sidebar__marca-acento">.</span>
       </div>
 
-      <nav className="sidebar__nav">
+      <nav className="sidebar__nav" aria-label="Navegação principal">
         <div className="sidebar__grupo">Fila</div>
         {visoes.map((visao) => (
           <a
             key={visao.chave}
             href={`#${visao.chave}`}
             className="sidebar__item"
-            aria-current={atual === 'fila' && visao.chave === 'time' ? 'page' : undefined}
+            aria-current={visao.atual ? 'page' : undefined}
             onClick={(evento) => {
               evento.preventDefault();
               aoNavegar();
@@ -66,9 +65,9 @@ export function Sidebar({
         ))}
 
         <div className="sidebar__grupo">Trabalho</div>
-        {secoes.map((secao) => (
-          <a key={secao.chave} href={`#${secao.chave}`} className="sidebar__item">
-            {secao.rotulo}
+        {trabalho.map((item) => (
+          <a key={item.chave} href={`#${item.chave}`} className="sidebar__item">
+            {item.rotulo}
           </a>
         ))}
 

@@ -1,6 +1,9 @@
 # 07 — Contratos de API
 
-Base: `https://api-desk.norty.com.br/v1`
+Base: `https://desk.norty.com.br/api/v1`
+
+A API não tem host próprio: vive sob `/api` no mesmo domínio do
+aplicativo. Ver `docs/11-infra.md`, seção 4.
 Tipos: `packages/shared/src/api.ts` (consumidos por web e API).
 
 ---

@@ -11,7 +11,7 @@ API REST que exige `session_token` e conhece campos por número
 
 ```
 desk.norty.com.br      → apps/web    (React + Vite)
-api-desk.norty.com.br  → apps/api    (NestJS + Prisma + PostgreSQL)
+desk.norty.com.br/api  → apps/api    (NestJS + Prisma + PostgreSQL)
 ```
 
 ## Estado
