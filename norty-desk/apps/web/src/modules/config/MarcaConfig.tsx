@@ -100,7 +100,7 @@ export function MarcaConfig() {
               {marca.logoUrl ? (
                 <img src={marca.logoUrl} alt="" style={{ maxHeight: 40 }} />
               ) : (
-                <MarcaEmbutida tamanho={40} tom="escuro" />
+                <MarcaEmbutida tamanho={40} />
               )}
             </Amostra>
           </div>

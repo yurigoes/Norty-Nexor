@@ -3,24 +3,13 @@ import { useState, type FormEvent } from 'react';
 import { ErroDaApi } from '../../api/cliente';
 import { useMarca } from '../../api/marca';
 import { useAutenticacao } from '../../auth/Autenticacao';
-import { Marca } from '../../components/Marca';
+import { Check, MarcaCompleta } from '../../components/Marca';
 
 const PONTOS = [
-  {
-    icone: '⌁',
-    titulo: 'Um chamado, todos os canais',
-    texto: 'Portal, e-mail e WhatsApp entram na mesma fila — e a resposta sai por onde a pessoa falou.',
-  },
-  {
-    icone: '◷',
-    titulo: 'Prazo que conta expediente',
-    texto: 'SLA sobre calendário, com feriado e pausa. Sexta às 17h não consome o fim de semana.',
-  },
-  {
-    icone: '☰',
-    titulo: 'A conversa inteira num lugar',
-    texto: 'Mensagem, tarefa, anexo e mudança de status na mesma linha do tempo.',
-  },
+  'Portal, e-mail e WhatsApp na mesma fila',
+  'Prazo contado em expediente, com feriado e pausa',
+  'A conversa inteira do chamado num lugar só',
+  'Nota interna que nunca sai para o cliente',
 ];
 
 export function Login() {
@@ -49,51 +38,45 @@ export function Login() {
   }
 
   return (
-    <div className="entrada">
-      <aside className="entrada-marca">
-        <div className="entrada-geo" aria-hidden="true" />
+    <div className="login">
+      <aside className="login-arte">
+        <div className="login-geo-3" aria-hidden="true" />
+        <div className="login-geo-1" aria-hidden="true" />
+        <div className="login-geo-2" aria-hidden="true" />
 
-        <div className="entrada-topo">
-          <div className="entrada-logo">
-            <Marca logoUrl={marca.logoUrl} nome={marca.productName} tamanho={40} />
-            {!marca.logoUrl ? (
-              <span className="entrada-logo-texto">{marca.productName}</span>
-            ) : null}
-          </div>
+        <div className="login-topo">
+          <MarcaCompleta
+            logoUrl={marca.logoUrl}
+            nome={marca.productName}
+            tamanho={38}
+            inversa
+          />
         </div>
 
-        <div className="entrada-corpo">
-          <h2 className="entrada-titulo">
-            {marca.tagline ?? 'A central de serviços da Norty.'}
-          </h2>
-          <p className="entrada-sub">
-            Abrir, acompanhar e resolver — com o prazo à vista e a conversa inteira registrada.
+        <div className="login-corpo">
+          <h2>{marca.tagline ?? 'A central de serviços da Norty.'}</h2>
+          <p>
+            Abrir, acompanhar e resolver — com o prazo à vista e a conversa inteira
+            registrada, venha ela do portal, do e-mail ou do WhatsApp.
           </p>
 
-          <div className="entrada-pontos">
+          <div className="login-lista" style={{ marginTop: 'var(--e-8)' }}>
             {PONTOS.map((ponto) => (
-              <div key={ponto.titulo} className="entrada-ponto">
-                <span className="entrada-ponto-marca" aria-hidden="true">
-                  <span>{ponto.icone}</span>
-                </span>
-                <span>
-                  <b>{ponto.titulo}</b>
-                  {ponto.texto}
-                </span>
-              </div>
+              <span key={ponto} className="login-lista-item">
+                <Check />
+                {ponto}
+              </span>
             ))}
           </div>
         </div>
 
-        <div className="entrada-rodape">
-          {marca.productName} · Norty
-        </div>
+        <div className="login-rodape">{marca.productName} · Norty</div>
       </aside>
 
-      <main className="entrada-form">
-        <form className="entrada-cartao" onSubmit={enviar}>
-          <div className="entrada-logo-mobile">
-            <Marca logoUrl={marca.logoUrl} nome={marca.productName} tamanho={44} tom="escuro" />
+      <main className="login-form">
+        <form className="login-caixa" onSubmit={enviar}>
+          <div className="login-marca-mobile">
+            <MarcaCompleta logoUrl={marca.logoUrl} nome={marca.productName} tamanho={40} />
           </div>
 
           <h1>Entrar</h1>
@@ -106,7 +89,7 @@ export function Login() {
             </div>
           ) : null}
 
-          <div className="entrada-campos">
+          <div className="login-campos">
             <div className="campo">
               <label className="campo-rotulo" htmlFor="email">
                 E-mail
@@ -148,7 +131,7 @@ export function Login() {
             </button>
           </div>
 
-          <p className="entrada-ajuda">
+          <p className="login-ajuda">
             Esqueceu a senha ou não tem acesso? Fale com quem administra o{' '}
             {marca.productName} na sua organização.
           </p>
