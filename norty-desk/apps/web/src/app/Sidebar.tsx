@@ -56,6 +56,7 @@ export function Sidebar() {
     },
     { rotulo: 'Webhooks', para: '/config/webhooks', permissao: 'config:webhooks' as const },
     { rotulo: 'Pessoas e times', para: null, permissao: 'pessoa:gerenciar' as const },
+    { rotulo: 'Auditoria', para: '/config/auditoria', permissao: 'auditoria:ler' as const },
   ].filter((item) => can(item.permissao));
 
   return (

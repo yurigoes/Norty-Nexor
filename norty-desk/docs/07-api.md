@@ -402,8 +402,58 @@ GET|POST|PATCH|DELETE /v1/teams
 GET|POST|PATCH|DELETE /v1/users
 GET|POST|PATCH|DELETE /v1/webhooks
 GET|POST|DELETE       /v1/api-keys
-GET                   /v1/audit-logs
+GET                   /v1/audit-logs?entity=&entityId=&actorId=&limit=
+POST                  /v1/tickets/lote
 ```
+
+### 7.1 Ação em lote
+
+```
+POST /v1/tickets/lote
+{ "ticketIds": ["..."], "acao": { "tipo": "ATRIBUIR", "teamId": "..." } }
+```
+
+`tipo` é `ATRIBUIR`, `CLASSIFICAR` ou `MUDAR_STATUS`. Máximo de 200
+chamados por requisição — acima disso a chamada estoura o tempo do
+proxy e o agente fica sem saber o que passou.
+
+**Cada item passa pelo caso de uso normal.** Nada de `updateMany`: um
+`UPDATE` em massa pularia a matriz de prioridade, a linha do tempo, o
+SLA e a saída por canal. O lote é laço, e é mais lento de propósito.
+
+**O resultado vem por item**, com o motivo de cada falha:
+
+```json
+{
+  "total": 3, "concluidos": 1, "falhas": 2,
+  "itens": [
+    { "ticketId": "…", "number": 41, "ok": true },
+    { "ticketId": "…", "number": 42, "ok": false,
+      "motivo": "Chamado fechado. Reabra antes de escrever nele." }
+  ]
+}
+```
+
+"23 de 40 concluídos" sem dizer quais 17 falharam obriga o agente a
+conferir os quarenta à mão — e ele não vai conferir. Uma falha não
+interrompe as outras 199.
+
+O escopo de leitura do perfil vale aqui como em qualquer listagem: o
+lote não é porta lateral para agir sobre chamado que não é seu.
+
+### 7.2 Trilha de auditoria
+
+Registra **o diff**, não a linha inteira: dois campos alterados numa
+tabela de trinta é o que alguém lê seis meses depois ao perguntar "quem
+afrouxou este SLA?". Guardar o registro completo antes e depois
+transforma a trilha num backup que ninguém consulta.
+
+**Campo com segredo nunca entra — nem o valor antigo.** O diff registra
+`{ "de": "(oculto)", "para": "(alterado)" }`: quem lê a trilha precisa
+saber que a senha do IMAP mudou, não qual ela era.
+
+Registrar nunca lança. Falha de auditoria não pode desfazer a ação já
+feita — isso deixaria o sistema pior do que sem trilha nenhuma.
 
 ---
 

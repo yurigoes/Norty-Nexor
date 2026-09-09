@@ -4,6 +4,7 @@ import { ProvedorDeAutenticacao, useAutenticacao } from '../auth/Autenticacao';
 import { Login } from '../modules/auth/Login';
 import { MinhasAprovacoes } from '../modules/aprovacao/MinhasAprovacoes';
 import { Canais } from '../modules/canais/Canais';
+import { Auditoria } from '../modules/auditoria/Auditoria';
 import { Ativos } from '../modules/ativo/Ativos';
 import { Pesquisa } from '../modules/ativo/Pesquisa';
 import { Artigo } from '../modules/conhecimento/Artigo';
@@ -89,6 +90,7 @@ function Aplicativo() {
             <Route path="/config/canais" element={<Canais />} />
             <Route path="/config/canais/diagnostico" element={<Diagnostico />} />
             <Route path="/config/webhooks" element={<Webhooks />} />
+            <Route path="/config/auditoria" element={<Auditoria />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

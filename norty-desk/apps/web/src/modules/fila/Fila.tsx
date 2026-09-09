@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { TicketQuery, TicketStatus } from '@norty-desk/shared';
 
-import { useRecurso } from '../../auth/Autenticacao';
+import { useAutenticacao, useRecurso } from '../../auth/Autenticacao';
+import { BarraDeLote } from '../lote/BarraDeLote';
 import * as api from '../../api/endpoints';
 import {
   MODIFICADOR_PRIORIDADE,
@@ -34,7 +35,9 @@ const VISOES: Visao[] = [
  */
 export function Fila() {
   const navegar = useNavigate();
+  const { can, revalidar } = useAutenticacao();
   const [parametros, definirParametros] = useSearchParams();
+  const [selecionados, setSelecionados] = useState<string[]>([]);
 
   const filtro = useMemo<TicketQuery & { semAtribuicao?: boolean }>(() => {
     const f: Record<string, unknown> = {};
@@ -45,6 +48,10 @@ export function Fila() {
   const chave = parametros.toString();
   const { dado, erro, carregando } = useRecurso(() => api.listarChamados(filtro), [chave]);
 
+  // Trocar de visão limpa a seleção: agir sobre chamado que saiu da
+  // tela é o jeito clássico de fechar em massa o que não devia.
+  useEffect(() => setSelecionados([]), [chave]);
+
   function aplicar(visao: Visao) {
     const proximos = new URLSearchParams();
     // A busca sobrevive à troca de visão; o resto do filtro, não.
@@ -53,6 +60,8 @@ export function Fila() {
     for (const [k, v] of Object.entries(visao.filtro)) proximos.set(k, v);
     definirParametros(proximos);
   }
+
+  const podeLote = can('chamado:acao-em-lote');
 
   const visaoAtual =
     VISOES.find((v) =>
@@ -83,6 +92,17 @@ export function Fila() {
         </div>
       ) : null}
 
+      {can('chamado:acao-em-lote') ? (
+        <BarraDeLote
+          selecionados={selecionados}
+          aoLimpar={() => setSelecionados([])}
+          aoConcluir={() => {
+            setSelecionados([]);
+            revalidar();
+          }}
+        />
+      ) : null}
+
       {carregando ? (
         <div className="tabela-caixa" style={{ padding: 'var(--e-5)' }}>
           <div className="pilha-sm">
@@ -108,6 +128,22 @@ export function Fila() {
               <table className="tabela -densa">
                 <thead>
                   <tr>
+                    {podeLote ? (
+                      <th scope="col" style={{ width: 36 }}>
+                        <label className="check">
+                          <span className="so-leitor">Selecionar todos</span>
+                          <input
+                            type="checkbox"
+                            checked={
+                              dado.data.length > 0 && selecionados.length === dado.data.length
+                            }
+                            onChange={(e) =>
+                              setSelecionados(e.target.checked ? dado.data.map((c) => c.id) : [])
+                            }
+                          />
+                        </label>
+                      </th>
+                    ) : null}
                     <th scope="col">Nº</th>
                     <th scope="col">Assunto</th>
                     <th scope="col">Status</th>
@@ -123,6 +159,26 @@ export function Fila() {
                     const compromisso = chamado.commitments[0];
                     return (
                       <tr key={chamado.id} onClick={() => navegar(`/chamados/${chamado.id}`)}>
+                        {podeLote ? (
+                          // `stopPropagation`: marcar a caixa não pode
+                          // abrir o chamado, que é o que a linha faz.
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <label className="check">
+                              <span className="so-leitor">Selecionar #{chamado.number}</span>
+                              <input
+                                type="checkbox"
+                                checked={selecionados.includes(chamado.id)}
+                                onChange={(e) =>
+                                  setSelecionados((atual) =>
+                                    e.target.checked
+                                      ? [...atual, chamado.id]
+                                      : atual.filter((id) => id !== chamado.id),
+                                  )
+                                }
+                              />
+                            </label>
+                          </td>
+                        ) : null}
                         <td className="mono">#{chamado.number}</td>
                         <td>
                           <span className="linha" style={{ gap: 'var(--e-2)' }}>

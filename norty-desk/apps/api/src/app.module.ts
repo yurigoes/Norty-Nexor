@@ -15,6 +15,8 @@ import { PaineisModule } from './modules/paineis/paineis.module';
 import { RegrasModule } from './modules/regras/regras.module';
 import { AprovacoesModule } from './modules/aprovacoes/aprovacoes.module';
 import { AtivosModule } from './modules/ativos/ativos.module';
+import { AuditoriaModule } from './modules/auditoria/auditoria.module';
+import { LoteModule } from './modules/lote/lote.module';
 import { SatisfacaoModule } from './modules/satisfacao/satisfacao.module';
 import { SlaModule } from './modules/sla/sla.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
@@ -52,6 +54,8 @@ import { TicketsModule } from './modules/tickets/tickets.module';
     IntakeModule,
     RegrasModule,
     WebhooksModule,
+    AuditoriaModule,
+    LoteModule,
   ],
 })
 export class AppModule {}

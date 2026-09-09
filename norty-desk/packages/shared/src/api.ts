@@ -242,6 +242,56 @@ export type DecideApprovalRequest = {
 };
 
 // ---------------------------------------------------------------------
+// Ação em lote
+// ---------------------------------------------------------------------
+
+export type BulkAction =
+  | { tipo: 'ATRIBUIR'; teamId?: string; userId?: string }
+  | { tipo: 'CLASSIFICAR'; categoryId?: string; urgency?: Scale; impact?: Scale }
+  | { tipo: 'MUDAR_STATUS'; status: TicketStatus; body?: string };
+
+export type BulkRequest = {
+  ticketIds: string[];
+  acao: BulkAction;
+};
+
+/**
+ * O resultado **por item**.
+ *
+ * Uma ação em lote que devolve "23 de 40 concluídos" e não diz quais 17
+ * falharam obriga o agente a conferir os quarenta à mão — e ele não vai
+ * conferir.
+ */
+export type BulkResultItem = {
+  ticketId: string;
+  number?: number;
+  ok: boolean;
+  motivo?: string;
+};
+
+export type BulkResult = {
+  total: number;
+  concluidos: number;
+  falhas: number;
+  itens: BulkResultItem[];
+};
+
+// ---------------------------------------------------------------------
+// Auditoria
+// ---------------------------------------------------------------------
+
+export type AuditEntry = {
+  id: string;
+  action: string;
+  entity: string;
+  entityId: string | null;
+  diff: Record<string, { de: unknown; para: unknown }> | null;
+  ip: string | null;
+  createdAt: string;
+  actor: { id: string; name: string; email: string } | null;
+};
+
+// ---------------------------------------------------------------------
 // Ativos
 // ---------------------------------------------------------------------
 

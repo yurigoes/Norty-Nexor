@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   HttpCode,
+  Ip,
   NotFoundException,
   Param,
   ParseUUIDPipe,
@@ -20,6 +21,7 @@ import { RequirePermission } from '../../common/decorators/require-permission.de
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { AuditoriaService } from '../auditoria/auditoria.service';
 import { ColetaJob } from './coleta.job';
 import { DespachoJob } from './despacho.job';
 import { EvolutionClient } from './evolution.client';
@@ -54,6 +56,7 @@ export class EditarCanalDto {
 export class CanaisController {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly auditoria: AuditoriaService,
     private readonly coleta: ColetaJob,
     private readonly despacho: DespachoJob,
     private readonly processamento: ProcessamentoService,
@@ -85,7 +88,11 @@ export class CanaisController {
 
   @Post('accounts')
   @RequirePermission('config:canais')
-  async criar(@CurrentUser() usuario: UsuarioAutenticado, @Body() dto: CriarCanalDto) {
+  async criar(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Body() dto: CriarCanalDto,
+    @Ip() ip: string,
+  ) {
     const conta = await this.prisma.channelAccount.create({
       data: {
         organizationId: usuario.organizationId,
@@ -94,6 +101,14 @@ export class CanaisController {
         config: cifrarConfig(dto.config ?? {}) as never,
         defaultTeamId: dto.defaultTeamId,
       },
+    });
+
+    await this.auditoria.registrar(usuario, {
+      action: 'canal.criado',
+      entity: 'ChannelAccount',
+      entityId: conta.id,
+      ip,
+      depois: { kind: conta.kind, name: conta.name, defaultTeamId: conta.defaultTeamId },
     });
 
     return { id: conta.id, name: conta.name, kind: conta.kind };
@@ -105,6 +120,7 @@ export class CanaisController {
     @CurrentUser() usuario: UsuarioAutenticado,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: EditarCanalDto,
+    @Ip() ip: string,
   ) {
     const conta = await this.exigirConta(usuario, id);
 
@@ -139,6 +155,16 @@ export class CanaisController {
       },
     });
 
+    // O diff registra que o segredo mudou, nunca o segredo.
+    await this.auditoria.registrar(usuario, {
+      action: 'canal.editado',
+      entity: 'ChannelAccount',
+      entityId: id,
+      ip,
+      antes: { name: conta.name, defaultTeamId: conta.defaultTeamId, isActive: conta.isActive, ...atual },
+      depois: { name: dto.name ?? conta.name, defaultTeamId: dto.defaultTeamId ?? conta.defaultTeamId, isActive: dto.isActive ?? conta.isActive, ...novo },
+    });
+
     return { ok: true };
   }
 
@@ -148,11 +174,21 @@ export class CanaisController {
   async desativar(
     @CurrentUser() usuario: UsuarioAutenticado,
     @Param('id', ParseUUIDPipe) id: string,
+    @Ip() ip: string,
   ): Promise<void> {
     await this.exigirConta(usuario, id);
     // Desativar, não excluir: as mensagens recebidas apontam para a
     // conta, e o histórico do diagnóstico precisa dela.
     await this.prisma.channelAccount.update({ where: { id }, data: { isActive: false } });
+
+    await this.auditoria.registrar(usuario, {
+      action: 'canal.desativado',
+      entity: 'ChannelAccount',
+      entityId: id,
+      ip,
+      antes: { isActive: true },
+      depois: { isActive: false },
+    });
   }
 
   /** Testa a configuração antes de o operador ir embora achando que deu certo. */

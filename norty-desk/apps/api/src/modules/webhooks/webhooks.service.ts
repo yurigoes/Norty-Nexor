@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
+import { AuditoriaService } from '../auditoria/auditoria.service';
 import { cifrar, decifrar } from '../channels/segredos';
 import { EVENTOS_DE_WEBHOOK, type EventoDeWebhook } from './eventos';
 import type { EscreverWebhookDto } from './dto';
@@ -18,7 +19,10 @@ import type { EscreverWebhookDto } from './dto';
 export class WebhooksService {
   private readonly logger = new Logger(WebhooksService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditoria: AuditoriaService,
+  ) {}
 
   // -------------------------------------------------------------------
   // Emissão
@@ -97,11 +101,18 @@ export class WebhooksService {
       },
     });
 
+    await this.auditoria.registrar(usuario, {
+      action: 'webhook.criado',
+      entity: 'OutboundWebhook',
+      entityId: webhook.id,
+      depois: { name: webhook.name, url: webhook.url, events: webhook.events },
+    });
+
     return { id: webhook.id, name: webhook.name };
   }
 
   async editar(usuario: UsuarioAutenticado, id: string, dto: Partial<EscreverWebhookDto>) {
-    await this.exigir(usuario, id);
+    const atual = await this.exigir(usuario, id);
 
     if (dto.events) WebhooksService.exigirEventosConhecidos(dto.events);
     if (dto.url) WebhooksService.exigirUrlDeSaida(dto.url);
@@ -115,6 +126,20 @@ export class WebhooksService {
         ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
         // Segredo em branco significa "não mexi nisso".
         ...(dto.secret ? { secret: cifrar(dto.secret) } : {}),
+      },
+    });
+
+    await this.auditoria.registrar(usuario, {
+      action: 'webhook.editado',
+      entity: 'OutboundWebhook',
+      entityId: id,
+      antes: { name: atual.name, url: atual.url, events: atual.events, isActive: atual.isActive, secret: atual.secret },
+      depois: {
+        name: dto.name ?? atual.name,
+        url: dto.url ?? atual.url,
+        events: dto.events ?? atual.events,
+        isActive: dto.isActive ?? atual.isActive,
+        secret: dto.secret ? 'novo' : atual.secret,
       },
     });
 
