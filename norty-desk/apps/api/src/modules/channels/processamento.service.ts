@@ -10,6 +10,7 @@ import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { PORTA_DE_ARMAZENAMENTO, type PortaDeArmazenamento } from '../attachments/armazenamento';
+import { RegrasService } from '../regras/regras.service';
 import { TicketsService } from '../tickets/tickets.service';
 import { EntradaService } from './entrada.service';
 import { EvolutionClient } from './evolution.client';
@@ -39,6 +40,7 @@ export class ProcessamentoService {
     private readonly entrada: EntradaService,
     @Inject(forwardRef(() => TicketsService)) private readonly tickets: TicketsService,
     private readonly saida: SaidaService,
+    private readonly regras: RegrasService,
     private readonly evolution: EvolutionClient,
     @Inject(PORTA_DE_ARMAZENAMENTO) private readonly armazenamento: PortaDeArmazenamento,
   ) {}
@@ -130,13 +132,33 @@ export class ProcessamentoService {
 
     const assunto = limparAssunto(mensagem.subject ?? '') || 'Chamado por e-mail';
 
+    // As regras decidem antes de o chamado existir: descartar spam
+    // depois de abrir já custou um número de chamado e um aviso ao
+    // remetente.
+    const decisao = await this.regras.classificar(mensagem.organizationId, {
+      assunto,
+      corpo,
+      remetente: mensagem.fromAddress,
+      canal: 'EMAIL',
+    });
+
+    if (decisao.descartar) {
+      await this.descartar(mensagem.id, `Regra de entrada: ${decisao.descartar}`);
+      return;
+    }
+
     const chamado = await this.tickets.abrirPorCanal({
       organizationId: mensagem.organizationId,
       contactId: contato.id,
       channel: 'EMAIL',
       subject: assunto,
       description: corpo || '(mensagem com anexo)',
-      teamId: mensagem.channelAccount.defaultTeamId,
+      teamId: decisao.timeId ?? mensagem.channelAccount.defaultTeamId,
+      categoryId: decisao.categoriaId,
+      urgency: decisao.urgencia,
+      ticketType: decisao.tipo,
+      agreementIds: decisao.acordoIds,
+      regrasAplicadas: decisao.regrasAplicadas,
     });
 
     const abertura = await this.prisma.ticketEvent.create({
@@ -274,15 +296,34 @@ export class ProcessamentoService {
       return;
     }
 
+    const assunto = ProcessamentoService.assuntoDeTexto(texto);
+
+    const decisao = await this.regras.classificar(mensagem.organizationId, {
+      assunto,
+      corpo: texto,
+      remetente: telefone,
+      canal: 'WHATSAPP',
+    });
+
+    if (decisao.descartar) {
+      await this.descartar(mensagem.id, `Regra de entrada: ${decisao.descartar}`);
+      return;
+    }
+
     const chamado = await this.tickets.abrirPorCanal({
       organizationId: mensagem.organizationId,
       contactId: contato.id,
       channel: 'WHATSAPP',
       // O WhatsApp não tem assunto: a primeira linha vira o título e o
       // texto inteiro vira a descrição.
-      subject: ProcessamentoService.assuntoDeTexto(texto),
+      subject: assunto,
       description: texto || '(mídia sem texto)',
-      teamId: mensagem.channelAccount.defaultTeamId,
+      teamId: decisao.timeId ?? mensagem.channelAccount.defaultTeamId,
+      categoryId: decisao.categoriaId,
+      urgency: decisao.urgencia,
+      ticketType: decisao.tipo,
+      agreementIds: decisao.acordoIds,
+      regrasAplicadas: decisao.regrasAplicadas,
     });
 
     const abertura = await this.prisma.ticketEvent.create({

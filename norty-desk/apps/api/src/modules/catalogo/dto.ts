@@ -65,6 +65,13 @@ export class EditarUsuarioDto {
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 
+export class CriarChaveDto {
+  @IsString() @MinLength(2) @MaxLength(120) name!: string;
+
+  @IsArray() @ArrayMaxSize(12) @IsString({ each: true })
+  scopes!: string[];
+}
+
 export class FiltroUsuarioDto {
   @IsOptional() @IsString() @MaxLength(120) q?: string;
   @IsOptional() @IsEnum(PAPEIS) role?: (typeof PAPEIS)[number];

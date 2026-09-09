@@ -300,6 +300,12 @@ model Ticket {
   /// Soma do tempo gasto nas tarefas, em segundos.
   spentSeconds    Int @default(0)
 
+  /// Referência do sistema que abriu o chamado pela API pública.
+  ///
+  /// Junto com `Idempotency-Key`, é o que impede um monitoramento em
+  /// laço abrir mil chamados do mesmo incidente.
+  externalRef String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -319,6 +325,7 @@ model Ticket {
   linkedBy    TicketLink[] @relation("ChamadoDestino")
 
   @@unique([organizationId, number])
+  @@unique([organizationId, externalRef])
   @@index([organizationId, status])
   @@index([organizationId, priority])
   @@index([organizationId, createdAt])

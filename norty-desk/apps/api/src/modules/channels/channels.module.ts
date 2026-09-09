@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
 import { AttachmentsModule } from '../attachments/attachments.module';
+import { RegrasModule } from '../regras/regras.module';
 import { TicketsModule } from '../tickets/tickets.module';
 import { PORTAS_DE_ENVIO, type PortasDeEnvio } from './canais.tokens';
 import { ProcessamentoService } from './processamento.service';
@@ -47,7 +48,7 @@ function criarPortas(
    * abrir. O ciclo é real e é do domínio — resolvê-lo movendo código
    * criaria um terceiro módulo que não corresponde a nada.
    */
-  imports: [ConfigModule, AttachmentsModule, forwardRef(() => TicketsModule)],
+  imports: [ConfigModule, AttachmentsModule, RegrasModule, forwardRef(() => TicketsModule)],
   controllers: [EmailController, WhatsappController],
   providers: [
     EntradaService,

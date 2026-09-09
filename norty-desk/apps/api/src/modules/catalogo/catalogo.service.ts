@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -381,6 +381,81 @@ export class CatalogoService {
     ]);
 
     return (await this.usuarios(usuario, {})).find((u) => u.id === id)!;
+  }
+
+  // ------------------------------------------------------------------
+  // Chaves de aplicação
+  // ------------------------------------------------------------------
+
+  async chaves(usuario: UsuarioAutenticado) {
+    const chaves = await this.prisma.apiKey.findMany({
+      where: { organizationId: usuario.organizationId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // O hash nunca sai: a projeção é explícita, como na listagem de
+    // pessoas.
+    return chaves.map((c) => ({
+      id: c.id,
+      name: c.name,
+      scopes: c.scopes,
+      lastUsedAt: c.lastUsedAt,
+      revokedAt: c.revokedAt,
+      createdAt: c.createdAt,
+    }));
+  }
+
+  /**
+   * Cria a chave e devolve o valor cru **uma única vez**.
+   *
+   * O que fica no banco é o SHA-256. Se quem criou perder o valor, o
+   * caminho é revogar e criar outra — não há como recuperá-lo, e é
+   * assim que tem de ser.
+   */
+  async criarChave(usuario: UsuarioAutenticado, dados: { name: string; scopes: string[] }) {
+    const existente = await this.prisma.apiKey.findFirst({
+      where: { organizationId: usuario.organizationId, name: dados.name },
+    });
+    if (existente) throw new ConflictException('Já existe uma chave com este nome.');
+
+    const permitidos = new Set<string>([
+      'chamado:criar',
+      'chamado:ler:proprios',
+      'chamado:responder',
+      'anexo:enviar',
+    ]);
+
+    const invalidos = dados.scopes.filter((e) => !permitidos.has(e));
+    if (invalidos.length) {
+      throw new BadRequestException(
+        `Escopo não permitido para chave de aplicação: ${invalidos.join(', ')}. ` +
+          'Chave é de integração, não de administração.',
+      );
+    }
+
+    const cru = `nd_${randomBytes(24).toString('base64url')}`;
+
+    const chave = await this.prisma.apiKey.create({
+      data: {
+        organizationId: usuario.organizationId,
+        name: dados.name,
+        keyHash: createHash('sha256').update(cru).digest('hex'),
+        scopes: dados.scopes,
+      },
+    });
+
+    return { id: chave.id, name: chave.name, scopes: chave.scopes, chave: cru };
+  }
+
+  async revogarChave(usuario: UsuarioAutenticado, id: string): Promise<void> {
+    const chave = await this.prisma.apiKey.findFirst({
+      where: { id, organizationId: usuario.organizationId },
+    });
+    if (!chave) throw new NotFoundException('Chave não encontrada.');
+
+    // Revogar, não excluir: o histórico de qual chave abriu qual
+    // chamado continua fazendo sentido depois.
+    await this.prisma.apiKey.update({ where: { id }, data: { revokedAt: new Date() } });
   }
 
   /** Impede a organização ficar sem administrador ativo. */

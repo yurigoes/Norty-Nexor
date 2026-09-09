@@ -14,6 +14,7 @@ import {
   type PriorityMatrix,
   type Scale,
   type TicketDetail,
+  type TicketType,
   type TicketEventView,
   type TicketListItem,
   type TicketStatus,
@@ -381,14 +382,36 @@ export class TicketsService {
     description: string;
     /** Time padrão do canal, quando a conta define um. */
     teamId?: string | null;
+    /** O que as regras de entrada decidiram. */
+    categoryId?: string;
+    urgency?: Scale;
+    impact?: Scale;
+    ticketType?: TicketType;
+    agreementIds?: string[];
+    regrasAplicadas?: string[];
   }): Promise<{ id: string; number: number }> {
-    // Sem categoria: melhor sem do que na primeira que apareceu. Quem
-    // classifica é a regra de entrada ou o agente.
-    const urgency = 3 as Scale;
-    const impact = 3 as Scale;
+    // Sem categoria e sem regra que classifique, o chamado nasce sem
+    // categoria: melhor sem do que na primeira que apareceu.
+    const urgency = dados.urgency ?? (3 as Scale);
+    const impact = dados.impact ?? (3 as Scale);
     const priority = await this.derivarPrioridade(dados.organizationId, urgency, impact);
 
-    return this.prisma.$transaction(async (tx) => {
+    // A categoria pode trazer time e acordos próprios; a regra ganha
+    // dela quando decide explicitamente.
+    const categoria = dados.categoryId
+      ? await this.prisma.category.findFirst({
+          where: { id: dados.categoryId, organizationId: dados.organizationId },
+          include: { defaultAgreements: { where: { isActive: true }, select: { id: true } } },
+        })
+      : null;
+
+    const timeFinal = dados.teamId ?? categoria?.defaultTeamId ?? null;
+    const acordos =
+      dados.agreementIds?.length
+        ? dados.agreementIds
+        : (categoria?.defaultAgreements.map((a) => a.id) ?? []);
+
+    const chamado = await this.prisma.$transaction(async (tx) => {
       const number = await this.proximoNumero(tx, dados.organizationId);
 
       return tx.ticket.create({
@@ -397,22 +420,41 @@ export class TicketsService {
           number,
           subject: dados.subject.slice(0, 255),
           description: dados.description,
-          type: 'INCIDENTE',
-          status: dados.teamId ? 'ATRIBUIDO' : 'NOVO',
+          type: dados.ticketType ?? 'INCIDENTE',
+          status: timeFinal ? 'ATRIBUIDO' : 'NOVO',
           urgency,
           impact,
           priority,
+          categoryId: categoria?.id,
           originChannel: dados.channel,
           actors: {
             create: [
               { role: 'REQUERENTE', contactId: dados.contactId },
-              ...(dados.teamId ? [{ role: 'ATRIBUIDO' as const, teamId: dados.teamId }] : []),
+              ...(timeFinal ? [{ role: 'ATRIBUIDO' as const, teamId: timeFinal }] : []),
             ],
           },
         },
         select: { id: true, number: true },
       });
     });
+
+    if (acordos.length) await this.sla.aplicarAcordos(chamado.id, acordos);
+
+    // Quais regras classificaram fica registrado: sem isso, ninguém
+    // consegue explicar por que o chamado caiu naquela fila.
+    if (dados.regrasAplicadas?.length) {
+      await this.prisma.ticketEvent.create({
+        data: {
+          ticketId: chamado.id,
+          type: 'MUDANCA_CLASSIFICACAO',
+          visibility: 'INTERNA',
+          channel: 'SISTEMA',
+          body: `Classificado pelas regras de entrada: ${dados.regrasAplicadas.join(', ')}.`,
+        },
+      });
+    }
+
+    return chamado;
   }
 
   /**

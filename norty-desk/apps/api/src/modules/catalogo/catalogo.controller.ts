@@ -19,6 +19,7 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { CatalogoService } from './catalogo.service';
 import {
   CriarCategoriaDto,
+  CriarChaveDto,
   CriarTimeDto,
   CriarUsuarioDto,
   EditarCategoriaDto,
@@ -112,6 +113,30 @@ export class CatalogoController {
     @Param('userId', ParseUUIDPipe) userId: string,
   ) {
     return this.catalogo.removerMembro(usuario, id, userId);
+  }
+
+  // --- Chaves de aplicação -------------------------------------------
+
+  @Get('api-keys')
+  @RequirePermission('config:chaves-api')
+  chaves(@CurrentUser() usuario: UsuarioAutenticado) {
+    return this.catalogo.chaves(usuario);
+  }
+
+  @Post('api-keys')
+  @RequirePermission('config:chaves-api')
+  criarChave(@CurrentUser() usuario: UsuarioAutenticado, @Body() dto: CriarChaveDto) {
+    return this.catalogo.criarChave(usuario, dto);
+  }
+
+  @Delete('api-keys/:id')
+  @HttpCode(204)
+  @RequirePermission('config:chaves-api')
+  revogarChave(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.catalogo.revogarChave(usuario, id);
   }
 
   // --- Pessoas ------------------------------------------------------

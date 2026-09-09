@@ -10,6 +10,7 @@ import { CatalogoModule } from './modules/catalogo/catalogo.module';
 import { ChannelsModule } from './modules/channels/channels.module';
 import { HealthModule } from './modules/health/health.module';
 import { IntakeModule } from './modules/intake/intake.module';
+import { RegrasModule } from './modules/regras/regras.module';
 import { SlaModule } from './modules/sla/sla.module';
 import { TicketsModule } from './modules/tickets/tickets.module';
 
@@ -27,6 +28,7 @@ import { TicketsModule } from './modules/tickets/tickets.module';
     SlaModule,
     ChannelsModule,
     IntakeModule,
+    RegrasModule,
   ],
 })
 export class AppModule {}
