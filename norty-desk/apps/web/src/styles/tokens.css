@@ -184,10 +184,6 @@
   --p-bold: 700;
   --p-extra: 800;
 
-  --lh-justa: 1.25;
-  --lh-normal: 1.5;
-  --lh-solta: 1.65;
-
   /* ---------- Espaço — escala de 4 ---------- */
   --e-1: 4px;
   --e-2: 8px;
@@ -237,12 +233,14 @@
   --conteudo-max: 1440px;
 
   /* ---------- [DESK] Métrica da fila ----------
-     A fila é onde o agente passa o dia: linha baixa e fonte de
-     label, para caber chamado na tela. Respiro generoso aqui
-     custa contexto. O painel do chamado tem largura fixa porque
-     ele é referência, não conteúdo — quem rola é a timeline. */
+     A fila é onde o agente passa o dia: linha baixa, para caber
+     chamado na tela. Respiro generoso aqui custa contexto.
+
+     O trilho de propriedades do chamado NÃO tem token próprio:
+     usa os 336px do `.grade-conteudo-trilho` do LICITA+. Um
+     token a mais para repetir uma medida que já existe seria
+     divergência disfarçada de configuração. */
   --fila-linha-alt: 46px;
-  --painel-larg: 340px;
 }
 
 /* Redução de movimento é preferência de acessibilidade, não de gosto. */

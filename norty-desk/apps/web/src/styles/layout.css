@@ -1,167 +1,309 @@
 /* =========================================================
-   NORTY DESK — Layout
-   A casca: sidebar, cabeçalho, conteúdo e as duas colunas da
-   tela de chamado. Nada de cor de componente aqui.
+   NORTY DESK — Shell da aplicação
+   ---------------------------------------------------------
+   Adotado do LICITA+: grid de duas colunas no desktop; no
+   mobile a sidebar sai do fluxo e vira gaveta, e uma barra
+   inferior assume a navegação. Nenhuma medida fixa governa o
+   conteúdo — a coluna central é sempre fluida.
+
+   Duas diferenças, ambas deliberadas:
+
+   1. Sem o losango de fundo na sidebar. Aquilo é a geometria da
+      marca LICITA+; o Desk não tem losango, e repetir a forma de
+      outro produto seria empréstimo, não sistema.
+
+   2. `.conteudo` do Desk recebe menos respiro vertical
+      (`--e-5` no topo, não `--e-8`). A fila é a tela em que o
+      agente passa o dia: cada 16px de padding é meia linha de
+      chamado a menos na primeira dobra.
    ========================================================= */
 
-.casca {
+.shell {
   display: grid;
-  grid-template-columns: var(--sidebar-larg) 1fr;
-  grid-template-rows: var(--header-alt) 1fr;
-  grid-template-areas:
-    "sidebar cabecalho"
-    "sidebar conteudo";
-  height: 100%;
+  grid-template-columns: var(--sidebar-larg) minmax(0, 1fr);
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* ---------- Sidebar ---------- */
 
 .sidebar {
-  grid-area: sidebar;
-  background: var(--grad-sidebar);
-  color: var(--texto-inverso);
+  grid-row: 1;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--borda-inversa);
+  background: var(--grad-sidebar);
+  border-right: 1px solid rgba(255, 255, 255, .06);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
-.sidebar__marca {
+.sidebar-topo {
   display: flex;
   align-items: center;
-  gap: var(--e-2);
+  gap: var(--e-3);
   height: var(--header-alt);
   padding: 0 var(--e-5);
-  font-size: var(--t-h4);
-  font-weight: var(--p-extra);
-  letter-spacing: -0.01em;
-  border-bottom: 1px solid var(--borda-inversa);
-  flex-shrink: 0;
+  flex: none;
+  position: relative;
+  z-index: 1;
 }
 
-/* O acento aparece uma vez por tela, no nome do produto. É o
-   uso raro que o sistema pede — e o amarelo aqui é forma, não
-   texto que precise de contraste de leitura. */
-.sidebar__marca-acento {
-  color: var(--amarelo);
-}
-
-.sidebar__nav {
+.sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
   padding: var(--e-4) var(--e-3);
   display: flex;
   flex-direction: column;
   gap: 2px;
-  overflow-y: auto;
+  position: relative;
+  z-index: 1;
 }
 
-.sidebar__grupo {
+.nav-grupo-rotulo {
   padding: var(--e-5) var(--e-3) var(--e-2);
   font-size: var(--t-micro);
   font-weight: var(--p-semi);
+  letter-spacing: .1em;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--texto-inverso-suave);
+  color: rgba(255, 255, 255, .38);
 }
 
-.sidebar__grupo:first-child {
-  padding-top: var(--e-1);
-}
-
-.sidebar__item {
+.nav-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--e-2);
-  padding: var(--e-2) var(--e-3);
+  gap: var(--e-3);
+  padding: 10px var(--e-3);
   border-radius: var(--r-md);
   color: var(--texto-inverso-suave);
-  text-decoration: none;
   font-size: var(--t-corpo-sm);
+  font-weight: var(--p-medio);
   transition: background var(--tr-rapida), color var(--tr-rapida);
+  width: 100%;
+  text-align: left;
+  position: relative;
 }
 
-.sidebar__item:hover {
-  background: rgba(255, 255, 255, .07);
-  color: var(--texto-inverso);
-  text-decoration: none;
-}
+.nav-item:hover { background: rgba(255, 255, 255, .07); color: var(--texto-inverso); }
+.nav-item svg { flex: none; width: 18px; height: 18px; }
 
-.sidebar__item[aria-current="page"] {
-  background: var(--azul-600);
+.nav-item[aria-current='page'] {
+  background: var(--grad-tecnologico);
   color: var(--texto-inverso);
   font-weight: var(--p-semi);
+  box-shadow: 0 2px 12px rgba(22, 119, 232, .34);
 }
 
-.sidebar__contador {
+.nav-item-contagem {
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, .14);
   font-size: var(--t-micro);
+  font-weight: var(--p-bold);
   font-variant-numeric: tabular-nums;
-  color: var(--texto-inverso-suave);
 }
 
-.sidebar__item[aria-current="page"] .sidebar__contador {
+.nav-item[aria-current='page'] .nav-item-contagem { background: rgba(255, 255, 255, .24); }
+
+/* [DESK] Contagem que exige ação agora — SLA estourando — sai do
+   cinza translúcido e vira vermelho. É o único ponto da
+   navegação em que a cor grita, e por isso ela funciona. */
+.nav-item-contagem.-alerta { background: var(--vermelho-500); color: var(--branco); }
+
+.sidebar-rodape {
+  flex: none;
+  padding: var(--e-3);
+  border-top: 1px solid var(--borda-inversa);
+  position: relative;
+  z-index: 1;
+}
+
+.conta {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  width: 100%;
+  padding: var(--e-2);
+  border-radius: var(--r-md);
+  transition: background var(--tr-rapida);
+  text-align: left;
+}
+
+.conta:hover { background: rgba(255, 255, 255, .07); }
+.conta-texto { min-width: 0; flex: 1; }
+.conta-nome {
+  font-size: var(--t-corpo-sm);
+  font-weight: var(--p-semi);
   color: var(--texto-inverso);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.conta-empresa {
+  font-size: var(--t-micro);
+  color: rgba(255, 255, 255, .5);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-/* ---------- Cabeçalho ---------- */
+/* ---------- Coluna principal ---------- */
 
-.cabecalho {
-  grid-area: cabecalho;
+.principal { display: flex; flex-direction: column; min-width: 0; }
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
   display: flex;
   align-items: center;
   gap: var(--e-4);
+  height: var(--header-alt);
   padding: 0 var(--e-6);
   background: var(--superficie-card);
   border-bottom: 1px solid var(--borda);
+  flex: none;
 }
 
-.cabecalho__busca {
-  flex: 1;
-  max-width: 460px;
-}
+.header-titulo { min-width: 0; flex: 1; }
+.header-titulo h1 { font-size: var(--t-h3); font-weight: var(--p-bold); }
 
-/* ---------- Conteúdo ---------- */
+.trilha {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  font-size: var(--t-micro);
+  color: var(--texto-suave);
+  margin-bottom: 1px;
+}
+.trilha svg { width: 13px; height: 13px; }
+
+.header-acoes { display: flex; align-items: center; gap: var(--e-2); flex: none; }
 
 .conteudo {
-  grid-area: conteudo;
-  overflow: auto;
-  padding: var(--e-6);
-}
-
-.conteudo__interno {
+  flex: 1;
+  padding: var(--e-5) var(--e-6) var(--e-16);
+  width: 100%;
   max-width: var(--conteudo-max);
   margin: 0 auto;
 }
 
-.titulo-tela {
-  font-size: var(--t-h3);
-  font-weight: var(--p-bold);
-  color: var(--texto-forte);
-  margin: 0 0 var(--e-5);
+/* ---------- Grades reutilizáveis ---------- */
+
+.grade { display: grid; gap: var(--e-4); }
+.grade-4 { grid-template-columns: repeat(auto-fit, minmax(226px, 1fr)); }
+.grade-3 { grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); }
+.grade-2 { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+
+/* Duas colunas assimétricas: conteúdo + trilho lateral.
+   No Desk é a tela de chamado — conversa à esquerda,
+   propriedades à direita. */
+.grade-conteudo-trilho { display: grid; grid-template-columns: minmax(0, 1fr) 336px; gap: var(--e-5); align-items: start; }
+
+.pilha { display: flex; flex-direction: column; gap: var(--e-4); }
+.pilha-sm { display: flex; flex-direction: column; gap: var(--e-2); }
+.pilha-lg { display: flex; flex-direction: column; gap: var(--e-8); }
+.linha { display: flex; align-items: center; gap: var(--e-3); }
+.linha-entre { display: flex; align-items: center; justify-content: space-between; gap: var(--e-4); flex-wrap: wrap; }
+
+.cabecalho-secao { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--e-4); flex-wrap: wrap; }
+.cabecalho-secao p { font-size: var(--t-corpo-sm); color: var(--texto-suave); max-width: 62ch; margin-top: 3px; }
+
+/* O trilho de propriedades acompanha a rolagem: ele é
+   referência constante, e quem rola é a conversa. */
+.trilho-fixo { position: sticky; top: calc(var(--header-alt) + var(--e-5)); }
+
+/* ---------- Gaveta mobile / bottom nav ---------- */
+
+.sidebar-fundo {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-drawer);
+  background: rgba(7, 30, 61, .5);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity var(--tr-media);
+}
+.sidebar-fundo.-visivel { opacity: 1; }
+
+.barra-inferior { display: none; }
+
+/* ---------- Tablet ---------- */
+
+@media (max-width: 1180px) {
+  .grade-conteudo-trilho { grid-template-columns: minmax(0, 1fr); }
+  .trilho-fixo { position: static; }
 }
 
-/* ---------- Tela de chamado ----------
-   Timeline à esquerda (o que aconteceu), propriedades à direita
-   (o que o chamado é). O painel gruda no topo porque é
-   referência constante; quem rola é a timeline. */
-
-.chamado {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--painel-larg);
-  gap: var(--e-6);
-  align-items: start;
+@media (max-width: 1024px) {
+  .shell { grid-template-columns: var(--sidebar-larg-min) minmax(0, 1fr); }
+  .sidebar-topo { justify-content: center; padding: 0 var(--e-2); }
+  .sidebar-topo .marca-texto { display: none; }
+  .nav-item { justify-content: center; padding: 11px; }
+  .nav-item span, .nav-item .nav-item-contagem { display: none; }
+  .nav-grupo-rotulo { display: none; }
+  .conta-texto, .conta-seta { display: none; }
+  .conta { justify-content: center; }
 }
 
-@media (max-width: 1100px) {
-  .chamado {
-    grid-template-columns: minmax(0, 1fr);
+/* ---------- Mobile ---------- */
+
+@media (max-width: 760px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: min(280px, 84vw);
+    height: 100dvh;
+    z-index: calc(var(--z-drawer) + 1);
+    transform: translateX(-102%);
+    transition: transform var(--tr-lenta);
+    box-shadow: var(--sombra-xl);
   }
+  .sidebar.-aberta { transform: translateX(0); }
+
+  /* Dentro da gaveta a sidebar volta a ser larga. */
+  .sidebar .sidebar-topo { justify-content: flex-start; padding: 0 var(--e-5); }
+  .sidebar .marca-texto { display: block; }
+  .sidebar .nav-item { justify-content: flex-start; padding: 10px var(--e-3); }
+  .sidebar .nav-item span, .sidebar .nav-item .nav-item-contagem { display: block; }
+  .sidebar .nav-grupo-rotulo { display: block; }
+  .sidebar .conta-texto { display: block; }
+  .sidebar .conta { justify-content: flex-start; }
+
+  .sidebar-fundo.-ativa { display: block; }
+
+  .header { padding: 0 var(--e-4); gap: var(--e-3); }
+  .header-titulo h1 { font-size: var(--t-h4); }
+  .trilha { display: none; }
+  .conteudo { padding: var(--e-4) var(--e-4) 96px; }
+
+  .barra-inferior {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: var(--z-sticky);
+    background: var(--superficie-card);
+    border-top: 1px solid var(--borda);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  .barra-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 9px 4px 7px;
+    font-size: 10px;
+    font-weight: var(--p-semi);
+    color: var(--texto-suave);
+    transition: color var(--tr-rapida);
+  }
+  .barra-item svg { width: 21px; height: 21px; }
+  .barra-item[aria-current='page'] { color: var(--azul-600); }
 }
 
-/* ---------- Grade de cartões ---------- */
-
-.cartoes {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--e-4);
-  margin-bottom: var(--e-6);
-}
+/* Telas públicas (login, portal do solicitante) não usam o shell. */
+.tela-publica { min-height: 100vh; min-height: 100dvh; background: var(--superficie-card); }

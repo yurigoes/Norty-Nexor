@@ -7,9 +7,10 @@ adotado inteiro. Dois produtos da mesma casa não devem parecer de casas
 diferentes.
 
 Levantado do código em produção — CT 103 Vanaheim, `/opt/licita-mais`,
-`licita-web` na porta 3500. A fonte de verdade lá é
-`src/styles/tokens.css`, e a cascata é `tokens → base → layout →
-components`. O Desk copia as duas coisas.
+`licita-web` na porta 3500. Foram lidos os quatro arquivos:
+`tokens.css`, `base.css`, `layout.css` e `components.css` (72 KB no
+total). O Desk adota os quatro: os tokens, o reset, o shell e a
+biblioteca de componentes.
 
 | | LICITA+ |
 |---|---|
@@ -95,11 +96,18 @@ timeline: o agente vê de onde veio a mensagem sem ler o rótulo.
 
 ```
 --fila-linha-alt  46px    a fila é onde o agente passa o dia
---painel-larg     340px   o painel é referência; quem rola é a timeline
 ```
 
-O header de 68px do LICITA+ fica; a linha de tabela é do Desk, e é baixa
-de propósito. Respiro generoso na fila custa contexto por tela.
+Um token só. O trilho de propriedades do chamado **não** ganhou token
+próprio: usa os 336px do `.grade-conteudo-trilho` do LICITA+ — a mesma
+grade que lá serve a "edital + resumo" serve aqui a "conversa +
+propriedades". Um token a mais para repetir medida existente seria
+divergência disfarçada de configuração.
+
+O header de 68px fica como está. A linha de tabela é do Desk e é baixa
+de propósito: o padrão de 16px de padding daria ~56px por linha e
+custaria três chamados por dobra. Entrou como `.tabela.-densa` —
+modificador, não alteração do padrão.
 
 ---
 
@@ -112,7 +120,7 @@ de propósito. Respiro generoso na fila custa contexto por tela.
 3. **A elevação vem da borda.** Sombra é para o que flutua de verdade —
    modal, menu. Cartão e tabela usam `--borda`.
 4. **Nota interna é visualmente inconfundível.** Fundo `--amarelo-50`,
-   borda `--amarelo-100` e a etiqueta escrita. Três sinais, nenhum deles
+   borda `--amarelo-100` e o selo escrito. Três sinais, nenhum deles
    só de cor. Confundir nota interna com resposta pública é o pior erro
    que este produto pode cometer.
 5. **Evento de sistema é ruído de fundo.** Borda tracejada, fundo
@@ -121,26 +129,86 @@ de propósito. Respiro generoso na fila custa contexto por tela.
 
 ---
 
-## 3. Arquivos
+## 3. Convenção de nomes
+
+Do LICITA+, e vale para todo componente novo:
+
+```
+.componente          o bloco
+.componente-parte    as partes
+.-modificador        a variante
+```
+
+O traço inicial do modificador evita colisão com nome de bloco na
+cascata: `.btn.-primario`, `.selo.-aviso`, `.tabela.-densa`.
+
+Duas consequências práticas no Desk:
+
+- **Modificador de prioridade é palavra, não número.** `.prio.-alta`,
+  não `.prio.-4` — `.-4` é identificador CSS inválido, e a palavra é o
+  que o usuário lê de qualquer forma.
+- **Modificador de canal é minúsculo.** O domínio usa `WHATSAPP`; o CSS
+  usa `.-whatsapp`. A tradução mora em `modificadorCanal()`, num lugar
+  só.
+
+## 4. Arquivos
 
 Mesma divisão do LICITA+, mesma ordem de cascata:
 
 ```
 src/styles/tokens.css       cor, tipo, espaço, raio, sombra, camada, transição
-src/styles/base.css         reset, tipografia, foco, pular-para-conteúdo
-src/styles/layout.css       casca, sidebar, cabeçalho, conteúdo, grade do chamado
-src/styles/components.css   campo, botão, etiqueta, fila, timeline, painel
+src/styles/base.css         reset, tipografia, foco, rolagem, pular-para-conteúdo
+src/styles/layout.css       shell, sidebar, header, conteúdo, grades, gaveta mobile
+src/styles/components.css   a biblioteca
 ```
 
 `portal.css` entra na Fase 2, ocupando o lugar que o `publico.css` ocupa
 no LICITA+.
 
-**Verificação automática:** 138 tokens definidos, nenhum componente
-usando token inexistente, nenhum hex literal fora de `tokens.css`.
+## 5. O que veio, o que não veio, o que o Desk somou
 
----
+**Adotados sem alteração** (33 componentes): `.btn` e variantes,
+`.btn-icone`, `.btn-link`, `.campo`/`.input`/`.select`/`.textarea`,
+`.busca`, `.check`, `.switch`, `.campo-grupo`, `.divisor-texto`,
+`.card`, `.selo`, `.stat`, `.tabela` e o par
+`.tabela-caixa`/`.tabela-rolagem`, `.abas`, `.progresso-trilho`,
+`.avatar`, `.modal`, `.gaveta`, `.dropdown`, `.tip`, `.toast`,
+`.alerta-bloco`, `.faixa-demo`, `.vazio`, `.sk`, `.filtro-pill`,
+`.filtro-chip`, `.gr-*`, `.notif`, `.paginacao`, `.aparece`.
 
-## 4. Onde o Desk diverge do LICITA+, e por quê
+**Não vieram**, porque são do domínio ou da marca do LICITA+:
+`.score` (compatibilidade), `.oport` (cartão de oportunidade),
+`.razoes`, `.geo` (geometria decorativa), a tela de carregamento
+`.lm-*` e o losango de fundo da sidebar. Repetir a forma de outro
+produto seria empréstimo, não sistema.
+
+**Somados pelo Desk**, na mesma convenção:
+
+| Componente | Para quê | Modelado em |
+|---|---|---|
+| `.prio` | prioridade, com ponto e palavra | `.score-pill` |
+| `.sla` / `.sla-selo` | prazo em três estados | — |
+| `.canal` | ponto de origem da mensagem | — |
+| `.conversa` / `.conversa-evento` | a linha do tempo do chamado | — |
+| `.responder` | caixa de resposta com visibilidade e canal | — |
+| `.chamado-card` | a fila abaixo de 760px | `.oport` |
+| `.tabela.-densa` | linha de 46px na fila | modificador |
+| `.aba-contagem` | contador na aba de visão | `.nav-item-contagem` |
+| `.nav-item-contagem.-alerta` | SLA estourando na navegação | modificador |
+| `.timeline.-recusado` | etapa de aprovação recusada | modificador |
+
+**Uma colisão de nome resolvida com cuidado:** `.timeline` no sistema é
+a linha de **etapas** — ponto, conector, `-feito`/`-agora`. No Desk ela
+serve à **aprovação em etapas**, que é exatamente esse desenho. A linha
+do tempo do chamado é outra coisa e chama-se `.conversa`. Manter o nome
+com o significado de origem evita que os dois produtos divirjam
+silenciosamente no mesmo seletor.
+
+**Verificação automática:** 134 tokens definidos, nenhum token
+indefinido em uso, nenhum hex literal fora de `tokens.css`, nenhuma
+classe usada na marcação sem regra no CSS.
+
+## 6. Onde o Desk diverge do LICITA+, e por quê
 
 | | LICITA+ | Desk | Motivo |
 |---|---|---|---|
@@ -157,12 +225,12 @@ recarga manual ou código de sincronização escrito à mão.
 
 ---
 
-## 5. Layout do aplicativo
+## 7. Layout do aplicativo
 
 ```
 ┌──────────────────┬──────────────────────────────────────────┐
 │                  │  busca                    [Novo chamado] │ 68px
-│  Norty Desk.     ├──────────────────────────────────────────┤
+│  ND  Norty Desk  ├──────────────────────────────────────────┤
 │                  │                                          │
 │  FILA            │                                          │
 │  Meus         4  │              conteúdo                    │
@@ -182,14 +250,23 @@ recarga manual ou código de sincronização escrito à mão.
        264px
 ```
 
-Sidebar com o gradiente `--grad-sidebar` do LICITA+. O item ativo é
-`--azul-600` sólido — o mesmo azul da ação. As visões de fila vêm
-primeiro, com contador: é a primeira coisa que o agente olha ao chegar.
-Configuração fica no fim.
+Sidebar com o `--grad-sidebar` do LICITA+, `position: sticky` em altura
+cheia. O item ativo recebe o `--grad-tecnologico` com sombra azul, como
+lá. As visões de fila vêm primeiro, com contador: é a primeira coisa que
+o agente olha ao chegar. Configuração fica no fim, e o rodapé traz a
+conta.
+
+Uma contagem pode gritar, e só uma: **SLA estourando** troca o cinza
+translúcido por `--vermelho-500` (`.nav-item-contagem.-alerta`). É o
+único vermelho da navegação, e é por isso que ele funciona.
+
+Abaixo de 1024px a sidebar colapsa para 76px (só ícones); abaixo de
+760px vira gaveta e a `.barra-inferior` assume — tudo herdado do
+`layout.css` do LICITA+.
 
 ---
 
-## 6. As telas
+## 8. As telas
 
 Trinta telas cobrem o que o GLPI faz em 315 páginas. A consolidação vem
 de três decisões: uma timeline em vez de quatro abas, um formulário
@@ -227,7 +304,7 @@ original, o motivo do descarte e um botão de reprocessar.
 
 ---
 
-## 7. A fila
+## 9. A fila
 
 ```
 Nº     Assunto                       Status      Prio  Solicitante  Atribuído   SLA      Atualizado
@@ -242,7 +319,7 @@ Seleção múltipla com ação em lote e atalhos de teclado (`j`/`k` navega,
 
 ---
 
-## 8. A tela de chamado
+## 10. A tela de chamado
 
 Duas colunas: timeline à esquerda, painel de propriedades à direita
 (340px, grudado no topo). Abaixo de 1100px vira uma coluna só.
@@ -257,7 +334,7 @@ mandar e-mail para quem falou por WhatsApp.
 
 ---
 
-## 9. Acessibilidade
+## 11. Acessibilidade
 
 Herdada do LICITA+ e mantida:
 
@@ -273,17 +350,15 @@ Herdada do LICITA+ e mantida:
 
 ---
 
-## 10. O que ainda falta do LICITA+
+## 12. O que ainda falta
 
-Tenho o `tokens.css` inteiro. **Faltam `base.css`, `layout.css` e
-`components.css`** — eles estão no pacote que o coletor gerou
-(`/tmp/licita-design-*/css/`) mas não foram lidos aqui.
+O alinhamento de código está fechado: tokens, reset, shell e biblioteca
+de componentes vieram do LICITA+ e estão em uso.
 
-Com eles eu fecho o alinhamento de componente: altura exata de campo e
-botão, padding de célula, estilo de aba, tratamento de estado
-`:disabled`, e o formato dos avisos. Hoje esses detalhes são coerentes
-com os tokens, mas foram decididos por mim, não copiados.
+Falta o que o CSS não mostra: **duas capturas de tela** — uma listagem e
+uma tela de detalhe. Proporção real, densidade percebida e hierarquia
+visual só a imagem resolve. São elas que dizem se a fila do Desk está
+apertada ou frouxa perto do que vocês já usam.
 
-Duas capturas de tela do LICITA+ — uma listagem e uma tela de detalhe —
-resolveriam o resto: proporção, densidade real e hierarquia visual são
-coisas que o CSS não mostra.
+Um detalhe menor, quando houver: o `publico.css` do LICITA+ (12 KB) vira
+a base do `portal.css` do solicitante, na Fase 2.

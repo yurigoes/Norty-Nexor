@@ -2,12 +2,14 @@ import { useMemo, useState } from 'react';
 import type { TicketListItem } from '@norty-desk/shared';
 
 import {
+  MODIFICADOR_PRIORIDADE,
   ROTULO_CANAL,
   ROTULO_STATUS,
-  classeStatus,
   dataCurta,
   duracaoCurta,
   estadoSla,
+  modificadorCanal,
+  seloStatus,
 } from '../../lib/formato';
 
 type Visao = 'todos' | 'meus' | 'sem-atribuicao' | 'sla';
@@ -19,12 +21,28 @@ const VISOES: { chave: Visao; rotulo: string }[] = [
   { chave: 'sla', rotulo: 'SLA estourando' },
 ];
 
+function filtrar(chamados: TicketListItem[], visao: Visao): TicketListItem[] {
+  switch (visao) {
+    case 'sem-atribuicao':
+      return chamados.filter((c) => !c.assignedTeam && !c.assignedUser);
+    case 'sla':
+      return chamados.filter((c) => (c.commitments[0]?.remainingSeconds ?? Infinity) < 3600);
+    case 'meus':
+      return chamados.filter((c) => c.assignedUser !== null);
+    default:
+      return chamados;
+  }
+}
+
 /**
  * A fila de trabalho.
  *
  * Não é a tela de busca genérica do GLPI: é a lista onde o agente passa
- * o dia, com visões salvas e densidade alta
+ * o dia, com visões salvas e `.tabela.-densa`
  * (`docs/02-gap-analysis.md`, item 10).
+ *
+ * Abaixo de 760px a tabela de oito colunas não sobrevive, então a mesma
+ * lista sai em `.chamado-card`.
  */
 export function Fila({
   chamados,
@@ -34,109 +52,147 @@ export function Fila({
   aoAbrir: (id: string) => void;
 }) {
   const [visao, setVisao] = useState<Visao>('todos');
-
-  const visiveis = useMemo(() => {
-    switch (visao) {
-      case 'sem-atribuicao':
-        return chamados.filter((c) => !c.assignedTeam && !c.assignedUser);
-      case 'sla':
-        return chamados.filter((c) => (c.commitments[0]?.remainingSeconds ?? Infinity) < 3600);
-      case 'meus':
-        return chamados.filter((c) => c.assignedUser !== null);
-      default:
-        return chamados;
-    }
-  }, [chamados, visao]);
+  const visiveis = useMemo(() => filtrar(chamados, visao), [chamados, visao]);
 
   return (
-    <section className="fila">
-      <header className="fila__cabecalho">
-        <div className="fila__visoes">
-          {VISOES.map((item) => (
-            <button
-              key={item.chave}
-              type="button"
-              className="fila__visao"
-              aria-pressed={visao === item.chave}
-              onClick={() => setVisao(item.chave)}
-            >
-              {item.rotulo}
-            </button>
-          ))}
-        </div>
-
-        <span className="fila__resumo">
-          {visiveis.length} {visiveis.length === 1 ? 'chamado' : 'chamados'}
-        </span>
-      </header>
+    <div className="pilha">
+      <div className="abas" role="tablist" aria-label="Visões da fila">
+        {VISOES.map((item) => (
+          <button
+            key={item.chave}
+            type="button"
+            role="tab"
+            className="aba"
+            aria-selected={visao === item.chave}
+            onClick={() => setVisao(item.chave)}
+          >
+            {item.rotulo}
+            <span className="aba-contagem">{filtrar(chamados, item.chave).length}</span>
+          </button>
+        ))}
+      </div>
 
       {visiveis.length === 0 ? (
-        <p className="vazio">Nenhum chamado nesta visão.</p>
+        <div className="tabela-caixa">
+          <div className="vazio">
+            <div className="vazio-arte" aria-hidden="true">
+              <span style={{ transform: 'rotate(-45deg)' }}>✓</span>
+            </div>
+            <h3>Nada nesta visão</h3>
+            <p>Quando um chamado cair neste filtro, ele aparece aqui.</p>
+          </div>
+        </div>
       ) : (
-        <table className="tabela">
-          <thead>
-            <tr>
-              <th scope="col">Nº</th>
-              <th scope="col">Assunto</th>
-              <th scope="col">Status</th>
-              <th scope="col">Prioridade</th>
-              <th scope="col">Solicitante</th>
-              <th scope="col">Atribuído</th>
-              <th scope="col">SLA</th>
-              <th scope="col">Atualizado</th>
-            </tr>
-          </thead>
-          <tbody>
+        <>
+          <div className="tabela-caixa fila-tabela">
+            <div className="tabela-rolagem">
+              <table className="tabela -densa">
+                <thead>
+                  <tr>
+                    <th scope="col">Nº</th>
+                    <th scope="col">Assunto</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Prioridade</th>
+                    <th scope="col">Solicitante</th>
+                    <th scope="col">Atribuído</th>
+                    <th scope="col">SLA</th>
+                    <th scope="col">Atualizado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visiveis.map((chamado) => {
+                    const compromisso = chamado.commitments[0];
+
+                    return (
+                      <tr key={chamado.id} onClick={() => aoAbrir(chamado.id)}>
+                        <td className="mono">#{chamado.number}</td>
+
+                        <td>
+                          <span className="linha" style={{ gap: 'var(--e-2)' }}>
+                            <span
+                              className={`canal ${modificadorCanal(chamado.originChannel)}`}
+                              title={`Aberto por ${ROTULO_CANAL[chamado.originChannel]}`}
+                            />
+                            <span className="tabela-titulo-celula">{chamado.subject}</span>
+                          </span>
+                        </td>
+
+                        <td>
+                          <span className={`selo ${seloStatus(chamado.status)}`}>
+                            {ROTULO_STATUS[chamado.status]}
+                          </span>
+                        </td>
+
+                        <td>
+                          <span className={`prio -traco ${MODIFICADOR_PRIORIDADE[chamado.priority]}`}>
+                            <span className="prio-ponto" aria-hidden="true" />
+                            {chamado.priority}
+                          </span>
+                        </td>
+
+                        <td>{chamado.requester?.name ?? '—'}</td>
+                        <td>{chamado.assignedUser?.name ?? chamado.assignedTeam?.name ?? '—'}</td>
+
+                        <td>
+                          {compromisso ? (
+                            <span className={`sla ${estadoSla(compromisso.remainingSeconds)}`}>
+                              {duracaoCurta(compromisso.remainingSeconds)}
+                            </span>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+
+                        <td className="num">{dataCurta(chamado.updatedAt)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="fila-cartoes pilha-sm">
             {visiveis.map((chamado) => {
               const compromisso = chamado.commitments[0];
-              const estado = compromisso ? estadoSla(compromisso.remainingSeconds) : null;
 
               return (
-                <tr key={chamado.id} onClick={() => aoAbrir(chamado.id)}>
-                  <td className="tabela__numero">#{chamado.number}</td>
-
-                  <td>
-                    <span className="tabela__assunto">
-                      <span
-                        className={`canal canal--${chamado.originChannel}`}
-                        title={`Aberto por ${ROTULO_CANAL[chamado.originChannel]}`}
-                      />
-                      {chamado.subject}
+                <button
+                  key={chamado.id}
+                  type="button"
+                  className="chamado-card"
+                  onClick={() => aoAbrir(chamado.id)}
+                >
+                  <div className="pilha-sm" style={{ textAlign: 'left', minWidth: 0 }}>
+                    <span className="chamado-card-titulo">
+                      <span className="mono">#{chamado.number}</span> {chamado.subject}
                     </span>
-                  </td>
+                    <span className="chamado-card-meta">
+                      <span className="linha" style={{ gap: 5 }}>
+                        <span className={`canal ${modificadorCanal(chamado.originChannel)}`} />
+                        {ROTULO_CANAL[chamado.originChannel]}
+                      </span>
+                      <span>{chamado.requester?.name ?? '—'}</span>
+                      <span className="num">{dataCurta(chamado.updatedAt)}</span>
+                    </span>
+                  </div>
 
-                  <td>
-                    <span className={`etiqueta ${classeStatus(chamado.status)}`}>
+                  <div className="chamado-card-lado">
+                    <span className={`selo ${seloStatus(chamado.status)}`}>
                       {ROTULO_STATUS[chamado.status]}
                     </span>
-                  </td>
-
-                  <td>
-                    <span className={`prioridade prioridade--${chamado.priority}`}>
-                      {chamado.priority}
-                    </span>
-                  </td>
-
-                  <td>{chamado.requester?.name ?? '—'}</td>
-                  <td>{chamado.assignedUser?.name ?? chamado.assignedTeam?.name ?? '—'}</td>
-
-                  <td>
-                    {compromisso && estado ? (
-                      <span className={`sla sla--${estado}`}>
+                    {compromisso ? (
+                      <span className={`sla ${estadoSla(compromisso.remainingSeconds)}`}>
                         {duracaoCurta(compromisso.remainingSeconds)}
                       </span>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-
-                  <td className="numerico">{dataCurta(chamado.updatedAt)}</td>
-                </tr>
+                    ) : null}
+                  </div>
+                </button>
               );
             })}
-          </tbody>
-        </table>
+          </div>
+        </>
       )}
-    </section>
+    </div>
   );
 }

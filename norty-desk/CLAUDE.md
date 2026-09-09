@@ -65,9 +65,19 @@ infra           docker-compose, Caddy, Dockerfiles, .env.example
    por cima nem carrega texto sozinho.** Onde a cor precisa virar texto,
    use `--amarelo-texto`. É por isso que o botão primário é azul.
 
+   A convenção de nomes também é a de lá: `.componente` para o bloco,
+   `.componente-parte` para as partes e `.-modificador` para a variante.
+   O traço inicial do modificador evita colisão na cascata.
+
    O que o Desk acrescenta ao sistema está marcado com `[DESK]`:
-   prioridade, SLA, canal e a métrica da fila. Todos derivam das rampas
-   existentes — não invente hex novo.
+   prioridade, SLA, canal, conversa, resposta e a métrica da fila. Todos
+   derivam das rampas existentes — não invente hex novo.
+
+   Atenção a um nome: `.timeline` é a linha de **etapas** (ponto e
+   conector), usada na aprovação em etapas. A linha do tempo do chamado
+   é `.conversa`. Não troque os dois — o significado veio do LICITA+ e
+   manter os dois produtos falando a mesma língua vale mais que o nome
+   mais óbvio.
 
 7. **Prioridade é derivada, nunca digitada.**
    `prioridade = f(urgência, impacto)` pela matriz configurável. O campo

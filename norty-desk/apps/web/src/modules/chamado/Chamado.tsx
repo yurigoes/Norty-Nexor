@@ -2,109 +2,105 @@ import type { TicketListItem } from '@norty-desk/shared';
 
 import { EVENTOS } from '../../lib/demonstracao';
 import {
+  MODIFICADOR_PRIORIDADE,
   ROTULO_CANAL,
   ROTULO_PRIORIDADE,
   ROTULO_STATUS,
-  classeStatus,
   dataCurta,
   duracaoCurta,
   estadoSla,
+  modificadorCanal,
+  seloStatus,
 } from '../../lib/formato';
-import { Timeline } from './Timeline';
+import { Conversa } from './Conversa';
 
 /**
- * Tela do chamado: timeline à esquerda, propriedades à direita
- * (`docs/02-gap-analysis.md`, item 11).
+ * Tela do chamado: conversa à esquerda, propriedades no trilho da
+ * direita (`docs/02-gap-analysis.md`, item 11).
+ *
+ * O layout é o `.grade-conteudo-trilho` do LICITA+ — a mesma grade que
+ * lá serve a "edital + resumo" serve aqui a "conversa + propriedades".
  */
-export function Chamado({
-  chamado,
-  aoVoltar,
-}: {
-  chamado: TicketListItem;
-  aoVoltar: () => void;
-}) {
+export function Chamado({ chamado }: { chamado: TicketListItem }) {
   const compromisso = chamado.commitments[0];
-  const estado = compromisso ? estadoSla(compromisso.remainingSeconds) : null;
 
   return (
-    <div>
-      <button type="button" className="botao botao--discreto" onClick={aoVoltar}>
-        ← Voltar para a fila
-      </button>
+    <div className="grade-conteudo-trilho">
+      <Conversa eventos={EVENTOS} />
 
-      <h1 className="titulo-tela" style={{ marginTop: 'var(--e-3)' }}>
-        <span className="tabela__numero">#{chamado.number}</span> {chamado.subject}
-      </h1>
-
-      <div className="chamado">
-        <Timeline eventos={EVENTOS} />
-
-        <aside className="painel" aria-label="Propriedades do chamado">
-          <div className="painel__linha">
-            <span className="painel__rotulo">Status</span>
-            <span className={`etiqueta ${classeStatus(chamado.status)}`}>
+      <aside className="card trilho-fixo" aria-label="Propriedades do chamado">
+        <div className="card-corpo pilha-sm">
+          <Linha rotulo="Status">
+            <span className={`selo ${seloStatus(chamado.status)}`}>
               {ROTULO_STATUS[chamado.status]}
             </span>
-          </div>
+          </Linha>
 
-          <div className="painel__linha">
-            <span className="painel__rotulo">Prioridade</span>
-            {/* A prioridade aparece por extenso: a informação nunca
-                depende só da cor do traço. */}
-            <span className={`prioridade prioridade--${chamado.priority}`}>
-              {ROTULO_PRIORIDADE[chamado.priority]}
+          <Linha rotulo="Prioridade">
+            {/* Número e palavra: a informação nunca depende da cor. */}
+            <span className={`prio ${MODIFICADOR_PRIORIDADE[chamado.priority]}`}>
+              <span className="prio-ponto" aria-hidden="true" />
+              {chamado.priority} · {ROTULO_PRIORIDADE[chamado.priority]}
             </span>
-          </div>
+          </Linha>
 
-          <div className="painel__linha">
-            <span className="painel__rotulo">Urgência × impacto</span>
-            <span className="painel__valor numerico">
+          <Linha rotulo="Urgência × impacto">
+            <span className="num">
               {chamado.urgency} × {chamado.impact}
             </span>
-          </div>
+          </Linha>
 
-          {compromisso && estado ? (
-            <div className="painel__linha">
-              <span className="painel__rotulo">
-                {compromisso.kind} {compromisso.target}
-              </span>
-              <span className={`sla sla--${estado}`}>
+          {compromisso ? (
+            <Linha rotulo={`${compromisso.kind} ${compromisso.target}`}>
+              <span className={`sla-selo ${estadoSla(compromisso.remainingSeconds)}`}>
                 {duracaoCurta(compromisso.remainingSeconds)}
               </span>
-            </div>
+            </Linha>
           ) : null}
 
-          <div className="painel__linha">
-            <span className="painel__rotulo">Categoria</span>
-            <span className="painel__valor">{chamado.category?.name ?? '—'}</span>
-          </div>
+          <Linha rotulo="Categoria">{chamado.category?.name ?? '—'}</Linha>
+          <Linha rotulo="Solicitante">{chamado.requester?.name ?? '—'}</Linha>
+          <Linha rotulo="Atribuído">
+            {chamado.assignedUser?.name ?? chamado.assignedTeam?.name ?? '—'}
+          </Linha>
 
-          <div className="painel__linha">
-            <span className="painel__rotulo">Solicitante</span>
-            <span className="painel__valor">{chamado.requester?.name ?? '—'}</span>
-          </div>
-
-          <div className="painel__linha">
-            <span className="painel__rotulo">Atribuído</span>
-            <span className="painel__valor">
-              {chamado.assignedUser?.name ?? chamado.assignedTeam?.name ?? '—'}
-            </span>
-          </div>
-
-          <div className="painel__linha">
-            <span className="painel__rotulo">Canal de origem</span>
-            <span className="painel__valor">
-              <span className={`canal canal--${chamado.originChannel}`} />{' '}
+          <Linha rotulo="Canal de origem">
+            <span className="linha" style={{ gap: 6 }}>
+              <span className={`canal ${modificadorCanal(chamado.originChannel)}`} />
               {ROTULO_CANAL[chamado.originChannel]}
             </span>
-          </div>
+          </Linha>
 
-          <div className="painel__linha">
-            <span className="painel__rotulo">Aberto em</span>
-            <span className="painel__valor numerico">{dataCurta(chamado.createdAt)}</span>
-          </div>
-        </aside>
-      </div>
+          <Linha rotulo="Aberto em">
+            <span className="num">{dataCurta(chamado.createdAt)}</span>
+          </Linha>
+        </div>
+
+        <div className="card-rodape linha" style={{ gap: 'var(--e-2)' }}>
+          <button type="button" className="btn -secundario -sm">
+            Atribuir
+          </button>
+          <button type="button" className="btn -secundario -sm">
+            Pausar
+          </button>
+          <button type="button" className="btn -sucesso -sm" style={{ marginLeft: 'auto' }}>
+            Resolver
+          </button>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function Linha({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
+  return (
+    <div className="linha-entre" style={{ flexWrap: 'nowrap', gap: 'var(--e-3)' }}>
+      <span className="suave" style={{ fontSize: 'var(--t-corpo-sm)', flex: 'none' }}>
+        {rotulo}
+      </span>
+      <span style={{ textAlign: 'right', fontSize: 'var(--t-corpo-sm)', minWidth: 0 }}>
+        {children}
+      </span>
     </div>
   );
 }
