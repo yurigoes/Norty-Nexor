@@ -1,0 +1,27 @@
+{
+  "name": "norty-desk",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Central de serviços da Norty — um GLPI remodelado",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @norty-desk/shared && npm run build -w @norty-desk/api && npm run build -w @norty-desk/web",
+    "dev:web": "npm run dev -w @norty-desk/web",
+    "dev:api": "npm run dev -w @norty-desk/api",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:migrate": "npm run db:migrate -w @norty-desk/api",
+    "db:seed": "npm run db:seed -w @norty-desk/api",
+    "db:studio": "npm run db:studio -w @norty-desk/api"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1"
+  }
+}

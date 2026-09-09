@@ -1,0 +1,860 @@
+// Norty Desk — schema do domínio.
+//
+// Regras que o banco garante (CLAUDE.md, regra 4):
+//   - número de chamado único por organização
+//   - um e-mail recebido só vira evento uma vez (messageId único)
+//   - uma mensagem de WhatsApp só vira evento uma vez
+//   - um voto de aprovação por validador por etapa
+//   - um ator não se repete no mesmo papel do mesmo chamado
+//
+// Tempo de SLA é Int em segundos. Dinheiro é Decimal(12,2). Nunca Float.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------
+// Organização e pessoas
+// ---------------------------------------------------------------------
+
+/// Substitui glpi_entities. Plana, sem herança recursiva.
+/// Ver docs/02-gap-analysis.md, item 7.
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  slug      String   @unique
+  name      String
+  isActive  Boolean  @default(true)
+  /// Matriz 5x5 urgência x impacto -> prioridade. Null usa o padrão global.
+  priorityMatrix Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships   Membership[]
+  teams         Team[]
+  categories    Category[]
+  tickets       Ticket[]
+  agreements    Agreement[]
+  calendars     Calendar[]
+  pendingReasons PendingReason[]
+  forms         TicketForm[]
+  articles      Article[]
+  channels      ChannelAccount[]
+  suppliers     Supplier[]
+  rules         IntakeRule[]
+  webhooks      OutboundWebhook[]
+  apiKeys       ApiKey[]
+  contacts      Contact[]
+
+  @@map("organizations")
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  name         String
+  /// Argon2id. A API nunca devolve este campo.
+  passwordHash String
+  phone        String?
+  avatarUrl    String?
+  isActive     Boolean  @default(true)
+  mustChangePassword Boolean @default(true)
+  locale       String   @default("pt-BR")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships   Membership[]
+  teamMembers   TeamMember[]
+  actorIn       TicketActor[]
+  authoredEvents TicketEvent[] @relation("AutorDoEvento")
+  approvals     Approval[]
+  refreshTokens RefreshToken[]
+  articles      Article[]
+
+  @@map("users")
+}
+
+/// Vínculo usuário x organização x perfil. Substitui glpi_profiles_users.
+model Membership {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @db.Uuid
+  organizationId String   @db.Uuid
+  role           Role
+  createdAt      DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@map("memberships")
+}
+
+enum Role {
+  SOLICITANTE
+  AGENTE
+  SUPERVISOR
+  GESTOR
+  ADMINISTRADOR
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  /// SHA-256 do token. O valor cru só existe no cookie httpOnly.
+  tokenHash String   @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+/// Grupo de atendimento. Substitui glpi_groups.
+model Team {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String
+  description    String?
+  /// E-mail da fila do time, usado como remetente das respostas.
+  email          String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members      TeamMember[]
+  actorIn      TicketActor[]
+  categories   Category[]
+
+  @@unique([organizationId, name])
+  @@map("teams")
+}
+
+model TeamMember {
+  teamId    String  @db.Uuid
+  userId    String  @db.Uuid
+  isManager Boolean @default(false)
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([teamId, userId])
+  @@map("team_members")
+}
+
+/// Pessoa que fala pelos canais externos e ainda não é usuário do sistema.
+/// Resolve o caso do WhatsApp: número conhecido antes do cadastro.
+model Contact {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String?
+  email          String?
+  /// E.164, sem espaços. Ex.: +5511999999999
+  phone          String?
+  /// Preenchido quando o contato é promovido a usuário.
+  userId         String?  @db.Uuid
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actorIn      TicketActor[]
+
+  @@unique([organizationId, email])
+  @@unique([organizationId, phone])
+  @@map("contacts")
+}
+
+model Supplier {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  name           String
+  email          String?
+  phone          String?
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actorIn      TicketActor[]
+
+  @@unique([organizationId, name])
+  @@map("suppliers")
+}
+
+// ---------------------------------------------------------------------
+// Catálogo de serviço
+// ---------------------------------------------------------------------
+
+/// Substitui glpi_itilcategories. Mantém a árvore — aqui ela é útil e
+/// rasa (categoria > subcategoria), diferente da árvore de entidades.
+model Category {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  parentId       String?  @db.Uuid
+  name           String
+  /// Time que recebe o chamado quando cai nesta categoria.
+  defaultTeamId  String?  @db.Uuid
+  /// Acordo aplicado por padrão.
+  defaultAgreementId String? @db.Uuid
+  defaultUrgency Int?
+  isActive       Boolean  @default(true)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent       Category?    @relation("Subcategoria", fields: [parentId], references: [id])
+  children     Category[]   @relation("Subcategoria")
+  defaultTeam  Team?        @relation(fields: [defaultTeamId], references: [id])
+  defaultAgreement Agreement? @relation(fields: [defaultAgreementId], references: [id])
+  tickets      Ticket[]
+  forms        TicketForm[]
+
+  @@unique([organizationId, parentId, name])
+  @@index([organizationId])
+  @@map("categories")
+}
+
+/// Substitui as 12 tabelas de tickettemplate*. O esquema do formulário
+/// é um JSON declarado. Ver docs/02-gap-analysis.md, item 8.
+model TicketForm {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  categoryId     String?  @db.Uuid
+  name           String
+  /// FormSchema em packages/shared/src/domain.ts
+  schema         Json
+  isDefault      Boolean  @default(false)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category     Category?    @relation(fields: [categoryId], references: [id])
+  tickets      Ticket[]
+
+  @@unique([organizationId, name])
+  @@map("ticket_forms")
+}
+
+// ---------------------------------------------------------------------
+// Chamado
+// ---------------------------------------------------------------------
+
+enum TicketType {
+  INCIDENTE
+  REQUISICAO
+}
+
+/// Espelha as constantes de CommonITILObject, com nome em vez de número.
+enum TicketStatus {
+  NOVO
+  ATRIBUIDO
+  PLANEJADO
+  PENDENTE
+  EM_APROVACAO
+  SOLUCIONADO
+  FECHADO
+}
+
+enum Channel {
+  WEB
+  EMAIL
+  WHATSAPP
+  API
+  SISTEMA
+}
+
+model Ticket {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  /// Sequencial legível por organização. É o que aparece em [#123] no
+  /// assunto do e-mail e nas mensagens de WhatsApp.
+  number         Int
+  subject        String
+  /// Descrição inicial. As demais mensagens são eventos.
+  description    String
+  type           TicketType   @default(INCIDENTE)
+  status         TicketStatus @default(NOVO)
+
+  /// 1..5. Prioridade é derivada — só TicketPriorityService escreve nela.
+  urgency  Int @default(3)
+  impact   Int @default(3)
+  priority Int @default(3)
+
+  categoryId String? @db.Uuid
+  formId     String? @db.Uuid
+  /// Canal em que o chamado nasceu. Define o canal padrão de resposta.
+  originChannel Channel @default(WEB)
+
+  /// Motivo da pendência atual, quando status = PENDENTE.
+  pendingReasonId String?   @db.Uuid
+  pendingSince    DateTime?
+  /// Quantas cobranças automáticas já saíram nesta pendência.
+  pendingRemindersSent Int  @default(0)
+
+  firstResponseAt DateTime?
+  solvedAt        DateTime?
+  closedAt        DateTime?
+  /// Soma do tempo gasto nas tarefas, em segundos.
+  spentSeconds    Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category      Category?      @relation(fields: [categoryId], references: [id])
+  form          TicketForm?    @relation(fields: [formId], references: [id])
+  pendingReason PendingReason? @relation(fields: [pendingReasonId], references: [id])
+
+  actors      TicketActor[]
+  events      TicketEvent[]
+  commitments SlaCommitment[]
+  approvals   Approval[]
+  attachments Attachment[]
+  /// Respostas do formulário dinâmico, chaveadas pelo campo do schema.
+  customFields Json?
+  links       TicketLink[] @relation("ChamadoOrigem")
+  linkedBy    TicketLink[] @relation("ChamadoDestino")
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@index([organizationId, priority])
+  @@index([organizationId, createdAt])
+  @@map("tickets")
+}
+
+enum ActorRole {
+  REQUERENTE
+  OBSERVADOR
+  ATRIBUIDO
+}
+
+/// Substitui glpi_tickets_users + glpi_groups_tickets +
+/// glpi_suppliers_tickets. Exatamente um dos quatro alvos preenchido.
+model TicketActor {
+  id         String    @id @default(uuid()) @db.Uuid
+  ticketId   String    @db.Uuid
+  role       ActorRole
+  userId     String?   @db.Uuid
+  teamId     String?   @db.Uuid
+  supplierId String?   @db.Uuid
+  contactId  String?   @db.Uuid
+  createdAt  DateTime  @default(now())
+
+  ticket   Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user     User?     @relation(fields: [userId], references: [id])
+  team     Team?     @relation(fields: [teamId], references: [id])
+  supplier Supplier? @relation(fields: [supplierId], references: [id])
+  contact  Contact?  @relation(fields: [contactId], references: [id])
+
+  @@unique([ticketId, role, userId])
+  @@unique([ticketId, role, teamId])
+  @@unique([ticketId, role, supplierId])
+  @@unique([ticketId, role, contactId])
+  @@index([userId])
+  @@index([teamId])
+  @@map("ticket_actors")
+}
+
+enum EventType {
+  MENSAGEM
+  NOTA_INTERNA
+  TAREFA
+  SOLUCAO
+  APROVACAO
+  ANEXO
+  MUDANCA_STATUS
+  MUDANCA_ATRIBUICAO
+  MUDANCA_CLASSIFICACAO
+  PAUSA_SLA
+  RETOMADA_SLA
+  ENTRADA_CANAL
+  SAIDA_CANAL
+}
+
+enum Visibility {
+  PUBLICA
+  INTERNA
+}
+
+/// A timeline única. Substitui glpi_itilfollowups + glpi_tickettasks +
+/// glpi_itilsolutions + glpi_documents_items.
+/// Ver docs/02-gap-analysis.md, item 4.
+model TicketEvent {
+  id         String     @id @default(uuid()) @db.Uuid
+  ticketId   String     @db.Uuid
+  type       EventType
+  visibility Visibility @default(PUBLICA)
+  /// Nulo quando o autor é o sistema (cron de SLA, regra de entrada).
+  authorId   String?    @db.Uuid
+  /// Quando o autor é externo e ainda não tem conta.
+  authorContactId String? @db.Uuid
+  channel    Channel    @default(WEB)
+  /// Corpo em texto. HTML sanitizado quando vem de e-mail.
+  body       String?
+  /// Campos específicos do tipo. Tipado em shared como EventPayload.
+  payload    Json?
+  createdAt  DateTime   @default(now())
+  editedAt   DateTime?
+
+  ticket      Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author      User?        @relation("AutorDoEvento", fields: [authorId], references: [id])
+  attachments Attachment[]
+  /// Rastro do canal: mensagem de e-mail ou WhatsApp que originou o evento.
+  inboundMessage InboundMessage?
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_events")
+}
+
+enum LinkType {
+  RELACIONADO
+  DUPLICADO_DE
+  BLOQUEIA
+}
+
+model TicketLink {
+  id       String   @id @default(uuid()) @db.Uuid
+  sourceId String   @db.Uuid
+  targetId String   @db.Uuid
+  type     LinkType
+
+  source Ticket @relation("ChamadoOrigem", fields: [sourceId], references: [id], onDelete: Cascade)
+  target Ticket @relation("ChamadoDestino", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, targetId, type])
+  @@map("ticket_links")
+}
+
+// ---------------------------------------------------------------------
+// Anexos
+// ---------------------------------------------------------------------
+
+/// Arquivo no MinIO do CT 102. Substitui glpi_documents +
+/// glpi_documents_items + glpi_documenttypes + glpi_documentcategories.
+model Attachment {
+  id          String   @id @default(uuid()) @db.Uuid
+  ticketId    String   @db.Uuid
+  eventId     String?  @db.Uuid
+  filename    String
+  contentType String
+  sizeBytes   Int
+  /// Chave no bucket. A URL é assinada na leitura, com validade curta.
+  storageKey  String   @unique
+  /// SHA-256 do conteúdo, para deduplicação e verificação.
+  checksum    String
+  uploadedById String? @db.Uuid
+  createdAt   DateTime @default(now())
+
+  ticket Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  event  TicketEvent? @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@map("attachments")
+}
+
+// ---------------------------------------------------------------------
+// SLA e calendário
+// ---------------------------------------------------------------------
+
+enum AgreementKind {
+  SLA
+  OLA
+}
+
+enum TargetKind {
+  TTO
+  TTR
+}
+
+/// Substitui glpi_slas + glpi_olas (ambas descendiam de LevelAgreement).
+model Agreement {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid
+  name           String
+  kind           AgreementKind
+  target         TargetKind
+  /// Prazo em segundos de expediente, contado pelo calendário.
+  durationSeconds Int
+  calendarId     String?       @db.Uuid
+  isActive       Boolean       @default(true)
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  calendar     Calendar?         @relation(fields: [calendarId], references: [id])
+  levels       EscalationLevel[]
+  commitments  SlaCommitment[]
+  categories   Category[]
+
+  @@unique([organizationId, name, kind, target])
+  @@map("agreements")
+}
+
+/// Substitui glpi_slalevels + glpi_olalevels + critérios + ações.
+model EscalationLevel {
+  id          String @id @default(uuid()) @db.Uuid
+  agreementId String @db.Uuid
+  name        String
+  /// Deslocamento em segundos relativo ao prazo. Negativo dispara antes
+  /// do vencimento (-1800 = 30 min antes); positivo, depois.
+  offsetSeconds Int
+  /// Critérios e ações declarados. Ver EscalationRule em shared.
+  criteria Json?
+  actions  Json
+
+  agreement Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+
+  @@unique([agreementId, name])
+  @@map("escalation_levels")
+}
+
+/// O compromisso de prazo de um chamado. Substitui as 17 colunas de
+/// SLA/OLA de glpi_tickets. Ver docs/02-gap-analysis.md, item 5.
+model SlaCommitment {
+  id          String        @id @default(uuid()) @db.Uuid
+  ticketId    String        @db.Uuid
+  agreementId String        @db.Uuid
+  kind        AgreementKind
+  target      TargetKind
+  startedAt   DateTime
+  /// Vencimento já calculado sobre o calendário.
+  dueAt       DateTime
+  /// Segundos descontados por pendência.
+  pausedSeconds Int      @default(0)
+  achievedAt  DateTime?
+  breachedAt  DateTime?
+  /// Último nível de escalonamento disparado.
+  escalationLevel Int   @default(0)
+
+  ticket    Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  agreement Agreement @relation(fields: [agreementId], references: [id])
+
+  @@unique([ticketId, kind, target])
+  @@index([dueAt, achievedAt])
+  @@map("sla_commitments")
+}
+
+/// Calendário de expediente. Substitui glpi_calendars.
+model Calendar {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String
+  timezone       String   @default("America/Sao_Paulo")
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  segments     CalendarSegment[]
+  holidays     Holiday[]
+  agreements   Agreement[]
+
+  @@unique([organizationId, name])
+  @@map("calendars")
+}
+
+/// Faixa de expediente. Substitui glpi_calendarsegments.
+model CalendarSegment {
+  id         String @id @default(uuid()) @db.Uuid
+  calendarId String @db.Uuid
+  /// 0 = domingo .. 6 = sábado
+  weekday    Int
+  /// Minutos desde a meia-noite, no fuso do calendário.
+  startMinute Int
+  endMinute   Int
+
+  calendar Calendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+
+  @@unique([calendarId, weekday, startMinute])
+  @@map("calendar_segments")
+}
+
+model Holiday {
+  id         String   @id @default(uuid()) @db.Uuid
+  calendarId String   @db.Uuid
+  name       String
+  date       DateTime @db.Date
+  /// Feriado que cai no mesmo dia todo ano.
+  isRecurring Boolean @default(false)
+
+  calendar Calendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+
+  @@unique([calendarId, date])
+  @@map("holidays")
+}
+
+/// Substitui glpi_pendingreasons. Cobrança automática e resolução por
+/// inatividade — um dos melhores recursos do GLPI.
+model PendingReason {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  name           String
+  /// Intervalo entre cobranças, em segundos. 0 desliga a cobrança.
+  followupIntervalSeconds Int @default(0)
+  /// Quantas cobranças antes de resolver sozinho. 0 nunca resolve.
+  followupsBeforeResolution Int @default(0)
+  /// Corpo da cobrança automática.
+  followupTemplate String?
+  isDefault      Boolean @default(false)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tickets      Ticket[]
+
+  @@unique([organizationId, name])
+  @@map("pending_reasons")
+}
+
+// ---------------------------------------------------------------------
+// Aprovação
+// ---------------------------------------------------------------------
+
+enum ApprovalStatus {
+  AGUARDANDO
+  APROVADO
+  RECUSADO
+}
+
+/// Substitui glpi_ticketvalidations + glpi_validationsteps.
+/// Uma linha por validador por etapa.
+model Approval {
+  id         String         @id @default(uuid()) @db.Uuid
+  ticketId   String         @db.Uuid
+  /// Etapas são resolvidas em ordem crescente.
+  step       Int            @default(1)
+  /// Quantos APROVADO a etapa precisa para avançar.
+  quorum     Int            @default(1)
+  approverId String         @db.Uuid
+  status     ApprovalStatus @default(AGUARDANDO)
+  comment    String?
+  requestedAt DateTime      @default(now())
+  decidedAt  DateTime?
+
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  approver User   @relation(fields: [approverId], references: [id])
+
+  @@unique([ticketId, step, approverId])
+  @@index([approverId, status])
+  @@map("approvals")
+}
+
+// ---------------------------------------------------------------------
+// Base de conhecimento
+// ---------------------------------------------------------------------
+
+model Article {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  title          String
+  body           String
+  /// Visível no portal do solicitante, não só para agentes.
+  isPublic       Boolean  @default(false)
+  authorId       String   @db.Uuid
+  views          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  author       User         @relation(fields: [authorId], references: [id])
+  revisions    ArticleRevision[]
+
+  @@index([organizationId])
+  @@map("articles")
+}
+
+model ArticleRevision {
+  id        String   @id @default(uuid()) @db.Uuid
+  articleId String   @db.Uuid
+  version   Int
+  title     String
+  body      String
+  editorId  String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([articleId, version])
+  @@map("article_revisions")
+}
+
+// ---------------------------------------------------------------------
+// Canais
+// ---------------------------------------------------------------------
+
+enum ChannelKind {
+  EMAIL_IMAP
+  EMAIL_SMTP
+  EMAIL_WEBHOOK
+  WHATSAPP_EVOLUTION
+}
+
+/// Configuração de uma caixa de e-mail ou de uma instância da Evolution.
+model ChannelAccount {
+  id             String      @id @default(uuid()) @db.Uuid
+  organizationId String      @db.Uuid
+  kind           ChannelKind
+  name           String
+  isActive       Boolean     @default(true)
+  /// Configuração do canal. Segredos são cifrados na aplicação antes
+  /// de entrar aqui — nunca em texto claro.
+  config         Json
+  /// Time que recebe os chamados abertos por este canal.
+  defaultTeamId  String?     @db.Uuid
+  lastSyncAt     DateTime?
+  lastError      String?
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  inboundMessages InboundMessage[]
+
+  @@unique([organizationId, name])
+  @@map("channel_accounts")
+}
+
+/// Toda mensagem que entra por canal externo passa por aqui antes de
+/// virar evento. A unicidade de externalId é o que impede chamado
+/// duplicado quando dois polls concorrem — correção do GLPI, que não tem.
+model InboundMessage {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String   @db.Uuid
+  channelAccountId String  @db.Uuid
+  channel         Channel
+  /// Message-ID do e-mail ou id da mensagem na Evolution.
+  externalId      String
+  /// Message-ID referenciado em In-Reply-To / References.
+  inReplyTo       String?
+  fromAddress     String
+  subject         String?
+  bodyText        String?
+  bodyHtml        String?
+  rawHeaders      Json?
+  receivedAt      DateTime @default(now())
+  /// Nulo até o processador transformar a mensagem em evento.
+  eventId         String?  @unique @db.Uuid
+  processedAt     DateTime?
+  /// Preenchido quando a mensagem é descartada por regra ou erro.
+  discardedReason String?
+
+  channelAccount ChannelAccount @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
+  event          TicketEvent?   @relation(fields: [eventId], references: [id])
+
+  @@unique([organizationId, channel, externalId])
+  @@index([processedAt])
+  @@map("inbound_messages")
+}
+
+enum DeliveryStatus {
+  PENDENTE
+  ENVIADO
+  FALHOU
+}
+
+/// Fila de saída: e-mail e WhatsApp. Substitui glpi_queuednotifications.
+model OutboundMessage {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  channel        Channel
+  ticketId       String?        @db.Uuid
+  toAddress      String
+  subject        String?
+  body           String
+  /// Message-ID gerado, usado no threading da resposta.
+  externalId     String?
+  status         DeliveryStatus @default(PENDENTE)
+  attempts       Int            @default(0)
+  lastError      String?
+  scheduledFor   DateTime       @default(now())
+  sentAt         DateTime?
+
+  @@index([status, scheduledFor])
+  @@map("outbound_messages")
+}
+
+/// Substitui RuleTicket / RuleMailCollector. Classificação na entrada.
+model IntakeRule {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  name           String
+  /// Ordem de avaliação. Menor primeiro.
+  position       Int
+  isActive       Boolean @default(true)
+  /// Ver IntakeRuleDefinition em packages/shared/src/domain.ts
+  criteria       Json
+  actions        Json
+  /// Para de avaliar as regras seguintes quando esta casar.
+  stopOnMatch    Boolean @default(false)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, name])
+  @@index([organizationId, position])
+  @@map("intake_rules")
+}
+
+// ---------------------------------------------------------------------
+// Integração de saída
+// ---------------------------------------------------------------------
+
+model OutboundWebhook {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String
+  url            String
+  /// Segredo do HMAC-SHA256 da assinatura. Cifrado na aplicação.
+  secret         String
+  /// Eventos assinados: ticket.criado, ticket.atualizado, ...
+  events         String[]
+  isActive       Boolean  @default(true)
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deliveries   WebhookDelivery[]
+
+  @@unique([organizationId, name])
+  @@map("outbound_webhooks")
+}
+
+model WebhookDelivery {
+  id         String         @id @default(uuid()) @db.Uuid
+  webhookId  String         @db.Uuid
+  event      String
+  payload    Json
+  status     DeliveryStatus @default(PENDENTE)
+  attempts   Int            @default(0)
+  responseCode Int?
+  lastError  String?
+  createdAt  DateTime       @default(now())
+  deliveredAt DateTime?
+
+  webhook OutboundWebhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@map("webhook_deliveries")
+}
+
+/// Chave de aplicação para o endpoint público de abertura de chamado.
+model ApiKey {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String
+  /// SHA-256 da chave. O valor cru é mostrado uma única vez, na criação.
+  keyHash        String   @unique
+  /// Permissões nomeadas concedidas a esta chave.
+  scopes         String[]
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, name])
+  @@map("api_keys")
+}
+
+/// Trilha de auditoria de mudanças de configuração. Eventos de chamado
+/// não entram aqui — a timeline já é a auditoria do chamado.
+model AuditLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  actorId        String?  @db.Uuid
+  action         String
+  entity         String
+  entityId       String?
+  diff           Json?
+  ip             String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+  @@map("audit_logs")
+}

@@ -1,0 +1,189 @@
+/* =========================================================
+   Norty Desk — Design Tokens
+
+   Fonte única de verdade para cores, espaçamento, tipografia,
+   raios, sombras, camadas e transições. Não introduza valores
+   literais em CSS de módulo (CLAUDE.md, regra 6).
+
+   A paleta é preto + dourado, herdada da identidade Norty. A
+   divisão de papéis é rígida:
+
+     grafite (--nd-ink)   ação primária, texto, superfícies escuras
+     dourado (--nd-gold)  acento de marca, destaque
+     vermelho (--danger)  só alerta real — nunca decoração
+
+   Sobre dourado o texto é preto: branco sobre dourado não atinge
+   contraste.
+
+   A densidade é a de uma ferramenta de trabalho, não a de um site.
+   A fila de chamados é onde o agente passa o dia; linha alta e
+   respiro generoso custam chamados por tela.
+   ========================================================= */
+
+:root {
+  /* ---------- Marca ---------- */
+  --nd-black: #0a0b0d;
+  --nd-black-700: #101216;
+  --nd-black-600: #171a20;
+  --nd-black-500: #23272f;
+
+  --nd-ink: #1a1d24;
+  --nd-ink-600: #0e1014;
+  --nd-ink-400: #3a3f49;
+  --nd-ink-100: #ecebe8;
+
+  --nd-gold: #c9a227;
+  --nd-gold-600: #8a6b10;
+  --nd-gold-400: #e3c463;
+  --nd-gold-100: #f7f0da;
+
+  --nd-white: #ffffff;
+  --nd-gray: #6b7280;
+  --nd-background: #f4f3f0;
+
+  /* ---------- Superfícies ---------- */
+  --surface-app: var(--nd-background);
+  --surface-card: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-sunken: #edebe7;
+  --surface-inverse: var(--nd-black);
+  --surface-hover: #f5f4f1;
+  --surface-active: #eae8e3;
+  --surface-selected: var(--nd-gold-100);
+
+  /* ---------- Texto ---------- */
+  --text-strong: #0e1013;
+  --text-default: #23262c;
+  --text-muted: #6b7280;
+  --text-subtle: #9aa0a8;
+  --text-inverse: #ffffff;
+  --text-inverse-muted: #a9aeb6;
+  --text-brand: var(--nd-gold-600);
+
+  /* ---------- Bordas ---------- */
+  --border-subtle: #e8e6e1;
+  --border-default: #dbd9d3;
+  --border-strong: #c4c1ba;
+  --border-inverse: rgba(255, 255, 255, 0.1);
+
+  /* ---------- Semântica ---------- */
+  --success: #0e8f5f;
+  --success-bg: #e6f4ee;
+  --success-border: #a4d6c1;
+  /* Âmbar deliberadamente alaranjado: se ficasse próximo do dourado,
+     um aviso passaria por acento de marca. */
+  --warning: #db6e1e;
+  --warning-bg: #fceee1;
+  --warning-border: #f2c39c;
+  --danger: #c42b2b;
+  --danger-bg: #fbeaea;
+  --danger-border: #efb4b4;
+  --info: #3a5570;
+  --info-bg: #e9eef3;
+  --info-border: #c3d0dc;
+  --neutral: var(--nd-gray);
+  --neutral-bg: #f0efec;
+  --neutral-border: #ddd9d2;
+
+  /* ---------- Prioridade ----------
+     Uma escala só, do frio ao quente. Prioridade 5 usa o vermelho de
+     alerta porque, aqui, é alerta real. */
+  --prio-1: #7c8794;
+  --prio-2: #4b7ca8;
+  --prio-3: #b98a1f;
+  --prio-4: #d2691e;
+  --prio-5: var(--danger);
+
+  /* ---------- SLA ----------
+     Três estados e nada mais: no prazo, apertando, estourado. */
+  --sla-ok: var(--success);
+  --sla-atencao: var(--warning);
+  --sla-estourado: var(--danger);
+
+  /* ---------- Canal ----------
+     Cada canal tem cor própria na timeline: o agente precisa ver de
+     onde a mensagem veio sem ler o rótulo. */
+  --canal-web: var(--nd-ink-400);
+  --canal-email: #3a5570;
+  --canal-whatsapp: #128c7e;
+  --canal-api: #6b4fa0;
+  --canal-sistema: var(--nd-gray);
+
+  /* ---------- Tipografia ---------- */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo,
+    Consolas, monospace;
+
+  --text-xs: 0.6875rem;   /* 11px — metadado, etiqueta */
+  --text-sm: 0.8125rem;   /* 13px — corpo da tabela */
+  --text-base: 0.875rem;  /* 14px — corpo padrão */
+  --text-md: 1rem;        /* 16px — título de cartão */
+  --text-lg: 1.125rem;    /* 18px — assunto do chamado */
+  --text-xl: 1.375rem;    /* 22px — título de tela */
+  --text-2xl: 1.75rem;    /* 28px — número de painel */
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+
+  /* ---------- Espaçamento — escala de 4 ---------- */
+  --space-0: 0;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* ---------- Raios ---------- */
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+  --radius-full: 999px;
+
+  /* ---------- Sombras ---------- */
+  --shadow-xs: 0 1px 2px rgba(10, 11, 13, 0.05);
+  --shadow-sm: 0 1px 3px rgba(10, 11, 13, 0.08), 0 1px 2px rgba(10, 11, 13, 0.04);
+  --shadow-md: 0 4px 12px rgba(10, 11, 13, 0.1);
+  --shadow-lg: 0 12px 32px rgba(10, 11, 13, 0.14);
+  --focus-ring: 0 0 0 3px rgba(201, 162, 39, 0.35);
+
+  /* ---------- Camadas ---------- */
+  --z-base: 0;
+  --z-sticky: 10;
+  --z-dropdown: 100;
+  --z-overlay: 200;
+  --z-modal: 300;
+  --z-toast: 400;
+
+  /* ---------- Transições ---------- */
+  --ease: cubic-bezier(0.2, 0, 0.15, 1);
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+
+  /* ---------- Medidas do shell ---------- */
+  --sidebar-width: 232px;
+  --sidebar-width-collapsed: 56px;
+  --topbar-height: 52px;
+  --queue-row-height: 44px;
+  --detail-panel-width: 340px;
+}
+
+/* Redução de movimento é preferência de acessibilidade, não de gosto. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
+  }
+}

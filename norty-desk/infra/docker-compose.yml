@@ -1,0 +1,55 @@
+# Norty Desk — CT 105 Asgard (norty-apps-fase3), 192.168.15.75
+#
+# Banco, Redis, MinIO e Evolution NÃO sobem aqui: são a infra
+# compartilhada do CT 102 Yggdrasil (192.168.15.72).
+# Ver docs/11-infra.md.
+
+services:
+  desk-api:
+    build:
+      context: ..
+      dockerfile: infra/api.Dockerfile
+    container_name: desk-api
+    restart: unless-stopped
+    env_file: ../apps/api/.env
+    ports:
+      - "3061:3061"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3061/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks: [desk]
+
+  # Filas de saída, coleta IMAP, cobrança de pendência e escalonamento.
+  # Mesma imagem da API, sem porta exposta: dois processos, um artefato.
+  desk-worker:
+    build:
+      context: ..
+      dockerfile: infra/api.Dockerfile
+    container_name: desk-worker
+    restart: unless-stopped
+    env_file: ../apps/api/.env
+    environment:
+      MODO: worker
+    command: ["node", "dist/main.js"]
+    depends_on:
+      desk-api:
+        condition: service_healthy
+    networks: [desk]
+
+  desk-web:
+    build:
+      context: ..
+      dockerfile: infra/web.Dockerfile
+    container_name: desk-web
+    restart: unless-stopped
+    ports:
+      - "3060:80"
+    depends_on: [desk-api]
+    networks: [desk]
+
+networks:
+  desk:
+    driver: bridge
