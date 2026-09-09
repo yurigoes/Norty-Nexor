@@ -1,9 +1,11 @@
-import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { ProvedorDeAutenticacao, useAutenticacao } from '../auth/Autenticacao';
 import { Login } from '../modules/auth/Login';
 import { MinhasAprovacoes } from '../modules/aprovacao/MinhasAprovacoes';
 import { Canais } from '../modules/canais/Canais';
+import { Ativos } from '../modules/ativo/Ativos';
+import { Pesquisa } from '../modules/ativo/Pesquisa';
 import { Artigo } from '../modules/conhecimento/Artigo';
 import { Conhecimento } from '../modules/conhecimento/Conhecimento';
 import { Diagnostico } from '../modules/canais/Diagnostico';
@@ -29,6 +31,19 @@ export function App() {
 
 function Raiz() {
   const { carregando, perfil } = useAutenticacao();
+  const local = useLocation();
+
+  // A pesquisa de satisfação vem antes de tudo: quem clica no link do
+  // e-mail não tem conta, e mandá-lo para o login é o mesmo que não
+  // receber a nota. Fica fora do portão porque a autorização dela é o
+  // token da URL, não a sessão.
+  if (local.pathname.startsWith('/pesquisa/')) {
+    return (
+      <Routes>
+        <Route path="/pesquisa/:token" element={<Pesquisa />} />
+      </Routes>
+    );
+  }
 
   if (carregando) {
     return (
@@ -62,6 +77,7 @@ function Aplicativo() {
           <Routes>
             <Route path="/" element={<Fila />} />
             <Route path="/painel" element={<Painel />} />
+            <Route path="/ativos" element={<Ativos />} />
             <Route path="/aprovacoes" element={<MinhasAprovacoes />} />
             <Route path="/conhecimento" element={<Conhecimento />} />
             <Route path="/conhecimento/novo" element={<Artigo novo />} />

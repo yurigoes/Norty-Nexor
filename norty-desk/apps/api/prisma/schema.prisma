@@ -49,6 +49,8 @@ model Organization {
   webhooks      OutboundWebhook[]
   apiKeys       ApiKey[]
   contacts      Contact[]
+  assets        Asset[]
+  surveys       Survey[]
 
   @@map("organizations")
 }
@@ -74,6 +76,7 @@ model User {
   approvals     Approval[]
   refreshTokens RefreshToken[]
   articles      Article[]
+  assets        Asset[]           @relation("AtivoDoUsuario")
   articleEdits  ArticleRevision[] @relation("EditorDaRevisao")
 
   @@map("users")
@@ -325,6 +328,8 @@ model Ticket {
   customFields Json?
   links       TicketLink[] @relation("ChamadoOrigem")
   linkedBy    TicketLink[] @relation("ChamadoDestino")
+  assets      TicketAsset[]
+  survey      Survey?
 
   @@unique([organizationId, number])
   @@unique([organizationId, externalRef])
@@ -694,6 +699,110 @@ model ArticleRevision {
 
   @@unique([articleId, version])
   @@map("article_revisions")
+}
+
+// ---------------------------------------------------------------------
+// Ativos
+// ---------------------------------------------------------------------
+
+enum AssetKind {
+  COMPUTADOR
+  MONITOR
+  IMPRESSORA
+  TELEFONE
+  REDE
+  LICENCA
+  OUTRO
+}
+
+enum AssetStatus {
+  EM_USO
+  EM_ESTOQUE
+  EM_MANUTENCAO
+  BAIXADO
+}
+
+/// Equipamento vinculável a chamado.
+///
+/// **Não é CMDB.** O inventário do GLPI tem 60 tabelas e um agente de
+/// coleta; aqui a pergunta é só "qual máquina é essa?" na hora do
+/// chamado. O inventário completo é a Fase 6 (`docs/10-roadmap.md`) e
+/// vai entrar por importação, não por este modelo.
+model Asset {
+  id             String      @id @default(uuid()) @db.Uuid
+  organizationId String      @db.Uuid
+  kind           AssetKind   @default(OUTRO)
+  status         AssetStatus @default(EM_USO)
+  name           String
+  /// Etiqueta de patrimônio. É por ela que o suporte procura.
+  tag            String?
+  serialNumber   String?
+  manufacturer   String?
+  model          String?
+  location       String?
+  /// Quem usa hoje. Nulo quando está em estoque.
+  userId         String?     @db.Uuid
+  purchasedAt    DateTime?
+  warrantyUntil  DateTime?
+  notes          String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation("AtivoDoUsuario", fields: [userId], references: [id], onDelete: SetNull)
+  tickets      TicketAsset[]
+
+  /// Patrimônio e série não se repetem na organização: dois registros do
+  /// mesmo equipamento são a origem de metade da sujeira de inventário.
+  @@unique([organizationId, tag])
+  @@unique([organizationId, serialNumber])
+  @@index([organizationId, status])
+  @@index([userId])
+  @@map("assets")
+}
+
+/// Um chamado pode envolver mais de um equipamento, e um equipamento
+/// acumula chamados — é o histórico que responde "essa máquina dá
+/// problema?".
+model TicketAsset {
+  ticketId String   @db.Uuid
+  assetId  String   @db.Uuid
+  addedAt  DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  asset  Asset  @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@id([ticketId, assetId])
+  @@index([assetId])
+  @@map("ticket_assets")
+}
+
+// ---------------------------------------------------------------------
+// Satisfação
+// ---------------------------------------------------------------------
+
+/// Pesquisa de satisfação de um chamado. Substitui glpi_ticketsatisfactions.
+///
+/// Uma por chamado: mandar duas seria pedir a mesma nota duas vezes.
+model Survey {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  ticketId       String    @unique @db.Uuid
+  /// O que abre a pesquisa sem exigir senha. Aleatório e único.
+  token          String    @unique
+  sentAt         DateTime?
+  /// 1 a 5. Nulo enquanto não respondida.
+  score          Int?
+  comment        String?
+  answeredAt     DateTime?
+  /// Depois disto o link não abre mais.
+  expiresAt      DateTime
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ticket       Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, answeredAt])
+  @@map("surveys")
 }
 
 // ---------------------------------------------------------------------

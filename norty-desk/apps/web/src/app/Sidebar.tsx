@@ -105,6 +105,16 @@ export function Sidebar() {
           </Link>
         ) : null}
 
+        {can('ativo:ler') ? (
+          <Link
+            to="/ativos"
+            className="nav-item"
+            aria-current={local.pathname === '/ativos' ? 'page' : undefined}
+          >
+            <span>Ativos</span>
+          </Link>
+        ) : null}
+
         {can('artigo:ler') ? (
           <Link
             to="/conhecimento"

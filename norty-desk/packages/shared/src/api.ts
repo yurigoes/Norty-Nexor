@@ -242,6 +242,116 @@ export type DecideApprovalRequest = {
 };
 
 // ---------------------------------------------------------------------
+// Ativos
+// ---------------------------------------------------------------------
+
+export const ASSET_KINDS = [
+  'COMPUTADOR',
+  'MONITOR',
+  'IMPRESSORA',
+  'TELEFONE',
+  'REDE',
+  'LICENCA',
+  'OUTRO',
+] as const;
+export type AssetKind = (typeof ASSET_KINDS)[number];
+
+export const ASSET_STATUSES = ['EM_USO', 'EM_ESTOQUE', 'EM_MANUTENCAO', 'BAIXADO'] as const;
+export type AssetStatus = (typeof ASSET_STATUSES)[number];
+
+export const ROTULO_ATIVO: Record<AssetKind, string> = {
+  COMPUTADOR: 'Computador',
+  MONITOR: 'Monitor',
+  IMPRESSORA: 'Impressora',
+  TELEFONE: 'Telefone',
+  REDE: 'Rede',
+  LICENCA: 'Licença',
+  OUTRO: 'Outro',
+};
+
+export const ROTULO_ATIVO_STATUS: Record<AssetStatus, string> = {
+  EM_USO: 'Em uso',
+  EM_ESTOQUE: 'Em estoque',
+  EM_MANUTENCAO: 'Em manutenção',
+  BAIXADO: 'Baixado',
+};
+
+export type AssetView = {
+  id: string;
+  kind: AssetKind;
+  status: AssetStatus;
+  name: string;
+  tag: string | null;
+  serialNumber: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  location: string | null;
+  user: PartyRef | null;
+  purchasedAt: string | null;
+  warrantyUntil: string | null;
+  notes: string | null;
+  /** Quantos chamados já envolveram este equipamento. */
+  ticketCount?: number;
+};
+
+export type WriteAssetRequest = {
+  kind?: AssetKind;
+  status?: AssetStatus;
+  name: string;
+  tag?: string | null;
+  serialNumber?: string | null;
+  manufacturer?: string | null;
+  model?: string | null;
+  location?: string | null;
+  userId?: string | null;
+  purchasedAt?: string | null;
+  warrantyUntil?: string | null;
+  notes?: string | null;
+};
+
+// ---------------------------------------------------------------------
+// Satisfação
+// ---------------------------------------------------------------------
+
+export type SurveyView = {
+  id: string;
+  ticket: { id: string; number: number; subject: string };
+  sentAt: string | null;
+  score: number | null;
+  comment: string | null;
+  answeredAt: string | null;
+  expiresAt: string;
+};
+
+/** O que a página pública da pesquisa mostra — sem nada de interno. */
+export type SurveyPublicView = {
+  ticketNumber: number;
+  subject: string;
+  organizationName: string;
+  answered: boolean;
+  score: number | null;
+  comment: string | null;
+};
+
+export type AnswerSurveyRequest = {
+  score: number;
+  comment?: string;
+};
+
+export type SatisfacaoResumo = {
+  periodo: { de: string; ate: string };
+  enviadas: number;
+  respondidas: number;
+  /** Respondidas ÷ enviadas. */
+  taxaDeResposta: number;
+  /** Média das notas respondidas, 1 a 5. */
+  media: number;
+  /** Percentual de notas 4 e 5 menos percentual de 1 e 2. */
+  csat: number;
+  porNota: { nota: number; total: number }[];
+};
+
+// ---------------------------------------------------------------------
 // Painéis e relatórios
 // ---------------------------------------------------------------------
 

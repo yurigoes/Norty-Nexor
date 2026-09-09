@@ -504,6 +504,82 @@ como "SoluÃ§Ã£o".
 
 ---
 
+## 9.1 Ativos
+
+```
+GET    /v1/assets?q=...&kind=...&status=...&userId=...
+GET    /v1/assets/:id
+GET    /v1/assets/:id/chamados      → o histórico do equipamento
+POST   /v1/assets
+PATCH  /v1/assets/:id
+
+GET    /v1/tickets/:id/ativos
+POST   /v1/tickets/:id/ativos       { assetId }
+DELETE /v1/tickets/:id/ativos/:assetId
+```
+
+**Não é CMDB, e é de propósito.** O inventário do GLPI são 60 tabelas e
+um agente de coleta — e é por isso que o campo do chamado fica vazio. A
+pergunta que o suporte faz é "qual máquina é essa?", e ela se responde
+com nome, patrimônio, série, dono e local. O inventário completo entra
+por importação na Fase 6.
+
+Patrimônio e número de série são únicos por organização: dois registros
+do mesmo equipamento são a origem de metade da sujeira de inventário. A
+API traduz a colisão para uma mensagem que diz **qual campo** repetiu,
+não o nome da restrição. Etiqueta em branco vira `NULL` — string vazia
+colidiria no índice único.
+
+A busca é `contains`, não busca de texto: o suporte procura por pedaço
+de patrimônio ("...4721") e por série incompleta, e nenhum dos dois é
+palavra que o `to_tsvector` reconheça.
+
+`GET /assets/:id/chamados` respeita o escopo de leitura do perfil: o
+histórico do equipamento não é porta lateral para ler chamado alheio.
+**Vincular exige `ativo:ler`**, não `ativo:gerenciar` — quem atende
+precisa dizer qual máquina é; mudar o cadastro dela é outra conversa.
+
+---
+
+## 9.2 Pesquisa de satisfação
+
+```
+GET  /v1/pesquisa/:token            → público, sem sessão
+POST /v1/pesquisa/:token            { score, comment? }
+GET  /v1/surveys?respondidas=true
+GET  /v1/reports/satisfacao?periodo=30d
+```
+
+**A pesquisa sai no fechamento, não na solução.** Entre "resolvido" e
+"fechado" o cliente ainda pode reabrir; perguntar antes disso é
+perguntar cedo demais.
+
+**Sai pelo canal de origem**: quem abriu por WhatsApp responde no
+WhatsApp. Mandar e-mail para quem nunca usou e-mail com a gente é como
+a taxa de resposta do GLPI fica no que fica.
+
+**O link abre sem login.** Exigir senha de quem só quer dar uma nota é o
+jeito mais eficiente de não receber nota nenhuma. A autorização é o
+token: 24 bytes aleatórios, único, com 15 dias de validade. A página
+pública devolve só número, assunto e nome da organização — nada de
+conversa ou nota interna, porque e-mail encaminhado é coisa que
+acontece.
+
+Uma pesquisa por chamado (`@unique` em `ticketId`): fechar, reabrir e
+fechar de novo não pede a mesma nota duas vezes. Responder de novo troca
+a nota — a pessoa mudou de ideia, e recusar seria discutir com quem se
+dispôs a avaliar.
+
+O resumo traz média **e** CSAT (percentual de 4 e 5 menos percentual de
+1 e 2). Uma média 3,0 pode ser "todo mundo achou mediano" ou "metade
+amou e metade odiou", e são problemas diferentes.
+
+O banco guarda a regra que a aplicação não pode burlar: `CHECK` que
+exige nota entre 1 e 5 **e** data de resposta juntas — nota sem data é
+nota que ninguém deu.
+
+---
+
 ## 10. Webhooks de saída
 
 Eventos assináveis:

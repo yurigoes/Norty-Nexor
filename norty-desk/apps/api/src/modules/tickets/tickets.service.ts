@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   forwardRef,
 } from '@nestjs/common';
@@ -26,6 +27,7 @@ import { Prisma } from '@prisma/client';
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { SaidaService } from '../channels/saida.service';
+import { SatisfacaoService } from '../satisfacao/satisfacao.service';
 import { SlaService } from '../sla/sla.service';
 import { escopoDeLeitura } from './tickets.escopo';
 import {
@@ -56,10 +58,13 @@ function doCursor(cursor: string): string {
 
 @Injectable()
 export class TicketsService {
+  private readonly logger = new Logger(TicketsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly sla: SlaService,
     @Inject(forwardRef(() => SaidaService)) private readonly saida: SaidaService,
+    @Inject(forwardRef(() => SatisfacaoService)) private readonly satisfacao: SatisfacaoService,
   ) {}
 
   // -------------------------------------------------------------------
@@ -785,6 +790,17 @@ export class TicketsService {
 
     if (destino === 'SOLUCIONADO' || destino === 'FECHADO') {
       await this.sla.cumprir(id, 'TTR', agora);
+    }
+
+    // A pesquisa sai no fechamento, não na solução: entre "resolvido" e
+    // "fechado" o cliente ainda pode reabrir, e perguntar como foi o
+    // atendimento antes disso é perguntar cedo demais.
+    if (destino === 'FECHADO') {
+      await this.satisfacao.enviarPara(id).catch((erro: Error) => {
+        // Uma pesquisa que não saiu não pode impedir o fechamento do
+        // chamado: o trabalho está feito, e o cliente espera a resposta.
+        this.logger.warn(`Pesquisa do chamado ${id} não saiu: ${erro.message}`);
+      });
     }
 
     // "Resolvido" com texto é resposta: o solicitante precisa saber

@@ -305,3 +305,26 @@ describe('contagem de leitura', () => {
     assert.equal(segunda.corpo.views, 2, '"os mais lidos" só significa algo se a leitura contar');
   });
 });
+
+// ---------------------------------------------------------------------
+
+describe('o índice de busca existe', () => {
+  it('a coluna gerada e os dois índices GIN estão no banco', async () => {
+    // Esta asserção existe porque uma migração gerada com
+    // `prisma migrate diff --from-schema-datasource` apagou a coluna
+    // `busca` e os dois índices sem ninguém pedir: o Prisma lê o banco
+    // vivo e "corrige" tudo que não está no `schema.prisma`. Sem ela, a
+    // próxima vez só apareceria como 500 na tela de busca.
+    const colunas = await prisma.$queryRaw<{ column_name: string }[]>`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'articles' AND column_name = 'busca'
+    `;
+    assert.equal(colunas.length, 1, 'a coluna gerada "busca" sumiu do banco');
+
+    const indices = await prisma.$queryRaw<{ indexname: string }[]>`
+      SELECT indexname FROM pg_indexes
+      WHERE tablename = 'articles' AND indexname IN ('articles_busca', 'articles_keywords')
+    `;
+    assert.equal(indices.length, 2, 'os índices GIN da base de conhecimento sumiram');
+  });
+});

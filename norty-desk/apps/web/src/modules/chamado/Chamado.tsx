@@ -17,6 +17,7 @@ import {
   seloStatus,
 } from '../../lib/formato';
 import { Aprovacoes } from '../aprovacao/Aprovacoes';
+import { AtivosDoChamado } from '../ativo/AtivosDoChamado';
 import { Sugestoes } from '../conhecimento/Sugestoes';
 import { Conversa } from './Conversa';
 
@@ -142,6 +143,8 @@ export function Chamado() {
             {chamado.pendingReason ? (
               <Linha rotulo="Pendente por">{chamado.pendingReason.name}</Linha>
             ) : null}
+
+            <AtivosDoChamado ticketId={chamado.id} />
           </div>
 
           <div className="card-rodape pilha-sm">

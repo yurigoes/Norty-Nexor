@@ -36,7 +36,7 @@ npm run db:test:migrate  # migra o banco da suíte
 npm run test -w @norty-desk/api
 ```
 
-Duas armadilhas que já custaram caro aqui:
+Três armadilhas que já custaram caro aqui:
 
 1. **A suíte precisa do `.env.test`.** Ela roda com
    `node --env-file=.env.test`, e o `ConfigModule` escolhe o arquivo por
@@ -45,7 +45,25 @@ Duas armadilhas que já custaram caro aqui:
    vez do simulado. `limparBanco` agora recusa qualquer banco cujo nome
    não termine em `_test`.
 
-2. **`typecheck` não pode emitir.** Era `tsc -b --noEmit false`, que
+2. **Nunca gere migração a partir do banco vivo.**
+   `prisma migrate diff --from-schema-datasource` lê o banco e "corrige"
+   tudo que não está no `schema.prisma` — inclusive o que foi escrito à
+   mão de propósito. Ele já gerou um `DROP COLUMN busca` que apagou o
+   índice de busca da base de conhecimento sem ninguém pedir. O diff sai
+   das migrações anteriores:
+
+   ```bash
+   npx prisma migrate diff \
+     --from-migrations prisma/migrations \
+     --to-schema-datamodel prisma/schema.prisma \
+     --shadow-database-url "postgresql://desk@127.0.0.1:5432/nortydesk_shadow" \
+     --script > prisma/migrations/<carimbo>_<nome>/migration.sql
+   ```
+
+   Depois, **leia o SQL gerado antes de aplicar** e apague qualquer
+   `DROP` que você não pediu.
+
+3. **`typecheck` não pode emitir.** Era `tsc -b --noEmit false`, que
    escrevia `.js` ao lado de cada `.tsx`; o Vite resolve `./Componente`
    para o `.js` velho antes do `.tsx`, e o aplicativo congelava na versão
    do momento em que alguém rodou o typecheck. Hoje é

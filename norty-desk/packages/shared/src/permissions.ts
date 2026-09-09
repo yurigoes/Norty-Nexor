@@ -74,6 +74,14 @@ export const PERMISSIONS = [
   'painel:organizacao',
   'relatorio:exportar',
 
+  // --- Ativos ---------------------------------------------------------
+  'ativo:ler',
+  'ativo:gerenciar',
+
+  // --- Satisfação -----------------------------------------------------
+  'satisfacao:ler',
+  'satisfacao:configurar',
+
   // --- Configuração ---------------------------------------------------
   'config:categorias',
   'config:formularios',
@@ -113,6 +121,8 @@ const IMPLICA: Partial<Record<Permission, readonly Permission[]>> = {
   'chamado:atribuir': ['chamado:atribuir:a-mim'],
   'artigo:publicar': ['artigo:escrever'],
   'artigo:ler:interno': ['artigo:ler'],
+  'ativo:gerenciar': ['ativo:ler'],
+  'satisfacao:configurar': ['satisfacao:ler'],
 };
 
 /** Fecha a lista sobre as implicações. */
@@ -171,6 +181,7 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'painel:proprio',
     'painel:time',
     'pessoa:ler',
+    'ativo:ler',
   ],
 
   SUPERVISOR: [
@@ -210,6 +221,9 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'relatorio:exportar',
     'pessoa:ler',
     'time:gerenciar',
+    'ativo:ler',
+    'ativo:gerenciar',
+    'satisfacao:ler',
   ],
 
   /** Lê indicadores e dá aval; não atende chamado. */
@@ -230,6 +244,8 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'relatorio:exportar',
     'pessoa:ler',
     'auditoria:ler',
+    'ativo:ler',
+    'satisfacao:ler',
   ],
 
   ADMINISTRADOR: [...PERMISSIONS],
