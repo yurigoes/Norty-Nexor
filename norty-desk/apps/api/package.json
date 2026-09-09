@@ -15,7 +15,7 @@
     "db:seed": "ts-node -r dotenv/config --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed.ts",
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
-    "test:e2e": "tsc -p tsconfig.test.json && node --test dist-test/test/*.e2e.test.js",
+    "test:e2e": "tsc -p tsconfig.test.json && node --test --test-concurrency=1 dist-test/test/*.e2e.test.js",
     "db:test:migrate": "dotenv -e .env.test -- prisma migrate deploy"
   },
   "prisma": {

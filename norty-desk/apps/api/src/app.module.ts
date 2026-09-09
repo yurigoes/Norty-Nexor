@@ -3,7 +3,9 @@ import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 
 import { PrismaModule } from './common/prisma/prisma.module';
+import { AttachmentsModule } from './modules/attachments/attachments.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { CatalogoModule } from './modules/catalogo/catalogo.module';
 import { ChannelsModule } from './modules/channels/channels.module';
 import { HealthModule } from './modules/health/health.module';
 import { IntakeModule } from './modules/intake/intake.module';
@@ -18,6 +20,8 @@ import { TicketsModule } from './modules/tickets/tickets.module';
     HealthModule,
     AuthModule,
     TicketsModule,
+    AttachmentsModule,
+    CatalogoModule,
     SlaModule,
     ChannelsModule,
     IntakeModule,
