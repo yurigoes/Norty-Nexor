@@ -385,6 +385,22 @@ export const ROTULO_ATIVO_STATUS: Record<AssetStatus, string> = {
   BAIXADO: 'Baixado',
 };
 
+/**
+ * Localização com o caminho inteiro.
+ *
+ * "Sala 201" sozinho não localiza ninguém; "Prédio A > 2º andar > Sala
+ * 201" localiza. O caminho é montado na leitura, não gravado — um
+ * caminho gravado é mais uma coisa a atualizar quando alguém renomeia o
+ * prédio.
+ */
+export type LocalizacaoRef = {
+  id: string;
+  name: string;
+  path: string;
+};
+
+export type CatalogoRef = { id: string; name: string };
+
 export type AssetView = {
   id: string;
   kind: AssetKind;
@@ -392,9 +408,9 @@ export type AssetView = {
   name: string;
   tag: string | null;
   serialNumber: string | null;
-  manufacturer: string | null;
-  model: string | null;
-  location: string | null;
+  manufacturer: CatalogoRef | null;
+  assetModel: CatalogoRef | null;
+  location: LocalizacaoRef | null;
   user: PartyRef | null;
   purchasedAt: string | null;
   warrantyUntil: string | null;
@@ -409,9 +425,9 @@ export type WriteAssetRequest = {
   name: string;
   tag?: string | null;
   serialNumber?: string | null;
-  manufacturer?: string | null;
-  model?: string | null;
-  location?: string | null;
+  manufacturerId?: string | null;
+  assetModelId?: string | null;
+  locationId?: string | null;
   userId?: string | null;
   purchasedAt?: string | null;
   warrantyUntil?: string | null;
@@ -593,6 +609,50 @@ export type ErroConhecidoSugerido = {
   status: ProblemStatus;
   /** Aderência da busca de texto, de 0 a 1. */
   score: number;
+};
+
+// ---------------------------------------------------------------------
+// Catálogo do ativo — localização, fabricante e modelo
+// ---------------------------------------------------------------------
+
+export type LocalizacaoView = {
+  id: string;
+  name: string;
+  /** Caminho inteiro, montado na leitura. */
+  path: string;
+  parentId: string | null;
+  notes: string | null;
+  isActive: boolean;
+  /** Quantos ativos estão aqui — sem contar as sublocalizações. */
+  assetCount: number;
+};
+
+export type EscreverLocalizacaoRequest = {
+  name: string;
+  parentId?: string | null;
+  notes?: string | null;
+  isActive?: boolean;
+};
+
+export type FabricanteView = {
+  id: string;
+  name: string;
+  modelCount: number;
+  assetCount: number;
+};
+
+export type ModeloDeAtivoView = {
+  id: string;
+  name: string;
+  kind: AssetKind;
+  manufacturer: CatalogoRef | null;
+  assetCount: number;
+};
+
+export type EscreverModeloDeAtivoRequest = {
+  name: string;
+  kind?: AssetKind;
+  manufacturerId?: string | null;
 };
 
 // ---------------------------------------------------------------------

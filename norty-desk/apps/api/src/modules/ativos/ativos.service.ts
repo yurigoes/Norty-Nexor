@@ -9,6 +9,9 @@ import type { BuscarAtivosDto, EditarAtivoDto, EscreverAtivoDto } from './dto';
 
 const INCLUDE = {
   user: true,
+  manufacturer: { select: { id: true, name: true } },
+  assetModel: { select: { id: true, name: true } },
+  location: { select: { id: true, name: true, parentId: true } },
   _count: { select: { tickets: true } },
 } satisfies Prisma.AssetInclude;
 
@@ -36,6 +39,7 @@ export class AtivosService {
       ...(filtro.kind ? { kind: filtro.kind } : {}),
       ...(filtro.status ? { status: filtro.status } : {}),
       ...(filtro.userId ? { userId: filtro.userId } : {}),
+      ...(filtro.locationId ? { locationId: filtro.locationId } : {}),
       ...(termo
         ? {
             // `contains` e não busca de texto: o suporte procura por
@@ -45,8 +49,9 @@ export class AtivosService {
               { name: { contains: termo, mode: 'insensitive' } },
               { tag: { contains: termo, mode: 'insensitive' } },
               { serialNumber: { contains: termo, mode: 'insensitive' } },
-              { model: { contains: termo, mode: 'insensitive' } },
-              { location: { contains: termo, mode: 'insensitive' } },
+              { assetModel: { name: { contains: termo, mode: 'insensitive' } } },
+              { manufacturer: { name: { contains: termo, mode: 'insensitive' } } },
+              { location: { name: { contains: termo, mode: 'insensitive' } } },
             ],
           }
         : {}),
@@ -59,7 +64,7 @@ export class AtivosService {
       take: limite,
     });
 
-    return ativos.map((a) => AtivosService.paraView(a));
+    return this.comCaminho(usuario.organizationId, ativos);
   }
 
   async obter(usuario: UsuarioAutenticado, id: string): Promise<AssetView> {
@@ -69,7 +74,8 @@ export class AtivosService {
     });
 
     if (!ativo) throw new NotFoundException('Ativo não encontrado.');
-    return AtivosService.paraView(ativo);
+    const [view] = await this.comCaminho(usuario.organizationId, [ativo]);
+    return view!;
   }
 
   /** O histórico do equipamento: é o que responde "essa máquina dá problema?". */
@@ -103,6 +109,7 @@ export class AtivosService {
 
   async criar(usuario: UsuarioAutenticado, dto: EscreverAtivoDto): Promise<AssetView> {
     await this.exigirUsuarioDaOrganizacao(usuario, dto.userId);
+    await this.exigirCatalogo(usuario, dto);
 
     try {
       const ativo = await this.prisma.asset.create({
@@ -113,9 +120,9 @@ export class AtivosService {
           status: dto.status ?? 'EM_USO',
           tag: dto.tag ?? null,
           serialNumber: dto.serialNumber ?? null,
-          manufacturer: dto.manufacturer ?? null,
-          model: dto.model ?? null,
-          location: dto.location ?? null,
+          manufacturerId: dto.manufacturerId ?? null,
+          assetModelId: dto.assetModelId ?? null,
+          locationId: dto.locationId ?? null,
           notes: dto.notes ?? null,
           userId: dto.userId ?? null,
           purchasedAt: dto.purchasedAt ? new Date(dto.purchasedAt) : null,
@@ -124,7 +131,8 @@ export class AtivosService {
         include: INCLUDE,
       });
 
-      return AtivosService.paraView(ativo);
+      const [view] = await this.comCaminho(usuario.organizationId, [ativo]);
+      return view!;
     } catch (erro) {
       throw AtivosService.traduzirDuplicidade(erro);
     }
@@ -137,6 +145,7 @@ export class AtivosService {
   ): Promise<AssetView> {
     await this.obter(usuario, id);
     await this.exigirUsuarioDaOrganizacao(usuario, dto.userId);
+    await this.exigirCatalogo(usuario, dto);
 
     try {
       const ativo = await this.prisma.asset.update({
@@ -147,9 +156,9 @@ export class AtivosService {
           ...(dto.status !== undefined ? { status: dto.status } : {}),
           ...(dto.tag !== undefined ? { tag: dto.tag } : {}),
           ...(dto.serialNumber !== undefined ? { serialNumber: dto.serialNumber } : {}),
-          ...(dto.manufacturer !== undefined ? { manufacturer: dto.manufacturer } : {}),
-          ...(dto.model !== undefined ? { model: dto.model } : {}),
-          ...(dto.location !== undefined ? { location: dto.location } : {}),
+          ...(dto.manufacturerId !== undefined ? { manufacturerId: dto.manufacturerId } : {}),
+          ...(dto.assetModelId !== undefined ? { assetModelId: dto.assetModelId } : {}),
+          ...(dto.locationId !== undefined ? { locationId: dto.locationId } : {}),
           ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
           ...(dto.userId !== undefined ? { userId: dto.userId } : {}),
           ...(dto.purchasedAt !== undefined
@@ -162,7 +171,8 @@ export class AtivosService {
         include: INCLUDE,
       });
 
-      return AtivosService.paraView(ativo);
+      const [view] = await this.comCaminho(usuario.organizationId, [ativo]);
+      return view!;
     } catch (erro) {
       throw AtivosService.traduzirDuplicidade(erro);
     }
@@ -217,12 +227,97 @@ export class AtivosService {
       orderBy: { addedAt: 'asc' },
     });
 
-    return vinculos.map((v) => AtivosService.paraView(v.asset));
+    return this.comCaminho(
+      usuario.organizationId,
+      vinculos.map((v) => v.asset),
+    );
   }
 
   // -------------------------------------------------------------------
   // Internos
   // -------------------------------------------------------------------
+
+  /**
+   * Monta o caminho da localização de cada ativo.
+   *
+   * A árvore de uma organização cabe numa consulta, e uma consulta
+   * resolve a lista inteira: subir a árvore por ativo seria o N+1 numa
+   * tela que sempre lista dezenas. Por isso o caminho não é gravado —
+   * ele não custa o bastante para valer mais uma coisa a atualizar
+   * quando alguém renomeia o prédio.
+   */
+  private async comCaminho(
+    organizationId: string,
+    ativos: AtivoComRelacoes[],
+  ): Promise<AssetView[]> {
+    const temLocal = ativos.some((a) => a.locationId);
+    const caminhos = temLocal ? await this.caminhosDaOrganizacao(organizationId) : new Map();
+
+    return ativos.map((a) => AtivosService.paraView(a, caminhos));
+  }
+
+  /** `id → "Prédio A > 2º andar > Sala 201"`, para a organização inteira. */
+  async caminhosDaOrganizacao(organizationId: string): Promise<Map<string, string>> {
+    const locais = await this.prisma.location.findMany({
+      where: { organizationId },
+      select: { id: true, name: true, parentId: true },
+    });
+
+    const porId = new Map(locais.map((l) => [l.id, l]));
+    const caminhos = new Map<string, string>();
+
+    const montar = (id: string, visitados = new Set<string>()): string => {
+      const pronto = caminhos.get(id);
+      if (pronto) return pronto;
+
+      const local = porId.get(id);
+      if (!local) return '';
+
+      // Ciclo no banco não pode virar laço infinito aqui: a unicidade
+      // impede a árvore de fechar, mas uma edição malfeita por SQL não.
+      if (visitados.has(id)) return local.name;
+      visitados.add(id);
+
+      const caminho = local.parentId
+        ? `${montar(local.parentId, visitados)} > ${local.name}`
+        : local.name;
+
+      caminhos.set(id, caminho);
+      return caminho;
+    };
+
+    for (const local of locais) montar(local.id);
+    return caminhos;
+  }
+
+  /** Localização, fabricante e modelo têm de ser da organização. */
+  private async exigirCatalogo(
+    usuario: UsuarioAutenticado,
+    dto: { manufacturerId?: string | null; assetModelId?: string | null; locationId?: string | null },
+  ): Promise<void> {
+    const organizationId = usuario.organizationId;
+
+    if (dto.manufacturerId) {
+      const existe = await this.prisma.manufacturer.count({
+        where: { id: dto.manufacturerId, organizationId },
+      });
+      if (!existe) throw new NotFoundException('Fabricante não encontrado nesta organização.');
+    }
+
+    if (dto.assetModelId) {
+      const existe = await this.prisma.assetModel.count({
+        where: { id: dto.assetModelId, organizationId },
+      });
+      if (!existe) throw new NotFoundException('Modelo não encontrado nesta organização.');
+    }
+
+    if (dto.locationId) {
+      const existe = await this.prisma.location.count({
+        where: { id: dto.locationId, organizationId },
+      });
+      if (!existe) throw new NotFoundException('Localização não encontrada nesta organização.');
+    }
+  }
 
   private async exigirUsuarioDaOrganizacao(
     usuario: UsuarioAutenticado,
@@ -264,7 +359,10 @@ export class AtivosService {
     return erro;
   }
 
-  private static paraView(ativo: AtivoComRelacoes): AssetView {
+  private static paraView(
+    ativo: AtivoComRelacoes,
+    caminhos: Map<string, string>,
+  ): AssetView {
     return {
       id: ativo.id,
       kind: ativo.kind,
@@ -273,8 +371,14 @@ export class AtivosService {
       tag: ativo.tag,
       serialNumber: ativo.serialNumber,
       manufacturer: ativo.manufacturer,
-      model: ativo.model,
-      location: ativo.location,
+      assetModel: ativo.assetModel,
+      location: ativo.location
+        ? {
+            id: ativo.location.id,
+            name: ativo.location.name,
+            path: caminhos.get(ativo.location.id) ?? ativo.location.name,
+          }
+        : null,
       user: ativo.user
         ? { kind: 'USER', id: ativo.user.id, name: ativo.user.name, email: ativo.user.email }
         : null,

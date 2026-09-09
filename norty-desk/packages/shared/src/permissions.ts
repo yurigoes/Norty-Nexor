@@ -87,6 +87,8 @@ export const PERMISSIONS = [
   // --- Ativos ---------------------------------------------------------
   'ativo:ler',
   'ativo:gerenciar',
+  /** Localização, fabricante e modelo — o catálogo que o ativo referencia. */
+  'ativo:catalogo',
 
   // --- Contrato, orçamento e custo -------------------------------------
   'contrato:ler',
@@ -139,7 +141,8 @@ const IMPLICA: Partial<Record<Permission, readonly Permission[]>> = {
   'chamado:atribuir': ['chamado:atribuir:a-mim'],
   'artigo:publicar': ['artigo:escrever'],
   'artigo:ler:interno': ['artigo:ler'],
-  'ativo:gerenciar': ['ativo:ler'],
+  'ativo:gerenciar': ['ativo:ler', 'ativo:catalogo'],
+  'ativo:catalogo': ['ativo:ler'],
   'problema:gerenciar': ['problema:ler'],
   'contrato:gerenciar': ['contrato:ler'],
   'custo:lancar': ['custo:ler'],

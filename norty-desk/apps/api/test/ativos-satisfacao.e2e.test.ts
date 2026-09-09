@@ -69,9 +69,6 @@ describe('cadastro de ativos', () => {
       kind: 'COMPUTADOR',
       tag: 'PAT-4721',
       serialNumber: 'BR9XK32',
-      manufacturer: 'Dell',
-      model: 'Latitude 5440',
-      location: '3º andar',
       userId: f.agente.id,
     });
 

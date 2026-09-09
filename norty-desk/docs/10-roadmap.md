@@ -225,6 +225,13 @@ O inventário que o chamado referencia.
 - **Vínculo com chamado** — "este chamado é sobre este equipamento",
   com histórico.
 - **Localização** em árvore, estado do ativo, fabricante e modelo.
+  ✅ *(entregue — `docs/07-api.md`, seção 17)* Um `AssetModel` com
+  discriminador, não seis tabelas de modelo como no GLPI; o caminho da
+  localização é montado na leitura, então renomear o prédio corrige o
+  caminho de todas as filhas de uma vez. O texto livre que estava em
+  `Asset.location/manufacturer/model` foi agrupado por
+  `lower(trim(...))` na migração — sem `initcap`, que faria "HP" virar
+  "Hp".
 
 ---
 

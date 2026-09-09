@@ -52,6 +52,11 @@ export function Sidebar() {
     { rotulo: 'Modelos', para: '/config/modelos', permissao: 'config:modelos' as const },
     { rotulo: 'Contratos e custo', para: '/config/contratos', permissao: 'contrato:ler' as const },
     {
+      rotulo: 'Catálogo do ativo',
+      para: '/config/catalogo-ativos',
+      permissao: 'ativo:catalogo' as const,
+    },
+    {
       rotulo: 'Chamados recorrentes',
       para: '/config/recorrencias',
       permissao: 'config:recorrencia' as const,

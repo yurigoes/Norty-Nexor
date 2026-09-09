@@ -57,6 +57,9 @@ model Organization {
   templates     Template[]
   contracts     Contract[]
   budgets       Budget[]
+  locations     Location[]
+  manufacturers Manufacturer[]
+  assetModels   AssetModel[]
 
   @@map("organizations")
 }
@@ -968,9 +971,14 @@ model Asset {
   /// Etiqueta de patrimônio. É por ela que o suporte procura.
   tag            String?
   serialNumber   String?
-  manufacturer   String?
-  model          String?
-  location       String?
+  /// Fabricante, modelo e localização vêm do catálogo.
+  ///
+  /// Eram texto livre, e texto livre é a origem da sujeira de
+  /// inventário: "HP", "hp" e "Hewlett-Packard" são três fabricantes
+  /// para quem conta, e um só para quem olha.
+  manufacturerId String?  @db.Uuid
+  assetModelId   String?  @db.Uuid
+  locationId     String?  @db.Uuid
   /// Quem usa hoje. Nulo quando está em estoque.
   userId         String?     @db.Uuid
   purchasedAt    DateTime?
@@ -992,6 +1000,9 @@ model Asset {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User?        @relation("AtivoDoUsuario", fields: [userId], references: [id], onDelete: SetNull)
   supplier     Supplier?    @relation("FornecedorDoAtivo", fields: [supplierId], references: [id], onDelete: SetNull)
+  manufacturer Manufacturer? @relation(fields: [manufacturerId], references: [id], onDelete: SetNull)
+  assetModel   AssetModel?   @relation(fields: [assetModelId], references: [id], onDelete: SetNull)
+  location     Location?     @relation(fields: [locationId], references: [id], onDelete: SetNull)
   tickets      TicketAsset[]
   contracts    ContractAsset[]
 
@@ -1001,6 +1012,7 @@ model Asset {
   @@unique([organizationId, serialNumber])
   @@index([organizationId, status])
   @@index([userId])
+  @@index([locationId])
   @@map("assets")
 }
 
@@ -1514,4 +1526,74 @@ model TicketCost {
   @@index([ticketId])
   @@index([budgetId])
   @@map("ticket_costs")
+}
+
+/// Localização em árvore. Substitui `glpi_locations`.
+///
+/// Mesma forma da categoria: pai, filhos e unicidade do nome dentro do
+/// pai. Sem caminho denormalizado — a árvore de uma organização cabe
+/// numa consulta, e um caminho gravado é mais uma coisa a atualizar
+/// quando alguém renomeia o prédio.
+model Location {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  parentId       String? @db.Uuid
+  name           String
+  /// Prédio, andar, sala: o que ajuda quem vai até lá.
+  notes          String?
+  isActive       Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent       Location?    @relation("Sublocalizacao", fields: [parentId], references: [id])
+  children     Location[]   @relation("Sublocalizacao")
+
+  assets Asset[]
+
+  @@unique([organizationId, parentId, name])
+  @@index([organizationId])
+  @@map("locations")
+}
+
+/// Fabricante. Substitui `glpi_manufacturers`.
+model Manufacturer {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  name           String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  models       AssetModel[]
+  assets       Asset[]
+
+  @@unique([organizationId, name])
+  @@map("manufacturers")
+}
+
+/// Modelo de equipamento.
+///
+/// O GLPI tem uma tabela por tipo — `computermodels`, `monitormodels`,
+/// `printermodels` e mais três —, todas com as mesmas quatro colunas.
+/// Aqui é um modelo com discriminador, como o próprio ativo.
+model AssetModel {
+  id             String     @id @default(uuid()) @db.Uuid
+  organizationId String     @db.Uuid
+  manufacturerId String?    @db.Uuid
+  kind           AssetKind  @default(OUTRO)
+  name           String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  manufacturer Manufacturer? @relation(fields: [manufacturerId], references: [id], onDelete: SetNull)
+  assets       Asset[]
+
+  @@unique([organizationId, manufacturerId, name])
+  @@index([organizationId, kind])
+  @@map("asset_models")
 }

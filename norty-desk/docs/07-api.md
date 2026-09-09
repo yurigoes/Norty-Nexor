@@ -1209,7 +1209,72 @@ reconstruí-lo no fim do mês. O solicitante não vê nem lança.
 
 ---
 
-## 17. Saúde
+## 17. Catálogo do ativo
+
+```
+GET    /v1/locations                → árvore de localizações, com o caminho pronto
+POST   /v1/locations                → { name, parentId?, notes?, isActive? }
+PATCH  /v1/locations/:id
+DELETE /v1/locations/:id
+
+GET    /v1/manufacturers            → { id, name, modelCount, assetCount }
+POST   /v1/manufacturers            → { name }
+PATCH  /v1/manufacturers/:id        → { name }
+DELETE /v1/manufacturers/:id
+
+GET    /v1/asset-models             → { id, name, kind, manufacturer, assetCount }
+POST   /v1/asset-models             → { name, kind?, manufacturerId? }
+PATCH  /v1/asset-models/:id
+DELETE /v1/asset-models/:id
+```
+
+Localização, fabricante e modelo eram texto livre dentro do ativo. Texto
+livre é a origem da sujeira de inventário: "HP", "hp" e
+"Hewlett-Packard" são três fabricantes para quem conta e um só para quem
+olha. A migração `20260909230000_catalogo_do_ativo` agrupa o que já
+existia por `lower(trim(...))`, cria uma linha por grupo e liga os
+ativos — sem `initcap`, que transformaria "HP" em "Hp" e "IBM" em "Ibm".
+
+**Toda resposta de escrita devolve a coleção inteira, não o item.** A
+tela de configuração é uma lista pequena que se relê a cada mudança; um
+`POST` que devolve o objeto obrigaria a um `GET` logo depois, e as
+contagens (`assetCount`, `modelCount`) mudam de qualquer jeito.
+
+**O caminho é montado na leitura, não guardado.** `path` sai
+`"Matriz > 2º andar > Sala 201"`, e a lista já vem ordenada por ele: a
+sublocalização aparece logo abaixo do lugar que a contém sem a tela
+montar árvore nenhuma. Renomear o prédio corrige o caminho de todas as
+filhas na mesma requisição — se o caminho fosse coluna, seria uma
+varredura recursiva que alguém esqueceria de rodar.
+
+**Um `AssetModel` com discriminador, não seis tabelas.** O GLPI tem
+`computermodels`, `monitormodels`, `printermodels` e mais três, todas
+com as mesmas quatro colunas — e cada tela nova precisa saber em qual
+olhar. Aqui `kind` é uma coluna.
+
+**Unicidade entre irmãos é checada na aplicação, sem olhar caixa.** O
+`@@unique([organizationId, parentId, name])` do banco não cobre dois
+casos que a tela produz sem esforço: `parentId` nulo, porque para o
+Postgres dois `NULL` são distintos e duas "Matriz" convivem no nível
+mais alto; e a diferença de caixa, que é exatamente o problema que este
+catálogo existe para resolver. O `mode: 'insensitive'` do Prisma não
+serve: vira `ILIKE`, que dobra a caixa pela *collation* do banco, e na
+nossa "RECEPÇÃO" e "Recepção" passavam como nomes diferentes — a dobra é
+`toLocaleLowerCase('pt-BR')`, em JavaScript. O índice continua sendo a
+rede contra duas requisições simultâneas com o nome idêntico.
+
+**Apagar não apaga ativo.** As três relações são `SET NULL`: some o
+local, o equipamento fica sem local. O que é recusado é o que deixaria
+órfão — localização com sublocalização, fabricante com modelo. Um
+"Master D" sem fabricante não diz de quem é.
+
+Permissões: ler o catálogo é `ativo:ler`, porque quem cadastra o ativo
+precisa das opções; mexer nele é `ativo:catalogo`. O agente escolhe a
+sala, não inventa uma.
+
+---
+
+## 18. Saúde
 
 ```
 GET /v1/health        → { status, uptime }

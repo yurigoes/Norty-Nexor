@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { AssetView, WriteAssetRequest } from '@norty-desk/shared';
+import type {
+  AssetView,
+  FabricanteView,
+  LocalizacaoView,
+  ModeloDeAtivoView,
+  WriteAssetRequest,
+} from '@norty-desk/shared';
 import {
   ASSET_KINDS,
   ASSET_STATUSES,
@@ -8,6 +14,11 @@ import {
 } from '@norty-desk/shared';
 
 import { buscarAtivos, chamadosDoAtivo, criarAtivo, editarAtivo, type ChamadoDoAtivo } from '../../api/ativos';
+import {
+  listarFabricantes,
+  listarLocalizacoes,
+  listarModelosDeAtivo,
+} from '../../api/catalogoAtivo';
 import { ErroDaApi } from '../../api/cliente';
 import { listarPessoas, type PessoaView } from '../../api/aprovacoes';
 import { useAutenticacao } from '../../auth/Autenticacao';
@@ -137,12 +148,13 @@ export function Ativos() {
                       {ativo.name}
                       <span className="campo-ajuda" style={{ display: 'block' }}>
                         {ROTULO_ATIVO[ativo.kind]}
-                        {ativo.model ? ` · ${ativo.model}` : ''}
+                        {ativo.manufacturer ? ` · ${ativo.manufacturer.name}` : ''}
+                        {ativo.assetModel ? ` ${ativo.assetModel.name}` : ''}
                       </span>
                     </td>
                     <td className="mono">{ativo.tag ?? '—'}</td>
                     <td>{ativo.user?.name ?? '—'}</td>
-                    <td>{ativo.location ?? '—'}</td>
+                    <td>{ativo.location?.path ?? '—'}</td>
                     <td>
                       <span className={`selo ${seloDoStatus(ativo.status)}`}>
                         {ROTULO_ATIVO_STATUS[ativo.status]}
@@ -278,19 +290,29 @@ function Formulario({
     status: ativo?.status ?? 'EM_USO',
     tag: ativo?.tag ?? '',
     serialNumber: ativo?.serialNumber ?? '',
-    manufacturer: ativo?.manufacturer ?? '',
-    model: ativo?.model ?? '',
-    location: ativo?.location ?? '',
+    manufacturerId: ativo?.manufacturer?.id ?? '',
+    assetModelId: ativo?.assetModel?.id ?? '',
+    locationId: ativo?.location?.id ?? '',
     userId: ativo?.user?.id ?? '',
     notes: ativo?.notes ?? '',
   });
   const [pessoas, setPessoas] = useState<PessoaView[]>([]);
+  const [fabricantes, setFabricantes] = useState<FabricanteView[]>([]);
+  const [modelos, setModelos] = useState<ModeloDeAtivoView[]>([]);
+  const [locais, setLocais] = useState<LocalizacaoView[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
   useEffect(() => {
     void listarPessoas()
       .then(setPessoas)
+      .catch(() => undefined);
+    void Promise.all([listarFabricantes(), listarModelosDeAtivo(), listarLocalizacoes()])
+      .then(([f, m, l]) => {
+        setFabricantes(f);
+        setModelos(m);
+        setLocais(l);
+      })
       .catch(() => undefined);
   }, []);
 
@@ -418,24 +440,47 @@ function Formulario({
                 <label className="campo-rotulo" htmlFor="fabricante-ativo">
                   Fabricante
                 </label>
-                <input
+                <select
                   id="fabricante-ativo"
-                  className="input"
-                  value={campos.manufacturer ?? ''}
-                  onChange={(e) => definir('manufacturer', e.target.value)}
-                />
+                  className="select"
+                  value={campos.manufacturerId ?? ''}
+                  onChange={(e) => definir('manufacturerId', e.target.value)}
+                >
+                  <option value="">Sem fabricante</option>
+                  {fabricantes.map((fa) => (
+                    <option key={fa.id} value={fa.id}>
+                      {fa.name}
+                    </option>
+                  ))}
+                </select>
+                <span className="campo-ajuda">
+                  Cadastre em Configuração → Catálogo de ativos.
+                </span>
               </div>
 
               <div className="campo">
                 <label className="campo-rotulo" htmlFor="modelo-ativo">
                   Modelo
                 </label>
-                <input
+                <select
                   id="modelo-ativo"
-                  className="input"
-                  value={campos.model ?? ''}
-                  onChange={(e) => definir('model', e.target.value)}
-                />
+                  className="select"
+                  value={campos.assetModelId ?? ''}
+                  onChange={(e) => definir('assetModelId', e.target.value)}
+                >
+                  <option value="">Sem modelo</option>
+                  {modelos
+                    // Só os modelos do fabricante escolhido: uma lista de
+                    // duzentos modelos de seis marcas não se escolhe.
+                    .filter(
+                      (m) => !campos.manufacturerId || m.manufacturer?.id === campos.manufacturerId,
+                    )
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                </select>
               </div>
             </div>
 
@@ -444,12 +489,19 @@ function Formulario({
                 <label className="campo-rotulo" htmlFor="local-ativo">
                   Local
                 </label>
-                <input
+                <select
                   id="local-ativo"
-                  className="input"
-                  value={campos.location ?? ''}
-                  onChange={(e) => definir('location', e.target.value)}
-                />
+                  className="select"
+                  value={campos.locationId ?? ''}
+                  onChange={(e) => definir('locationId', e.target.value)}
+                >
+                  <option value="">Sem local</option>
+                  {locais.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.path}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="campo">

@@ -28,9 +28,12 @@ export class EscreverAtivoDto {
   @IsOptional() @Transform(vazioVirandoNulo) @IsString() @MaxLength(80) tag?: string | null;
   @IsOptional() @Transform(vazioVirandoNulo) @IsString() @MaxLength(120) serialNumber?: string | null;
 
-  @IsOptional() @Transform(vazioVirandoNulo) @IsString() @MaxLength(120) manufacturer?: string | null;
-  @IsOptional() @Transform(vazioVirandoNulo) @IsString() @MaxLength(120) model?: string | null;
-  @IsOptional() @Transform(vazioVirandoNulo) @IsString() @MaxLength(160) location?: string | null;
+  // Fabricante, modelo e localização vêm do catálogo: texto livre era a
+  // origem da sujeira de inventário — "HP", "hp" e "Hewlett-Packard" são
+  // três fabricantes para quem conta e um só para quem olha.
+  @IsOptional() @Transform(vazioVirandoNulo) @IsUUID() manufacturerId?: string | null;
+  @IsOptional() @Transform(vazioVirandoNulo) @IsUUID() assetModelId?: string | null;
+  @IsOptional() @Transform(vazioVirandoNulo) @IsUUID() locationId?: string | null;
   @IsOptional() @Transform(vazioVirandoNulo) @IsString() @MaxLength(2000) notes?: string | null;
 
   @IsOptional() @Transform(vazioVirandoNulo) @IsUUID() userId?: string | null;
@@ -45,6 +48,7 @@ export class EditarAtivoDto extends EscreverAtivoDto {
 
 export class BuscarAtivosDto {
   @IsOptional() @IsString() @MaxLength(160) q?: string;
+  @IsOptional() @IsUUID() locationId?: string;
   @IsOptional() @IsIn(ASSET_KINDS) kind?: (typeof ASSET_KINDS)[number];
   @IsOptional() @IsIn(ASSET_STATUSES) status?: (typeof ASSET_STATUSES)[number];
   @IsOptional() @IsUUID() userId?: string;
