@@ -846,6 +846,31 @@ model ApiKey {
   @@map("api_keys")
 }
 
+/// Identidade visual da instalação.
+///
+/// É uma linha só (`id = 'unica'`): a marca precisa ser lida **antes**
+/// do login, e antes do login não se sabe a organização. Marca por
+/// organização, se um dia fizer sentido, entra como sobreposição
+/// aplicada depois da autenticação — não como substituta desta.
+model Brand {
+  id          String   @id @default("unica")
+  /// O que aparece na aba do navegador e no cabeçalho.
+  productName String   @default("Norty Desk")
+  /// Frase abaixo do nome, na tela de entrada.
+  tagline     String?
+  /// Chaves no armazenamento. Nulas significam usar a marca embutida.
+  logoKey     String?
+  logoContentType String?
+  faviconKey  String?
+  faviconContentType String?
+  /// Muda a cada upload. Entra na URL para o navegador não servir a
+  /// logo antiga do cache depois da troca.
+  version     Int      @default(1)
+  updatedAt   DateTime @updatedAt
+
+  @@map("brand")
+}
+
 /// Trilha de auditoria de mudanças de configuração. Eventos de chamado
 /// não entram aqui — a timeline já é a auditoria do chamado.
 model AuditLog {

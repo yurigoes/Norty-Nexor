@@ -160,10 +160,12 @@ src/styles/tokens.css       cor, tipo, espaço, raio, sombra, camada, transiçã
 src/styles/base.css         reset, tipografia, foco, rolagem, pular-para-conteúdo
 src/styles/layout.css       shell, sidebar, header, conteúdo, grades, gaveta mobile
 src/styles/components.css   a biblioteca
+src/styles/publico.css      tela de entrada e portal do solicitante
 ```
 
-`portal.css` entra na Fase 2, ocupando o lugar que o `publico.css` ocupa
-no LICITA+.
+O nome do quinto acompanha o `publico.css` do LICITA+, e a linguagem
+também: painel de marca com o `--grad-principal`, malha de pontos como
+textura e o losango de contorno fino girando devagar por trás.
 
 ## 5. O que veio, o que não veio, o que o Desk somou
 
@@ -350,15 +352,58 @@ Herdada do LICITA+ e mantida:
 
 ---
 
-## 12. O que ainda falta
+## 12. A marca é configurável
+
+A logo **não está no código**. Ela é enviada em Configuração → Marca e
+guardada pela mesma porta de armazenamento dos anexos: disco em
+desenvolvimento, MinIO em produção.
+
+| | |
+|---|---|
+| Onde aparece | tela de entrada, barra lateral, aba do navegador |
+| O que é configurável | logo, ícone da aba, nome do produto, frase da entrada |
+| Quem pode trocar | perfil com `organizacao:gerenciar` |
+| Formatos | SVG, PNG, WebP, JPEG — até 512 KB |
+
+Três decisões que valem registro:
+
+1. **`GET /v1/brand` é público.** A marca aparece antes do login, e
+   antes do login não há token nem organização. Por isso a marca é da
+   **instalação**, não da organização — e por isso o endpoint não
+   devolve nada além dela.
+
+2. **A URL carrega a versão** (`/v1/brand/logo?v=7`), que sobe a cada
+   upload. Sem isso o navegador serve a logo antiga do cache e o
+   operador jura que o envio falhou. Com isso, o `Cache-Control` pode
+   ser de um ano.
+
+3. **SVG é documento executável.** Um `<script>` dentro dele roda na
+   origem que o serve — a mesma origem do cookie de sessão. O upload
+   recusa script, atributo de evento, `javascript:`, entidade,
+   `foreignObject` e referência externa, com a mensagem dizendo o quê e
+   sugerindo PNG. Sete testes cobrem essa recusa.
+
+Enquanto nenhuma logo é enviada, vale a **marca embutida** de
+`components/Marca.tsx` — um losango com o gradiente da casa e um balão
+de atendimento. Ela é provisória e está marcada como tal no código: a
+logo do Norty Desk existe e substitui isso no primeiro upload.
+
+## 13. O que ainda falta
 
 O alinhamento de código está fechado: tokens, reset, shell e biblioteca
 de componentes vieram do LICITA+ e estão em uso.
 
-Falta o que o CSS não mostra: **duas capturas de tela** — uma listagem e
-uma tela de detalhe. Proporção real, densidade percebida e hierarquia
-visual só a imagem resolve. São elas que dizem se a fila do Desk está
-apertada ou frouxa perto do que vocês já usam.
+Duas coisas, e as duas dependem de arquivos que estão no servidor:
 
-Um detalhe menor, quando houver: o `publico.css` do LICITA+ (12 KB) vira
-a base do `portal.css` do solicitante, na Fase 2.
+1. **O `publico.css` do LICITA+ (12 KB).** É ele que estiliza a tela de
+   entrada de vocês. A do Desk foi desenhada com os mesmos tokens e a
+   mesma linguagem, mas de ouvido — com o arquivo em mãos, o alinhamento
+   fecha do mesmo jeito que fechou nos outros três.
+
+2. **Duas capturas de tela** — uma listagem e uma tela de detalhe.
+   Proporção real, densidade percebida e hierarquia visual só a imagem
+   resolve. São elas que dizem se a fila do Desk está apertada ou frouxa
+   perto do que vocês já usam.
+
+E, quando houver, **o arquivo da logo do Norty Desk**: o mecanismo está
+pronto e é upload pela tela, não mudança de código.

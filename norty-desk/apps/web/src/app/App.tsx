@@ -4,6 +4,7 @@ import { ProvedorDeAutenticacao, useAutenticacao } from '../auth/Autenticacao';
 import { Login } from '../modules/auth/Login';
 import { Chamado } from '../modules/chamado/Chamado';
 import { NovoChamado } from '../modules/chamado/NovoChamado';
+import { MarcaConfig } from '../modules/config/MarcaConfig';
 import { Fila } from '../modules/fila/Fila';
 import { PortalChamado } from '../modules/portal/PortalChamado';
 import { PortalLista } from '../modules/portal/PortalLista';
@@ -56,6 +57,7 @@ function Aplicativo() {
             <Route path="/" element={<Fila />} />
             <Route path="/chamados/novo" element={<NovoChamado />} />
             <Route path="/chamados/:id" element={<Chamado />} />
+            <Route path="/config/marca" element={<MarcaConfig />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

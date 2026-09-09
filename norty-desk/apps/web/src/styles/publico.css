@@ -1,0 +1,239 @@
+/* =========================================================
+   NORTY DESK — Telas públicas
+   ---------------------------------------------------------
+   Entrada, troca de senha e portal do solicitante: tudo que
+   aparece antes ou fora da casca do agente.
+
+   O nome do arquivo acompanha o `publico.css` do LICITA+, e a
+   linguagem também: o painel de marca é o `--grad-principal`
+   com a geometria da casa por trás, e o formulário é um cartão
+   branco de raio grande sobre ele.
+   ========================================================= */
+
+.entrada {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--superficie-card);
+}
+
+/* ---------- Painel de marca ---------- */
+
+.entrada-marca {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--e-12);
+  padding: var(--e-12) var(--e-12) var(--e-10);
+  background: var(--grad-principal);
+  color: var(--texto-inverso);
+  overflow: hidden;
+}
+
+/* Malha de pontos: textura, não desenho. Fica bem abaixo do
+   texto e não intercepta ponteiro. */
+.entrada-marca::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, .34) 1.1px, transparent 1.1px);
+  background-size: 26px 26px;
+  opacity: .12;
+  pointer-events: none;
+}
+
+/* Losango de contorno fino, girando devagar. A geometria da casa
+   aparece sem competir com o que está escrito por cima. */
+.entrada-geo {
+  position: absolute;
+  right: -140px;
+  bottom: -120px;
+  width: 460px;
+  height: 460px;
+  border-radius: 92px;
+  border: 1px solid rgba(255, 255, 255, .13);
+  transform: rotate(45deg);
+  pointer-events: none;
+  animation: entrada-girar 40s linear infinite;
+}
+
+.entrada-geo::after {
+  content: '';
+  position: absolute;
+  inset: 64px;
+  border-radius: 62px;
+  background: linear-gradient(135deg, rgba(22, 119, 232, .20), rgba(0, 140, 69, .12));
+}
+
+@keyframes entrada-girar {
+  from { transform: rotate(45deg); }
+  to { transform: rotate(405deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .entrada-geo { animation: none; }
+}
+
+.entrada-topo,
+.entrada-corpo,
+.entrada-rodape {
+  position: relative;
+  z-index: 1;
+}
+
+.entrada-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+}
+
+.entrada-logo img {
+  max-height: 40px;
+  width: auto;
+}
+
+.entrada-logo-texto {
+  font-size: var(--t-h4);
+  font-weight: var(--p-extra);
+  letter-spacing: -.02em;
+  color: var(--texto-inverso);
+}
+
+.entrada-titulo {
+  font-size: clamp(1.75rem, 2.6vw, 2.6rem);
+  font-weight: var(--p-extra);
+  letter-spacing: -.03em;
+  line-height: 1.12;
+  color: var(--texto-inverso);
+  max-width: 18ch;
+  text-wrap: balance;
+}
+
+.entrada-sub {
+  margin-top: var(--e-4);
+  font-size: var(--t-h4);
+  line-height: 1.5;
+  color: rgba(255, 255, 255, .74);
+  max-width: 42ch;
+}
+
+/* Três pontos, não um parágrafo: quem chega na tela de entrada
+   está entrando, não lendo. */
+.entrada-pontos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-4);
+  margin-top: var(--e-10);
+}
+
+.entrada-ponto {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--e-3);
+  font-size: var(--t-corpo-sm);
+  color: rgba(255, 255, 255, .82);
+  line-height: 1.5;
+}
+
+.entrada-ponto-marca {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 9px;
+  transform: rotate(45deg);
+  background: rgba(255, 255, 255, .12);
+  border: 1px solid rgba(255, 255, 255, .18);
+}
+
+.entrada-ponto-marca > * {
+  transform: rotate(-45deg);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.entrada-ponto b {
+  display: block;
+  color: var(--texto-inverso);
+  font-weight: var(--p-semi);
+}
+
+.entrada-rodape {
+  font-size: var(--t-micro);
+  color: rgba(255, 255, 255, .45);
+}
+
+/* ---------- Painel do formulário ---------- */
+
+.entrada-form {
+  display: grid;
+  place-items: center;
+  padding: var(--e-8) var(--e-6);
+}
+
+.entrada-cartao {
+  width: min(400px, 100%);
+}
+
+.entrada-cartao h1 {
+  font-size: var(--t-h2);
+  letter-spacing: -.02em;
+}
+
+.entrada-cartao > p {
+  margin-top: var(--e-2);
+  font-size: var(--t-corpo-sm);
+  color: var(--texto-suave);
+}
+
+.entrada-campos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-4);
+  margin-top: var(--e-6);
+}
+
+.entrada-ajuda {
+  margin-top: var(--e-5);
+  padding-top: var(--e-4);
+  border-top: 1px solid var(--borda-suave);
+  font-size: var(--t-micro);
+  color: var(--texto-tenue);
+  line-height: 1.6;
+}
+
+/* A marca dentro do formulário só aparece quando o painel some. */
+.entrada-logo-mobile { display: none; }
+
+/* ---------- Estreito ---------- */
+
+@media (max-width: 900px) {
+  .entrada { grid-template-columns: minmax(0, 1fr); }
+
+  /* O painel vira uma faixa: a marca continua presente, a
+     retórica sai. Numa tela de 390px o que importa é o campo de
+     e-mail estar acima da dobra. */
+  .entrada-marca {
+    padding: var(--e-5) var(--e-5) var(--e-6);
+    gap: var(--e-5);
+  }
+  .entrada-titulo { font-size: var(--t-h3); max-width: none; }
+  .entrada-sub,
+  .entrada-pontos,
+  .entrada-rodape,
+  .entrada-geo { display: none; }
+
+  .entrada-form { padding: var(--e-6) var(--e-4) var(--e-10); }
+}
+
+@media (max-width: 520px) {
+  .entrada-marca { display: none; }
+  .entrada-logo-mobile {
+    display: flex;
+    justify-content: center;
+    margin-bottom: var(--e-6);
+  }
+}

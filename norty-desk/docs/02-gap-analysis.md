@@ -263,37 +263,83 @@ meu time / ler todos são permissões distintas.
 
 ---
 
-## F. O que corta
+## F. Cobertura do GLPI
 
-Fora do escopo do Desk. Nenhuma dessas áreas é usada pela Norty hoje, e
-cada uma delas custa esquema, tela e manutenção.
+**Decisão do projeto: o Desk cobre todo o GLPI.** A versão anterior
+deste documento propunha cortar inventário de datacenter, rede,
+software, consumíveis e dicionários de regra. Essa proposta foi
+revista — a paridade é requisito, não opção.
 
-| Área | Classes GLPI | Por quê |
-|---|---|---|
-| Componentes de hardware (`Device*`, `Item_Device*`) | ~60 | Inventário de peça não é serviço |
-| Datacenter (rack, PDU, cabo, sala, estêncil) | ~25 | A Norty não vende colocation |
-| Rede (`NetworkPort*`, IP, VLAN, FQDN) | ~30 | Fora do domínio |
-| Software e licenças | ~10 | Fora do domínio |
-| Consumíveis e cartuchos | ~8 | Fora do domínio |
-| Reservas de equipamento | 2 | Não usado |
-| Dicionários de regra (`RuleDictionnary*`) | ~40 | Só fazem sentido com inventário automático |
-| Agente de inventário nativo | ~10 | Fora do domínio |
-| Impacto / análise de impacto em grafo | ~6 | Complexidade sem demanda |
+O que muda com isso não é *se*, é *quando* e *como*. Duas coisas
+seguem valendo:
 
-**Fica para depois, não cortado:** Mudança e Problema (Fase 4), Projetos
-(Fase 5), inventário simples de ativo vinculável a chamado (Fase 3 — só
-o suficiente para dizer "este chamado é sobre este equipamento").
+1. **A ordem é por uso.** O que a Norty opera todo dia vem primeiro; o
+   que existe no GLPI mas ninguém abriu em dois anos vem por último. O
+   `docs/09-migracao.md` levanta esse dado da base real — é ele que
+   ordena as fases, não o índice do manual do GLPI.
 
----
+2. **Cobrir não é copiar.** Onde o GLPI resolve certo, o Desk copia
+   (matriz de prioridade, SLA sobre calendário, motivos de pendência).
+   Onde ele resolve mal, o Desk cobre a mesma necessidade com desenho
+   melhor — é o que as seções A a E deste documento fazem, uma a uma.
+   Sessenta tabelas de `Device*` viram um modelo de componente com
+   tipo; quarenta classes de `RuleDictionnary*` viram um motor de
+   regras com um catálogo de alvos.
+
+### O mapa completo, por área
+
+| Área do GLPI | Classes | Fase | Como o Desk cobre |
+|---|---|---|---|
+| Chamado, conversa, SLA, atores | ~40 | **1 ✅** | entregue |
+| Categorias, times, pessoas, perfis | ~15 | **1 ✅** | entregue |
+| Anexos e documentos | 4 | **1 ✅** | porta de armazenamento |
+| Canais de entrada e notificação | ~35 | 2 | e-mail, WhatsApp, webhooks |
+| Motor de regras (`RuleTicket`, coletor) | ~10 | 2 | um motor, catálogo de alvos |
+| Aprovação em etapas | ~6 | 3 | `Approval` com quórum |
+| Base de conhecimento | ~12 | 3 | com revisão e vínculo |
+| Painéis, estatísticas, buscas salvas | ~10 | 3 | |
+| Satisfação | 3 | 3 | pesquisa pelo canal de origem |
+| Problema e Mudança | ~35 | 4 | colunas nulas distintas, com `CHECK` |
+| Recorrência e modelos de formulário | ~20 | 4 | `TicketForm` em JSONB |
+| Contratos, fornecedores, orçamento, `Infocom` | ~15 | 4 | |
+| Ativos: computador, monitor, impressora, telefone, periférico, equipamento de rede | ~30 | 5 | modelo de ativo com tipo |
+| Componentes (`Device*`, `Item_Device*`) | ~60 | 5 | **um** modelo de componente com tipo, não sessenta tabelas |
+| Software, versões e licenças | ~10 | 6 | |
+| Consumíveis e cartuchos | ~8 | 6 | |
+| Rede: portas, IP, VLAN, FQDN | ~30 | 6 | |
+| Datacenter: rack, PDU, sala, cabo, estêncil | ~25 | 7 | |
+| Dicionários de regra | ~40 | 7 | catálogo do mesmo motor da fase 2 |
+| Inventário automático (agente, `RuleImportAsset`) | ~12 | 7 | recebe o inventário do agente GLPI |
+| Projetos e tarefas de projeto | ~15 | 8 | |
+| Reservas de equipamento | 2 | 8 | |
+| Análise de impacto em grafo | 6 | 8 | |
+
+### O que a paridade custa, dito com franqueza
+
+As fases 1 a 4 cobrem o que uma central de serviços usa todo dia, e são
+onde está quase todo o valor. As fases 5 a 8 são inventário e
+periferia: muito esquema, muita tela de cadastro, pouco uso por dia
+trabalhado.
+
+Duas observações que ajudam a decidir a ordem, não a decisão:
+
+- **A migração (`docs/09-migracao.md`) não precisa esperar a paridade.**
+  Ela acontece no fim da Fase 2, e o GLPI fica em somente leitura por 90
+  dias em `glpi-legado.norty.com.br`. Enquanto uma área não estiver
+  coberta, ela continua consultável lá.
+- **O levantamento da base real pode encurtar o caminho.** Se
+  `glpi_racks` tiver zero linhas, a Fase 7 é cadastro que ninguém vai
+  preencher — e o esforço rende mais na Fase 3. O script
+  `scripts/coletar-glpi.sh` traz esse número.
 
 ## G. Resumo em uma tabela
 
 | Dimensão | GLPI 11 | Norty Desk |
 |---|---|---|
-| Tabelas | 442 | ~40 na Fase 3 |
-| Classes de domínio | 623 | ~60 |
+| Tabelas | 442 | 35 na Fase 1; ~120 na paridade |
+| Classes de domínio | 623 | ~60 na Fase 1 |
 | Colunas no chamado | 44 | 18 + tabelas satélite |
-| Telas | 315 | ~30 |
+| Telas | 315 | 30 na Fase 1; ~90 na paridade |
 | Timeline | 4 tabelas + `UNION` | 1 tabela |
 | Canais de entrada | web, e-mail | web, e-mail, **WhatsApp**, API |
 | Multi-tenant | árvore com herança recursiva | organização plana |

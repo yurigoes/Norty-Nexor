@@ -9,6 +9,7 @@ import './styles/tokens.css';
 import './styles/base.css';
 import './styles/layout.css';
 import './styles/components.css';
+import './styles/publico.css';
 
 const raiz = document.getElementById('app');
 if (!raiz) throw new Error('Elemento #app não encontrado no index.html.');

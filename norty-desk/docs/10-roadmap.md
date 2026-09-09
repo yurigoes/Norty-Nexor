@@ -101,13 +101,13 @@ O que faz a operação escalar.
 
 ## Fase 4 — ITIL completo
 
-Só quando a operação pedir.
-
-- **Problema** — causa raiz, chamados vinculados.
-- **Mudança** — com aprovação, janela e plano de recuo.
+- **Problema** — causa raiz, chamados vinculados, base de erros conhecidos.
+- **Mudança** — aprovação, janela de execução, plano de recuo.
 - **Chamado recorrente** — manutenção preventiva em agenda.
-- **Modelos de resposta e solução.**
-- **Contratos e fornecedores.**
+- **Formulário dinâmico por categoria** — o `TicketForm` que ficou da
+  Fase 1, com a tela de configuração que o alimenta.
+- **Modelos** de resposta, de solução e de tarefa.
+- **Contratos, fornecedores, orçamento e `Infocom`** — custo e vigência.
 
 Problema e Mudança entram como colunas nulas distintas em `TicketEvent`
 e `Attachment`, com `CHECK` de exclusividade — nunca como
@@ -115,26 +115,73 @@ e `Attachment`, com `CHECK` de exclusividade — nunca como
 
 ---
 
-## Fase 5 — Projetos e capacidade
+## Fase 5 — Ativos
 
-- Projetos, tarefas de projeto, times, kanban.
-- Planejamento de capacidade da equipe.
-- Custo por chamado e por contrato.
+O inventário que o chamado referencia.
+
+- **Ativo** com tipo: computador, monitor, impressora, telefone,
+  periférico, equipamento de rede. Um modelo com discriminador, não seis
+  tabelas paralelas.
+- **Componentes** — memória, disco, processador, placa. No GLPI são
+  sessenta tabelas (`Device*` mais `Item_Device*`); aqui é **um** modelo
+  de componente com tipo e atributos por tipo.
+- **Vínculo com chamado** — "este chamado é sobre este equipamento",
+  com histórico.
+- **Localização** em árvore, estado do ativo, fabricante e modelo.
 
 ---
 
-## Migração
+## Fase 6 — Software, consumíveis e rede
 
-A migração do GLPI (`docs/09-migracao.md`) acontece **no fim da Fase 2**,
-não antes. Migrar para um sistema que ainda não trata canal significa
-migrar duas vezes.
+- **Software**, versões e **licenças**, com contagem de uso.
+- **Consumíveis e cartuchos**, com estoque e alerta de mínimo.
+- **Rede**: portas, conexões, IP, faixa, VLAN, FQDN.
 
 ---
 
-## Ordem, e por que ela
+## Fase 7 — Datacenter e automação de inventário
 
-A tentação é fazer todo o CRUD de configuração primeiro, porque é fácil.
-A ordem aqui é outra: **chamado antes de configuração, canal antes de
-relatório.** Uma tela de configuração de SLA sem chamado nenhum no
-sistema não prova nada; um chamado que entra por WhatsApp e sai por
-WhatsApp prova o produto inteiro.
+- **Rack, PDU, sala, cabo, gabinete**, com desenho de ocupação.
+- **Dicionários de regra** — o mesmo motor da Fase 2, com o catálogo de
+  alvos que normaliza fabricante, modelo e sistema operacional.
+- **Inventário automático** — recepção do que o agente do GLPI já
+  coleta, com regras de importação e de atribuição de entidade.
+
+---
+
+## Fase 8 — Projetos e o que resta
+
+- **Projetos**, tarefas, times, custos e kanban.
+- **Reservas** de equipamento.
+- **Análise de impacto** em grafo.
+- Planejamento de capacidade e custo por chamado.
+
+---
+
+## Sobre a ordem
+
+A paridade com o GLPI é requisito (`docs/02-gap-analysis.md`, seção F).
+O que a ordem acima assume é que **cobrir por uso rende mais que cobrir
+por índice do manual**: as fases 1 a 4 são o que uma central de serviços
+faz todo dia, e as 5 a 8 são inventário e periferia — muito esquema,
+muita tela de cadastro, pouco uso por dia trabalhado.
+
+Dois pontos que podem reordenar tudo, e valem ser resolvidos antes da
+Fase 5:
+
+1. **O que a base real tem.** `scripts/coletar-glpi.sh` conta as linhas
+   de cada área. Se `glpi_racks` estiver vazia, a Fase 7 é cadastro que
+   ninguém vai preencher, e o esforço rende mais adiantando a Fase 6.
+2. **Onde o inventário nasce.** Se o agente de inventário do GLPI
+   continuar rodando, a Fase 7 é receber o que ele manda; se não, é
+   cadastro manual, e o desenho muda.
+
+A migração (`docs/09-migracao.md`) acontece no **fim da Fase 2**, não no
+fim da paridade. Enquanto uma área não estiver coberta, ela continua
+consultável no GLPI de legado — que é justamente o que torna possível
+migrar antes de cobrir tudo.
+
+A tentação continua sendo fazer todo o CRUD de configuração primeiro,
+porque é fácil. A regra que ordenou a Fase 1 vale para as demais:
+**chamado antes de configuração, canal antes de relatório, uso antes de
+catálogo.**
