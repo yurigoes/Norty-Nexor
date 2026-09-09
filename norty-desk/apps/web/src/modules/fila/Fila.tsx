@@ -1,6 +1,9 @@
-import { useMemo, useState } from 'react';
-import type { TicketListItem } from '@norty-desk/shared';
+import { useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import type { TicketQuery, TicketStatus } from '@norty-desk/shared';
 
+import { useRecurso } from '../../auth/Autenticacao';
+import * as api from '../../api/endpoints';
 import {
   MODIFICADOR_PRIORIDADE,
   ROTULO_CANAL,
@@ -12,67 +15,83 @@ import {
   seloStatus,
 } from '../../lib/formato';
 
-type Visao = 'todos' | 'meus' | 'sem-atribuicao' | 'sla';
+type Visao = { chave: string; rotulo: string; filtro: Record<string, string> };
 
-const VISOES: { chave: Visao; rotulo: string }[] = [
-  { chave: 'todos', rotulo: 'Todos' },
-  { chave: 'meus', rotulo: 'Meus' },
-  { chave: 'sem-atribuicao', rotulo: 'Sem atribuição' },
-  { chave: 'sla', rotulo: 'SLA estourando' },
+const VISOES: Visao[] = [
+  { chave: 'time', rotulo: 'Do meu time', filtro: {} },
+  { chave: 'meus', rotulo: 'Meus', filtro: { assignedUserId: 'me' } },
+  { chave: 'sem', rotulo: 'Sem atribuição', filtro: { semAtribuicao: 'true' } },
+  { chave: 'sla', rotulo: 'SLA estourado', filtro: { slaBreached: 'true' } },
+  { chave: 'abertos', rotulo: 'Em aberto', filtro: { status: 'NOVO,ATRIBUIDO,PLANEJADO,PENDENTE' } },
 ];
-
-function filtrar(chamados: TicketListItem[], visao: Visao): TicketListItem[] {
-  switch (visao) {
-    case 'sem-atribuicao':
-      return chamados.filter((c) => !c.assignedTeam && !c.assignedUser);
-    case 'sla':
-      return chamados.filter((c) => (c.commitments[0]?.remainingSeconds ?? Infinity) < 3600);
-    case 'meus':
-      return chamados.filter((c) => c.assignedUser !== null);
-    default:
-      return chamados;
-  }
-}
 
 /**
  * A fila de trabalho.
  *
- * Não é a tela de busca genérica do GLPI: é a lista onde o agente passa
- * o dia, com visões salvas e `.tabela.-densa`
- * (`docs/02-gap-analysis.md`, item 10).
- *
- * Abaixo de 760px a tabela de oito colunas não sobrevive, então a mesma
- * lista sai em `.chamado-card`.
+ * O filtro mora na URL: um agente manda o link da visão para o colega e
+ * o colega vê a mesma coisa. Estado de tela em `useState` não sobrevive
+ * a um F5 nem cabe num link.
  */
-export function Fila({
-  chamados,
-  aoAbrir,
-}: {
-  chamados: TicketListItem[];
-  aoAbrir: (id: string) => void;
-}) {
-  const [visao, setVisao] = useState<Visao>('todos');
-  const visiveis = useMemo(() => filtrar(chamados, visao), [chamados, visao]);
+export function Fila() {
+  const navegar = useNavigate();
+  const [parametros, definirParametros] = useSearchParams();
+
+  const filtro = useMemo<TicketQuery & { semAtribuicao?: boolean }>(() => {
+    const f: Record<string, unknown> = {};
+    for (const [chave, valor] of parametros.entries()) f[chave] = valor;
+    return f as TicketQuery;
+  }, [parametros]);
+
+  const chave = parametros.toString();
+  const { dado, erro, carregando } = useRecurso(() => api.listarChamados(filtro), [chave]);
+
+  function aplicar(visao: Visao) {
+    const proximos = new URLSearchParams();
+    // A busca sobrevive à troca de visão; o resto do filtro, não.
+    const q = parametros.get('q');
+    if (q) proximos.set('q', q);
+    for (const [k, v] of Object.entries(visao.filtro)) proximos.set(k, v);
+    definirParametros(proximos);
+  }
+
+  const visaoAtual =
+    VISOES.find((v) =>
+      Object.entries(v.filtro).every(([k, valor]) => parametros.get(k) === valor),
+    ) ?? VISOES[0];
 
   return (
     <div className="pilha">
       <div className="abas" role="tablist" aria-label="Visões da fila">
-        {VISOES.map((item) => (
+        {VISOES.map((visao) => (
           <button
-            key={item.chave}
+            key={visao.chave}
             type="button"
             role="tab"
             className="aba"
-            aria-selected={visao === item.chave}
-            onClick={() => setVisao(item.chave)}
+            aria-selected={visao.chave === visaoAtual.chave}
+            onClick={() => aplicar(visao)}
           >
-            {item.rotulo}
-            <span className="aba-contagem">{filtrar(chamados, item.chave).length}</span>
+            {visao.rotulo}
           </button>
         ))}
       </div>
 
-      {visiveis.length === 0 ? (
+      {erro ? (
+        <div className="alerta-bloco -erro">
+          <span aria-hidden="true">!</span>
+          <span>{erro.message}</span>
+        </div>
+      ) : null}
+
+      {carregando ? (
+        <div className="tabela-caixa" style={{ padding: 'var(--e-5)' }}>
+          <div className="pilha-sm">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="sk sk-linha" />
+            ))}
+          </div>
+        </div>
+      ) : !dado || dado.data.length === 0 ? (
         <div className="tabela-caixa">
           <div className="vazio">
             <div className="vazio-arte" aria-hidden="true">
@@ -100,13 +119,11 @@ export function Fila({
                   </tr>
                 </thead>
                 <tbody>
-                  {visiveis.map((chamado) => {
+                  {dado.data.map((chamado) => {
                     const compromisso = chamado.commitments[0];
-
                     return (
-                      <tr key={chamado.id} onClick={() => aoAbrir(chamado.id)}>
+                      <tr key={chamado.id} onClick={() => navegar(`/chamados/${chamado.id}`)}>
                         <td className="mono">#{chamado.number}</td>
-
                         <td>
                           <span className="linha" style={{ gap: 'var(--e-2)' }}>
                             <span
@@ -116,23 +133,21 @@ export function Fila({
                             <span className="tabela-titulo-celula">{chamado.subject}</span>
                           </span>
                         </td>
-
                         <td>
-                          <span className={`selo ${seloStatus(chamado.status)}`}>
+                          <span className={`selo ${seloStatus(chamado.status as TicketStatus)}`}>
                             {ROTULO_STATUS[chamado.status]}
                           </span>
                         </td>
-
                         <td>
-                          <span className={`prio -traco ${MODIFICADOR_PRIORIDADE[chamado.priority]}`}>
+                          <span
+                            className={`prio -traco ${MODIFICADOR_PRIORIDADE[chamado.priority]}`}
+                          >
                             <span className="prio-ponto" aria-hidden="true" />
                             {chamado.priority}
                           </span>
                         </td>
-
                         <td>{chamado.requester?.name ?? '—'}</td>
                         <td>{chamado.assignedUser?.name ?? chamado.assignedTeam?.name ?? '—'}</td>
-
                         <td>
                           {compromisso ? (
                             <span className={`sla ${estadoSla(compromisso.remainingSeconds)}`}>
@@ -142,7 +157,6 @@ export function Fila({
                             '—'
                           )}
                         </td>
-
                         <td className="num">{dataCurta(chamado.updatedAt)}</td>
                       </tr>
                     );
@@ -153,15 +167,14 @@ export function Fila({
           </div>
 
           <div className="fila-cartoes pilha-sm">
-            {visiveis.map((chamado) => {
+            {dado.data.map((chamado) => {
               const compromisso = chamado.commitments[0];
-
               return (
                 <button
                   key={chamado.id}
                   type="button"
                   className="chamado-card"
-                  onClick={() => aoAbrir(chamado.id)}
+                  onClick={() => navegar(`/chamados/${chamado.id}`)}
                 >
                   <div className="pilha-sm" style={{ textAlign: 'left', minWidth: 0 }}>
                     <span className="chamado-card-titulo">
@@ -176,9 +189,8 @@ export function Fila({
                       <span className="num">{dataCurta(chamado.updatedAt)}</span>
                     </span>
                   </div>
-
                   <div className="chamado-card-lado">
-                    <span className={`selo ${seloStatus(chamado.status)}`}>
+                    <span className={`selo ${seloStatus(chamado.status as TicketStatus)}`}>
                       {ROTULO_STATUS[chamado.status]}
                     </span>
                     {compromisso ? (
@@ -191,6 +203,25 @@ export function Fila({
               );
             })}
           </div>
+
+          {dado.nextCursor ? (
+            <div className="paginacao">
+              <span className="suave" style={{ fontSize: 'var(--t-micro)' }}>
+                {dado.data.length} chamados nesta página
+              </span>
+              <button
+                type="button"
+                className="btn -secundario -sm"
+                onClick={() => {
+                  const proximos = new URLSearchParams(parametros);
+                  proximos.set('cursor', dado.nextCursor!);
+                  definirParametros(proximos);
+                }}
+              >
+                Próxima página
+              </button>
+            </div>
+          ) : null}
         </>
       )}
     </div>

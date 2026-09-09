@@ -1,67 +1,96 @@
-import { useState } from 'react';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
+import { ProvedorDeAutenticacao, useAutenticacao } from '../auth/Autenticacao';
+import { Login } from '../modules/auth/Login';
 import { Chamado } from '../modules/chamado/Chamado';
+import { NovoChamado } from '../modules/chamado/NovoChamado';
 import { Fila } from '../modules/fila/Fila';
-import { CHAMADOS } from '../lib/demonstracao';
+import { PortalChamado } from '../modules/portal/PortalChamado';
+import { PortalLista } from '../modules/portal/PortalLista';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 
-type Tela = { nome: 'fila' } | { nome: 'chamado'; id: string };
-
-/**
- * Casca do aplicativo do agente.
- *
- * O portal do solicitante é uma superfície separada, com layout próprio
- * (`.tela-publica`) — ver `docs/02-gap-analysis.md`, item 9. Ele entra na
- * Fase 2, e o CSS dele será `portal.css`, no lugar em que o LICITA+
- * guarda o `publico.css`.
- */
 export function App() {
-  const [tela, setTela] = useState<Tela>({ nome: 'fila' });
+  return (
+    <ProvedorDeAutenticacao>
+      <BrowserRouter>
+        <Raiz />
+      </BrowserRouter>
+    </ProvedorDeAutenticacao>
+  );
+}
 
-  const chamado = tela.nome === 'chamado' ? CHAMADOS.find((c) => c.id === tela.id) : undefined;
+function Raiz() {
+  const { carregando, perfil } = useAutenticacao();
 
-  const slaEstourando = CHAMADOS.filter(
-    (c) => (c.commitments[0]?.remainingSeconds ?? Infinity) < 3600,
-  ).length;
+  if (carregando) {
+    return (
+      <div className="tela-publica" style={{ display: 'grid', placeItems: 'center' }}>
+        <div className="pilha-sm" style={{ width: 240 }}>
+          <div className="sk sk-titulo" />
+          <div className="sk sk-linha" />
+          <div className="sk sk-linha" />
+        </div>
+      </div>
+    );
+  }
 
+  if (!perfil) return <Login />;
+
+  // Duas superfícies distintas, não uma com "modo simplificado": o
+  // solicitante nunca vê a fila, e o agente nunca vê o portal
+  // (`docs/02-gap-analysis.md`, item 9).
+  return perfil.role === 'SOLICITANTE' ? <Portal /> : <Aplicativo />;
+}
+
+function Aplicativo() {
   return (
     <div className="shell">
-      <Sidebar
-        contadores={{
-          meus: CHAMADOS.filter((c) => c.assignedUser !== null).length,
-          time: CHAMADOS.length,
-          semAtribuicao: CHAMADOS.filter((c) => !c.assignedTeam && !c.assignedUser).length,
-          slaEstourando,
-        }}
-        aoNavegar={() => setTela({ nome: 'fila' })}
-      />
+      <Sidebar />
 
       <div className="principal">
-        <Header
-          titulo={chamado ? `#${chamado.number} ${chamado.subject}` : 'Do meu time'}
-          trilha={chamado ? ['Fila', 'Chamado'] : ['Fila']}
-          aoVoltar={chamado ? () => setTela({ nome: 'fila' }) : undefined}
-        />
-
-        {/* Enquanto o VITE_DATA_SOURCE for mock, a faixa é
-            inegociável: o risco é alguém tratar chamado de mentira
-            como fila de verdade. */}
-        <div className="faixa-demo">
-          <span aria-hidden="true">⚠</span>
-          <span>
-            Dados de demonstração. Nenhum chamado aqui é real — a API ainda não está ligada.
-          </span>
-        </div>
+        <Header />
 
         <main className="conteudo" id="conteudo">
-          {chamado ? (
-            <Chamado chamado={chamado} />
-          ) : (
-            <Fila chamados={CHAMADOS} aoAbrir={(id) => setTela({ nome: 'chamado', id })} />
-          )}
+          <Routes>
+            <Route path="/" element={<Fila />} />
+            <Route path="/chamados/novo" element={<NovoChamado />} />
+            <Route path="/chamados/:id" element={<Chamado />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
         </main>
       </div>
+    </div>
+  );
+}
+
+function Portal() {
+  const { perfil, sair } = useAutenticacao();
+
+  return (
+    <div className="tela-publica">
+      <header className="header">
+        <div className="header-titulo">
+          <h1>Meus chamados</h1>
+        </div>
+        <div className="header-acoes">
+          <span className="suave" style={{ fontSize: 'var(--t-corpo-sm)' }}>
+            {perfil?.user.name}
+          </span>
+          <button type="button" className="btn -fantasma -sm" onClick={() => void sair()}>
+            Sair
+          </button>
+        </div>
+      </header>
+
+      <main className="conteudo" id="conteudo" style={{ maxWidth: 880 }}>
+        <Routes>
+          <Route path="/" element={<PortalLista />} />
+          <Route path="/chamados/novo" element={<NovoChamado noPortal />} />
+          <Route path="/chamados/:id" element={<PortalChamado />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </main>
     </div>
   );
 }

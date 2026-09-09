@@ -1,48 +1,53 @@
-export function Header({
-  titulo,
-  trilha,
-  aoVoltar,
-}: {
-  titulo: string;
-  trilha: string[];
-  aoVoltar?: () => void;
-}) {
+import { useState, type FormEvent } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+
+import { useAutenticacao } from '../auth/Autenticacao';
+
+export function Header() {
+  const navegar = useNavigate();
+  const { can } = useAutenticacao();
+  const [parametros, definirParametros] = useSearchParams();
+  const [busca, setBusca] = useState(parametros.get('q') ?? '');
+
+  function pesquisar(evento: FormEvent) {
+    evento.preventDefault();
+    const proximos = new URLSearchParams(parametros);
+    if (busca.trim()) proximos.set('q', busca.trim());
+    else proximos.delete('q');
+    definirParametros(proximos);
+  }
+
   return (
     <header className="header">
-      {aoVoltar ? (
-        <button type="button" className="btn-icone -borda" onClick={aoVoltar} aria-label="Voltar para a fila">
-          <span aria-hidden="true">←</span>
-        </button>
-      ) : null}
-
       <div className="header-titulo">
-        <nav className="trilha" aria-label="Trilha de navegação">
-          {trilha.map((passo, indice) => (
-            <span key={passo}>
-              {indice > 0 ? <span aria-hidden="true">/ </span> : null}
-              {passo}
-            </span>
-          ))}
-        </nav>
-        <h1>{titulo}</h1>
+        <h1>Chamados</h1>
       </div>
 
       <div className="header-acoes">
-        <label className="so-leitor" htmlFor="busca-global">
-          Buscar chamados
-        </label>
-        <div className="busca">
+        <form onSubmit={pesquisar} className="busca">
+          <label className="so-leitor" htmlFor="busca-global">
+            Buscar chamados
+          </label>
           <input
             id="busca-global"
             className="input"
             type="search"
-            placeholder="Buscar por número, assunto ou solicitante"
+            placeholder="Número, assunto ou solicitante"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            style={{ minWidth: 280, paddingLeft: 'var(--e-3)' }}
           />
-        </div>
+        </form>
 
-        <button type="button" className="btn -primario">
-          Novo chamado
-        </button>
+        {can('chamado:criar') ? (
+          <button
+            type="button"
+            className="btn -primario"
+            onClick={() => navegar('/chamados/novo')}
+          >
+            Novo chamado
+          </button>
+        ) : null}
       </div>
     </header>
   );

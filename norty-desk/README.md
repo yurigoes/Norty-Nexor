@@ -16,7 +16,15 @@ desk.norty.com.br/api  → apps/api    (NestJS + Prisma + PostgreSQL)
 
 ## Estado
 
-**Fase 0 — discovery e scaffold.** O que existe aqui hoje:
+**Fase 1 entregue — o chamado funciona de ponta a ponta.**
+
+Autenticação, abertura, fila com filtros, conversa, nota interna,
+atribuição, classificação, transições de status, pausa de SLA, anexos e
+o portal do solicitante. Validado por 70 testes automatizados, dos quais
+44 sobem a aplicação inteira contra um Postgres real, mais um passeio de
+navegador que confere que a nota interna não vaza para o portal.
+
+O que existe hoje:
 
 | Entrega | Onde | Estado |
 |---|---|---|
@@ -31,14 +39,17 @@ desk.norty.com.br/api  → apps/api    (NestJS + Prisma + PostgreSQL)
 | Migração de dados do GLPI | `docs/09-migracao.md` | pronto |
 | Roadmap por fases | `docs/10-roadmap.md` | pronto |
 | Deploy no Proxmox | `docs/11-infra.md` | pronto |
-| Domínio compartilhado (TypeScript) | `packages/shared` | scaffold |
-| Schema Prisma | `apps/api/prisma/schema.prisma` | scaffold |
-| API NestJS | `apps/api` | scaffold |
-| Aplicativo React | `apps/web` | scaffold |
+| Domínio compartilhado (TypeScript) | `packages/shared` | pronto, 14 testes |
+| Schema Prisma e migrações | `apps/api/prisma` | pronto |
+| Autenticação | `apps/api/src/modules/auth` | pronto |
+| Chamados | `apps/api/src/modules/tickets` | pronto |
+| SLA sobre calendário | `apps/api/src/modules/sla` | pronto, 12 testes |
+| Anexos | `apps/api/src/modules/attachments` | pronto |
+| Catálogo (categorias, times, pessoas) | `apps/api/src/modules/catalogo` | pronto |
+| Canais de e-mail e WhatsApp | `apps/api/src/modules/channels` | adaptadores prontos, processamento na Fase 2 |
+| Aplicativo do agente e portal | `apps/web` | pronto |
 
-Scaffold significa: compila, tem a forma certa e os contratos corretos —
-mas os módulos de negócio ainda não estão implementados. A ordem de
-implementação está em `docs/10-roadmap.md`.
+A ordem do que vem depois está em `docs/10-roadmap.md`.
 
 ## Por onde começar a ler
 
@@ -56,10 +67,20 @@ npm run build            # shared → api → web, nesta ordem
 npm run lint
 
 # Banco (precisa de DATABASE_URL em apps/api/.env)
-npm run db:migrate
-npm run db:seed
+npm run db:migrate       # aplica as migrações
+npm run db:seed          # estrutura base; DEMO=1 cria as contas de teste
 npm run db:studio
 ```
+
+```bash
+# Testes
+npm test -w @norty-desk/shared     # domínio e matriz de permissões
+npm test -w @norty-desk/api        # ponta a ponta, contra Postgres real
+npm run test:navegador -w @norty-desk/web   # passeio no Chromium
+```
+
+A suíte da API precisa de um banco próprio (ela trunca tudo entre
+execuções) e de um `.env.test` — veja `apps/api/.env.test.example`.
 
 ## Este projeto ainda mora dentro do Norty-Nexor
 

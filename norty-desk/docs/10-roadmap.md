@@ -25,24 +25,34 @@ O que está neste repositório hoje.
 
 ---
 
-## Fase 1 — O chamado funciona ponta a ponta
+## Fase 1 — O chamado funciona ponta a ponta ✅ *(entregue)*
 
 O menor sistema que substitui o GLPI para uma equipe pequena.
 
-| Entrega | Detalhe |
+| Entrega | Estado |
 |---|---|
-| Autenticação | Argon2id, JWT de 15 min, refresh em cookie `httpOnly` com rotação |
-| Organizações e pessoas | CRUD de usuário, time, vínculo |
-| Categorias | árvore rasa, com time e acordo padrão |
-| Abrir chamado | web, com formulário dinâmico |
-| Fila | filtros, visões salvas, ordenação, cursor |
-| Chamado | timeline, responder, nota interna, atribuir, classificar |
-| Transições de status | validadas por `canTransition` |
-| Anexos | MinIO, URL assinada |
-| Portal do solicitante | as 5 telas |
+| Autenticação — Argon2id, JWT de 15 min, refresh rotativo em cookie `httpOnly` | pronto |
+| Organizações, pessoas, times e vínculos | pronto |
+| Categorias em árvore, com time e acordos padrão | pronto |
+| Abrir chamado (agente e portal) | pronto |
+| Fila — filtros, visões, busca, ordenação, cursor | pronto |
+| Chamado — conversa, responder, nota interna, atribuir, classificar | pronto |
+| Transições de status validadas | pronto |
+| Pausar e retomar, descontando o tempo parado | pronto |
+| Anexos — porta de armazenamento, disco e MinIO | pronto |
+| Portal do solicitante | pronto |
+| Formulário dinâmico por categoria | **fica para a Fase 2** |
 
-**Pronto quando:** um agente atende um dia inteiro de chamados sem abrir
-o GLPI.
+**Verificação:** 44 testes de ponta a ponta contra Postgres real, que
+sobem a aplicação Nest inteira, mais 14 do domínio compartilhado e 12 do
+cálculo de calendário. Um passeio de navegador (`npm run test:navegador
+-w @norty-desk/web`) percorre o caminho do agente no Chromium e confere
+que a nota interna não chega ao portal do solicitante.
+
+**O que ficou de fora e por quê:** o formulário dinâmico por categoria
+(`TicketForm`) tem schema e tipo, mas nenhuma tela o consome ainda. Ele
+depende da tela de configuração de categorias, que é da Fase 2 — e
+abrir chamado já funciona sem ele.
 
 ---
 

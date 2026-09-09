@@ -134,6 +134,9 @@
 
 .conta:hover { background: rgba(255, 255, 255, .07); }
 .conta-texto { min-width: 0; flex: 1; }
+/* As duas linhas da conta empilham. Como elemento inline elas ficariam
+   lado a lado e o nome colaria na organização. */
+.conta-nome, .conta-empresa { display: block; }
 .conta-nome {
   font-size: var(--t-corpo-sm);
   font-weight: var(--p-semi);
