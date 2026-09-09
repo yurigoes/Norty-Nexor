@@ -242,6 +242,57 @@ export type DecideApprovalRequest = {
 };
 
 // ---------------------------------------------------------------------
+// Painéis e relatórios
+// ---------------------------------------------------------------------
+
+/** Um número do painel, com o dado que o gerou — nunca só o número. */
+export type Indicador = {
+  rotulo: string;
+  valor: number;
+  /** Sufixo de exibição: `%`, `h`, `min`. Ausente quando é contagem. */
+  unidade?: string;
+  /** Comparação com o período anterior, em pontos percentuais ou absoluto. */
+  variacao?: number;
+  /** Filtro da fila que mostra exatamente estes chamados. */
+  filtro?: string;
+};
+
+export type FatiaDeContagem = {
+  chave: string;
+  rotulo: string;
+  total: number;
+};
+
+export type PainelView = {
+  escopo: 'AGENTE' | 'TIME' | 'ORGANIZACAO';
+  periodo: { de: string; ate: string };
+  indicadores: Indicador[];
+  porStatus: FatiaDeContagem[];
+  porPrioridade: FatiaDeContagem[];
+  porCanal: FatiaDeContagem[];
+  /** Volume diário no período, para o gráfico de linha. */
+  porDia: { dia: string; abertos: number; resolvidos: number }[];
+};
+
+export type LinhaDeSla = {
+  chave: string;
+  rotulo: string;
+  total: number;
+  cumpridos: number;
+  violados: number;
+  emAberto: number;
+  /** Cumpridos ÷ (cumpridos + violados). Não conta o que ainda corre. */
+  percentual: number;
+};
+
+export type RelatorioSlaView = {
+  periodo: { de: string; ate: string };
+  agrupamento: 'categoria' | 'time' | 'prioridade' | 'acordo';
+  geral: LinhaDeSla;
+  linhas: LinhaDeSla[];
+};
+
+// ---------------------------------------------------------------------
 // Base de conhecimento
 // ---------------------------------------------------------------------
 

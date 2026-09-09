@@ -293,6 +293,49 @@ export const DEFAULT_BUSINESS_HOURS: CalendarSegmentInput[] = [1, 2, 3, 4, 5].ma
 );
 
 // ---------------------------------------------------------------------
+// Rótulos em português
+// ---------------------------------------------------------------------
+
+/**
+ * O nome que a pessoa lê para cada valor do domínio.
+ *
+ * Mora aqui, e não no aplicativo, porque a API também rotula: o painel
+ * devolve `rotulo` junto do número, e o CSV do relatório sai com o nome
+ * da coluna. Duas tabelas de rótulos divergem na primeira vez que
+ * alguém renomeia um status só de um lado (CLAUDE.md, regra 1).
+ */
+export const ROTULO_STATUS: Record<TicketStatus, string> = {
+  NOVO: 'Novo',
+  ATRIBUIDO: 'Atribuído',
+  PLANEJADO: 'Planejado',
+  PENDENTE: 'Pendente',
+  EM_APROVACAO: 'Em aprovação',
+  SOLUCIONADO: 'Solucionado',
+  FECHADO: 'Fechado',
+};
+
+export const ROTULO_CANAL: Record<Channel, string> = {
+  WEB: 'Portal',
+  EMAIL: 'E-mail',
+  WHATSAPP: 'WhatsApp',
+  API: 'API',
+  SISTEMA: 'Sistema',
+};
+
+export const ROTULO_PRIORIDADE: Record<Scale, string> = {
+  1: 'Muito baixa',
+  2: 'Baixa',
+  3: 'Média',
+  4: 'Alta',
+  5: 'Muito alta',
+};
+
+export const ROTULO_TIPO: Record<TicketType, string> = {
+  INCIDENTE: 'Incidente',
+  REQUISICAO: 'Requisição',
+};
+
+// ---------------------------------------------------------------------
 // Transições de status
 // ---------------------------------------------------------------------
 

@@ -11,6 +11,7 @@ import { ConhecimentoModule } from './modules/conhecimento/conhecimento.module';
 import { ChannelsModule } from './modules/channels/channels.module';
 import { HealthModule } from './modules/health/health.module';
 import { IntakeModule } from './modules/intake/intake.module';
+import { PaineisModule } from './modules/paineis/paineis.module';
 import { RegrasModule } from './modules/regras/regras.module';
 import { AprovacoesModule } from './modules/aprovacoes/aprovacoes.module';
 import { SlaModule } from './modules/sla/sla.module';
@@ -39,6 +40,7 @@ import { TicketsModule } from './modules/tickets/tickets.module';
     AttachmentsModule,
     CatalogoModule,
     ConhecimentoModule,
+    PaineisModule,
     BrandModule,
     SlaModule,
     ChannelsModule,

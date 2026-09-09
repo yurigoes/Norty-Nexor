@@ -135,6 +135,41 @@ export async function chamar<T>(caminho: string, opcoes: Opcoes = {}): Promise<T
   return (await resposta.json()) as T;
 }
 
+/**
+ * Baixa um arquivo da API.
+ *
+ * Não dá para apontar um `<a download>` para a rota: a autorização é o
+ * `Bearer` que vive em memória, e o navegador não o manda numa
+ * navegação. Busca-se com o token, e o que volta vira um blob local.
+ */
+export async function baixar(caminho: string, nomeDoArquivo: string): Promise<void> {
+  const resposta = await fetch(`${BASE}${caminho}`, {
+    credentials: 'include',
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  });
+
+  if (!resposta.ok) {
+    throw new ErroDaApi(resposta.status, {
+      type: 'sobre:em-branco',
+      title: 'Não foi possível exportar.',
+      status: resposta.status,
+    });
+  }
+
+  // BOM: sem ele o Excel em pt-BR lê o CSV como Latin-1 e "Solução"
+  // vira "SoluÃ§Ã£o".
+  const texto = await resposta.text();
+  const blob = new Blob([`\ufeff${texto}`], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = nomeDoArquivo;
+  link.click();
+
+  URL.revokeObjectURL(url);
+}
+
 /** Tenta recuperar a sessão pelo cookie, na subida do aplicativo. */
 export async function recuperarSessao(): Promise<boolean> {
   return renovar();

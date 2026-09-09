@@ -462,18 +462,45 @@ histórico de linhas idênticas.
 
 ---
 
-## 9. Painéis
+## 9. Painéis e relatórios
 
 ```
-GET /v1/dashboards/agente
+GET /v1/dashboards/agente?periodo=7d|30d|90d|12m
 GET /v1/dashboards/time?teamId=...&periodo=30d
 GET /v1/dashboards/organizacao?periodo=30d
-GET /v1/reports/sla?de=...&ate=...&formato=json|csv
-GET /v1/reports/volume?agrupar=categoria|canal|time|dia
+GET /v1/reports/sla?periodo=30d&agrupar=categoria|time|prioridade|acordo&formato=json|csv
+GET /v1/reports/volume?periodo=30d&agrupar=categoria|canal|time|dia&formato=json|csv
 ```
+
+**Todo indicador carrega o filtro que o reproduz.** `Em aberto agora`
+volta com `filtro: "?assignedUserId=..."`, e a tela transforma o número
+num link para a fila. Um número sem caminho de volta para as linhas que
+o formaram é um número que ninguém confere — e o painel do GLPI é
+exatamente isso.
+
+**As medianas são medianas, não médias.** Um chamado esquecido por três
+semanas desloca a média e some com a realidade dos outros duzentos. O
+cálculo é `percentile_cont` no banco: trazer todas as linhas para o
+Node funciona com duzentos chamados e para de funcionar com duzentos
+mil.
+
+**O dia é o dia local.** `createdAt` é UTC; recortar por `::date` direto
+jogaria tudo que aconteceu depois das 21h de Brasília para o dia
+seguinte, e o gráfico mentiria toda noite. O fuso padrão é o mesmo de
+`Calendar.timezone`.
 
 O relatório de SLA lê `achievedAt` / `breachedAt` gravados no momento do
 fato — nunca recalcula prazo histórico (`docs/05-sla.md`, seção 7).
+Afrouxar o acordo hoje não melhora o desempenho de ontem, e há teste
+que prova isso.
+
+**O que ainda corre não entra no percentual.** Ele aparece na coluna
+`emAberto`: contá-lo como cumprido inflaria o número, e como violado o
+depreciaria.
+
+O CSV sai com `;` — é o separador que o Excel em pt-BR abre sem
+perguntar — e o aplicativo prefixa o BOM, sem o qual "Solução" chega
+como "SoluÃ§Ã£o".
 
 ---
 

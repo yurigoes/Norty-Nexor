@@ -1032,6 +1032,11 @@
   .fila-tabela { display: none; }
   .fila-cartoes { display: flex; }
 
+  /* Título e ações lado a lado espremem o título a duas palavras por
+     linha. Empilhar é o que o cartão faz de melhor num celular. */
+  .card-topo { flex-direction: column; align-items: stretch; }
+  .card-topo .linha { flex-wrap: wrap; }
+
   .modal { max-height: 92vh; }
   .stat-num { font-size: 1.8rem; }
   .campo-grupo { grid-template-columns: 1fr; }

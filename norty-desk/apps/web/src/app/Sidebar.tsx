@@ -95,6 +95,16 @@ export function Sidebar() {
           <span>Abrir chamado</span>
         </Link>
 
+        {can('painel:proprio') ? (
+          <Link
+            to="/painel"
+            className="nav-item"
+            aria-current={local.pathname === '/painel' ? 'page' : undefined}
+          >
+            <span>Painel</span>
+          </Link>
+        ) : null}
+
         {can('artigo:ler') ? (
           <Link
             to="/conhecimento"

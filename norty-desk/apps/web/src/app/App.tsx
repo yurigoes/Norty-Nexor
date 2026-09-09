@@ -11,6 +11,7 @@ import { Chamado } from '../modules/chamado/Chamado';
 import { NovoChamado } from '../modules/chamado/NovoChamado';
 import { MarcaConfig } from '../modules/config/MarcaConfig';
 import { Fila } from '../modules/fila/Fila';
+import { Painel } from '../modules/painel/Painel';
 import { PortalChamado } from '../modules/portal/PortalChamado';
 import { PortalLista } from '../modules/portal/PortalLista';
 import { Header } from './Header';
@@ -60,6 +61,7 @@ function Aplicativo() {
         <main className="conteudo" id="conteudo">
           <Routes>
             <Route path="/" element={<Fila />} />
+            <Route path="/painel" element={<Painel />} />
             <Route path="/aprovacoes" element={<MinhasAprovacoes />} />
             <Route path="/conhecimento" element={<Conhecimento />} />
             <Route path="/conhecimento/novo" element={<Artigo novo />} />

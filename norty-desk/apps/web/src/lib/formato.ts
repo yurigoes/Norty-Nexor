@@ -1,30 +1,11 @@
 import type { Channel, Scale, TicketStatus } from '@norty-desk/shared';
 
-export const ROTULO_STATUS: Record<TicketStatus, string> = {
-  NOVO: 'Novo',
-  ATRIBUIDO: 'Atribuído',
-  PLANEJADO: 'Planejado',
-  PENDENTE: 'Pendente',
-  EM_APROVACAO: 'Em aprovação',
-  SOLUCIONADO: 'Solucionado',
-  FECHADO: 'Fechado',
-};
-
-export const ROTULO_CANAL: Record<Channel, string> = {
-  WEB: 'Portal',
-  EMAIL: 'E-mail',
-  WHATSAPP: 'WhatsApp',
-  API: 'API',
-  SISTEMA: 'Sistema',
-};
-
-export const ROTULO_PRIORIDADE: Record<Scale, string> = {
-  1: 'Muito baixa',
-  2: 'Baixa',
-  3: 'Média',
-  4: 'Alta',
-  5: 'Muito alta',
-};
+/**
+ * Os rótulos moram em `packages/shared`: a API também rotula, e duas
+ * tabelas divergem na primeira vez que alguém renomeia um status só de
+ * um lado. Reexportados daqui para as telas não precisarem saber disso.
+ */
+export { ROTULO_CANAL, ROTULO_PRIORIDADE, ROTULO_STATUS, ROTULO_TIPO } from '@norty-desk/shared';
 
 /**
  * Modificador do `.prio`. Nomeado, não numerado: `.-1` seria um
