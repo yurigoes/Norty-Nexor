@@ -53,6 +53,7 @@ model Organization {
   surveys       Survey[]
   problems      Problem[]
   changes       Change[]
+  recurrences   RecurringTicket[]
 
   @@map("organizations")
 }
@@ -81,6 +82,7 @@ model User {
   assets        Asset[]           @relation("AtivoDoUsuario")
   problems      Problem[]         @relation("ResponsavelPeloProblema")
   changes       Change[]          @relation("ResponsavelPelaMudanca")
+  recurrences   RecurringTicket[] @relation("RequerenteDaRecorrencia")
   articleEdits  ArticleRevision[] @relation("EditorDaRevisao")
 
   @@map("users")
@@ -142,6 +144,7 @@ model Team {
   categories   Category[]
   problems     Problem[]    @relation("TimeDoProblema")
   changes      Change[]     @relation("TimeDaMudanca")
+  recurrences  RecurringTicket[] @relation("TimeDaRecorrencia")
 
   @@unique([organizationId, name])
   @@map("teams")
@@ -226,6 +229,7 @@ model Category {
   articles     Article[]
   problems     Problem[]
   changes      Change[]
+  recurrences  RecurringTicket[]
 
   @@unique([organizationId, parentId, name])
   @@index([organizationId])
@@ -347,6 +351,10 @@ model Ticket {
   problem   Problem? @relation(fields: [problemId], references: [id], onDelete: SetNull)
   change    Change?  @relation(fields: [changeId], references: [id], onDelete: SetNull)
 
+  /// A agenda que abriu este chamado, quando ele não nasceu de gente.
+  recurringTicketId String?          @db.Uuid
+  recurringTicket   RecurringTicket? @relation(fields: [recurringTicketId], references: [id], onDelete: SetNull)
+
   @@unique([organizationId, number])
   @@unique([organizationId, externalRef])
   @@index([organizationId, status])
@@ -354,6 +362,7 @@ model Ticket {
   @@index([organizationId, createdAt])
   @@index([problemId])
   @@index([changeId])
+  @@index([recurringTicketId])
   @@map("tickets")
 }
 
@@ -1245,4 +1254,61 @@ model AuditLog {
 
   @@index([organizationId, createdAt])
   @@map("audit_logs")
+}
+
+/// Chamado recorrente — a manutenção preventiva em agenda.
+///
+/// Substitui `glpi_ticketrecurrents`. A diferença que importa está no
+/// descritor de recorrência: o GLPI guarda periodicidade em segundos, o
+/// que não consegue dizer "toda segunda e quinta" nem "todo dia 1º" sem
+/// derrapar. Aqui o descritor mora em `schedule` (ver
+/// `packages/shared`) e descreve o calendário, não o intervalo.
+model RecurringTicket {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  name           String
+  isActive       Boolean @default(true)
+
+  /// O molde do chamado que vai nascer.
+  subject     String
+  description String
+  ticketType  TicketType @default(REQUISICAO)
+  urgency     Int        @default(3)
+  impact      Int        @default(3)
+
+  categoryId     String? @db.Uuid
+  assignedTeamId String? @db.Uuid
+  /// Quem consta como requerente do chamado gerado. Chamado sem
+  /// requerente não tem para quem responder.
+  requesterId    String  @db.Uuid
+
+  /// Descritor de recorrência. Union discriminada por `tipo`.
+  schedule Json
+  timezone String @default("America/Sao_Paulo")
+  /// Quantos segundos antes da ocorrência o chamado é aberto: "a
+  /// manutenção é dia 20, abra o chamado três dias antes".
+  createBeforeSeconds Int @default(0)
+
+  startsAt DateTime?
+  endsAt   DateTime?
+
+  /// A próxima ocorrência, já calculada. É por ela que o ciclo procura
+  /// o que abrir, e é ela que a tela mostra sem recalcular nada.
+  nextRunAt DateTime?
+  lastRunAt DateTime?
+  runCount  Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category     Category?    @relation(fields: [categoryId], references: [id])
+  assignedTeam Team?        @relation("TimeDaRecorrencia", fields: [assignedTeamId], references: [id])
+  requester    User         @relation("RequerenteDaRecorrencia", fields: [requesterId], references: [id])
+
+  tickets Ticket[]
+
+  @@unique([organizationId, name])
+  @@index([isActive, nextRunAt])
+  @@map("recurring_tickets")
 }

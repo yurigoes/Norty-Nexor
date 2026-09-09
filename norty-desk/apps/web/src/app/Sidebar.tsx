@@ -48,6 +48,11 @@ export function Sidebar() {
     { rotulo: 'Marca', para: '/config/marca', permissao: 'organizacao:gerenciar' as const },
     { rotulo: 'Categorias', para: '/config/categorias', permissao: 'config:categorias' as const },
     { rotulo: 'SLA e calendários', para: '/config/sla', permissao: 'config:sla' as const },
+    {
+      rotulo: 'Chamados recorrentes',
+      para: '/config/recorrencias',
+      permissao: 'config:recorrencia' as const,
+    },
     { rotulo: 'Canais', para: '/config/canais', permissao: 'config:canais' as const },
     {
       rotulo: 'Diagnóstico',

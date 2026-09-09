@@ -910,7 +910,80 @@ o que a operação quer saber na hora.
 
 ---
 
-## 13. Saúde
+## 13. Chamado recorrente
+
+```
+GET    /v1/recorrencias
+GET    /v1/recorrencias/:id
+GET    /v1/recorrencias/:id/chamados   → o que a agenda já abriu
+POST   /v1/recorrencias
+PATCH  /v1/recorrencias/:id
+DELETE /v1/recorrencias/:id
+```
+
+Substitui `glpi_ticketrecurrents`. Duas diferenças que importam.
+
+**A agenda descreve o calendário, não o intervalo.** O GLPI guarda
+periodicidade em **segundos** (mais `MONTH` e `YEAR` como casos
+especiais). Segundos não conseguem dizer "toda segunda e quinta" nem
+"todo dia 1º": um intervalo de 604800s a partir de uma data derrapa para
+outro dia da semana assim que alguém edita a agenda, e ninguém entende
+por quê. Aqui o descritor mora em `packages/shared`:
+
+```ts
+type Recorrencia =
+  | { tipo: 'DIARIA';  hora; minuto }
+  | { tipo: 'SEMANAL'; diasDaSemana: number[]; hora; minuto }
+  | { tipo: 'MENSAL';  diaDoMes; hora; minuto }
+  | { tipo: 'ANUAL';   mes; diaDoMes; hora; minuto }
+```
+
+Pequeno de propósito. Cron resolveria tudo e seria impossível de
+configurar sem errar — e errar aqui significa abrir chamado de
+manutenção no dia errado, todo mês, até alguém reparar. `descreverRecorrencia`
+devolve a frase em português que a tela mostra na prévia **e** que vai
+na nota interna do chamado: uma definição, dois lugares.
+
+Mês que não tem o dia usa o último — "todo dia 31" quer dizer "no fim do
+mês", e pular fevereiro seria pior que antecipar um dia.
+
+**A próxima ocorrência é coluna, não conta de tela.** `nextRunAt` é
+gravada ao salvar e recalculada a cada edição; o ciclo procura por ela e
+a tela mostra a mesma data que o ciclo vai usar. No GLPI a tela
+recalcula por conta própria e às vezes discorda do cron. A tela formata
+`nextRunAt` **no fuso da agenda**, não no do navegador: a linha que diz
+"toda sexta às 07:00" não pode ter 10:00 na coluna ao lado.
+
+O cálculo (`modules/recorrencias/agenda.ts`) varre dia a dia no fuso da
+agenda em vez de somar intervalos, reusando os mesmos `componentesNoFuso`
+e `instanteLocal` do calendário de SLA. É o que faz a agenda sobreviver
+ao horário de verão sem derrapar.
+
+**A agenda decide *quando*; o chamado nasce como qualquer outro.** Mesma
+numeração por organização, mesma matriz de prioridade, mesmos acordos de
+SLA da categoria. Canal de origem `SISTEMA` — ninguém escreveu este
+chamado, e marcá-lo como `WEB` faria a resposta tentar sair por um canal
+que nunca existiu. O requerente é um usuário, não um contato: manutenção
+preventiva tem dono dentro de casa.
+
+`createBeforeSeconds` é o `create_before` do GLPI: a manutenção é dia 20,
+mas o chamado nasce dia 17 para dar tempo de preparar. A ocorrência
+seguinte continua sendo a do calendário — a antecedência antecipa a
+abertura, não desloca a agenda.
+
+**Não duplica.** O ciclo avança `nextRunAt` **antes** de abrir o chamado,
+com `updateMany` condicionado ao valor que leu. Se outro processo já
+avançou, zero linhas são afetadas e a passada desiste. Trocar a ordem
+abriria a porta para o contrário: dois chamados e um só avanço.
+
+Apagar a agenda não apaga o histórico: `Ticket.recurringTicketId` é
+`SET NULL`.
+
+Permissão: `config:recorrencia`, como as demais telas de configuração.
+
+---
+
+## 14. Saúde
 
 ```
 GET /v1/health        → { status, uptime }

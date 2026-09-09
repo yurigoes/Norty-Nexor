@@ -99,6 +99,7 @@ export const PERMISSIONS = [
   'config:calendario',
   'config:motivos-pendencia',
   'config:regras-entrada',
+  'config:recorrencia',
   'config:canais',
   'config:webhooks',
   'config:chaves-api',

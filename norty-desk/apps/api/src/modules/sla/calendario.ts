@@ -40,7 +40,7 @@ const MAX_DIAS_VARRIDOS = 730;
  * horário de verão e pode voltar a ter; offset fixo erraria duas vezes
  * por ano.
  */
-function componentesNoFuso(data: Date, timezone: string) {
+export function componentesNoFuso(data: Date, timezone: string) {
   const partes = new Intl.DateTimeFormat('en-US', {
     timeZone: timezone,
     year: 'numeric',
@@ -78,7 +78,7 @@ function offsetMinutos(data: Date, timezone: string): number {
 }
 
 /** Instante UTC correspondente a uma hora local do calendário. */
-function instanteLocal(
+export function instanteLocal(
   ano: number, mes: number, dia: number, minutosDoDia: number, timezone: string,
 ): Date {
   const palpite = new Date(Date.UTC(ano, mes - 1, dia, 0, minutosDoDia, 0));

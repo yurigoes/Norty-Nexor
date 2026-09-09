@@ -13,6 +13,7 @@ import type {
   ChangeRisk,
   ChangeStatus,
   Channel,
+  Recorrencia,
   EventPayload,
   EventType,
   LinkType,
@@ -576,6 +577,54 @@ export type ErroConhecidoSugerido = {
   status: ProblemStatus;
   /** Aderência da busca de texto, de 0 a 1. */
   score: number;
+};
+
+// ---------------------------------------------------------------------
+// Chamado recorrente
+// ---------------------------------------------------------------------
+
+export type RecorrenciaView = {
+  id: string;
+  name: string;
+  isActive: boolean;
+  /** O molde do chamado que vai nascer. */
+  subject: string;
+  description: string;
+  ticketType: TicketType;
+  urgency: Scale;
+  impact: Scale;
+  category: CategoryRef | null;
+  assignedTeam: PartyRef | null;
+  requester: PartyRef;
+  schedule: Recorrencia;
+  timezone: string;
+  /** Quantos segundos antes da ocorrência o chamado é aberto. */
+  createBeforeSeconds: number;
+  startsAt: string | null;
+  endsAt: string | null;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+  runCount: number;
+  /** A recorrência em português, como a tela e a linha do tempo dizem. */
+  descricao: string;
+};
+
+export type EscreverRecorrenciaRequest = {
+  name: string;
+  subject: string;
+  description: string;
+  schedule: Recorrencia;
+  ticketType?: TicketType;
+  urgency?: Scale;
+  impact?: Scale;
+  categoryId?: string | null;
+  assignedTeamId?: string | null;
+  requesterId?: string | null;
+  timezone?: string;
+  createBeforeSeconds?: number;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  isActive?: boolean;
 };
 
 // ---------------------------------------------------------------------

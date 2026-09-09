@@ -6,6 +6,7 @@ import { MinhasAprovacoes } from '../modules/aprovacao/MinhasAprovacoes';
 import { Canais } from '../modules/canais/Canais';
 import { Auditoria } from '../modules/auditoria/Auditoria';
 import { Categorias } from '../modules/configuracao/Categorias';
+import { Recorrencias } from '../modules/configuracao/Recorrencias';
 import { Sla } from '../modules/configuracao/Sla';
 import { Ativos } from '../modules/ativo/Ativos';
 import { Pesquisa } from '../modules/ativo/Pesquisa';
@@ -102,6 +103,7 @@ function Aplicativo() {
             <Route path="/config/marca" element={<MarcaConfig />} />
             <Route path="/config/categorias" element={<Categorias />} />
             <Route path="/config/sla" element={<Sla />} />
+            <Route path="/config/recorrencias" element={<Recorrencias />} />
             <Route path="/config/canais" element={<Canais />} />
             <Route path="/config/canais/diagnostico" element={<Diagnostico />} />
             <Route path="/config/webhooks" element={<Webhooks />} />

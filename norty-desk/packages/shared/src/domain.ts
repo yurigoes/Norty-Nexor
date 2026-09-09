@@ -346,6 +346,121 @@ export type FormSchema = {
 };
 
 // ---------------------------------------------------------------------
+// Recorrência — substitui glpi_ticketrecurrents
+// ---------------------------------------------------------------------
+
+/**
+ * Quando um chamado recorrente nasce.
+ *
+ * O GLPI guarda periodicidade em **segundos** (mais `MONTH` e `YEAR`
+ * como casos especiais). Segundos não conseguem dizer "toda segunda e
+ * quinta" nem "todo dia 1º": um intervalo de 604800s a partir de uma
+ * data derrapa para outro dia da semana assim que alguém edita a
+ * agenda, e ninguém entende por quê.
+ *
+ * Aqui a recorrência descreve o **calendário**, não o intervalo. É um
+ * descritor pequeno de propósito: cron resolveria tudo e seria
+ * impossível de configurar sem errar — e errar aqui significa abrir
+ * chamado de manutenção no dia errado, todo mês, até alguém reparar.
+ */
+export type Recorrencia =
+  | { tipo: 'DIARIA'; hora: number; minuto: number }
+  | {
+      tipo: 'SEMANAL';
+      /** 0 = domingo .. 6 = sábado. Pelo menos um. */
+      diasDaSemana: number[];
+      hora: number;
+      minuto: number;
+    }
+  | {
+      tipo: 'MENSAL';
+      /**
+       * 1..31. Mês que não tem o dia usa o último: "todo dia 31" quer
+       * dizer "no fim do mês", e pular fevereiro seria pior que
+       * antecipar um dia.
+       */
+      diaDoMes: number;
+      hora: number;
+      minuto: number;
+    }
+  | {
+      tipo: 'ANUAL';
+      /** 1 = janeiro .. 12 = dezembro. */
+      mes: number;
+      diaDoMes: number;
+      hora: number;
+      minuto: number;
+    };
+
+export type TipoDeRecorrencia = Recorrencia['tipo'];
+
+export const TIPOS_DE_RECORRENCIA = ['DIARIA', 'SEMANAL', 'MENSAL', 'ANUAL'] as const;
+
+const DIAS_DA_SEMANA = [
+  'domingo',
+  'segunda',
+  'terça',
+  'quarta',
+  'quinta',
+  'sexta',
+  'sábado',
+] as const;
+
+const MESES = [
+  'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+] as const;
+
+function horaCurta(hora: number, minuto: number): string {
+  return `${String(hora).padStart(2, '0')}:${String(minuto).padStart(2, '0')}`;
+}
+
+/**
+ * A recorrência em português.
+ *
+ * Mora aqui porque a API também descreve: o registro na linha do tempo
+ * do chamado diz de qual agenda ele nasceu, e a tela mostra a mesma
+ * frase. Duas versões do mesmo texto divergem na primeira correção.
+ */
+export function descreverRecorrencia(r: Recorrencia): string {
+  const as = `às ${horaCurta(r.hora, r.minuto)}`;
+
+  switch (r.tipo) {
+    case 'DIARIA':
+      return `Todo dia ${as}`;
+    case 'SEMANAL': {
+      const dias = [...r.diasDaSemana].sort().map((d) => DIAS_DA_SEMANA[d] ?? '?');
+      if (dias.length === 0) return `Nunca — nenhum dia da semana escolhido`;
+      const lista =
+        dias.length === 1 ? dias[0] : `${dias.slice(0, -1).join(', ')} e ${dias.at(-1)}`;
+      return `Toda ${lista} ${as}`;
+    }
+    case 'MENSAL':
+      return `Todo dia ${r.diaDoMes} de cada mês ${as}`;
+    case 'ANUAL':
+      return `Todo ${r.diaDoMes} de ${MESES[r.mes - 1] ?? '?'} ${as}`;
+  }
+}
+
+/**
+ * A recorrência é possível?
+ *
+ * Uma semanal sem nenhum dia marcado nunca dispara, e uma agenda que
+ * nunca dispara é pior que nenhuma: ela aparece ativa na lista.
+ */
+export function recorrenciaValida(r: Recorrencia): boolean {
+  if (r.hora < 0 || r.hora > 23 || r.minuto < 0 || r.minuto > 59) return false;
+  if (r.tipo === 'SEMANAL') {
+    return r.diasDaSemana.length > 0 && r.diasDaSemana.every((d) => d >= 0 && d <= 6);
+  }
+  if (r.tipo === 'MENSAL') return r.diaDoMes >= 1 && r.diaDoMes <= 31;
+  if (r.tipo === 'ANUAL') {
+    return r.mes >= 1 && r.mes <= 12 && r.diaDoMes >= 1 && r.diaDoMes <= 31;
+  }
+  return true;
+}
+
+// ---------------------------------------------------------------------
 // Regras de entrada — substitui RuleTicket / RuleMailCollector
 // ---------------------------------------------------------------------
 

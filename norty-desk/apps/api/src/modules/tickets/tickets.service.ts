@@ -491,6 +491,79 @@ export class TicketsService {
   }
 
   /**
+   * Chamado aberto por uma agenda de recorrência.
+   *
+   * O requerente é um usuário, não um contato: manutenção preventiva
+   * tem dono dentro de casa. O canal é `SISTEMA` — ninguém escreveu
+   * este chamado, e marcar `WEB` faria a resposta tentar sair por um
+   * canal que nunca existiu.
+   *
+   * Passa pelo mesmo `proximoNumero`, pela mesma matriz de prioridade e
+   * pelos mesmos acordos da categoria que qualquer outro chamado: a
+   * agenda decide *quando*, não *como*.
+   */
+  async abrirRecorrente(dados: {
+    organizationId: string;
+    recurringTicketId: string;
+    requesterId: string;
+    subject: string;
+    description: string;
+    ticketType: TicketType;
+    urgency: Scale;
+    impact: Scale;
+    categoryId?: string | null;
+    teamId?: string | null;
+  }): Promise<{ id: string; number: number }> {
+    const priority = await this.derivarPrioridade(
+      dados.organizationId,
+      dados.urgency,
+      dados.impact,
+    );
+
+    const categoria = dados.categoryId
+      ? await this.prisma.category.findFirst({
+          where: { id: dados.categoryId, organizationId: dados.organizationId },
+          include: { defaultAgreements: { where: { isActive: true }, select: { id: true } } },
+        })
+      : null;
+
+    const timeFinal = dados.teamId ?? categoria?.defaultTeamId ?? null;
+    const acordos = categoria?.defaultAgreements.map((a) => a.id) ?? [];
+
+    const chamado = await this.prisma.$transaction(async (tx) => {
+      const number = await this.proximoNumero(tx, dados.organizationId);
+
+      return tx.ticket.create({
+        data: {
+          organizationId: dados.organizationId,
+          number,
+          subject: dados.subject.slice(0, 255),
+          description: dados.description,
+          type: dados.ticketType,
+          status: timeFinal ? 'ATRIBUIDO' : 'NOVO',
+          urgency: dados.urgency,
+          impact: dados.impact,
+          priority,
+          categoryId: categoria?.id,
+          originChannel: 'SISTEMA',
+          recurringTicketId: dados.recurringTicketId,
+          actors: {
+            create: [
+              { role: 'REQUERENTE', userId: dados.requesterId },
+              ...(timeFinal ? [{ role: 'ATRIBUIDO' as const, teamId: timeFinal }] : []),
+            ],
+          },
+        },
+        select: { id: true, number: true },
+      });
+    });
+
+    if (acordos.length) await this.sla.aplicarAcordos(chamado.id, acordos);
+
+    return chamado;
+  }
+
+  /**
    * Resposta vinda de canal externo.
    *
    * Sempre pública e sempre do contato — quem escreve de fora não tem
