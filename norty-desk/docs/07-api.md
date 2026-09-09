@@ -582,26 +582,72 @@ nota que ninguém deu.
 
 ## 10. Webhooks de saída
 
+```
+GET    /v1/webhooks
+GET    /v1/webhooks/eventos                  → a lista de eventos assináveis
+POST   /v1/webhooks                          { name, url, secret, events }
+PATCH  /v1/webhooks/:id
+DELETE /v1/webhooks/:id                      → desativa; não exclui
+GET    /v1/webhooks/:id/entregas?status=FALHOU
+POST   /v1/webhooks/:id/testar
+POST   /v1/webhooks/entregas/:id/reenviar
+```
+
 Eventos assináveis:
 
 ```
 ticket.criado          ticket.atualizado      ticket.atribuido
 ticket.respondido      ticket.resolvido       ticket.fechado
 ticket.reaberto        sla.violado            sla.perto-do-vencimento
-aprovacao.solicitada   aprovacao.decidida
+aprovacao.solicitada   aprovacao.decidida     satisfacao.respondida
 ```
 
-Entrega:
+Nome fora dessa lista é 400 no cadastro. Quem digita `ticket.criada` e
+nunca recebe nada abre um chamado de suporte que ninguém consegue
+diagnosticar.
+
+### Entrega
 
 ```
 POST <url>
+Content-Type: application/json
 X-Desk-Event: ticket.criado
-X-Desk-Delivery: <uuid>
-X-Desk-Signature: sha256=<HMAC do corpo com o segredo>
+X-Desk-Delivery: <uuid da entrega, estável entre as tentativas>
+X-Desk-Timestamp: <epoch em segundos>
+X-Desk-Signature: sha256=<HMAC-SHA256 de "<timestamp>.<corpo>">
 ```
 
-Retentativa com backoff (1 min, 5 min, 15 min, 1 h, 6 h). Log
-consultável em `GET /v1/webhooks/:id/entregas`.
+**O timestamp entra dentro do que se assina** — mesmo formato do Stripe
+e do GitHub, e pelo mesmo motivo. Assinar só o corpo deixaria a entrega
+válida para sempre: quem a interceptasse uma vez poderia reenviá-la
+amanhã com a assinatura ainda conferindo. A tolerância recomendada do
+lado de quem recebe é de 5 minutos.
+
+`X-Desk-Delivery` é estável entre as tentativas: é por ele que o
+assinante descarta a repetição de uma entrega que chegou mas cuja
+resposta se perdeu.
+
+### Retentativa
+
+Backoff de 1 min, 5 min, 15 min, 1 h e 6 h — cinco tentativas e para.
+Depois de seis horas fora do ar o problema é do assinante, e a entrega
+fica no log de onde ele a reenvia quando voltar.
+
+**4xx não é retentado**, exceto 408 e 429: repetir cinco vezes não
+conserta um payload que o assinante recusa por contrato. 5xx, timeout e
+erro de rede são retentados.
+
+O destino tem de ser `https` e **não pode ser endereço de rede
+interna** (laço, 10/8, 172.16/12, 192.168/16, 169.254/16, `.internal`).
+Sem essa recusa, quem tivesse `config:webhooks` transformaria a API num
+scanner da rede — inclusive do endpoint de metadados da nuvem.
+
+O segredo é cifrado em repouso pelo mesmo AES-256-GCM dos canais e nunca
+volta pela API: a listagem devolve `hasSecret`.
+
+Entregas terminadas com mais de `WEBHOOK_RETENCAO_DIAS` (padrão 30) são
+podadas de madrugada. As pendentes nunca — entrega que ainda não saiu
+não é lixo.
 
 ---
 

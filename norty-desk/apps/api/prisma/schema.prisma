@@ -673,6 +673,13 @@ model Article {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  /// Coluna **gerada** pelo banco a partir de título e corpo, com peso.
+  /// A fórmula está na migração `base_de_conhecimento`; aqui ela existe
+  /// só para o Prisma saber que a coluna existe. Sem esta linha, todo
+  /// `migrate diff` seguinte gera um `DROP COLUMN busca` — o que já
+  /// aconteceu uma vez e derrubou a busca de artigos.
+  busca Unsupported("tsvector")?
+
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   author       User         @relation(fields: [authorId], references: [id])
   category     Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
@@ -680,6 +687,9 @@ model Article {
 
   @@index([organizationId, isPublic, isArchived])
   @@index([categoryId])
+  /// Etiqueta é busca exata, por sobreposição de array.
+  @@index([keywords], type: Gin, map: "articles_keywords")
+  @@index([busca], type: Gin, map: "articles_busca")
   @@map("articles")
 }
 
@@ -959,6 +969,8 @@ model WebhookDelivery {
   payload    Json
   status     DeliveryStatus @default(PENDENTE)
   attempts   Int            @default(0)
+  /// Quando a próxima tentativa pode sair. É o backoff.
+  scheduledFor DateTime     @default(now())
   responseCode Int?
   lastError  String?
   createdAt  DateTime       @default(now())
@@ -966,7 +978,7 @@ model WebhookDelivery {
 
   webhook OutboundWebhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
 
-  @@index([status, createdAt])
+  @@index([status, scheduledFor])
   @@map("webhook_deliveries")
 }
 

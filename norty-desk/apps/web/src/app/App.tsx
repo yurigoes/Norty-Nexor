@@ -14,6 +14,7 @@ import { NovoChamado } from '../modules/chamado/NovoChamado';
 import { MarcaConfig } from '../modules/config/MarcaConfig';
 import { Fila } from '../modules/fila/Fila';
 import { Painel } from '../modules/painel/Painel';
+import { Webhooks } from '../modules/webhook/Webhooks';
 import { PortalChamado } from '../modules/portal/PortalChamado';
 import { PortalLista } from '../modules/portal/PortalLista';
 import { Header } from './Header';
@@ -87,6 +88,7 @@ function Aplicativo() {
             <Route path="/config/marca" element={<MarcaConfig />} />
             <Route path="/config/canais" element={<Canais />} />
             <Route path="/config/canais/diagnostico" element={<Diagnostico />} />
+            <Route path="/config/webhooks" element={<Webhooks />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

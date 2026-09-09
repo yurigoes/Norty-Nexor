@@ -28,6 +28,8 @@ import type { UsuarioAutenticado } from '../../common/decorators/current-user.de
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { SaidaService } from '../channels/saida.service';
 import { SatisfacaoService } from '../satisfacao/satisfacao.service';
+import type { EventoDeWebhook } from '../webhooks/eventos';
+import { WebhooksService } from '../webhooks/webhooks.service';
 import { SlaService } from '../sla/sla.service';
 import { escopoDeLeitura } from './tickets.escopo';
 import {
@@ -65,7 +67,39 @@ export class TicketsService {
     private readonly sla: SlaService,
     @Inject(forwardRef(() => SaidaService)) private readonly saida: SaidaService,
     @Inject(forwardRef(() => SatisfacaoService)) private readonly satisfacao: SatisfacaoService,
+    private readonly webhooks: WebhooksService,
   ) {}
+
+  /**
+   * Avisa quem assinou o evento.
+   *
+   * Nunca lança: um webhook mal configurado não pode derrubar a ação
+   * que o gerou. O chamado abre; a entrega falha e fica no log.
+   */
+  private async avisarAssinantes(
+    organizationId: string,
+    evento: EventoDeWebhook,
+    ticketId: string,
+  ): Promise<void> {
+    const chamado = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: {
+        id: true,
+        number: true,
+        subject: true,
+        status: true,
+        type: true,
+        priority: true,
+        urgency: true,
+        impact: true,
+        originChannel: true,
+        createdAt: true,
+        category: { select: { id: true, name: true } },
+      },
+    });
+
+    if (chamado) await this.webhooks.emitir(organizationId, evento, chamado);
+  }
 
   // -------------------------------------------------------------------
   // Leitura
@@ -367,6 +401,8 @@ export class TicketsService {
         categoria.defaultAgreements.map((a) => a.id),
       );
     }
+
+    await this.avisarAssinantes(usuario.organizationId, 'ticket.criado', id);
 
     return this.obter(usuario, id);
   }
@@ -795,6 +831,18 @@ export class TicketsService {
     // A pesquisa sai no fechamento, não na solução: entre "resolvido" e
     // "fechado" o cliente ainda pode reabrir, e perguntar como foi o
     // atendimento antes disso é perguntar cedo demais.
+    const EVENTO_DO_STATUS: Partial<Record<TicketStatus, EventoDeWebhook>> = {
+      SOLUCIONADO: 'ticket.resolvido',
+      FECHADO: 'ticket.fechado',
+      ATRIBUIDO: origem === 'FECHADO' ? 'ticket.reaberto' : 'ticket.atualizado',
+    };
+
+    await this.avisarAssinantes(
+      chamado.organizationId,
+      EVENTO_DO_STATUS[destino] ?? 'ticket.atualizado',
+      id,
+    );
+
     if (destino === 'FECHADO') {
       await this.satisfacao.enviarPara(id).catch((erro: Error) => {
         // Uma pesquisa que não saiu não pode impedir o fechamento do

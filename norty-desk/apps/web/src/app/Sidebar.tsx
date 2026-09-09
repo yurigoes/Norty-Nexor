@@ -54,6 +54,7 @@ export function Sidebar() {
       para: '/config/canais/diagnostico',
       permissao: 'config:canais' as const,
     },
+    { rotulo: 'Webhooks', para: '/config/webhooks', permissao: 'config:webhooks' as const },
     { rotulo: 'Pessoas e times', para: null, permissao: 'pessoa:gerenciar' as const },
   ].filter((item) => can(item.permissao));
 

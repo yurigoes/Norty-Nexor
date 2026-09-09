@@ -45,12 +45,26 @@ Três armadilhas que já custaram caro aqui:
    vez do simulado. `limparBanco` agora recusa qualquer banco cujo nome
    não termine em `_test`.
 
-2. **Nunca gere migração a partir do banco vivo.**
-   `prisma migrate diff --from-schema-datasource` lê o banco e "corrige"
-   tudo que não está no `schema.prisma` — inclusive o que foi escrito à
-   mão de propósito. Ele já gerou um `DROP COLUMN busca` que apagou o
-   índice de busca da base de conhecimento sem ninguém pedir. O diff sai
-   das migrações anteriores:
+2. **O que o Prisma não vê, ele apaga — declare, e leia o SQL.**
+   `migrate diff` compara o banco (ou as migrações) com o
+   `schema.prisma` e "corrige" a diferença. Objeto escrito à mão que o
+   schema não menciona é diferença: ele já gerou sozinho um
+   `DROP COLUMN busca` que derrubou a busca da base de conhecimento.
+
+   Trocar `--from-schema-datasource` por `--from-migrations` **não
+   resolve** — os dois diffs terminam no mesmo schema. O que resolve é
+   declarar o objeto:
+
+   ```prisma
+   busca Unsupported("tsvector")?          // a coluna gerada existe
+   @@index([busca], type: Gin, map: "articles_busca")
+   ```
+
+   O que não dá para declarar (índice por expressão, `CHECK`,
+   `GENERATED ALWAYS AS`) o Prisma ignora ou tenta desfazer. Por isso o
+   passo obrigatório é o mesmo desde o começo: **leia o SQL gerado antes
+   de aplicar e apague todo `DROP` ou `ALTER` que você não pediu.** O
+   comando:
 
    ```bash
    npx prisma migrate diff \
@@ -59,9 +73,6 @@ Três armadilhas que já custaram caro aqui:
      --shadow-database-url "postgresql://desk@127.0.0.1:5432/nortydesk_shadow" \
      --script > prisma/migrations/<carimbo>_<nome>/migration.sql
    ```
-
-   Depois, **leia o SQL gerado antes de aplicar** e apague qualquer
-   `DROP` que você não pediu.
 
 3. **`typecheck` não pode emitir.** Era `tsc -b --noEmit false`, que
    escrevia `.js` ao lado de cada `.tsx`; o Vite resolve `./Componente`

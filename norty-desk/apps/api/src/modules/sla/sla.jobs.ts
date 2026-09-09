@@ -4,6 +4,7 @@ import { type EscalationAction, type Scale, ticketTag } from '@norty-desk/shared
 
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { SaidaService } from '../channels/saida.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
 
 /**
  * Os dois relógios do SLA.
@@ -20,6 +21,7 @@ export class SlaJobs {
   constructor(
     private readonly prisma: PrismaService,
     private readonly saida: SaidaService,
+    private readonly webhooks: WebhooksService,
   ) {}
 
   // -------------------------------------------------------------------
@@ -55,6 +57,27 @@ export class SlaJobs {
 
     if (vencidos.length) {
       this.logger.warn(`${vencidos.length} compromisso(s) de SLA estouraram.`);
+
+      // Quem assinou `sla.violado` costuma querer isto num painel de
+      // parede ou num canal do Slack: chega no minuto da violação.
+      const chamados = await this.prisma.ticket.findMany({
+        where: { id: { in: vencidos.map((v) => v.ticketId) } },
+        select: { id: true, organizationId: true, number: true, subject: true, priority: true },
+      });
+
+      for (const compromisso of vencidos) {
+        const chamado = chamados.find((c) => c.id === compromisso.ticketId);
+        if (!chamado) continue;
+
+        await this.webhooks.emitir(chamado.organizationId, 'sla.violado', {
+          ticketId: chamado.id,
+          numero: chamado.number,
+          assunto: chamado.subject,
+          prioridade: chamado.priority,
+          alvo: compromisso.target,
+          venceuEm: compromisso.dueAt.toISOString(),
+        });
+      }
     }
 
     return vencidos.length;

@@ -20,6 +20,7 @@ import type { UsuarioAutenticado } from '../../common/decorators/current-user.de
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { SaidaService } from '../channels/saida.service';
 import { escopoDeLeitura } from '../tickets/tickets.escopo';
+import { WebhooksService } from '../webhooks/webhooks.service';
 import type { DecidirAprovacaoDto, SolicitarAprovacaoDto } from './dto';
 
 /** O status para onde o chamado volta quando a aprovação se resolve. */
@@ -45,6 +46,7 @@ export class AprovacoesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly saida: SaidaService,
+    private readonly webhooks: WebhooksService,
   ) {}
 
   // -------------------------------------------------------------------
@@ -229,6 +231,14 @@ export class AprovacoesService {
 
     await this.avisarValidadores(ticketId, step, dto.approverIds);
 
+    await this.webhooks.emitir(usuario.organizationId, 'aprovacao.solicitada', {
+      ticketId,
+      numero: chamado.number,
+      etapa: step,
+      quorum,
+      validadores: dto.approverIds,
+    });
+
     return this.listar(ticketId);
   }
 
@@ -295,6 +305,14 @@ export class AprovacoesService {
     if (depois.estado !== 'AGUARDANDO') {
       await this.encerrar(linha.ticketId, depois.estado, usuario);
     }
+
+    await this.webhooks.emitir(usuario.organizationId, 'aprovacao.decidida', {
+      ticketId: linha.ticketId,
+      aprovacaoId: approvalId,
+      etapa: linha.step,
+      decisao: dto.decision,
+      desfecho: depois.estado,
+    });
 
     return this.listar(linha.ticketId);
   }
