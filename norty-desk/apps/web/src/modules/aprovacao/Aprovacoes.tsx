@@ -60,20 +60,32 @@ export function Aprovacoes({ ticketId, aoMudar }: { ticketId: string; aoMudar: (
   const podePedir = can('aprovacao:solicitar');
   if (linhas.length === 0 && !podePedir) return null;
 
+  // A maioria dos chamados nunca precisa de aprovação. Um cartão
+  // inteiro dizendo "nenhuma aprovação pedida" empurraria a conversa
+  // para baixo em toda tela para não informar nada: sem etapas, o bloco
+  // é só a ação.
+  if (linhas.length === 0 && !pedindo) {
+    return (
+      <div className="linha" style={{ justifyContent: 'flex-end' }}>
+        <button type="button" className="btn -fantasma -sm" onClick={() => setPedindo(true)}>
+          Pedir aprovação
+        </button>
+      </div>
+    );
+  }
+
   return (
     <section className="card">
       <div className="card-topo">
         <div>
           <h3 className="card-titulo">Aprovação</h3>
           <p className="card-sub">
-            {linhas.length === 0
-              ? 'Nenhuma aprovação pedida neste chamado.'
-              : 'Etapas em sequência: a seguinte só começa quando a anterior passa.'}
+            Etapas em sequência: a seguinte só começa quando a anterior passa.
           </p>
         </div>
         {podePedir && !pedindo ? (
           <button type="button" className="btn -secundario -sm" onClick={() => setPedindo(true)}>
-            {linhas.length === 0 ? 'Pedir aprovação' : 'Nova etapa'}
+            Nova etapa
           </button>
         ) : null}
       </div>

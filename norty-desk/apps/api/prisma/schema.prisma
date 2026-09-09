@@ -74,6 +74,7 @@ model User {
   approvals     Approval[]
   refreshTokens RefreshToken[]
   articles      Article[]
+  articleEdits  ArticleRevision[] @relation("EditorDaRevisao")
 
   @@map("users")
 }
@@ -213,6 +214,7 @@ model Category {
   defaultAgreements Agreement[] @relation("AcordosPadraoDaCategoria")
   tickets      Ticket[]
   forms        TicketForm[]
+  articles     Article[]
 
   @@unique([organizationId, parentId, name])
   @@index([organizationId])
@@ -653,6 +655,14 @@ model Article {
   body           String
   /// Visível no portal do solicitante, não só para agentes.
   isPublic       Boolean  @default(false)
+  /// Aposentado sem perder o histórico: chamado antigo ainda o cita.
+  isArchived     Boolean  @default(false)
+  /// Assunto do artigo. É o que liga a sugestão à categoria do chamado.
+  categoryId     String?  @db.Uuid
+  /// Termos que não aparecem no texto e mesmo assim são como a pessoa
+  /// procura: código de erro, apelido do sistema, nome do fornecedor.
+  /// Entram na busca com o mesmo peso do título.
+  keywords       String[] @default([])
   authorId       String   @db.Uuid
   views          Int      @default(0)
   createdAt      DateTime @default(now())
@@ -660,9 +670,11 @@ model Article {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   author       User         @relation(fields: [authorId], references: [id])
+  category     Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   revisions    ArticleRevision[]
 
-  @@index([organizationId])
+  @@index([organizationId, isPublic, isArchived])
+  @@index([categoryId])
   @@map("articles")
 }
 
@@ -672,10 +684,13 @@ model ArticleRevision {
   version   Int
   title     String
   body      String
+  /// Por que mudou. Revisão sem motivo é revisão que ninguém consulta.
+  note      String?
   editorId  String   @db.Uuid
   createdAt DateTime @default(now())
 
   article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  editor  User    @relation("EditorDaRevisao", fields: [editorId], references: [id])
 
   @@unique([articleId, version])
   @@map("article_revisions")

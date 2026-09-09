@@ -95,6 +95,16 @@ export function Sidebar() {
           <span>Abrir chamado</span>
         </Link>
 
+        {can('artigo:ler') ? (
+          <Link
+            to="/conhecimento"
+            className="nav-item"
+            aria-current={local.pathname.startsWith('/conhecimento') ? 'page' : undefined}
+          >
+            <span>Conhecimento</span>
+          </Link>
+        ) : null}
+
         {can('aprovacao:decidir') ? (
           <Link
             to="/aprovacoes"

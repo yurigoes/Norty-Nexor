@@ -242,6 +242,50 @@ export type DecideApprovalRequest = {
 };
 
 // ---------------------------------------------------------------------
+// Base de conhecimento
+// ---------------------------------------------------------------------
+
+export type ArticleListItem = {
+  id: string;
+  title: string;
+  isPublic: boolean;
+  isArchived: boolean;
+  category: CategoryRef | null;
+  keywords: string[];
+  author: PartyRef;
+  views: number;
+  updatedAt: string;
+  /** Trecho com os termos da busca em destaque. Só vem na busca. */
+  excerpt?: string;
+};
+
+export type ArticleDetail = ArticleListItem & {
+  body: string;
+  version: number;
+  createdAt: string;
+};
+
+export type ArticleRevisionView = {
+  version: number;
+  title: string;
+  body: string;
+  note: string | null;
+  editor: PartyRef;
+  createdAt: string;
+};
+
+export type WriteArticleRequest = {
+  title: string;
+  body: string;
+  categoryId?: string | null;
+  keywords?: string[];
+  isPublic?: boolean;
+  isArchived?: boolean;
+  /** Por que mudou. Vai para a revisão. */
+  note?: string;
+};
+
+// ---------------------------------------------------------------------
 // Canais
 // ---------------------------------------------------------------------
 

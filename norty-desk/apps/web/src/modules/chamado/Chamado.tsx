@@ -17,6 +17,7 @@ import {
   seloStatus,
 } from '../../lib/formato';
 import { Aprovacoes } from '../aprovacao/Aprovacoes';
+import { Sugestoes } from '../conhecimento/Sugestoes';
 import { Conversa } from './Conversa';
 
 export function Chamado() {
@@ -84,6 +85,7 @@ export function Chamado() {
       <div className="grade-conteudo-trilho">
         <div className="pilha">
           <Aprovacoes ticketId={chamado.id} aoMudar={revalidar} />
+          <Sugestoes ticketId={chamado.id} />
           <Conversa chamado={chamado} aoMudar={revalidar} />
         </div>
 

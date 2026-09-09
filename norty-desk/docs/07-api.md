@@ -410,13 +410,55 @@ GET                   /v1/audit-logs
 ## 8. Base de conhecimento
 
 ```
-GET  /v1/articles?q=...&public=true
-GET  /v1/articles/:id
-POST /v1/articles
+GET   /v1/articles?q=...&categoryId=...&arquivados=true&limit=30
+GET   /v1/articles/:id
+GET   /v1/articles/:id/revisoes
+POST  /v1/articles
 PATCH /v1/articles/:id
-GET  /v1/articles/:id/revisoes
-POST /v1/tickets/:id/artigos-sugeridos    → busca por similaridade do assunto
+GET   /v1/tickets/:id/artigos-sugeridos   → o que já foi escrito sobre este chamado
 ```
+
+A sugestão é `GET`, não `POST` como esta seção dizia antes: é leitura,
+sem efeito colateral.
+
+### 8.1 Busca em português
+
+A busca usa o índice do banco: uma coluna `busca` gerada sobre o título
+(peso A) e o corpo (peso B), com índice GIN. Coluna gerada, e não índice
+por expressão como o de `tickets`, porque aqui a fórmula tem peso e duas
+origens — repeti-la em cada consulta é como o índice deixa de ser usado
+sem ninguém perceber.
+
+`plainto_tsquery` exigiria **todos** os termos, e com o assunto inteiro
+de um chamado nunca casaria nada. Em vez disso os lexemas do texto viram
+um `OR` e o `ts_rank` ordena: quem casa mais termos sobe. Os lexemas
+saem do próprio `to_tsvector` e entram citados, então nenhum texto do
+usuário chega cru ao `to_tsquery` — pontuação e aspas não derrubam a
+consulta.
+
+**As palavras-chave ficam fora do vetor**, de propósito:
+`array_to_string` é `stable` e o Postgres recusa a coluna gerada;
+`array_to_tsvector` guardaria o termo cru, sem radical, e "impressora"
+deixaria de casar com a chave "impressoras". Etiqueta é busca exata, e
+entra na consulta por sobreposição de array — é o que faz `0x0000011b`
+encontrar o artigo em que esse código não aparece no texto.
+
+### 8.2 Visibilidade
+
+`isPublic` é o que separa o artigo do portal do artigo de quem atende.
+Quem não tem `artigo:ler:interno` só enxerga o publicado — na lista, na
+busca e pela URL direta (404, não 403: não confirmamos o que existe).
+
+`artigo:escrever` escreve; **mudar o estado de publicação exige
+`artigo:publicar` nos dois sentidos.** Tirar do ar o que a organização
+decidiu mostrar ao cliente não é decisão menor do que colocar.
+
+### 8.3 Revisões
+
+A criação já grava a versão 1 — sem ela o histórico começaria na
+primeira edição. Depois, **só a mudança de texto gera revisão**: trocar
+categoria, etiqueta ou arquivar não é versão nova e encheria o
+histórico de linhas idênticas.
 
 ---
 
