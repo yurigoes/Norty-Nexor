@@ -5,6 +5,7 @@ import * as api from '../../api/endpoints';
 import { ErroDaApi } from '../../api/cliente';
 import { useAutenticacao, useRecurso } from '../../auth/Autenticacao';
 import { ROTULO_CANAL, ROTULO_STATUS, dataCurta, iniciais, modificadorCanal } from '../../lib/formato';
+import { EscolherModelo } from '../modelo/EscolherModelo';
 
 const TIPOS_DE_SISTEMA = new Set([
   'MUDANCA_STATUS',
@@ -92,7 +93,14 @@ function Evento({ evento }: { evento: TicketEventView }) {
         <span>{ROTULO_CANAL[evento.channel]}</span>
         <span className="conversa-sep">·</span>
         <span className="num">{dataCurta(evento.createdAt)}</span>
-        {ehInterna ? <span className="selo -aviso">Nota interna</span> : null}
+        {/* A tarefa também é interna, mas dizer "nota interna" nela
+            confundiria com a nota escrita à mão — e ela tem cartão
+            próprio logo acima. */}
+        {evento.type === 'TAREFA' ? (
+          <span className="selo -info">Tarefa</span>
+        ) : ehInterna ? (
+          <span className="selo -aviso">Nota interna</span>
+        ) : null}
       </header>
 
       <p className="conversa-corpo">{corpoDoEvento(evento)}</p>
@@ -203,6 +211,18 @@ function Responder({ chamado, aoEnviar }: { chamado: TicketDetail; aoEnviar: () 
       />
 
       <div className="responder-acoes">
+        <EscolherModelo
+          chamado={chamado}
+          kind="RESPOSTA"
+          aoEscolher={(texto, modelo) => {
+            // Acrescenta ao que já foi escrito em vez de substituir:
+            // apagar o parágrafo de alguém por um clique errado é o tipo
+            // de coisa que faz o recurso parar de ser usado.
+            setCorpo((atual) => (atual.trim() ? `${atual.trimEnd()}\n\n${texto}` : texto));
+            if (podeNotaInterna) setInterna(modelo.isInternal);
+          }}
+        />
+
         {podeNotaInterna ? (
           <>
             <label className="so-leitor" htmlFor="visibilidade">

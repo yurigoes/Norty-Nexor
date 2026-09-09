@@ -165,7 +165,9 @@ o construtor visual de regras de entrada (o motor e a API existem).
 - **Formulário dinâmico por categoria** — o `TicketForm` que ficou da
   Fase 1, com a tela de configuração que o alimenta.
   ✅ *(entregue — `docs/07-api.md`, seção 14)*
-- **Modelos** de resposta, de solução e de tarefa.
+- **Modelos** de resposta, de solução e de tarefa — e as **tarefas do
+  chamado**, que faltavam para o modelo de tarefa ter onde ser usado.
+  ✅ *(entregue — `docs/07-api.md`, seção 15)*
 - **Contratos, fornecedores, orçamento e `Infocom`** — custo e vigência.
 
 Problema e Mudança entram como colunas nulas distintas em `TicketEvent`

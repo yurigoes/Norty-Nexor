@@ -18,9 +18,11 @@ import { AtivosModule } from './modules/ativos/ativos.module';
 import { AuditoriaModule } from './modules/auditoria/auditoria.module';
 import { LoteModule } from './modules/lote/lote.module';
 import { FormulariosModule } from './modules/formularios/formularios.module';
+import { ModelosModule } from './modules/modelos/modelos.module';
 import { MudancasModule } from './modules/mudancas/mudancas.module';
 import { ProblemasModule } from './modules/problemas/problemas.module';
 import { RecorrenciasModule } from './modules/recorrencias/recorrencias.module';
+import { TarefasModule } from './modules/tarefas/tarefas.module';
 import { SatisfacaoModule } from './modules/satisfacao/satisfacao.module';
 import { SlaModule } from './modules/sla/sla.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
@@ -56,6 +58,8 @@ import { TranscricaoModule } from './modules/transcricao/transcricao.module';
     MudancasModule,
     RecorrenciasModule,
     FormulariosModule,
+    ModelosModule,
+    TarefasModule,
     SatisfacaoModule,
     BrandModule,
     SlaModule,

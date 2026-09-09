@@ -54,6 +54,7 @@ model Organization {
   problems      Problem[]
   changes       Change[]
   recurrences   RecurringTicket[]
+  templates     Template[]
 
   @@map("organizations")
 }
@@ -230,6 +231,7 @@ model Category {
   problems     Problem[]
   changes      Change[]
   recurrences  RecurringTicket[]
+  templates    Template[]
 
   @@unique([organizationId, parentId, name])
   @@index([organizationId])
@@ -1311,4 +1313,45 @@ model RecurringTicket {
   @@unique([organizationId, name])
   @@index([isActive, nextRunAt])
   @@map("recurring_tickets")
+}
+
+enum TemplateKind {
+  RESPOSTA
+  SOLUCAO
+  TAREFA
+}
+
+/// Modelo de texto pronto.
+///
+/// O GLPI tem tres tabelas quase identicas — `itilfollowuptemplates`,
+/// `solutiontemplates`, `tasktemplates` —, cada uma com sua tela e seu
+/// CRUD. Sao a mesma coisa usada em tres lugares. Aqui e um modelo com
+/// discriminador: uma tela, uma busca, e o `kind` diz onde ele aparece.
+model Template {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  kind           TemplateKind
+  name           String
+  body           String
+
+  /// Quando presente, o modelo so e oferecido em chamado desta
+  /// categoria — e o que evita a lista de sessenta modelos.
+  categoryId String? @db.Uuid
+
+  /// So para RESPOSTA: o texto entra como nota interna.
+  isInternal Boolean @default(false)
+  isActive   Boolean @default(true)
+
+  /// Quantas vezes ja foi usado. Ordena a lista pelo que serve.
+  usageCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category     Category?    @relation(fields: [categoryId], references: [id])
+
+  @@unique([organizationId, kind, name])
+  @@index([organizationId, kind, isActive])
+  @@map("templates")
 }

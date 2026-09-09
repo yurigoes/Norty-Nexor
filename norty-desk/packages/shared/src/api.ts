@@ -15,6 +15,7 @@ import type {
   Channel,
   FormSchema,
   Recorrencia,
+  TemplateKind,
   EventPayload,
   EventType,
   LinkType,
@@ -589,6 +590,74 @@ export type ErroConhecidoSugerido = {
   status: ProblemStatus;
   /** Aderência da busca de texto, de 0 a 1. */
   score: number;
+};
+
+// ---------------------------------------------------------------------
+// Tarefa do chamado
+// ---------------------------------------------------------------------
+
+/**
+ * Uma tarefa é um `TicketEvent` do tipo `TAREFA`.
+ *
+ * Não é tabela própria: a linha do tempo é a fonte, e a tarefa aparece
+ * nela junto do resto (CLAUDE.md, regra 8). Esta view é a mesma coisa
+ * lida pelo lado do painel de tarefas.
+ */
+export type TicketTaskView = {
+  id: string;
+  body: string;
+  done: boolean;
+  /** Tempo apontado, em segundos. Nunca em horas fracionadas. */
+  spentSeconds: number;
+  assignee: PartyRef | null;
+  author: PartyRef | null;
+  plannedStart: string | null;
+  plannedEnd: string | null;
+  createdAt: string;
+};
+
+export type CriarTarefaRequest = {
+  body: string;
+  assigneeId?: string | null;
+  plannedStart?: string | null;
+  plannedEnd?: string | null;
+  spentSeconds?: number;
+};
+
+export type EditarTarefaRequest = {
+  body?: string;
+  done?: boolean;
+  assigneeId?: string | null;
+  plannedStart?: string | null;
+  plannedEnd?: string | null;
+  /** Somado ao que já estava apontado — apontar tempo é acrescentar. */
+  addSpentSeconds?: number;
+};
+
+// ---------------------------------------------------------------------
+// Modelos de texto
+// ---------------------------------------------------------------------
+
+export type ModeloView = {
+  id: string;
+  kind: TemplateKind;
+  name: string;
+  body: string;
+  category: CategoryRef | null;
+  /** Só para RESPOSTA: se o texto entra como nota interna. */
+  isInternal: boolean;
+  isActive: boolean;
+  /** Quantas vezes já foi usado. Ordena a lista pelo que serve. */
+  usageCount: number;
+};
+
+export type EscreverModeloRequest = {
+  kind: TemplateKind;
+  name: string;
+  body: string;
+  categoryId?: string | null;
+  isInternal?: boolean;
+  isActive?: boolean;
 };
 
 // ---------------------------------------------------------------------

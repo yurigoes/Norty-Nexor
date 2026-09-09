@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import type { TicketStatus } from '@norty-desk/shared';
+import type { TicketDetail, TicketStatus } from '@norty-desk/shared';
 
 import * as api from '../../api/endpoints';
 import { ErroDaApi } from '../../api/cliente';
@@ -19,6 +19,8 @@ import {
 import { Aprovacoes } from '../aprovacao/Aprovacoes';
 import { AtivosDoChamado } from '../ativo/AtivosDoChamado';
 import { RespostasDoFormulario } from '../formulario/CamposDinamicos';
+import { EscolherModelo } from '../modelo/EscolherModelo';
+import { Tarefas } from '../tarefa/Tarefas';
 import { ErrosConhecidosDoChamado } from '../problema/ErrosConhecidosDoChamado';
 import { Sugestoes } from '../conhecimento/Sugestoes';
 import { Conversa } from './Conversa';
@@ -29,6 +31,7 @@ export function Chamado() {
   const { can, revalidar, perfil } = useAutenticacao();
   const [erroDeAcao, setErroDeAcao] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const [resolvendo, setResolvendo] = useState(false);
 
   const { dado: chamado, erro, carregando } = useRecurso(() => api.obterChamado(id), [id]);
   const { dado: times } = useRecurso(() => api.listarTimes().catch(() => []), []);
@@ -94,6 +97,7 @@ export function Chamado() {
             aoVincular={revalidar}
           />
           <Sugestoes ticketId={chamado.id} />
+          <Tarefas chamado={chamado} aoMudar={revalidar} />
           <Conversa chamado={chamado} aoMudar={revalidar} />
         </div>
 
@@ -146,6 +150,12 @@ export function Chamado() {
             <Linha rotulo="Aberto em">
               <span className="num">{dataCurta(chamado.createdAt)}</span>
             </Linha>
+
+            {chamado.spentSeconds > 0 ? (
+              <Linha rotulo="Tempo apontado">
+                <span className="num">{duracaoCurta(chamado.spentSeconds)}</span>
+              </Linha>
+            ) : null}
 
             {chamado.pendingReason ? (
               <Linha rotulo="Pendente por">{chamado.pendingReason.name}</Linha>
@@ -236,9 +246,7 @@ export function Chamado() {
                   type="button"
                   className="btn -sucesso -sm"
                   disabled={ocupado}
-                  onClick={() =>
-                    void executar(() => api.resolver(chamado.id, 'Resolvido pelo atendimento.'))
-                  }
+                  onClick={() => setResolvendo(true)}
                 >
                   Resolver
                 </button>
@@ -268,6 +276,103 @@ export function Chamado() {
             </div>
           </div>
         </aside>
+      </div>
+
+      {resolvendo && chamado ? (
+        <ResolverChamado
+          chamado={chamado}
+          aoFechar={() => setResolvendo(false)}
+          aoResolver={async (texto) => {
+            await executar(() => api.resolver(chamado.id, texto));
+            setResolvendo(false);
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * A solução, escrita.
+ *
+ * Antes o botão mandava "Resolvido pelo atendimento." — uma frase que
+ * não diz nada a quem abriu o chamado nem a quem for ler daqui a seis
+ * meses. O modelo de solução existe justamente para o texto certo custar
+ * um clique.
+ */
+function ResolverChamado({
+  chamado,
+  aoFechar,
+  aoResolver,
+}: {
+  chamado: TicketDetail;
+  aoFechar: () => void;
+  aoResolver: (texto: string) => Promise<void>;
+}) {
+  const [texto, setTexto] = useState('');
+  const [ocupado, setOcupado] = useState(false);
+
+  return (
+    <div className="modal-fundo" role="presentation" onClick={aoFechar}>
+      <div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Resolver chamado"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-topo">
+          <div>
+            <h3 className="card-titulo">Resolver</h3>
+            <p className="card-sub">O que foi feito. É o que o solicitante vai ler.</p>
+          </div>
+          <button type="button" className="btn-icone" aria-label="Fechar" onClick={aoFechar}>
+            ×
+          </button>
+        </div>
+
+        <form
+          className="modal-forma"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setOcupado(true);
+            void aoResolver(texto.trim()).finally(() => setOcupado(false));
+          }}
+        >
+          <div className="modal-corpo pilha-sm">
+            <label className="so-leitor" htmlFor="texto-solucao">
+              Solução
+            </label>
+            <textarea
+              id="texto-solucao"
+              className="textarea"
+              rows={5}
+              required
+              placeholder="O que resolveu, e o que fazer se voltar a acontecer."
+              value={texto}
+              onChange={(e) => setTexto(e.target.value)}
+            />
+            <div className="linha" style={{ gap: 'var(--e-2)' }}>
+              <EscolherModelo
+                chamado={chamado}
+                kind="SOLUCAO"
+                rotulo="Modelo de solução"
+                aoEscolher={(pronto) =>
+                  setTexto((atual) => (atual.trim() ? `${atual.trimEnd()}\n\n${pronto}` : pronto))
+                }
+              />
+            </div>
+          </div>
+
+          <div className="modal-rodape">
+            <button type="button" className="btn -fantasma" onClick={aoFechar}>
+              Cancelar
+            </button>
+            <button type="submit" className="btn -sucesso" disabled={ocupado || !texto.trim()}>
+              Resolver chamado
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

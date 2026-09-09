@@ -1051,7 +1051,88 @@ resolver — quem abre chamado precisa saber o que responder.
 
 ---
 
-## 15. Saúde
+## 15. Tarefa e modelos de texto
+
+### 15.1 Tarefas do chamado
+
+```
+GET    /v1/tickets/:id/tarefas
+POST   /v1/tickets/:id/tarefas            { body, assigneeId?, plannedStart?, spentSeconds? }
+PATCH  /v1/tickets/:id/tarefas/:tarefaId  { done?, addSpentSeconds?, body?, assigneeId? }
+DELETE /v1/tickets/:id/tarefas/:tarefaId
+```
+
+**Uma tarefa é um `TicketEvent` do tipo `TAREFA`**, com os campos
+próprios em `payload` — não uma tabela à parte. É a regra 8 do
+CLAUDE.md e a correção do maior defeito estrutural do GLPI: lá,
+acompanhamento, tarefa e solução vivem em três tabelas, e a tela do
+chamado costura as três em ordem cronológica na mão
+(`docs/02-gap-analysis.md`, item 4).
+
+Tarefa é sempre **interna**: "conferir o log do servidor" é organização
+do atendimento, não conversa com quem pediu.
+
+`Ticket.spentSeconds` é a **soma** dos apontamentos, recalculada a cada
+mudança. Guardar um contador e incrementá-lo custa nada e diverge na
+primeira tarefa apagada — e ninguém descobre, porque o número continua
+parecendo plausível.
+
+**Apontar tempo acrescenta** (`addSpentSeconds`), não substitui: quem
+trabalhou mais meia hora informa a meia hora, e não o total que teria de
+calcular na cabeça — que é onde o número deixa de bater. Teto de 24h por
+apontamento: mais que isso é engano de unidade.
+
+Ler as tarefas é `chamado:ler:proprios` — quem abre a tela do chamado vê
+o que já foi feito nele. Criar e apagar é `tarefa:criar`; concluir e
+apontar, `tarefa:concluir`.
+
+### 15.2 Modelos
+
+```
+GET    /v1/modelos?kind=RESPOSTA&categoryId=...&q=...
+POST   /v1/modelos
+PATCH  /v1/modelos/:id
+DELETE /v1/modelos/:id
+POST   /v1/modelos/:id/uso                → conta o uso
+```
+
+O GLPI tem **três tabelas** quase idênticas —
+`glpi_itilfollowuptemplates`, `glpi_solutiontemplates`,
+`glpi_tasktemplates` —, cada uma com sua tela e seu CRUD. São a mesma
+coisa (um texto pronto) usada em três lugares. Aqui é um modelo com
+discriminador: uma tela, uma busca, e o `kind` diz onde ele aparece.
+
+Os marcadores são uma **lista fechada** (`CAMPOS_DO_MODELO`). Um motor
+de expressões dentro do texto seria mais uma linguagem para manter, e o
+que o atendimento precisa é o nome de quem pediu e o número do chamado.
+Marcador inventado é recusado **ao salvar**: errar ali é barato, e uma
+resposta que sai com `{{requerente.apelido}}` no meio da frase não é.
+Marcador conhecido que o chamado não tem fica visível no texto em vez de
+virar vazio — a frase com um buraco é pior que a frase com o marcador.
+
+**O texto é preenchido no aplicativo**, no momento em que o agente
+escolhe o modelo: ele ainda vai editar antes de enviar. Preencher no
+servidor devolveria o mesmo texto com uma ida a mais e uma chance a mais
+de chegar diferente do que ele viu. `preencherModelo` é função pura de
+`packages/shared`, e é a mesma que faz a prévia da tela de configuração.
+
+A lista vem **ordenada pelo mais usado** e filtrada pela categoria do
+chamado — trazendo também os modelos sem categoria, porque o "bom dia,
+já estamos olhando" serve para todo mundo. Sem isso, escolher entre
+sessenta modelos custa mais do que escrever a frase.
+
+`isInternal` só existe em modelo de `RESPOSTA` — nota interna é conceito
+de resposta, e a regra é `CHECK` no banco além de 400 na API. Escolher um
+modelo interno já marca a resposta como nota interna.
+
+Listar é `chamado:responder`: modelo existe para ser usado por quem
+atende, e exigir a permissão de configuração para *ler* a lista o
+deixaria inalcançável de dentro da tela do chamado. Configurar é
+`config:modelos`.
+
+---
+
+## 16. Saúde
 
 ```
 GET /v1/health        → { status, uptime }

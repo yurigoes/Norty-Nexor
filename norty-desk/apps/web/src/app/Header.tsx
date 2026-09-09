@@ -17,6 +17,7 @@ const TITULOS: { prefixo: string; titulo: string }[] = [
   { prefixo: '/config/sla', titulo: 'SLA e calendários' },
   { prefixo: '/config/recorrencias', titulo: 'Chamados recorrentes' },
   { prefixo: '/config/formularios', titulo: 'Formulários' },
+  { prefixo: '/config/modelos', titulo: 'Modelos' },
   { prefixo: '/config/marca', titulo: 'Marca' },
   { prefixo: '/config/webhooks', titulo: 'Webhooks' },
   { prefixo: '/config/auditoria', titulo: 'Auditoria' },

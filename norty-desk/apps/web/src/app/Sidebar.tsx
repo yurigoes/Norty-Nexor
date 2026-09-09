@@ -49,6 +49,7 @@ export function Sidebar() {
     { rotulo: 'Categorias', para: '/config/categorias', permissao: 'config:categorias' as const },
     { rotulo: 'SLA e calendários', para: '/config/sla', permissao: 'config:sla' as const },
     { rotulo: 'Formulários', para: '/config/formularios', permissao: 'config:formularios' as const },
+    { rotulo: 'Modelos', para: '/config/modelos', permissao: 'config:modelos' as const },
     {
       rotulo: 'Chamados recorrentes',
       para: '/config/recorrencias',

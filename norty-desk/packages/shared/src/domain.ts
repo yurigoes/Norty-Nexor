@@ -509,6 +509,74 @@ function erroDeTipo(campo: FormField, valor: unknown): string | null {
 }
 
 // ---------------------------------------------------------------------
+// Modelos de texto — substitui followup/solution/tasktemplates
+// ---------------------------------------------------------------------
+
+/**
+ * Um modelo é de resposta, de solução ou de tarefa.
+ *
+ * O GLPI tem **três tabelas** quase idênticas
+ * (`glpi_itilfollowuptemplates`, `glpi_solutiontemplates`,
+ * `glpi_tasktemplates`), cada uma com sua tela e seu CRUD. São a mesma
+ * coisa — um texto pronto — usadas em três lugares. Aqui é um modelo
+ * com discriminador: uma tela, uma busca, e o tipo diz onde ele aparece.
+ */
+export const TEMPLATE_KINDS = ['RESPOSTA', 'SOLUCAO', 'TAREFA'] as const;
+export type TemplateKind = (typeof TEMPLATE_KINDS)[number];
+
+export const ROTULO_MODELO: Record<TemplateKind, string> = {
+  RESPOSTA: 'Resposta',
+  SOLUCAO: 'Solução',
+  TAREFA: 'Tarefa',
+};
+
+/**
+ * O que um modelo pode interpolar.
+ *
+ * Lista fechada de propósito. Um motor de expressões dentro do texto
+ * seria mais uma linguagem para manter, e o que o atendimento precisa é
+ * o nome de quem pediu e o número do chamado.
+ */
+export const CAMPOS_DO_MODELO = [
+  'chamado.numero',
+  'chamado.assunto',
+  'chamado.categoria',
+  'requerente.nome',
+  'requerente.email',
+  'agente.nome',
+  'organizacao.nome',
+] as const;
+
+export type CampoDoModelo = (typeof CAMPOS_DO_MODELO)[number];
+
+export type ContextoDoModelo = Partial<Record<CampoDoModelo, string>>;
+
+const MARCADOR = /\{\{\s*([a-z]+\.[a-z]+)\s*\}\}/g;
+
+/**
+ * Preenche o modelo.
+ *
+ * Marcador desconhecido fica **como está**, visível no texto: some-lo
+ * faria a frase perder um pedaço sem ninguém reparar, e é justamente
+ * o que acontece quando alguém renomeia um campo. `marcadoresInvalidos`
+ * existe para a tela de configuração recusar antes — errar na hora de
+ * salvar é barato, errar na resposta ao cliente não é.
+ */
+export function preencherModelo(texto: string, contexto: ContextoDoModelo): string {
+  return texto.replace(MARCADOR, (inteiro, campo: string) => {
+    const valor = contexto[campo as CampoDoModelo];
+    return valor === undefined ? inteiro : valor;
+  });
+}
+
+/** Os marcadores do texto que não existem. */
+export function marcadoresInvalidos(texto: string): string[] {
+  const conhecidos = new Set<string>(CAMPOS_DO_MODELO);
+  const achados = [...texto.matchAll(MARCADOR)].map((m) => m[1]!);
+  return [...new Set(achados.filter((c) => !conhecidos.has(c)))];
+}
+
+// ---------------------------------------------------------------------
 // Recorrência — substitui glpi_ticketrecurrents
 // ---------------------------------------------------------------------
 

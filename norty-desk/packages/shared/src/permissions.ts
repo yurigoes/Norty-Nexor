@@ -100,6 +100,7 @@ export const PERMISSIONS = [
   'config:motivos-pendencia',
   'config:regras-entrada',
   'config:recorrencia',
+  'config:modelos',
   'config:canais',
   'config:webhooks',
   'config:chaves-api',
