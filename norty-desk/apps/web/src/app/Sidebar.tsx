@@ -50,6 +50,7 @@ export function Sidebar() {
     { rotulo: 'SLA e calendários', para: '/config/sla', permissao: 'config:sla' as const },
     { rotulo: 'Formulários', para: '/config/formularios', permissao: 'config:formularios' as const },
     { rotulo: 'Modelos', para: '/config/modelos', permissao: 'config:modelos' as const },
+    { rotulo: 'Contratos e custo', para: '/config/contratos', permissao: 'contrato:ler' as const },
     {
       rotulo: 'Chamados recorrentes',
       para: '/config/recorrencias',

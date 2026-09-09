@@ -7,6 +7,7 @@ import { Canais } from '../modules/canais/Canais';
 import { Auditoria } from '../modules/auditoria/Auditoria';
 import { Categorias } from '../modules/configuracao/Categorias';
 import { Formularios } from '../modules/configuracao/Formularios';
+import { Contratos } from '../modules/configuracao/Contratos';
 import { Modelos } from '../modules/configuracao/Modelos';
 import { Recorrencias } from '../modules/configuracao/Recorrencias';
 import { Sla } from '../modules/configuracao/Sla';
@@ -108,6 +109,7 @@ function Aplicativo() {
             <Route path="/config/recorrencias" element={<Recorrencias />} />
             <Route path="/config/formularios" element={<Formularios />} />
             <Route path="/config/modelos" element={<Modelos />} />
+            <Route path="/config/contratos" element={<Contratos />} />
             <Route path="/config/canais" element={<Canais />} />
             <Route path="/config/canais/diagnostico" element={<Diagnostico />} />
             <Route path="/config/webhooks" element={<Webhooks />} />

@@ -62,6 +62,21 @@ export function duracaoCurta(segundos: number): string {
   return negativo ? `-${texto}` : texto;
 }
 
+/**
+ * Data sem hora, **com ano**.
+ *
+ * `dataCurta` omite o ano de propósito — num chamado de ontem ele é
+ * ruído. Em vigência de contrato e de orçamento ele é a informação:
+ * "vence 29/09" não diz se é este ano ou o que vem.
+ */
+export function dataSimples(iso: string): string {
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(new Date(iso));
+}
+
 export function dataCurta(iso: string): string {
   return new Intl.DateTimeFormat('pt-BR', {
     day: '2-digit',

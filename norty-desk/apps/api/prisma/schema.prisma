@@ -55,6 +55,8 @@ model Organization {
   changes       Change[]
   recurrences   RecurringTicket[]
   templates     Template[]
+  contracts     Contract[]
+  budgets       Budget[]
 
   @@map("organizations")
 }
@@ -84,6 +86,7 @@ model User {
   problems      Problem[]         @relation("ResponsavelPeloProblema")
   changes       Change[]          @relation("ResponsavelPelaMudanca")
   recurrences   RecurringTicket[] @relation("RequerenteDaRecorrencia")
+  costs         TicketCost[]      @relation("AutorDoCusto")
   articleEdits  ArticleRevision[] @relation("EditorDaRevisao")
 
   @@map("users")
@@ -193,6 +196,8 @@ model Supplier {
 
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   actorIn      TicketActor[]
+  contracts    Contract[]
+  assets       Asset[]      @relation("FornecedorDoAtivo")
 
   @@unique([organizationId, name])
   @@map("suppliers")
@@ -344,6 +349,7 @@ model Ticket {
   linkedBy    TicketLink[] @relation("ChamadoDestino")
   assets      TicketAsset[]
   survey      Survey?
+  costs       TicketCost[]
 
   /// O problema que causa este chamado e a mudança que o resolve.
   /// São os dois vínculos que o ITIL pede e o GLPI resolve com uma
@@ -970,12 +976,24 @@ model Asset {
   purchasedAt    DateTime?
   warrantyUntil  DateTime?
   notes          String?
+  /// Dados financeiros do ativo — o `glpi_infocoms` do GLPI.
+  ///
+  /// Lá é tabela à parte porque é polimórfica sobre sessenta tipos de
+  /// item. Aqui o ativo é um modelo só, e cinco colunas custam menos
+  /// que uma tabela 1-1 que todo `include` teria de lembrar.
+  purchaseValue  Decimal?  @db.Decimal(12, 2)
+  supplierId     String?   @db.Uuid
+  invoiceNumber  String?
+  /// Meses de amortização. Zero ou nulo é bem que não amortiza.
+  amortizationMonths Int?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User?        @relation("AtivoDoUsuario", fields: [userId], references: [id], onDelete: SetNull)
+  supplier     Supplier?    @relation("FornecedorDoAtivo", fields: [supplierId], references: [id], onDelete: SetNull)
   tickets      TicketAsset[]
+  contracts    ContractAsset[]
 
   /// Patrimônio e série não se repetem na organização: dois registros do
   /// mesmo equipamento são a origem de metade da sujeira de inventário.
@@ -1354,4 +1372,146 @@ model Template {
   @@unique([organizationId, kind, name])
   @@index([organizationId, kind, isActive])
   @@map("templates")
+}
+
+enum ContractKind {
+  SUPORTE
+  LICENCA
+  LOCACAO
+  MANUTENCAO
+  SERVICO
+  OUTRO
+}
+
+/// Como o contrato é cobrado. Decide o custo mensal equivalente.
+enum BillingPeriod {
+  MENSAL
+  TRIMESTRAL
+  SEMESTRAL
+  ANUAL
+  UNICO
+}
+
+/// Contrato com fornecedor.
+///
+/// Equivale a `glpi_contracts`. A diferença que importa é o aviso: lá a
+/// antecedência (`notice`) existe como coluna e nada a lê — o contrato
+/// vence e alguém descobre pela fatura. Aqui `noticeDays` alimenta a
+/// consulta de vencimento e a tela.
+model Contract {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  /// Número do contrato como o fornecedor o chama.
+  number         String
+  name           String
+  kind           ContractKind @default(SERVICO)
+
+  supplierId String? @db.Uuid
+
+  startsAt DateTime
+  /// Fim da vigência. Nulo é contrato por prazo indeterminado.
+  endsAt   DateTime?
+  /// Com quantos dias de antecedência avisar do vencimento.
+  noticeDays Int @default(30)
+  /// Renova sozinho se ninguém avisar. Muda o que o aviso significa.
+  autoRenew  Boolean @default(false)
+
+  billingPeriod BillingPeriod @default(MENSAL)
+  /// Valor de cada cobrança. Dinheiro é Decimal(12,2), nunca Float.
+  value         Decimal       @default(0) @db.Decimal(12, 2)
+
+  notes    String?
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  supplier     Supplier?    @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  assets ContractAsset[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, endsAt])
+  @@map("contracts")
+}
+
+/// O que o contrato cobre. Substitui `glpi_contracts_items`, que no
+/// GLPI é polimórfico sobre sessenta tipos de item.
+model ContractAsset {
+  contractId String   @db.Uuid
+  assetId    String   @db.Uuid
+  addedAt    DateTime @default(now())
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  asset    Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@id([contractId, assetId])
+  @@index([assetId])
+  @@map("contract_assets")
+}
+
+/// Orçamento anual. Equivale a `glpi_budgets`.
+model Budget {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String
+  startsAt       DateTime
+  endsAt         DateTime
+  value          Decimal  @default(0) @db.Decimal(12, 2)
+  notes          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  costs        TicketCost[]
+
+  @@unique([organizationId, name])
+  @@map("budgets")
+}
+
+enum CostKind {
+  /// Horas de quem atendeu, pelo valor-hora do lançamento.
+  TEMPO
+  /// Peça, licença, deslocamento.
+  MATERIAL
+  /// Valor fechado, sem hora nem item.
+  FIXO
+}
+
+/// Custo do chamado.
+///
+/// Equivale a `glpi_ticketcosts`, mas com um discriminador em vez de
+/// três pares de colunas (`cost_time`, `cost_fixed`, `cost_material`)
+/// que sempre vêm com duas zeradas. O total é a soma das linhas — não
+/// há coluna de total no chamado, porque um total gravado diverge da
+/// primeira linha corrigida.
+model TicketCost {
+  id       String   @id @default(uuid()) @db.Uuid
+  ticketId String   @db.Uuid
+  kind     CostKind @default(MATERIAL)
+  label    String
+
+  /// Só para TEMPO: quantidade de horas e valor da hora.
+  hours     Decimal? @db.Decimal(8, 2)
+  hourlyRate Decimal? @db.Decimal(12, 2)
+
+  /// O valor da linha. Em TEMPO, é `hours * hourlyRate` calculado no
+  /// lançamento — guardar o produto é o que preserva o histórico quando
+  /// o valor-hora muda no ano seguinte.
+  amount Decimal @db.Decimal(12, 2)
+
+  budgetId String? @db.Uuid
+  authorId String? @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  ticket Ticket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  budget Budget? @relation(fields: [budgetId], references: [id], onDelete: SetNull)
+  author User?   @relation("AutorDoCusto", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId])
+  @@index([budgetId])
+  @@map("ticket_costs")
 }

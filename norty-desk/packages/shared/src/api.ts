@@ -13,6 +13,9 @@ import type {
   ChangeRisk,
   ChangeStatus,
   Channel,
+  BillingPeriod,
+  ContractKind,
+  CostKind,
   FormSchema,
   Recorrencia,
   TemplateKind,
@@ -590,6 +593,122 @@ export type ErroConhecidoSugerido = {
   status: ProblemStatus;
   /** Aderência da busca de texto, de 0 a 1. */
   score: number;
+};
+
+// ---------------------------------------------------------------------
+// Fornecedor, contrato, orçamento e custo
+// ---------------------------------------------------------------------
+
+export type FornecedorView = {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  contractCount: number;
+};
+
+export type EscreverFornecedorRequest = {
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+};
+
+export type ContratoView = {
+  id: string;
+  number: string;
+  name: string;
+  kind: ContractKind;
+  supplier: { id: string; name: string } | null;
+  startsAt: string;
+  endsAt: string | null;
+  noticeDays: number;
+  autoRenew: boolean;
+  billingPeriod: BillingPeriod;
+  /** Decimal vira `number` uma vez só, no serializador (CLAUDE.md, regra 5). */
+  value: number;
+  notes: string | null;
+  isActive: boolean;
+  /** Quantos ativos o contrato cobre. */
+  assetCount: number;
+};
+
+export type EscreverContratoRequest = {
+  number: string;
+  name: string;
+  kind?: ContractKind;
+  supplierId?: string | null;
+  startsAt: string;
+  endsAt?: string | null;
+  noticeDays?: number;
+  autoRenew?: boolean;
+  billingPeriod?: BillingPeriod;
+  value?: number;
+  notes?: string | null;
+  isActive?: boolean;
+};
+
+export type OrcamentoView = {
+  id: string;
+  name: string;
+  startsAt: string;
+  endsAt: string;
+  value: number;
+  notes: string | null;
+  /** Quanto já foi lançado contra ele. */
+  spent: number;
+};
+
+export type EscreverOrcamentoRequest = {
+  name: string;
+  startsAt: string;
+  endsAt: string;
+  value?: number;
+  notes?: string | null;
+};
+
+export type CustoView = {
+  id: string;
+  kind: CostKind;
+  label: string;
+  hours: number | null;
+  hourlyRate: number | null;
+  amount: number;
+  budget: { id: string; name: string } | null;
+  author: PartyRef | null;
+  createdAt: string;
+};
+
+export type LancarCustoRequest = {
+  kind: CostKind;
+  label: string;
+  /** Só para TEMPO. O valor da linha sai de `hours * hourlyRate`. */
+  hours?: number;
+  hourlyRate?: number;
+  /** Para MATERIAL e FIXO. */
+  amount?: number;
+  budgetId?: string | null;
+};
+
+/** O que a tela do chamado mostra sobre dinheiro. */
+export type CustoDoChamado = {
+  linhas: CustoView[];
+  total: number;
+};
+
+/** Uma linha do relatório de custo. */
+export type LinhaDeCusto = {
+  chave: string;
+  rotulo: string;
+  chamados: number;
+  total: number;
+};
+
+export type RelatorioDeCusto = {
+  de: string;
+  ate: string;
+  total: number;
+  porCategoria: LinhaDeCusto[];
+  porTipo: LinhaDeCusto[];
 };
 
 // ---------------------------------------------------------------------

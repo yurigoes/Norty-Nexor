@@ -154,7 +154,7 @@ o construtor visual de regras de entrada (o motor e a API existem).
 
 ---
 
-## Fase 4 — ITIL completo
+## Fase 4 — ITIL completo — **entregue**
 
 - **Problema** — causa raiz, chamados vinculados, base de erros
   conhecidos. ✅ *(entregue — `docs/07-api.md`, seção 11)*
@@ -169,10 +169,46 @@ o construtor visual de regras de entrada (o motor e a API existem).
   chamado**, que faltavam para o modelo de tarefa ter onde ser usado.
   ✅ *(entregue — `docs/07-api.md`, seção 15)*
 - **Contratos, fornecedores, orçamento e `Infocom`** — custo e vigência.
+  ✅ *(entregue — `docs/07-api.md`, seção 16)*
 
-Problema e Mudança entram como colunas nulas distintas em `TicketEvent`
-e `Attachment`, com `CHECK` de exclusividade — nunca como
+Problema e Mudança entraram como colunas nulas distintas em
+`TicketEvent` e `Attachment`, com `CHECK` de exclusividade — nunca como
 `(itemtype, items_id)` em texto (`docs/03-modelo-de-dados.md`, seção 6).
+
+**Verificação:** 438 testes — 56 no domínio compartilhado, 382 contra
+Postgres real — mais passeios de navegador em cada tela nova.
+
+**As decisões que mais importam desta fase**
+
+- **Erro conhecido é causa *e* contorno.** É o que separa "estamos
+  investigando" de "sabemos o que é e como contornar", e é o que o GLPI
+  não tem — lá a causa raiz é um campo de texto que ninguém preenche.
+
+- **Mudança normal não executa sem aval, e sem plano de recuo não sai do
+  rascunho.** As duas regras que o GLPI deixa como convenção de
+  processo, sem nada no sistema que as sustente.
+
+- **A agenda do chamado recorrente descreve o calendário, não o
+  intervalo.** Periodicidade em segundos derrapa; "toda segunda e
+  quinta" não se escreve em segundos.
+
+- **A resposta do formulário é conferida na API**, com a mesma função
+  pura que a tela usa. Antes o `customFields` era JSON livre.
+
+- **Tarefa é evento da linha do tempo**, e o tempo do chamado é a soma
+  dos apontamentos — não um contador que diverge da primeira tarefa
+  apagada.
+
+- **Marcador de modelo inventado é recusado ao salvar.** Errar ali é
+  barato; uma resposta que sai com `{{requerente.apelido}}` no meio da
+  frase não é.
+
+- **O aviso de vencimento de contrato é consultável.** No GLPI a
+  antecedência é coluna e nada a lê: o contrato vence e alguém descobre
+  pela fatura.
+
+**O que continua de fora:** a tela de pessoas e times (a API existe) e o
+construtor visual de regras de entrada (o motor e a API existem).
 
 ---
 

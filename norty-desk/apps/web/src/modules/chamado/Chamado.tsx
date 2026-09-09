@@ -20,6 +20,7 @@ import { Aprovacoes } from '../aprovacao/Aprovacoes';
 import { AtivosDoChamado } from '../ativo/AtivosDoChamado';
 import { RespostasDoFormulario } from '../formulario/CamposDinamicos';
 import { EscolherModelo } from '../modelo/EscolherModelo';
+import { CustosDoChamado } from '../custo/CustosDoChamado';
 import { Tarefas } from '../tarefa/Tarefas';
 import { ErrosConhecidosDoChamado } from '../problema/ErrosConhecidosDoChamado';
 import { Sugestoes } from '../conhecimento/Sugestoes';
@@ -98,6 +99,7 @@ export function Chamado() {
           />
           <Sugestoes ticketId={chamado.id} />
           <Tarefas chamado={chamado} aoMudar={revalidar} />
+          <CustosDoChamado chamado={chamado} />
           <Conversa chamado={chamado} aoMudar={revalidar} />
         </div>
 

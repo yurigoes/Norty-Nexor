@@ -509,6 +509,114 @@ function erroDeTipo(campo: FormField, valor: unknown): string | null {
 }
 
 // ---------------------------------------------------------------------
+// Contrato, orçamento e custo — substitui contracts/budgets/ticketcosts
+// ---------------------------------------------------------------------
+
+export const CONTRACT_KINDS = [
+  'SUPORTE',
+  'LICENCA',
+  'LOCACAO',
+  'MANUTENCAO',
+  'SERVICO',
+  'OUTRO',
+] as const;
+export type ContractKind = (typeof CONTRACT_KINDS)[number];
+
+export const ROTULO_CONTRATO: Record<ContractKind, string> = {
+  SUPORTE: 'Suporte',
+  LICENCA: 'Licença',
+  LOCACAO: 'Locação',
+  MANUTENCAO: 'Manutenção',
+  SERVICO: 'Serviço',
+  OUTRO: 'Outro',
+};
+
+export const BILLING_PERIODS = ['MENSAL', 'TRIMESTRAL', 'SEMESTRAL', 'ANUAL', 'UNICO'] as const;
+export type BillingPeriod = (typeof BILLING_PERIODS)[number];
+
+export const ROTULO_COBRANCA: Record<BillingPeriod, string> = {
+  MENSAL: 'Mensal',
+  TRIMESTRAL: 'Trimestral',
+  SEMESTRAL: 'Semestral',
+  ANUAL: 'Anual',
+  UNICO: 'Pagamento único',
+};
+
+/** Quantos meses cada cobrança cobre. `UNICO` não tem período. */
+const MESES_DA_COBRANCA: Record<BillingPeriod, number | null> = {
+  MENSAL: 1,
+  TRIMESTRAL: 3,
+  SEMESTRAL: 6,
+  ANUAL: 12,
+  UNICO: null,
+};
+
+/**
+ * O custo mensal equivalente do contrato.
+ *
+ * É o número que permite somar um contrato anual com um mensal sem
+ * mentir. `UNICO` devolve `null` em vez de zero: um pagamento único não
+ * tem custo mensal, e fingir que tem zero faria a soma da carteira
+ * parecer menor do que é.
+ */
+export function custoMensal(contrato: {
+  billingPeriod: BillingPeriod;
+  value: number;
+}): number | null {
+  const meses = MESES_DA_COBRANCA[contrato.billingPeriod];
+  return meses === null ? null : contrato.value / meses;
+}
+
+/**
+ * Quantos dias faltam para o contrato vencer.
+ *
+ * Negativo já venceu. `null` é prazo indeterminado — que não é o mesmo
+ * que "não vence tão cedo", e a tela precisa dizer a diferença.
+ */
+export function diasParaVencer(endsAt: string | null, agora = new Date()): number | null {
+  if (!endsAt) return null;
+  const fim = new Date(endsAt).getTime();
+  return Math.ceil((fim - agora.getTime()) / 86_400_000);
+}
+
+/**
+ * O contrato está dentro da janela de aviso?
+ *
+ * É a coluna `notice` que o GLPI tem e ninguém lê: lá o contrato vence e
+ * alguém descobre pela fatura. Renovação automática não dispensa o
+ * aviso — ela o torna mais urgente, porque é a última chance de não
+ * renovar.
+ */
+export function precisaAvisar(
+  contrato: { endsAt: string | null; noticeDays: number; isActive: boolean },
+  agora = new Date(),
+): boolean {
+  if (!contrato.isActive) return false;
+  const dias = diasParaVencer(contrato.endsAt, agora);
+  return dias !== null && dias <= contrato.noticeDays;
+}
+
+export const COST_KINDS = ['TEMPO', 'MATERIAL', 'FIXO'] as const;
+export type CostKind = (typeof COST_KINDS)[number];
+
+export const ROTULO_CUSTO: Record<CostKind, string> = {
+  TEMPO: 'Tempo',
+  MATERIAL: 'Material',
+  FIXO: 'Fixo',
+};
+
+/**
+ * Dinheiro em reais, como se lê.
+ *
+ * Mora aqui porque a API também formata: o CSV do relatório sai com o
+ * mesmo texto da tela, e duas formatações divergem no primeiro
+ * arredondamento.
+ */
+export function emReais(valor: number): string {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
+}
+
+// ---------------------------------------------------------------------
 // Modelos de texto — substitui followup/solution/tasktemplates
 // ---------------------------------------------------------------------
 

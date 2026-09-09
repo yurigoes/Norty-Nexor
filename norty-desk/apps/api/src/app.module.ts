@@ -17,6 +17,7 @@ import { AprovacoesModule } from './modules/aprovacoes/aprovacoes.module';
 import { AtivosModule } from './modules/ativos/ativos.module';
 import { AuditoriaModule } from './modules/auditoria/auditoria.module';
 import { LoteModule } from './modules/lote/lote.module';
+import { ContratosModule } from './modules/contratos/contratos.module';
 import { FormulariosModule } from './modules/formularios/formularios.module';
 import { ModelosModule } from './modules/modelos/modelos.module';
 import { MudancasModule } from './modules/mudancas/mudancas.module';
@@ -58,6 +59,7 @@ import { TranscricaoModule } from './modules/transcricao/transcricao.module';
     MudancasModule,
     RecorrenciasModule,
     FormulariosModule,
+    ContratosModule,
     ModelosModule,
     TarefasModule,
     SatisfacaoModule,

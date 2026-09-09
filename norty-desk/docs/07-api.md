@@ -1132,7 +1132,84 @@ deixaria inalcançável de dentro da tela do chamado. Configurar é
 
 ---
 
-## 16. Saúde
+## 16. Contrato, orçamento e custo
+
+```
+GET    /v1/suppliers
+POST   /v1/suppliers
+
+GET    /v1/contracts?vencendoEm=30&kind=...&q=...
+GET    /v1/contracts/:id
+GET    /v1/contracts/:id/ativos          → o que o contrato cobre
+POST   /v1/contracts
+PATCH  /v1/contracts/:id
+POST   /v1/contracts/:id/ativos          { assetId }
+DELETE /v1/contracts/:id/ativos/:assetId
+
+GET    /v1/budgets
+POST   /v1/budgets
+
+GET    /v1/tickets/:id/custos
+POST   /v1/tickets/:id/custos            { kind, label, hours?, hourlyRate?, amount?, budgetId? }
+DELETE /v1/tickets/:id/custos/:custoId
+GET    /v1/reports/custo?de=...&ate=...
+```
+
+Cobre `glpi_contracts`, `glpi_suppliers`, `glpi_contracts_items`,
+`glpi_budgets`, `glpi_contractcosts` e `glpi_ticketcosts`.
+
+**Dinheiro é `Decimal(12,2)`, nunca `Float`** (CLAUDE.md, regra 5), e o
+Decimal vira `number` **uma vez só**, no serializador deste módulo.
+Deixar o cliente converter espalharia `Number(x)` por dez telas — e a
+décima primeira esqueceria.
+
+**O aviso de vencimento é consultável.** No GLPI a antecedência
+(`notice`) é coluna e nada a lê: o contrato vence e alguém descobre pela
+fatura. Aqui `?vencendoEm=` é a pergunta que a tela faz, e
+`precisaAvisar` — função pura de `packages/shared` — decide o selo.
+Contrato por prazo indeterminado **não** entra no recorte: ele não
+vence, e listá-lo ali seria ruído. Renovação automática não dispensa o
+aviso: ali ele é a última chance de **não** renovar, e a tela diz isso.
+
+`custoMensal` normaliza a cobrança para poder somar um contrato anual
+com um mensal sem mentir. `UNICO` devolve `null`, não zero: pagamento
+único não tem custo mensal, e fingir que tem zero faria a soma da
+carteira parecer menor do que é.
+
+**O custo do chamado é a soma das linhas.** `glpi_ticketcosts` tem três
+pares de colunas (`cost_time`, `cost_fixed`, `cost_material`) e duas
+sempre vêm zeradas; aqui é um discriminador. Não há total gravado no
+chamado — um total gravado diverge da primeira linha corrigida.
+
+Linha de `TEMPO` exige horas **e** valor-hora, com `CHECK` no banco:
+sem os dois, "2 horas" entraria como custo zero, que é o que o GLPI
+aceita. O produto é **gravado**, não recalculado na leitura — é o que
+preserva o histórico quando o valor-hora muda no ano seguinte.
+
+Custo negativo é recusado por `CHECK`: estorno é outra conversa, e
+aceitá-lo aqui faria o total do chamado poder diminuir sem que nada
+explicasse.
+
+O **`Infocom`** do GLPI — valor de compra, fornecedor, nota fiscal,
+amortização — virou cinco colunas em `Asset`. Lá é tabela à parte porque
+é polimórfica sobre sessenta tipos de item; aqui o ativo é um modelo só,
+e cinco colunas custam menos que uma tabela 1-1 que todo `include` teria
+de lembrar.
+
+`GET /reports/custo` responde "quanto custou atender", por categoria e
+por tipo de lançamento. É o número que faz o resto disto valer a pena — e
+o que o GLPI só entrega a quem exportar `glpi_ticketcosts` para uma
+planilha.
+
+Permissões: `contrato:ler` / `contrato:gerenciar` para a carteira;
+`custo:ler` / `custo:lancar` para o dinheiro do chamado. O agente lança
+custo mas não vê o contrato do fornecedor: quem trocou a peça sabe
+quanto ela custou, e lançar na hora é a diferença entre ter o número e
+reconstruí-lo no fim do mês. O solicitante não vê nem lança.
+
+---
+
+## 17. Saúde
 
 ```
 GET /v1/health        → { status, uptime }

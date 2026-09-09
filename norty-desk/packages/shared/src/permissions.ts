@@ -88,6 +88,12 @@ export const PERMISSIONS = [
   'ativo:ler',
   'ativo:gerenciar',
 
+  // --- Contrato, orçamento e custo -------------------------------------
+  'contrato:ler',
+  'contrato:gerenciar',
+  'custo:ler',
+  'custo:lancar',
+
   // --- Satisfação -----------------------------------------------------
   'satisfacao:ler',
   'satisfacao:configurar',
@@ -135,6 +141,8 @@ const IMPLICA: Partial<Record<Permission, readonly Permission[]>> = {
   'artigo:ler:interno': ['artigo:ler'],
   'ativo:gerenciar': ['ativo:ler'],
   'problema:gerenciar': ['problema:ler'],
+  'contrato:gerenciar': ['contrato:ler'],
+  'custo:lancar': ['custo:ler'],
   'mudanca:gerenciar': ['mudanca:ler'],
   'mudanca:executar': ['mudanca:ler'],
   'satisfacao:configurar': ['satisfacao:ler'],
@@ -210,6 +218,12 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
      * registro atrasado. O aval continua sendo de outro.
      */
     'mudanca:executar',
+    /**
+     * Quem trocou a peça sabe quanto ela custou, e lançar na hora é a
+     * diferença entre ter o número e reconstruí-lo no fim do mês. Ver o
+     * contrato do fornecedor é outra conversa.
+     */
+    'custo:lancar',
   ],
 
   SUPERVISOR: [
@@ -256,6 +270,10 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'mudanca:ler',
     'mudanca:gerenciar',
     'mudanca:executar',
+    'contrato:ler',
+    'contrato:gerenciar',
+    'custo:ler',
+    'custo:lancar',
     'satisfacao:ler',
   ],
 
@@ -280,6 +298,8 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'ativo:ler',
     'problema:ler',
     'mudanca:ler',
+    'contrato:ler',
+    'custo:ler',
     'satisfacao:ler',
   ],
 
