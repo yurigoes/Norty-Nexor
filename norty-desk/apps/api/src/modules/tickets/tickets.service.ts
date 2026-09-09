@@ -25,6 +25,7 @@ import type { UsuarioAutenticado } from '../../common/decorators/current-user.de
 import { derivarPrioridade } from '../../common/prioridade';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { SaidaService } from '../channels/saida.service';
+import { FormulariosService } from '../formularios/formularios.service';
 import { SatisfacaoService } from '../satisfacao/satisfacao.service';
 import type { EventoDeWebhook } from '../webhooks/eventos';
 import { WebhooksService } from '../webhooks/webhooks.service';
@@ -66,6 +67,7 @@ export class TicketsService {
     @Inject(forwardRef(() => SaidaService)) private readonly saida: SaidaService,
     @Inject(forwardRef(() => SatisfacaoService)) private readonly satisfacao: SatisfacaoService,
     private readonly webhooks: WebhooksService,
+    private readonly formularios: FormulariosService,
   ) {}
 
   /**
@@ -335,6 +337,16 @@ export class TicketsService {
       throw new BadRequestException('Categoria não encontrada nesta organização.');
     }
 
+    // O formulário vem da categoria, e as respostas são conferidas
+    // contra o schema dele. Sem isto, `customFields` era JSON livre:
+    // campo obrigatório em branco e chave inventada entravam iguais.
+    const formulario = await this.formularios.validarAbertura(
+      usuario.organizationId,
+      usuario.role,
+      categoria?.id,
+      dto.customFields,
+    );
+
     const id = await this.prisma.$transaction(async (tx) => {
       const number = await this.proximoNumero(tx, usuario.organizationId);
 
@@ -373,9 +385,9 @@ export class TicketsService {
           impact,
           priority,
           categoryId: categoria?.id,
-          formId: dto.formId,
+          formId: formulario.formId,
           originChannel: 'WEB',
-          customFields: (dto.customFields as Prisma.InputJsonValue) ?? undefined,
+          customFields: (formulario.customFields as Prisma.InputJsonValue) ?? undefined,
           actors: { create: atores },
         },
         select: { id: true },

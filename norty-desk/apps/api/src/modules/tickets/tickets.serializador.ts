@@ -2,6 +2,7 @@ import type {
   AttachmentView,
   CommitmentView,
   EventPayload,
+  FormSchema,
   PartyRef,
   TicketDetail,
   TicketEventView,
@@ -30,6 +31,7 @@ export const INCLUDE_DETALHE = {
   links: { include: { target: true } },
   problem: { select: { id: true, number: true, title: true, isKnownError: true, workaround: true } },
   change: { select: { id: true, number: true, title: true, status: true, windowStart: true } },
+  form: { select: { id: true, name: true, schema: true } },
   _count: { select: { attachments: true } },
 } satisfies Prisma.TicketInclude;
 
@@ -160,6 +162,15 @@ export function paraDetalhe(chamado: ChamadoDetalhe): TicketDetail {
     problem: chamado.problem,
     change: chamado.change
       ? { ...chamado.change, windowStart: chamado.change.windowStart?.toISOString() ?? null }
+      : null,
+    // O schema vai junto porque `customFields` são chaves: sem ele, a
+    // tela mostraria `patrimonio: PAT-4721` em vez de "Patrimônio".
+    form: chamado.form
+      ? {
+          id: chamado.form.id,
+          name: chamado.form.name,
+          schema: chamado.form.schema as unknown as FormSchema,
+        }
       : null,
   };
 }

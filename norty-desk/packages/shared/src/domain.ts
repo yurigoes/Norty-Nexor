@@ -318,17 +318,38 @@ export type AnexoRecebido = {
 // Formulário dinâmico — substitui as 12 tabelas de tickettemplate*
 // ---------------------------------------------------------------------
 
-export type FormFieldType =
-  | 'TEXTO'
-  | 'TEXTO_LONGO'
-  | 'NUMERO'
-  | 'DATA'
-  | 'SELECAO'
-  | 'MULTISELECAO'
-  | 'BOOLEANO'
-  | 'ARQUIVO';
+/**
+ * Não há `ARQUIVO`.
+ *
+ * Anexo já é uma coisa inteira neste produto: armazenamento abstraído,
+ * checksum, permissão de baixar e de remover. Um "campo de arquivo"
+ * dentro do JSON de respostas seria um segundo caminho de anexo, pior
+ * que o primeiro — e a tela de abertura já tem o de verdade.
+ */
+export const FORM_FIELD_TYPES = [
+  'TEXTO',
+  'TEXTO_LONGO',
+  'NUMERO',
+  'DATA',
+  'SELECAO',
+  'MULTISELECAO',
+  'BOOLEANO',
+] as const;
+
+export type FormFieldType = (typeof FORM_FIELD_TYPES)[number];
+
+export const ROTULO_CAMPO: Record<FormFieldType, string> = {
+  TEXTO: 'Texto',
+  TEXTO_LONGO: 'Texto longo',
+  NUMERO: 'Número',
+  DATA: 'Data',
+  SELECAO: 'Escolha uma',
+  MULTISELECAO: 'Escolha várias',
+  BOOLEANO: 'Sim ou não',
+};
 
 export type FormField = {
+  /** Chave da resposta em `Ticket.customFields`. `a-z`, dígitos e `_`. */
   key: string;
   label: string;
   type: FormFieldType;
@@ -344,6 +365,148 @@ export type FormField = {
 export type FormSchema = {
   fields: FormField[];
 };
+
+/** Um problema num campo, com o nome do campo em que ele está. */
+export type ErroDeCampo = { key: string; mensagem: string };
+
+const CHAVE_VALIDA = /^[a-z][a-z0-9_]{0,39}$/;
+
+/**
+ * O formulário está bem formado?
+ *
+ * Roda ao salvar o formulário, e é o que impede o defeito que só
+ * apareceria meses depois: duas chaves iguais gravam uma por cima da
+ * outra em `customFields`, e uma seleção sem opções é um campo
+ * obrigatório que ninguém consegue preencher.
+ */
+export function validarSchema(schema: FormSchema): ErroDeCampo[] {
+  const erros: ErroDeCampo[] = [];
+  const vistas = new Set<string>();
+
+  for (const campo of schema.fields) {
+    if (!CHAVE_VALIDA.test(campo.key)) {
+      erros.push({
+        key: campo.key,
+        mensagem: 'A chave começa por letra e usa só letras minúsculas, dígitos e "_".',
+      });
+    }
+
+    if (vistas.has(campo.key)) {
+      erros.push({ key: campo.key, mensagem: 'Chave repetida: a resposta de uma apagaria a da outra.' });
+    }
+    vistas.add(campo.key);
+
+    if (!campo.label.trim()) {
+      erros.push({ key: campo.key, mensagem: 'Todo campo precisa de rótulo.' });
+    }
+
+    const ehEscolha = campo.type === 'SELECAO' || campo.type === 'MULTISELECAO';
+
+    if (ehEscolha && !campo.options?.length) {
+      erros.push({ key: campo.key, mensagem: 'Campo de escolha precisa de ao menos uma opção.' });
+    }
+
+    if (ehEscolha) {
+      const valores = new Set<string>();
+      for (const opcao of campo.options ?? []) {
+        if (valores.has(opcao.value)) {
+          erros.push({ key: campo.key, mensagem: `Opção repetida: "${opcao.value}".` });
+        }
+        valores.add(opcao.value);
+      }
+    }
+  }
+
+  return erros;
+}
+
+function vazio(valor: unknown): boolean {
+  return (
+    valor === undefined ||
+    valor === null ||
+    (typeof valor === 'string' && valor.trim() === '') ||
+    (Array.isArray(valor) && valor.length === 0)
+  );
+}
+
+/**
+ * As respostas cabem no formulário?
+ *
+ * Mesma função no aplicativo e na API. A tela usa para dizer o que
+ * falta antes de enviar; a API usa porque é ela quem responde por isso
+ * — esconder o botão é conveniência, o guard é a proteção (CLAUDE.md,
+ * regra 2), e aqui vale igual.
+ *
+ * Chave desconhecida é erro, não algo a ignorar em silêncio: é a mesma
+ * decisão do `forbidNonWhitelisted` do corpo da requisição. Campo que
+ * some do formulário depois de respondido é o caso em que isso aparece,
+ * e o silêncio ali esconderia a resposta para sempre.
+ */
+export function validarRespostas(
+  schema: FormSchema,
+  respostas: Record<string, unknown>,
+): ErroDeCampo[] {
+  const erros: ErroDeCampo[] = [];
+  const porChave = new Map(schema.fields.map((c) => [c.key, c]));
+
+  for (const chave of Object.keys(respostas)) {
+    if (!porChave.has(chave)) {
+      erros.push({ key: chave, mensagem: 'Campo desconhecido neste formulário.' });
+    }
+  }
+
+  for (const campo of schema.fields) {
+    const valor = respostas[campo.key];
+
+    if (vazio(valor)) {
+      if (campo.required) erros.push({ key: campo.key, mensagem: `"${campo.label}" é obrigatório.` });
+      continue;
+    }
+
+    const erro = erroDeTipo(campo, valor);
+    if (erro) erros.push({ key: campo.key, mensagem: erro });
+  }
+
+  return erros;
+}
+
+function erroDeTipo(campo: FormField, valor: unknown): string | null {
+  const opcoes = new Set((campo.options ?? []).map((o) => o.value));
+
+  switch (campo.type) {
+    case 'TEXTO':
+    case 'TEXTO_LONGO':
+      return typeof valor === 'string' ? null : `"${campo.label}" espera texto.`;
+
+    case 'NUMERO':
+      return typeof valor === 'number' && Number.isFinite(valor)
+        ? null
+        : `"${campo.label}" espera um número.`;
+
+    case 'BOOLEANO':
+      return typeof valor === 'boolean' ? null : `"${campo.label}" espera sim ou não.`;
+
+    case 'DATA':
+      return typeof valor === 'string' && !Number.isNaN(Date.parse(valor))
+        ? null
+        : `"${campo.label}" espera uma data.`;
+
+    case 'SELECAO':
+      return typeof valor === 'string' && opcoes.has(valor)
+        ? null
+        : `"${valor as string}" não é uma opção de "${campo.label}".`;
+
+    case 'MULTISELECAO': {
+      if (!Array.isArray(valor)) return `"${campo.label}" espera uma lista de opções.`;
+      const fora = valor.filter((v) => typeof v !== 'string' || !opcoes.has(v));
+      return fora.length === 0
+        ? null
+        : `${fora.map((v) => `"${String(v)}"`).join(', ')} não ${
+            fora.length === 1 ? 'é opção' : 'são opções'
+          } de "${campo.label}".`;
+    }
+  }
+}
 
 // ---------------------------------------------------------------------
 // Recorrência — substitui glpi_ticketrecurrents

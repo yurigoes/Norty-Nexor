@@ -18,6 +18,7 @@ import {
 } from '../../lib/formato';
 import { Aprovacoes } from '../aprovacao/Aprovacoes';
 import { AtivosDoChamado } from '../ativo/AtivosDoChamado';
+import { RespostasDoFormulario } from '../formulario/CamposDinamicos';
 import { ErrosConhecidosDoChamado } from '../problema/ErrosConhecidosDoChamado';
 import { Sugestoes } from '../conhecimento/Sugestoes';
 import { Conversa } from './Conversa';
@@ -172,6 +173,18 @@ export function Chamado() {
                   </span>
                 ) : null}
               </Linha>
+            ) : null}
+
+            {chamado.form && chamado.customFields ? (
+              <>
+                <div className="divisor-texto">
+                  <span>{chamado.form.name}</span>
+                </div>
+                <RespostasDoFormulario
+                  schema={chamado.form.schema}
+                  respostas={chamado.customFields}
+                />
+              </>
             ) : null}
 
             <AtivosDoChamado ticketId={chamado.id} />

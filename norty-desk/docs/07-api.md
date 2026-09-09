@@ -983,7 +983,75 @@ Permissão: `config:recorrencia`, como as demais telas de configuração.
 
 ---
 
-## 14. Saúde
+## 14. Formulário dinâmico
+
+```
+GET    /v1/forms
+GET    /v1/forms/resolver?categoryId=...   → o que vale para a categoria
+GET    /v1/forms/:id
+POST   /v1/forms
+PATCH  /v1/forms/:id
+DELETE /v1/forms/:id
+```
+
+Substitui as **doze** tabelas `tickettemplate*` do GLPI por um `Json`
+validado. Lá, o que cada campo é, se é obrigatório, se está escondido e
+qual o valor padrão vive em quatro tabelas de ligação distintas — e
+nenhuma delas confere a resposta: o campo obrigatório do template é
+cobrado na tela, e quem abre pela API passa por cima.
+
+Aqui o schema é uma coisa só, e as duas regras são funções puras de
+`packages/shared`:
+
+- `validarSchema` roda ao salvar o formulário. Chave repetida grava uma
+  resposta por cima da outra; seleção sem opções é um obrigatório
+  impossível de preencher. Os dois são recusados na hora, não meses
+  depois.
+- `validarRespostas` roda no aplicativo **e** na API. A tela usa para
+  dizer o que falta antes de enviar; a API usa porque é ela quem
+  responde por isso. Devolve um erro **por campo** — não "requisição
+  inválida".
+
+Chave desconhecida é erro, pela mesma razão que `forbidNonWhitelisted`
+recusa campo desconhecido no corpo. O caso em que isso aparece é o campo
+que sumiu do formulário depois de respondido, e o silêncio ali
+esconderia a resposta para sempre.
+
+**O formulário vem da categoria, resolvido pela API.** `POST /tickets`
+não aceita `formId`: aceitá-lo seria deixar alguém responder ao schema
+de um formulário e gravar o resultado no chamado de outro. A resolução
+sobe a árvore de categorias antes de cair no padrão da organização — é a
+herança de template do GLPI, e é o que evita repetir o mesmo formulário
+em cada subcategoria de "Hardware". `origem` diz de onde ele veio
+(`CATEGORIA`, `CATEGORIA_ACIMA`, `PADRAO`, `NENHUM`), porque sem isso
+"por que aparece este formulário aqui?" não tem resposta.
+
+Categoria sem formulário **recusa** `customFields`: guardar resposta que
+nada valida e nada lê seria JSON solto no banco.
+
+**Campo `internal` é só de quem atende.** Quem não pode escrever nota
+interna não vê o campo na tela e não consegue respondê-lo pela API — a
+linha é a mesma que separa o portal do atendimento. O obrigatório
+interno não bloqueia o portal: para o solicitante, ele não existe.
+
+`TicketDetail` carrega `form` com o schema, porque `customFields` são
+chaves: sem ele a tela mostraria `patrimonio: PAT-4721` em vez de
+"Patrimônio", e `["mouse"]` em vez de "Mouse".
+
+**Não há tipo `ARQUIVO`.** Anexo já é uma coisa inteira neste produto —
+armazenamento abstraído, checksum, permissão de baixar e de remover. Um
+"campo de arquivo" dentro do JSON de respostas seria um segundo caminho
+de anexo, pior que o primeiro, e a tela de abertura já tem o de verdade.
+
+Apagar formulário já respondido é 409: levaria junto o significado das
+respostas gravadas. A saída é desvinculá-lo da categoria.
+
+Permissão: `config:formularios` para configurar; `chamado:criar` para
+resolver — quem abre chamado precisa saber o que responder.
+
+---
+
+## 15. Saúde
 
 ```
 GET /v1/health        → { status, uptime }

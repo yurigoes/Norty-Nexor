@@ -5,6 +5,7 @@ import {
   IsDateString,
   IsEnum,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -57,14 +58,25 @@ export class CriarChamadoDto {
   @IsOptional() @IsInt() @Min(1) @Max(5) urgency?: number;
   @IsOptional() @IsInt() @Min(1) @Max(5) impact?: number;
   @IsOptional() @IsUUID() categoryId?: string;
-  @IsOptional() @IsUUID() formId?: string;
+  /*
+   * Não há `formId`: o formulário vem da categoria, resolvido pela API.
+   * Aceitá-lo do cliente seria deixar alguém responder ao schema de um
+   * formulário e gravar o resultado no chamado de outro.
+   */
 
   @IsOptional() @ValidateNested() @Type(() => ParteDto) requester?: ParteDto;
 
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => ParteDto)
   observers?: ParteDto[];
 
-  @IsOptional() customFields?: Record<string, unknown>;
+  /**
+   * As respostas do formulário da categoria.
+   *
+   * Sem validação de forma aqui de propósito: quem conhece o schema é o
+   * `FormulariosService`, e é ele quem devolve um erro por campo em vez
+   * de "requisição inválida".
+   */
+  @IsOptional() @IsObject() customFields?: Record<string, unknown>;
 }
 
 export class ResponderDto {

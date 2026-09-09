@@ -1,9 +1,13 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import type { FormularioResolvido } from '@norty-desk/shared';
+import { validarRespostas } from '@norty-desk/shared';
 import { DEFAULT_PRIORITY_MATRIX, ROTULO_ESCALA, computePriority, type Scale } from './escala';
 
 import * as api from '../../api/endpoints';
 import { ErroDaApi } from '../../api/cliente';
+import { resolverFormulario } from '../../api/formularios';
+import { CamposDinamicos } from '../formulario/CamposDinamicos';
 import { useRecurso } from '../../auth/Autenticacao';
 import { MODIFICADOR_PRIORIDADE, ROTULO_PRIORIDADE } from '../../lib/formato';
 
@@ -28,6 +32,30 @@ export function NovoChamado({ noPortal = false }: { noPortal?: boolean }) {
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
+  // O formulário vem da categoria, resolvido pela API — inclusive a
+  // herança da categoria acima e o padrão da organização. A tela não
+  // reproduz essa regra; ela pergunta.
+  const [formulario, setFormulario] = useState<FormularioResolvido['form']>(null);
+  const [respostas, setRespostas] = useState<Record<string, unknown>>({});
+  const [errosDeCampo, setErrosDeCampo] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let atual = true;
+    void resolverFormulario(categoria || null)
+      .then((r) => {
+        if (!atual) return;
+        setFormulario(r.form);
+        // Troca de categoria troca de formulário: manter as respostas
+        // antigas mandaria chaves de outro schema, que a API recusa.
+        setRespostas({});
+        setErrosDeCampo({});
+      })
+      .catch(() => atual && setFormulario(null));
+    return () => {
+      atual = false;
+    };
+  }, [categoria]);
+
   // A prioridade é mostrada, não escolhida: o usuário vê o resultado da
   // matriz enquanto mexe em urgência e impacto (CLAUDE.md, regra 7).
   const prioridade = computePriority(urgencia, impacto, DEFAULT_PRIORITY_MATRIX);
@@ -37,12 +65,29 @@ export function NovoChamado({ noPortal = false }: { noPortal?: boolean }) {
     setErro(null);
     setEnviando(true);
 
+    // A mesma função pura que a API usa. Aqui ela existe para dizer o
+    // que falta antes de enviar; lá, porque é a API que responde por isso.
+    if (formulario) {
+      const visivel = noPortal
+        ? { fields: formulario.schema.fields.filter((c) => !c.internal) }
+        : formulario.schema;
+      const problemas = validarRespostas(visivel, respostas);
+
+      if (problemas.length > 0) {
+        setErrosDeCampo(Object.fromEntries(problemas.map((p) => [p.key, p.mensagem])));
+        setErro('Confira os campos marcados abaixo.');
+        setEnviando(false);
+        return;
+      }
+    }
+
     try {
       const chamado = await api.abrirChamado({
         subject: assunto.trim(),
         description: descricao.trim(),
         ...(categoria ? { categoryId: categoria } : {}),
         ...(noPortal ? {} : { urgency: urgencia, impact: impacto }),
+        ...(formulario && Object.keys(respostas).length > 0 ? { customFields: respostas } : {}),
       });
 
       if (arquivo) await api.anexar(chamado.id, arquivo);
@@ -124,6 +169,26 @@ export function NovoChamado({ noPortal = false }: { noPortal?: boolean }) {
             A categoria define o time que atende e o prazo de resposta.
           </span>
         </div>
+
+        {formulario ? (
+          <CamposDinamicos
+            schema={formulario.schema}
+            respostas={respostas}
+            noPortal={noPortal}
+            erros={errosDeCampo}
+            aoMudar={(chave, valor) =>
+              setRespostas((atual) => {
+                const proximo = { ...atual };
+                // Campo esvaziado sai do objeto: mandar `undefined` no
+                // JSON viraria chave ausente de qualquer jeito, e mandar
+                // string vazia faria o obrigatório passar.
+                if (valor === undefined || valor === '') delete proximo[chave];
+                else proximo[chave] = valor;
+                return proximo;
+              })
+            }
+          />
+        ) : null}
 
         {!noPortal ? (
           <div className="campo-grupo">

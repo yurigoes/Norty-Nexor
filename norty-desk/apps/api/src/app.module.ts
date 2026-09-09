@@ -17,6 +17,7 @@ import { AprovacoesModule } from './modules/aprovacoes/aprovacoes.module';
 import { AtivosModule } from './modules/ativos/ativos.module';
 import { AuditoriaModule } from './modules/auditoria/auditoria.module';
 import { LoteModule } from './modules/lote/lote.module';
+import { FormulariosModule } from './modules/formularios/formularios.module';
 import { MudancasModule } from './modules/mudancas/mudancas.module';
 import { ProblemasModule } from './modules/problemas/problemas.module';
 import { RecorrenciasModule } from './modules/recorrencias/recorrencias.module';
@@ -54,6 +55,7 @@ import { TranscricaoModule } from './modules/transcricao/transcricao.module';
     ProblemasModule,
     MudancasModule,
     RecorrenciasModule,
+    FormulariosModule,
     SatisfacaoModule,
     BrandModule,
     SlaModule,

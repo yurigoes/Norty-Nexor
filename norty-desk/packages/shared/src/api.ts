@@ -13,6 +13,7 @@ import type {
   ChangeRisk,
   ChangeStatus,
   Channel,
+  FormSchema,
   Recorrencia,
   EventPayload,
   EventType,
@@ -152,6 +153,13 @@ export type TicketDetail = TicketListItem & {
   problem: TicketProblemRef | null;
   /** A mudança que vai resolver este chamado, quando há uma. */
   change: TicketChangeRef | null;
+  /**
+   * O formulário que o chamado respondeu.
+   *
+   * Vem junto porque `customFields` são chaves: sem o schema, a tela
+   * mostraria `patrimonio: PAT-4721` em vez de "Patrimônio".
+   */
+  form: { id: string; name: string; schema: FormSchema } | null;
 };
 
 export type TicketProblemRef = {
@@ -207,7 +215,11 @@ export type CreateTicketRequest = {
   urgency?: Scale;
   impact?: Scale;
   categoryId?: string;
-  formId?: string;
+  /*
+   * Não há `formId`: o formulário vem da categoria, resolvido pela API.
+   * Aceitá-lo do cliente seria deixar alguém responder ao schema de um
+   * formulário e gravar no chamado de outro.
+   */
   requester?: PartyInput;
   observers?: PartyInput[];
   customFields?: Record<string, unknown>;
@@ -577,6 +589,39 @@ export type ErroConhecidoSugerido = {
   status: ProblemStatus;
   /** Aderência da busca de texto, de 0 a 1. */
   score: number;
+};
+
+// ---------------------------------------------------------------------
+// Formulário dinâmico
+// ---------------------------------------------------------------------
+
+export type FormularioView = {
+  id: string;
+  name: string;
+  /** O formulário da organização, usado quando a categoria não tem um. */
+  isDefault: boolean;
+  category: CategoryRef | null;
+  schema: FormSchema;
+  /** Quantos chamados já responderam a este formulário. */
+  ticketCount: number;
+};
+
+export type EscreverFormularioRequest = {
+  name: string;
+  schema: FormSchema;
+  categoryId?: string | null;
+  isDefault?: boolean;
+};
+
+/** O formulário que vale para uma categoria, já resolvido pela API. */
+export type FormularioResolvido = {
+  form: FormularioView | null;
+  /**
+   * De onde ele veio: a própria categoria, uma categoria acima, ou o
+   * padrão da organização. A tela de configuração mostra isso — sem a
+   * origem, "por que aparece este formulário aqui?" não tem resposta.
+   */
+  origem: 'CATEGORIA' | 'CATEGORIA_ACIMA' | 'PADRAO' | 'NENHUM';
 };
 
 // ---------------------------------------------------------------------
