@@ -62,6 +62,10 @@ export const PERMISSIONS = [
   'aprovacao:solicitar',
   'aprovacao:decidir',
 
+  // --- Problema -------------------------------------------------------
+  'problema:ler',
+  'problema:gerenciar',
+
   // --- Base de conhecimento -------------------------------------------
   'artigo:ler',
   'artigo:ler:interno',
@@ -122,6 +126,7 @@ const IMPLICA: Partial<Record<Permission, readonly Permission[]>> = {
   'artigo:publicar': ['artigo:escrever'],
   'artigo:ler:interno': ['artigo:ler'],
   'ativo:gerenciar': ['ativo:ler'],
+  'problema:gerenciar': ['problema:ler'],
   'satisfacao:configurar': ['satisfacao:ler'],
 };
 
@@ -182,6 +187,12 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'painel:time',
     'pessoa:ler',
     'ativo:ler',
+    /**
+     * Ler, não gerenciar — como no ativo. Vincular o chamado ao
+     * problema é o gesto de todo dia de quem atende; escrever a causa
+     * raiz é outra conversa, e o GLPI acerta ao separar as duas.
+     */
+    'problema:ler',
   ],
 
   SUPERVISOR: [
@@ -223,6 +234,8 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'time:gerenciar',
     'ativo:ler',
     'ativo:gerenciar',
+    'problema:ler',
+    'problema:gerenciar',
     'satisfacao:ler',
   ],
 
@@ -245,6 +258,7 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'pessoa:ler',
     'auditoria:ler',
     'ativo:ler',
+    'problema:ler',
     'satisfacao:ler',
   ],
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { TicketStatus } from '@norty-desk/shared';
 
 import * as api from '../../api/endpoints';
@@ -18,6 +18,7 @@ import {
 } from '../../lib/formato';
 import { Aprovacoes } from '../aprovacao/Aprovacoes';
 import { AtivosDoChamado } from '../ativo/AtivosDoChamado';
+import { ErrosConhecidosDoChamado } from '../problema/ErrosConhecidosDoChamado';
 import { Sugestoes } from '../conhecimento/Sugestoes';
 import { Conversa } from './Conversa';
 
@@ -86,6 +87,11 @@ export function Chamado() {
       <div className="grade-conteudo-trilho">
         <div className="pilha">
           <Aprovacoes ticketId={chamado.id} aoMudar={revalidar} />
+          <ErrosConhecidosDoChamado
+            ticketId={chamado.id}
+            problemaVinculado={chamado.problem?.id ?? null}
+            aoVincular={revalidar}
+          />
           <Sugestoes ticketId={chamado.id} />
           <Conversa chamado={chamado} aoMudar={revalidar} />
         </div>
@@ -142,6 +148,15 @@ export function Chamado() {
 
             {chamado.pendingReason ? (
               <Linha rotulo="Pendente por">{chamado.pendingReason.name}</Linha>
+            ) : null}
+
+            {chamado.problem ? (
+              <Linha rotulo="Problema">
+                <Link to={`/problemas/${chamado.problem.id}`}>
+                  <span className="mono">P#{chamado.problem.number}</span>{' '}
+                  {chamado.problem.title}
+                </Link>
+              </Linha>
             ) : null}
 
             <AtivosDoChamado ticketId={chamado.id} />

@@ -18,6 +18,9 @@ export const EVENTOS_DE_WEBHOOK = [
   'aprovacao.solicitada',
   'aprovacao.decidida',
   'satisfacao.respondida',
+  'problema.criado',
+  /** O contorno acabou de ser publicado: é o aviso que vale rebroadcast. */
+  'problema.erro-conhecido',
 ] as const;
 
 export type EventoDeWebhook = (typeof EVENTOS_DE_WEBHOOK)[number];

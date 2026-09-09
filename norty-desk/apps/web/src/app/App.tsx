@@ -17,6 +17,9 @@ import { NovoChamado } from '../modules/chamado/NovoChamado';
 import { MarcaConfig } from '../modules/config/MarcaConfig';
 import { Fila } from '../modules/fila/Fila';
 import { Painel } from '../modules/painel/Painel';
+import { ErrosConhecidos } from '../modules/problema/ErrosConhecidos';
+import { Problema } from '../modules/problema/Problema';
+import { Problemas } from '../modules/problema/Problemas';
 import { Webhooks } from '../modules/webhook/Webhooks';
 import { PortalChamado } from '../modules/portal/PortalChamado';
 import { PortalLista } from '../modules/portal/PortalLista';
@@ -82,6 +85,10 @@ function Aplicativo() {
             <Route path="/" element={<Fila />} />
             <Route path="/painel" element={<Painel />} />
             <Route path="/ativos" element={<Ativos />} />
+            {/* `erros-conhecidos` antes de `:id`, ou casaria com ele. */}
+            <Route path="/problemas/erros-conhecidos" element={<ErrosConhecidos />} />
+            <Route path="/problemas/:id" element={<Problema />} />
+            <Route path="/problemas" element={<Problemas />} />
             <Route path="/aprovacoes" element={<MinhasAprovacoes />} />
             <Route path="/conhecimento" element={<Conhecimento />} />
             <Route path="/conhecimento/novo" element={<Artigo novo />} />

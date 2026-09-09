@@ -52,6 +52,15 @@ export const EVENT_TYPES = [
   'APROVACAO',
   'ANEXO',
   'MUDANCA_STATUS',
+  /**
+   * Mudança de status do **problema**.
+   *
+   * Tipo próprio porque o payload carrega `ProblemStatus`, e não
+   * `TicketStatus`. Alargar `MUDANCA_STATUS` para aceitar os dois faria
+   * toda leitura de status de chamado passar a conviver com valores que
+   * um chamado nunca tem.
+   */
+  'MUDANCA_STATUS_PROBLEMA',
   'MUDANCA_ATRIBUICAO',
   'MUDANCA_CLASSIFICACAO',
   'PAUSA_SLA',
@@ -76,6 +85,36 @@ export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
 
 export const LINK_TYPES = ['RELACIONADO', 'DUPLICADO_DE', 'BLOQUEIA'] as const;
 export type LinkType = (typeof LINK_TYPES)[number];
+
+/**
+ * Ciclo do problema.
+ *
+ * O GLPI reaproveita os status do chamado no problema, e o resultado é
+ * um problema "atribuído" que ninguém sabe se já tem causa. Aqui o
+ * status conta a investigação: onde ela está, e o que já dá para
+ * entregar a quem atende.
+ *
+ * `CONTORNO_PUBLICADO` é o estado que o GLPI não tem e que mais vale no
+ * dia a dia: a causa pode continuar de pé por semanas, mas o
+ * atendimento já sabe o que fazer no décimo chamado igual.
+ */
+export const PROBLEM_STATUSES = [
+  'NOVO',
+  'INVESTIGANDO',
+  'CAUSA_IDENTIFICADA',
+  'CONTORNO_PUBLICADO',
+  'RESOLVIDO',
+  'FECHADO',
+] as const;
+export type ProblemStatus = (typeof PROBLEM_STATUSES)[number];
+
+/** Status em que o problema ainda está de pé. */
+export const OPEN_PROBLEM_STATUSES: readonly ProblemStatus[] = [
+  'NOVO',
+  'INVESTIGANDO',
+  'CAUSA_IDENTIFICADA',
+  'CONTORNO_PUBLICADO',
+];
 
 /** Urgência, impacto e prioridade vão de 1 (muito baixa) a 5 (muito alta). */
 export type Scale = 1 | 2 | 3 | 4 | 5;
@@ -146,6 +185,12 @@ export type StatusChangePayload = {
   to: TicketStatus;
 };
 
+export type ProblemStatusChangePayload = {
+  type: 'MUDANCA_STATUS_PROBLEMA';
+  from: ProblemStatus;
+  to: ProblemStatus;
+};
+
 export type AssignmentChangePayload = {
   type: 'MUDANCA_ATRIBUICAO';
   fromTeamId?: string;
@@ -193,6 +238,7 @@ export type EventPayload =
   | TaskPayload
   | SolutionPayload
   | StatusChangePayload
+  | ProblemStatusChangePayload
   | AssignmentChangePayload
   | ClassificationChangePayload
   | ApprovalPayload
@@ -314,6 +360,15 @@ export const ROTULO_STATUS: Record<TicketStatus, string> = {
   FECHADO: 'Fechado',
 };
 
+export const ROTULO_PROBLEMA_STATUS: Record<ProblemStatus, string> = {
+  NOVO: 'Novo',
+  INVESTIGANDO: 'Investigando',
+  CAUSA_IDENTIFICADA: 'Causa identificada',
+  CONTORNO_PUBLICADO: 'Contorno publicado',
+  RESOLVIDO: 'Resolvido',
+  FECHADO: 'Fechado',
+};
+
 export const ROTULO_CANAL: Record<Channel, string> = {
   WEB: 'Portal',
   EMAIL: 'E-mail',
@@ -358,6 +413,46 @@ export const ALLOWED_TRANSITIONS: Record<TicketStatus, readonly TicketStatus[]> 
 
 export function canTransition(from: TicketStatus, to: TicketStatus): boolean {
   return ALLOWED_TRANSITIONS[from].includes(to);
+}
+
+/**
+ * Para onde um problema pode ir.
+ *
+ * Investigar volta a ser possível de qualquer estado, inclusive depois
+ * de fechado: a causa que se julgava removida reaparece, e refazer o
+ * registro perderia o histórico dos chamados já vinculados a ele.
+ */
+export const ALLOWED_PROBLEM_TRANSITIONS: Record<ProblemStatus, readonly ProblemStatus[]> = {
+  NOVO: ['INVESTIGANDO', 'CAUSA_IDENTIFICADA', 'RESOLVIDO', 'FECHADO'],
+  INVESTIGANDO: ['CAUSA_IDENTIFICADA', 'CONTORNO_PUBLICADO', 'RESOLVIDO', 'FECHADO'],
+  CAUSA_IDENTIFICADA: ['INVESTIGANDO', 'CONTORNO_PUBLICADO', 'RESOLVIDO', 'FECHADO'],
+  CONTORNO_PUBLICADO: ['INVESTIGANDO', 'CAUSA_IDENTIFICADA', 'RESOLVIDO', 'FECHADO'],
+  RESOLVIDO: ['INVESTIGANDO', 'FECHADO'],
+  FECHADO: ['INVESTIGANDO'],
+};
+
+export function canTransitionProblem(from: ProblemStatus, to: ProblemStatus): boolean {
+  return ALLOWED_PROBLEM_TRANSITIONS[from].includes(to);
+}
+
+/**
+ * Erro conhecido é causa **e** contorno documentados.
+ *
+ * A regra é a mesma no CHECK `problems_erro_conhecido`, no service e no
+ * botão da tela. Ela mora aqui porque o aplicativo precisa dizer *por
+ * que* o botão está desabilitado antes de a API recusar — e porque duas
+ * cópias da mesma regra divergem na primeira vez que alguém muda uma.
+ */
+export function podeSerErroConhecido(problema: {
+  rootCause?: string | null;
+  workaround?: string | null;
+}): boolean {
+  return Boolean(problema.rootCause?.trim()) && Boolean(problema.workaround?.trim());
+}
+
+/** O `[P#7]` do problema, irmão do `[#1042]` do chamado. */
+export function problemTag(number: number): string {
+  return `[P#${number}]`;
 }
 
 // ---------------------------------------------------------------------

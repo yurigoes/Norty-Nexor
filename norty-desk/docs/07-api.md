@@ -740,7 +740,90 @@ não é lixo.
 
 ---
 
-## 11. Saúde
+## 11. Problema e erro conhecido
+
+```
+GET    /v1/problems?q=...&status=...&abertos=true&isKnownError=true
+GET    /v1/problems/erros-conhecidos?q=...   → a base, buscável
+GET    /v1/problems/:id
+GET    /v1/problems/:id/eventos              → a linha do tempo do problema
+POST   /v1/problems                          { title, description, ticketIds? }
+PATCH  /v1/problems/:id
+POST   /v1/problems/:id/notas                { body }
+
+POST   /v1/problems/:id/tickets              { ticketId }
+DELETE /v1/problems/:id/tickets/:ticketId
+
+GET    /v1/tickets/:id/erros-conhecidos      → "isso já é conhecido?"
+```
+
+**O que o GLPI chama de problema é um chamado com outra tabela**: mesmos
+status, mesma tela, e a causa raiz num campo de texto que ninguém
+preenche. O que falta lá é justamente o que faz gestão de problema valer
+a pena — o **erro conhecido**.
+
+Por isso aqui o status conta a investigação:
+
+```
+NOVO → INVESTIGANDO → CAUSA_IDENTIFICADA → CONTORNO_PUBLICADO
+                                         → RESOLVIDO → FECHADO
+```
+
+`CONTORNO_PUBLICADO` é o estado que o GLPI não tem e que mais vale no dia
+a dia: a causa pode continuar de pé por semanas, mas o atendimento já
+sabe o que fazer no décimo chamado igual. Transição fora do mapa
+(`ALLOWED_PROBLEM_TRANSITIONS`) é 409 — publicar contorno de um problema
+que ninguém olhou não é um estado que se queira poder alcançar.
+`INVESTIGANDO` é alcançável de qualquer estado, inclusive de `FECHADO`:
+a causa que se julgava removida reaparece, e abrir outro registro
+perderia os chamados já pendurados.
+
+**`isKnownError` só liga com causa raiz e contorno preenchidos.** A regra
+é uma função pura em `packages/shared` (`podeSerErroConhecido`), o
+`CHECK problems_erro_conhecido` no banco, e o que desabilita o
+interruptor na tela — três lugares, uma definição. A validação lê o
+estado **depois** da edição: quem escreve os três campos na mesma
+requisição não é recusado pelo estado anterior. Para apagar o contorno de
+um erro publicado, desmarque `isKnownError` na mesma edição — e a
+mensagem de erro diz isso.
+
+`knownErrorAt` não é reescrito em edição posterior: é por ele que a base
+ordena, e um erro documentado em janeiro não deve parecer descoberto
+hoje. `resolvedAt` sobrevive ao fechamento — apagá-lo ali faria o tempo
+médio de resolução perder justamente os problemas que chegaram ao fim.
+
+**Prioridade é derivada**, pela mesma matriz da organização que o chamado
+usa (`common/prioridade.ts`): um problema de urgência 5 e impacto 5 sai
+com a prioridade do chamado equivalente.
+
+**Vincular exige `problema:ler`**, não `problema:gerenciar` — a mesma
+decisão do ativo: quem atende diz "este chamado é aquele problema";
+escrever a causa raiz é outra conversa. O escopo de leitura do chamado
+vale no vínculo: ele não é porta lateral para descobrir número e assunto
+de chamado alheio. O `TicketDetail` passa a carregar `problem`, e é dele
+que a tela sabe que já vinculou.
+
+`GET /tickets/:id/erros-conhecidos` busca o texto do chamado contra
+título e descrição dos problemas publicados, com os lexemas em `OU` e
+`ts_rank` — a mesma técnica da base de conhecimento, pelo mesmo motivo:
+`plainto_tsquery` exigiria todos os termos e um assunto de chamado
+inteiro não casaria nada.
+
+A linha do tempo do problema são registros de `TicketEvent` com
+`problemId` no lugar de `ticketId` — colunas nulas distintas com `CHECK`
+de exclusividade, nunca `(itemtype, items_id)` em texto
+(`docs/03-modelo-de-dados.md`, seção 6). A mudança de status do problema
+tem tipo próprio, `MUDANCA_STATUS_PROBLEMA`: alargar `MUDANCA_STATUS`
+para aceitar `ProblemStatus` faria toda leitura de status de chamado
+conviver com valores que um chamado nunca tem.
+
+Eventos de webhook: `problema.criado` e `problema.erro-conhecido` — o
+segundo é o que vale rebroadcast, porque é quando o contorno passa a
+existir.
+
+---
+
+## 12. Saúde
 
 ```
 GET /v1/health        → { status, uptime }

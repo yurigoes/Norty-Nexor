@@ -32,6 +32,27 @@ type LinhaDeAprovacao = {
   status: ApprovalStatus;
 };
 
+type ResumoDoChamado = { id: string; number: number; subject: string };
+
+/**
+ * Traduz para o TypeScript o que o banco já garante.
+ *
+ * Desde a Fase 4 uma aprovação pertence a um chamado **ou** a uma
+ * mudança — o CHECK `approvals_dono_unico` impede as duas e impede
+ * nenhuma. Numa consulta filtrada por chamado a coluna nunca vem nula,
+ * mas o Prisma tipa a coluna, não a consulta. Filtrar é mais honesto que
+ * um `as`: se um dia a consulta mudar, some a linha em vez de estourar.
+ */
+function somenteDeChamado<T extends { ticketId: string | null; ticket: ResumoDoChamado | null }>(
+  linhas: readonly T[],
+): (T & { ticketId: string; ticket: ResumoDoChamado })[] {
+  return linhas.flatMap((linha) =>
+    linha.ticket && linha.ticketId
+      ? [{ ...linha, ticketId: linha.ticketId, ticket: linha.ticket }]
+      : [],
+  );
+}
+
 /**
  * Aprovação em etapas.
  *
@@ -74,7 +95,7 @@ export class AprovacoesService {
       orderBy: [{ step: 'asc' }, { requestedAt: 'asc' }],
     });
 
-    return linhas.map((l) => AprovacoesService.paraView(l));
+    return somenteDeChamado(linhas).map((l) => AprovacoesService.paraView(l));
   }
 
   /**
@@ -85,15 +106,17 @@ export class AprovacoesService {
    * decidir fora de ordem.
    */
   async minhas(usuario: UsuarioAutenticado): Promise<ApprovalView[]> {
-    const minhas = await this.prisma.approval.findMany({
-      where: {
-        approverId: usuario.userId,
-        status: 'AGUARDANDO',
-        ticket: { organizationId: usuario.organizationId },
-      },
-      include: { approver: true, ticket: { select: { id: true, number: true, subject: true } } },
-      orderBy: { requestedAt: 'asc' },
-    });
+    const minhas = somenteDeChamado(
+      await this.prisma.approval.findMany({
+        where: {
+          approverId: usuario.userId,
+          status: 'AGUARDANDO',
+          ticket: { organizationId: usuario.organizationId },
+        },
+        include: { approver: true, ticket: { select: { id: true, number: true, subject: true } } },
+        orderBy: { requestedAt: 'asc' },
+      }),
+    );
 
     if (minhas.length === 0) return [];
 
@@ -108,6 +131,7 @@ export class AprovacoesService {
 
     const porChamado = new Map<string, LinhaDeAprovacao[]>();
     for (const linha of todas) {
+      if (!linha.ticketId) continue;
       const lista = porChamado.get(linha.ticketId) ?? [];
       lista.push(linha);
       porChamado.set(linha.ticketId, lista);
@@ -256,9 +280,13 @@ export class AprovacoesService {
       include: { ticket: { select: { id: true, organizationId: true, status: true } } },
     });
 
-    if (!linha || linha.ticket.organizationId !== usuario.organizationId) {
+    // Sem `ticket` a aprovação é de uma mudança, e esta rota é a do
+    // chamado: para quem pergunta, ela simplesmente não existe aqui.
+    if (!linha?.ticket || linha.ticket.organizationId !== usuario.organizationId) {
       throw new NotFoundException('Aprovação não encontrada.');
     }
+
+    const ticketId = linha.ticket.id;
 
     // Decidir é pessoal: nem supervisor decide no lugar de quem foi
     // designado. Permissão diz que a rota abre; isto diz de quem é a vez.
@@ -271,7 +299,7 @@ export class AprovacoesService {
     }
 
     const todas = await this.prisma.approval.findMany({
-      where: { ticketId: linha.ticketId },
+      where: { ticketId },
       select: { id: true, step: true, quorum: true, status: true },
     });
 
@@ -300,21 +328,21 @@ export class AprovacoesService {
       ),
     );
 
-    await this.registrarDecisao(linha.ticketId, approvalId, usuario, dto, linha.step);
+    await this.registrarDecisao(ticketId, approvalId, usuario, dto, linha.step);
 
     if (depois.estado !== 'AGUARDANDO') {
-      await this.encerrar(linha.ticketId, depois.estado, usuario);
+      await this.encerrar(ticketId, depois.estado, usuario);
     }
 
     await this.webhooks.emitir(usuario.organizationId, 'aprovacao.decidida', {
-      ticketId: linha.ticketId,
+      ticketId,
       aprovacaoId: approvalId,
       etapa: linha.step,
       decisao: dto.decision,
       desfecho: depois.estado,
     });
 
-    return this.listar(linha.ticketId);
+    return this.listar(ticketId);
   }
 
   // -------------------------------------------------------------------

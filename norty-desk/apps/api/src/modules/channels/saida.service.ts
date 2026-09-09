@@ -80,7 +80,13 @@ export class SaidaService {
       return 0;
     }
 
+    // Evento de problema ou de mudança não tem por onde sair: quem
+    // conversa por canal externo é o chamado. O CHECK `dono_unico` do
+    // banco garante que o dono é exatamente um; aqui basta ignorar o
+    // que não é chamado.
     const chamado = evento.ticket;
+    if (!chamado) return 0;
+
     const canal: Channel = evento.channel === 'WEB' ? chamado.originChannel : evento.channel;
 
     // Pelo portal a pessoa já vê a resposta na tela; mandar e-mail

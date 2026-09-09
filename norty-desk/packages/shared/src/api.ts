@@ -13,6 +13,7 @@ import type {
   EventPayload,
   EventType,
   LinkType,
+  ProblemStatus,
   Scale,
   TargetKind,
   TicketStatus,
@@ -137,6 +138,22 @@ export type TicketDetail = TicketListItem & {
   customFields: Record<string, unknown> | null;
   links: { id: string; type: LinkType; ticket: { id: string; number: number; subject: string } }[];
   attachmentCount: number;
+  /**
+   * O problema por trás deste chamado, quando há um.
+   *
+   * Vem no detalhe e não só na tela do problema porque é o chamado que
+   * se abre: quem atende precisa ver "isto já tem causa conhecida" sem
+   * sair da tela — e é daqui que a sugestão sabe qual já foi vinculado.
+   */
+  problem: TicketProblemRef | null;
+};
+
+export type TicketProblemRef = {
+  id: string;
+  number: number;
+  title: string;
+  isKnownError: boolean;
+  workaround: string | null;
 };
 
 export type AttachmentView = {
@@ -450,6 +467,90 @@ export type RelatorioSlaView = {
   agrupamento: 'categoria' | 'time' | 'prioridade' | 'acordo';
   geral: LinhaDeSla;
   linhas: LinhaDeSla[];
+};
+
+// ---------------------------------------------------------------------
+// Problema
+// ---------------------------------------------------------------------
+
+/*
+ * Os nomes vão em português porque `ProblemDetails` acima já é o
+ * envelope de erro RFC 7807 desta API. Duas coisas chamadas "problem"
+ * no mesmo arquivo é confusão garantida no `import`.
+ */
+
+export type ProblemaResumo = {
+  id: string;
+  number: number;
+  title: string;
+  status: ProblemStatus;
+  urgency: Scale;
+  impact: Scale;
+  priority: Scale;
+  category: CategoryRef | null;
+  assignedTeam: PartyRef | null;
+  assignedUser: PartyRef | null;
+  isKnownError: boolean;
+  /** Quantos chamados já apontam para este problema. */
+  ticketCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ProblemaDetalhe = ProblemaResumo & {
+  description: string;
+  rootCause: string | null;
+  workaround: string | null;
+  knownErrorAt: string | null;
+  /** Artigo da base que documenta o erro conhecido. */
+  article: { id: string; title: string } | null;
+  resolvedAt: string | null;
+  closedAt: string | null;
+  tickets: ProblemaChamadoRef[];
+};
+
+export type ProblemaChamadoRef = {
+  id: string;
+  number: number;
+  subject: string;
+  status: TicketStatus;
+  createdAt: string;
+};
+
+export type EscreverProblemaRequest = {
+  title: string;
+  description: string;
+  status?: ProblemStatus;
+  urgency?: Scale;
+  impact?: Scale;
+  categoryId?: string | null;
+  assignedTeamId?: string | null;
+  assignedUserId?: string | null;
+  rootCause?: string | null;
+  workaround?: string | null;
+  /** Só aceita `true` com causa e contorno preenchidos. */
+  isKnownError?: boolean;
+  articleId?: string | null;
+};
+
+export type ProblemaQuery = {
+  q?: string;
+  status?: ProblemStatus;
+  isKnownError?: boolean;
+  assignedTeamId?: string;
+  assignedUserId?: string;
+  limit?: number;
+};
+
+/** O que a tela do chamado mostra: "isso já é um problema conhecido". */
+export type ErroConhecidoSugerido = {
+  id: string;
+  number: number;
+  title: string;
+  workaround: string | null;
+  status: ProblemStatus;
+  /** Aderência da busca de texto, de 0 a 1. */
+  score: number;
 };
 
 // ---------------------------------------------------------------------

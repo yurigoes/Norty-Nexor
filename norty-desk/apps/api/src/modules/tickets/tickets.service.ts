@@ -9,10 +9,8 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import {
-  DEFAULT_PRIORITY_MATRIX,
   type Channel,
   type Paginated,
-  type PriorityMatrix,
   type Scale,
   type TicketDetail,
   type TicketType,
@@ -20,11 +18,11 @@ import {
   type TicketListItem,
   type TicketStatus,
   canTransition,
-  computePriority,
 } from '@norty-desk/shared';
 import { Prisma } from '@prisma/client';
 
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
+import { derivarPrioridade } from '../../common/prioridade';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { SaidaService } from '../channels/saida.service';
 import { SatisfacaoService } from '../satisfacao/satisfacao.service';
@@ -241,13 +239,7 @@ export class TicketsService {
    * Este é o único ponto do sistema que escreve em `Ticket.priority`.
    */
   async derivarPrioridade(organizationId: string, urgency: Scale, impact: Scale): Promise<Scale> {
-    const organizacao = await this.prisma.organization.findUniqueOrThrow({
-      where: { id: organizationId },
-      select: { priorityMatrix: true },
-    });
-
-    const matriz = (organizacao.priorityMatrix as PriorityMatrix | null) ?? DEFAULT_PRIORITY_MATRIX;
-    return computePriority(urgency, impact, matriz);
+    return derivarPrioridade(this.prisma, organizationId, urgency, impact);
   }
 
   /**

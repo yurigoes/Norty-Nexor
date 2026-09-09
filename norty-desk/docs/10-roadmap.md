@@ -156,7 +156,8 @@ o construtor visual de regras de entrada (o motor e a API existem).
 
 ## Fase 4 — ITIL completo
 
-- **Problema** — causa raiz, chamados vinculados, base de erros conhecidos.
+- **Problema** — causa raiz, chamados vinculados, base de erros
+  conhecidos. ✅ *(entregue — `docs/07-api.md`, seção 11)*
 - **Mudança** — aprovação, janela de execução, plano de recuo.
 - **Chamado recorrente** — manutenção preventiva em agenda.
 - **Formulário dinâmico por categoria** — o `TicketForm` que ficou da

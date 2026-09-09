@@ -51,6 +51,8 @@ model Organization {
   contacts      Contact[]
   assets        Asset[]
   surveys       Survey[]
+  problems      Problem[]
+  changes       Change[]
 
   @@map("organizations")
 }
@@ -77,6 +79,8 @@ model User {
   refreshTokens RefreshToken[]
   articles      Article[]
   assets        Asset[]           @relation("AtivoDoUsuario")
+  problems      Problem[]         @relation("ResponsavelPeloProblema")
+  changes       Change[]          @relation("ResponsavelPelaMudanca")
   articleEdits  ArticleRevision[] @relation("EditorDaRevisao")
 
   @@map("users")
@@ -136,6 +140,8 @@ model Team {
   members      TeamMember[]
   actorIn      TicketActor[]
   categories   Category[]
+  problems     Problem[]    @relation("TimeDoProblema")
+  changes      Change[]     @relation("TimeDaMudanca")
 
   @@unique([organizationId, name])
   @@map("teams")
@@ -218,6 +224,8 @@ model Category {
   tickets      Ticket[]
   forms        TicketForm[]
   articles     Article[]
+  problems     Problem[]
+  changes      Change[]
 
   @@unique([organizationId, parentId, name])
   @@index([organizationId])
@@ -331,11 +339,21 @@ model Ticket {
   assets      TicketAsset[]
   survey      Survey?
 
+  /// O problema que causa este chamado e a mudança que o resolve.
+  /// São os dois vínculos que o ITIL pede e o GLPI resolve com uma
+  /// tabela de ligação polimórfica.
+  problemId String? @db.Uuid
+  changeId  String? @db.Uuid
+  problem   Problem? @relation(fields: [problemId], references: [id], onDelete: SetNull)
+  change    Change?  @relation(fields: [changeId], references: [id], onDelete: SetNull)
+
   @@unique([organizationId, number])
   @@unique([organizationId, externalRef])
   @@index([organizationId, status])
   @@index([organizationId, priority])
   @@index([organizationId, createdAt])
+  @@index([problemId])
+  @@index([changeId])
   @@map("tickets")
 }
 
@@ -380,6 +398,7 @@ enum EventType {
   APROVACAO
   ANEXO
   MUDANCA_STATUS
+  MUDANCA_STATUS_PROBLEMA
   MUDANCA_ATRIBUICAO
   MUDANCA_CLASSIFICACAO
   PAUSA_SLA
@@ -396,9 +415,19 @@ enum Visibility {
 /// A timeline única. Substitui glpi_itilfollowups + glpi_tickettasks +
 /// glpi_itilsolutions + glpi_documents_items.
 /// Ver docs/02-gap-analysis.md, item 4.
+/// A linha do tempo de um chamado, de um problema **ou** de uma mudança.
+///
+/// Três colunas nulas distintas, e um `CHECK` que exige exatamente uma
+/// preenchida — nunca `(itemtype, items_id)` em texto como no GLPI. A
+/// coluna nomeada dá chave estrangeira, `ON DELETE CASCADE` e índice; o
+/// par polimórfico não dá nenhum dos três, e é por isso que o GLPI tem
+/// linhas apontando para registros que não existem mais
+/// (`docs/03-modelo-de-dados.md`, seção 6).
 model TicketEvent {
   id         String     @id @default(uuid()) @db.Uuid
-  ticketId   String     @db.Uuid
+  ticketId   String?    @db.Uuid
+  problemId  String?    @db.Uuid
+  changeId   String?    @db.Uuid
   type       EventType
   visibility Visibility @default(PUBLICA)
   /// Nulo quando o autor é o sistema (cron de SLA, regra de entrada).
@@ -413,13 +442,17 @@ model TicketEvent {
   createdAt  DateTime   @default(now())
   editedAt   DateTime?
 
-  ticket      Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticket      Ticket?      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  problem     Problem?     @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  change      Change?      @relation(fields: [changeId], references: [id], onDelete: Cascade)
   author      User?        @relation("AutorDoEvento", fields: [authorId], references: [id])
   attachments Attachment[]
   /// Rastro do canal: mensagem de e-mail ou WhatsApp que originou o evento.
   inboundMessage InboundMessage?
 
   @@index([ticketId, createdAt])
+  @@index([problemId, createdAt])
+  @@index([changeId, createdAt])
   @@map("ticket_events")
 }
 
@@ -450,7 +483,11 @@ model TicketLink {
 /// glpi_documents_items + glpi_documenttypes + glpi_documentcategories.
 model Attachment {
   id          String   @id @default(uuid()) @db.Uuid
-  ticketId    String   @db.Uuid
+  /// Mesmo desenho da linha do tempo: três donos possíveis, exatamente
+  /// um preenchido, garantido por `CHECK` no banco.
+  ticketId    String?  @db.Uuid
+  problemId   String?  @db.Uuid
+  changeId    String?  @db.Uuid
   eventId     String?  @db.Uuid
   filename    String
   contentType String
@@ -462,10 +499,14 @@ model Attachment {
   uploadedById String? @db.Uuid
   createdAt   DateTime @default(now())
 
-  ticket Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  event  TicketEvent? @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  ticket  Ticket?      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  problem Problem?     @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  change  Change?      @relation(fields: [changeId], references: [id], onDelete: Cascade)
+  event   TicketEvent? @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@index([ticketId])
+  @@index([problemId])
+  @@index([changeId])
   @@map("attachments")
 }
 
@@ -630,7 +671,10 @@ enum ApprovalStatus {
 /// Uma linha por validador por etapa.
 model Approval {
   id         String         @id @default(uuid()) @db.Uuid
-  ticketId   String         @db.Uuid
+  /// Chamado **ou** mudança: uma mudança normal não executa sem aval, e
+  /// é o mesmo motor de etapas e quórum.
+  ticketId   String?        @db.Uuid
+  changeId   String?        @db.Uuid
   /// Etapas são resolvidas em ordem crescente.
   step       Int            @default(1)
   /// Quantos APROVADO a etapa precisa para avançar.
@@ -641,10 +685,12 @@ model Approval {
   requestedAt DateTime      @default(now())
   decidedAt  DateTime?
 
-  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  approver User   @relation(fields: [approverId], references: [id])
+  ticket   Ticket?  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  change   Change?  @relation(fields: [changeId], references: [id], onDelete: Cascade)
+  approver User     @relation(fields: [approverId], references: [id])
 
   @@unique([ticketId, step, approverId])
+  @@unique([changeId, step, approverId])
   @@index([approverId, status])
   @@map("approvals")
 }
@@ -684,6 +730,7 @@ model Article {
   author       User         @relation(fields: [authorId], references: [id])
   category     Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   revisions    ArticleRevision[]
+  problems     Problem[]
 
   @@index([organizationId, isPublic, isArchived])
   @@index([categoryId])
@@ -709,6 +756,162 @@ model ArticleRevision {
 
   @@unique([articleId, version])
   @@map("article_revisions")
+}
+
+// ---------------------------------------------------------------------
+// Problema
+// ---------------------------------------------------------------------
+
+enum ProblemStatus {
+  NOVO
+  INVESTIGANDO
+  CAUSA_IDENTIFICADA
+  CONTORNO_PUBLICADO
+  RESOLVIDO
+  FECHADO
+}
+
+/// Substitui glpi_problems.
+///
+/// Problema é a **causa** de um ou mais chamados, e vive em outro ritmo:
+/// o chamado tem prazo de atendimento, o problema tem investigação. Por
+/// isso ele é tabela própria e não um `Ticket` com tipo diferente — o
+/// SLA de resposta não faz sentido numa investigação de causa raiz.
+model Problem {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid
+  /// Sequencial legível por organização, independente do de chamados.
+  number         Int
+  title          String
+  description    String
+  status         ProblemStatus @default(NOVO)
+
+  urgency  Int @default(3)
+  impact   Int @default(3)
+  priority Int @default(3)
+
+  categoryId     String? @db.Uuid
+  assignedTeamId String? @db.Uuid
+  assignedUserId String? @db.Uuid
+
+  /// O que causa. Preenchido quando a investigação chega ao fim.
+  rootCause  String?
+  /// O que fazer enquanto a causa não é removida.
+  workaround String?
+
+  /// Erro conhecido: causa **e** contorno documentados.
+  ///
+  /// É o que separa "estamos investigando" de "sabemos o que é e como
+  /// contornar" — e é a única coisa que o atendimento precisa saber
+  /// quando o mesmo problema gera o décimo chamado.
+  isKnownError Boolean   @default(false)
+  knownErrorAt DateTime?
+
+  /// Artigo da base que documenta o erro conhecido.
+  articleId String? @db.Uuid
+
+  resolvedAt DateTime?
+  closedAt   DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category     Category?    @relation(fields: [categoryId], references: [id])
+  assignedTeam Team?        @relation("TimeDoProblema", fields: [assignedTeamId], references: [id])
+  assignedUser User?        @relation("ResponsavelPeloProblema", fields: [assignedUserId], references: [id])
+  article      Article?     @relation(fields: [articleId], references: [id], onDelete: SetNull)
+
+  tickets     Ticket[]
+  changes     Change[]
+  events      TicketEvent[]
+  attachments Attachment[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@index([organizationId, isKnownError])
+  @@map("problems")
+}
+
+// ---------------------------------------------------------------------
+// Mudança
+// ---------------------------------------------------------------------
+
+enum ChangeStatus {
+  RASCUNHO
+  EM_APROVACAO
+  APROVADA
+  AGENDADA
+  EM_EXECUCAO
+  CONCLUIDA
+  REVERTIDA
+  RECUSADA
+  CANCELADA
+}
+
+enum ChangeKind {
+  /// Pré-aprovada: procedimento conhecido e de risco conhecido.
+  PADRAO
+  NORMAL
+  /// Executa antes de aprovar; a aprovação vira registro depois.
+  EMERGENCIAL
+}
+
+enum ChangeRisk {
+  BAIXO
+  MEDIO
+  ALTO
+}
+
+/// Substitui glpi_changes.
+model Change {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  number         Int
+  title          String
+  description    String
+  status         ChangeStatus @default(RASCUNHO)
+  kind           ChangeKind   @default(NORMAL)
+  risk           ChangeRisk   @default(MEDIO)
+
+  categoryId     String? @db.Uuid
+  assignedTeamId String? @db.Uuid
+  assignedUserId String? @db.Uuid
+
+  implementationPlan String?
+  testPlan           String?
+  /// Como desfazer. É o que separa mudança de aposta.
+  rollbackPlan       String?
+
+  /// Janela de execução acordada.
+  windowStart DateTime?
+  windowEnd   DateTime?
+
+  startedAt  DateTime?
+  finishedAt DateTime?
+  /// O que de fato aconteceu, escrito depois da execução.
+  outcome    String?
+
+  /// A mudança que remove a causa de um problema.
+  problemId String? @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category     Category?    @relation(fields: [categoryId], references: [id])
+  assignedTeam Team?        @relation("TimeDaMudanca", fields: [assignedTeamId], references: [id])
+  assignedUser User?        @relation("ResponsavelPelaMudanca", fields: [assignedUserId], references: [id])
+  problem      Problem?     @relation(fields: [problemId], references: [id], onDelete: SetNull)
+
+  tickets     Ticket[]
+  approvals   Approval[]
+  events      TicketEvent[]
+  attachments Attachment[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@index([organizationId, windowStart])
+  @@map("changes")
 }
 
 // ---------------------------------------------------------------------

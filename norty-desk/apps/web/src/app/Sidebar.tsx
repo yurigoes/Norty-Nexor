@@ -117,6 +117,16 @@ export function Sidebar() {
           </Link>
         ) : null}
 
+        {can('problema:ler') ? (
+          <Link
+            to="/problemas"
+            className="nav-item"
+            aria-current={local.pathname.startsWith('/problemas') ? 'page' : undefined}
+          >
+            <span>Problemas</span>
+          </Link>
+        ) : null}
+
         {can('artigo:ler') ? (
           <Link
             to="/conhecimento"

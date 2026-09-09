@@ -17,6 +17,7 @@ import { AprovacoesModule } from './modules/aprovacoes/aprovacoes.module';
 import { AtivosModule } from './modules/ativos/ativos.module';
 import { AuditoriaModule } from './modules/auditoria/auditoria.module';
 import { LoteModule } from './modules/lote/lote.module';
+import { ProblemasModule } from './modules/problemas/problemas.module';
 import { SatisfacaoModule } from './modules/satisfacao/satisfacao.module';
 import { SlaModule } from './modules/sla/sla.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
@@ -48,6 +49,7 @@ import { TranscricaoModule } from './modules/transcricao/transcricao.module';
     ConhecimentoModule,
     PaineisModule,
     AtivosModule,
+    ProblemasModule,
     SatisfacaoModule,
     BrandModule,
     SlaModule,
