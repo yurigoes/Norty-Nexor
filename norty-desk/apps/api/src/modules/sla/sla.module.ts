@@ -1,9 +1,12 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 
+import { ChannelsModule } from '../channels/channels.module';
+import { SlaJobs } from './sla.jobs';
 import { SlaService } from './sla.service';
 
 @Module({
-  providers: [SlaService],
-  exports: [SlaService],
+  imports: [forwardRef(() => ChannelsModule)],
+  providers: [SlaService, SlaJobs],
+  exports: [SlaService, SlaJobs],
 })
 export class SlaModule {}
