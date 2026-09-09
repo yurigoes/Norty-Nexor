@@ -2,11 +2,14 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import {
   DEFAULT_PRIORITY_MATRIX,
+  type Channel,
   type Paginated,
   type PriorityMatrix,
   type Scale,
@@ -21,6 +24,7 @@ import { Prisma } from '@prisma/client';
 
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { SaidaService } from '../channels/saida.service';
 import { SlaService } from '../sla/sla.service';
 import { escopoDeLeitura } from './tickets.escopo';
 import {
@@ -54,6 +58,7 @@ export class TicketsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sla: SlaService,
+    @Inject(forwardRef(() => SaidaService)) private readonly saida: SaidaService,
   ) {}
 
   // -------------------------------------------------------------------
@@ -360,6 +365,117 @@ export class TicketsService {
     return this.obter(usuario, id);
   }
 
+  /**
+   * Abertura por canal externo.
+   *
+   * Não há usuário autenticado: quem escreveu é um `Contact`, e o
+   * chamado nasce com o canal de origem marcado. É o mesmo caso de uso
+   * de `abrir()` — o adaptador de canal traduz e sai, sem regra de
+   * negócio própria (`docs/06-canais.md`).
+   */
+  async abrirPorCanal(dados: {
+    organizationId: string;
+    contactId: string;
+    channel: Channel;
+    subject: string;
+    description: string;
+    /** Time padrão do canal, quando a conta define um. */
+    teamId?: string | null;
+  }): Promise<{ id: string; number: number }> {
+    // Sem categoria: melhor sem do que na primeira que apareceu. Quem
+    // classifica é a regra de entrada ou o agente.
+    const urgency = 3 as Scale;
+    const impact = 3 as Scale;
+    const priority = await this.derivarPrioridade(dados.organizationId, urgency, impact);
+
+    return this.prisma.$transaction(async (tx) => {
+      const number = await this.proximoNumero(tx, dados.organizationId);
+
+      return tx.ticket.create({
+        data: {
+          organizationId: dados.organizationId,
+          number,
+          subject: dados.subject.slice(0, 255),
+          description: dados.description,
+          type: 'INCIDENTE',
+          status: dados.teamId ? 'ATRIBUIDO' : 'NOVO',
+          urgency,
+          impact,
+          priority,
+          originChannel: dados.channel,
+          actors: {
+            create: [
+              { role: 'REQUERENTE', contactId: dados.contactId },
+              ...(dados.teamId ? [{ role: 'ATRIBUIDO' as const, teamId: dados.teamId }] : []),
+            ],
+          },
+        },
+        select: { id: true, number: true },
+      });
+    });
+  }
+
+  /**
+   * Resposta vinda de canal externo.
+   *
+   * Sempre pública e sempre do contato — quem escreve de fora não tem
+   * como pedir nota interna, e não deveria.
+   */
+  async responderPorCanal(dados: {
+    ticketId: string;
+    contactId: string;
+    channel: Channel;
+    body: string;
+  }): Promise<{ id: string }> {
+    const evento = await this.prisma.ticketEvent.create({
+      data: {
+        ticketId: dados.ticketId,
+        type: 'MENSAGEM',
+        visibility: 'PUBLICA',
+        authorContactId: dados.contactId,
+        channel: dados.channel,
+        body: dados.body,
+      },
+      select: { id: true },
+    });
+
+    // Resposta do solicitante em chamado solucionado o reabre: se ele
+    // ainda tem o que dizer, não estava resolvido.
+    const chamado = await this.prisma.ticket.findUniqueOrThrow({
+      where: { id: dados.ticketId },
+      select: { status: true, pendingSince: true },
+    });
+
+    if (chamado.status === 'SOLUCIONADO' || chamado.status === 'PENDENTE') {
+      if (chamado.status === 'PENDENTE' && chamado.pendingSince) {
+        await this.sla.retomarAposPendencia(dados.ticketId, chamado.pendingSince);
+      }
+
+      await this.prisma.$transaction([
+        this.prisma.ticket.update({
+          where: { id: dados.ticketId },
+          data: { status: 'ATRIBUIDO', pendingSince: null, pendingReasonId: null },
+        }),
+        this.prisma.ticketEvent.create({
+          data: {
+            ticketId: dados.ticketId,
+            type: 'MUDANCA_STATUS',
+            visibility: 'PUBLICA',
+            channel: 'SISTEMA',
+            payload: { type: 'MUDANCA_STATUS', from: chamado.status, to: 'ATRIBUIDO' },
+          },
+        }),
+      ]);
+    } else {
+      await this.prisma.ticket.update({
+        where: { id: dados.ticketId },
+        data: { updatedAt: new Date() },
+      });
+    }
+
+    return evento;
+  }
+
   // -------------------------------------------------------------------
   // Comandos
   // -------------------------------------------------------------------
@@ -413,6 +529,10 @@ export class TicketsService {
     });
 
     await this.prisma.ticket.update({ where: { id }, data: { updatedAt: new Date() } });
+
+    // A resposta pública sai pelo canal em que a pessoa falou. Enfileira
+    // e devolve: responder não espera o SMTP.
+    await this.saida.enfileirarEventoDoChamado(evento.id);
 
     // A primeira resposta pública de quem atende cumpre o TTO. A do
     // próprio requerente não conta: responder a si mesmo não é
@@ -623,6 +743,17 @@ export class TicketsService {
 
     if (destino === 'SOLUCIONADO' || destino === 'FECHADO') {
       await this.sla.cumprir(id, 'TTR', agora);
+    }
+
+    // "Resolvido" com texto é resposta: o solicitante precisa saber
+    // pelo canal dele, não abrindo o portal para descobrir.
+    if (corpo) {
+      const evento = await this.prisma.ticketEvent.findFirst({
+        where: { ticketId: id, type: destino === 'SOLUCIONADO' ? 'SOLUCAO' : 'MENSAGEM' },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      });
+      if (evento) await this.saida.enfileirarEventoDoChamado(evento.id);
     }
 
     return this.obter(usuario, id);

@@ -200,6 +200,15 @@ export type EventPayload =
   | SlaResumePayload
   | ChannelIoPayload;
 
+/** Anexo já gravado no armazenamento, aguardando virar `Attachment`. */
+export type AnexoRecebido = {
+  storageKey: string;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+  checksum: string;
+};
+
 // ---------------------------------------------------------------------
 // Formulário dinâmico — substitui as 12 tabelas de tickettemplate*
 // ---------------------------------------------------------------------

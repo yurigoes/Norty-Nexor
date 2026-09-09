@@ -1,5 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { type Channel, normalizePhone, parseTicketNumberFromSubject } from '@norty-desk/shared';
+import {
+  type AnexoRecebido,
+  type Channel,
+  normalizePhone,
+  parseTicketNumberFromSubject,
+} from '@norty-desk/shared';
 import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -19,6 +24,8 @@ export type MensagemNormalizada = {
   bodyText?: string;
   bodyHtml?: string;
   rawHeaders?: Prisma.InputJsonValue;
+  /** Já gravados no armazenamento pelo controller. */
+  anexos?: AnexoRecebido[];
   receivedAt?: Date;
 };
 
@@ -62,6 +69,7 @@ export class EntradaService {
           bodyText: mensagem.bodyText,
           bodyHtml: mensagem.bodyHtml,
           rawHeaders: mensagem.rawHeaders,
+          attachments: (mensagem.anexos ?? []) as unknown as Prisma.InputJsonValue,
           receivedAt: mensagem.receivedAt ?? new Date(),
         },
         select: { id: true },

@@ -724,6 +724,12 @@ model InboundMessage {
   bodyText        String?
   bodyHtml        String?
   rawHeaders      Json?
+  /// Anexos já gravados no armazenamento na hora do recebimento.
+  ///
+  /// O binário chega junto com o webhook e está na memória; gravá-lo
+  /// ali é mais barato que devolvê-lo ao provedor depois. A lista traz
+  /// chave, nome, tipo e tamanho — o `AnexoRecebido` de shared.
+  attachments     Json?
   receivedAt      DateTime @default(now())
   /// Nulo até o processador transformar a mensagem em evento.
   eventId         String?  @unique @db.Uuid
@@ -751,6 +757,9 @@ model OutboundMessage {
   organizationId String         @db.Uuid
   channel        Channel
   ticketId       String?        @db.Uuid
+  /// O evento que originou o envio. É o que permite olhar uma falha de
+  /// entrega e saber qual resposta não chegou.
+  eventId        String?        @db.Uuid
   toAddress      String
   subject        String?
   body           String
@@ -761,8 +770,11 @@ model OutboundMessage {
   lastError      String?
   scheduledFor   DateTime       @default(now())
   sentAt         DateTime?
+  createdAt      DateTime       @default(now())
 
   @@index([status, scheduledFor])
+  @@index([organizationId, externalId])
+  @@index([ticketId])
   @@map("outbound_messages")
 }
 

@@ -19,6 +19,8 @@ export const prisma = new PrismaClient();
 
 export type Api = {
   url: string;
+  /** O container: a suíte chama os jobs à mão, sem esperar o cron. */
+  app: NestExpressApplication;
   fechar: () => Promise<void>;
 };
 
@@ -36,7 +38,7 @@ export async function subirApi(): Promise<Api> {
   await app.listen(0, '127.0.0.1');
   const url = (await app.getUrl()).replace('[::1]', '127.0.0.1');
 
-  return { url: `${url}/v1`, fechar: () => app.close() };
+  return { url: `${url}/v1`, app, fechar: () => app.close() };
 }
 
 /**
@@ -151,6 +153,28 @@ export async function semear() {
     data: { organizationId: organizacao.id, name: 'Dúvida' },
   });
 
+  const contaEmail = await prisma.channelAccount.create({
+    data: {
+      organizationId: organizacao.id,
+      kind: 'EMAIL_WEBHOOK',
+      name: 'Suporte por e-mail',
+      config: {},
+      defaultTeamId: time.id,
+    },
+  });
+
+  const contaWhatsapp = await prisma.channelAccount.create({
+    data: {
+      organizationId: organizacao.id,
+      kind: 'WHATSAPP_EVOLUTION',
+      name: 'Suporte por WhatsApp',
+      // Sem baseUrl nem apiKey: a suíte não fala com a Evolution de
+      // verdade, e mídia é exercitada à parte.
+      config: { janelaHoras: 24, menuAtivo: true },
+      defaultTeamId: time.id,
+    },
+  });
+
   const motivo = await prisma.pendingReason.create({
     data: {
       organizationId: organizacao.id,
@@ -164,6 +188,7 @@ export async function semear() {
     organizacao, outra,
     solicitante, agente, outroAgente, supervisor, gestor, forasteiro,
     time, outroTime, categoria, semTime, motivo, tto, ttr, calendario,
+    contaEmail, contaWhatsapp,
   };
 }
 
