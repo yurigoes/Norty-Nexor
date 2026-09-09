@@ -12,6 +12,7 @@ import { Contratos } from '../modules/configuracao/Contratos';
 import { Modelos } from '../modules/configuracao/Modelos';
 import { Recorrencias } from '../modules/configuracao/Recorrencias';
 import { Sla } from '../modules/configuracao/Sla';
+import { Ativo } from '../modules/ativo/Ativo';
 import { Ativos } from '../modules/ativo/Ativos';
 import { Pesquisa } from '../modules/ativo/Pesquisa';
 import { Artigo } from '../modules/conhecimento/Artigo';
@@ -92,6 +93,7 @@ function Aplicativo() {
             <Route path="/" element={<Fila />} />
             <Route path="/painel" element={<Painel />} />
             <Route path="/ativos" element={<Ativos />} />
+            <Route path="/ativos/:id" element={<Ativo />} />
             {/* `erros-conhecidos` antes de `:id`, ou casaria com ele. */}
             <Route path="/problemas/erros-conhecidos" element={<ErrosConhecidos />} />
             <Route path="/problemas/:id" element={<Problema />} />

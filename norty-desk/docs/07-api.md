@@ -1274,7 +1274,66 @@ sala, não inventa uma.
 
 ---
 
-## 18. Saúde
+## 18. Componentes do ativo
+
+```
+GET    /v1/assets/:id                       → o ativo com os componentes juntos
+GET    /v1/assets/:id/components
+POST   /v1/assets/:id/components            → { kind, name, manufacturerId?, serialNumber?,
+                                                attributes?, notes? }
+PATCH  /v1/assets/:id/components/:componentId
+DELETE /v1/assets/:id/components/:componentId
+```
+
+No GLPI cada tipo de peça é **duas** tabelas: `glpi_deviceprocessors`
+mais `glpi_items_deviceprocessors`, `glpi_devicememories` mais
+`glpi_items_devicememories`, e assim por diante — perto de sessenta ao
+todo, com o mesmo desenho repetido. Toda tela nova precisa saber em qual
+delas olhar, e "quanta memória a frota tem" é uma união de dezessete
+`SELECT`. Aqui é **uma** tabela com um discriminador.
+
+**Uma linha é uma peça — não há campo de quantidade.** Dois pentes de
+8 GB são duas linhas, porque cada um tem o seu número de série e o seu
+slot, e porque "16 GB" tem de sair de uma soma e não de uma
+multiplicação que ninguém revisa. `resumoDoHardware`, em
+`packages/shared`, faz essa soma; é a mesma função que escreve a linha
+"16 GB de memória · 1 TB de disco · 6 núcleos" na tela de detalhe.
+
+**Os atributos por tipo são ficha, não schema.** `attributes` é `Json`,
+e o que vale nele está declarado em `ATRIBUTOS_DO_COMPONENTE`
+(`packages/shared`): memória tem capacidade, tecnologia, frequência e
+slot; disco tem capacidade, tecnologia, interface e rotação. A validação
+é `validarAtributos`, que é `validarRespostas` — **o mesmo validador do
+formulário dinâmico**. Um formulário é um formulário, e ter dois
+validadores seria ter dois comportamentos para a mesma pergunta. Por
+isso o 400 vem com o nome do campo (`"Capacidade" é obrigatório.`) e não
+com um `attributes inválido` que não diz nada. A tela desenha a ficha
+com o mesmo `CampoDinamico` do formulário do chamado.
+
+A diferença para o formulário dinâmico é que **esta ficha não se edita
+pela tela**: um pente DDR4 tem os campos que tem, e deixar o
+administrador inventar "capacidade2" produziria inventário que não soma.
+
+**Trocar o `kind` troca a ficha inteira.** Guardar os atributos antigos
+"por via das dúvidas" deixaria uma frequência de memória escondida
+dentro de um disco. Um `PATCH` que só muda o tipo passa a cobrar o
+obrigatório do tipo novo.
+
+**Série de peça é única na organização.** Duas linhas com a mesma série
+são a mesma peça contada duas vezes — é assim que a memória da frota
+dobra sozinha quando alguém troca um pente de máquina sem apagar a linha
+antiga. Apagar o ativo leva os componentes junto (`CASCADE`); apagar o
+fabricante não (`SET NULL`).
+
+**O que não copiamos do GLPI:** ele guarda o PIN e o PUK do chip em
+coluna de texto, na tabela do SIM. Inventário não é cofre.
+
+Permissões: ler é `ativo:ler`, escrever é `ativo:gerenciar` — as mesmas
+do ativo, porque a peça é parte dele.
+
+---
+
+## 19. Saúde
 
 ```
 GET /v1/health        → { status, uptime }

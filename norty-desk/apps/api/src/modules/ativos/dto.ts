@@ -3,6 +3,7 @@ import {
   IsDateString,
   IsIn,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -11,7 +12,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-import { ASSET_KINDS, ASSET_STATUSES } from '@norty-desk/shared';
+import { ASSET_KINDS, ASSET_STATUSES, COMPONENT_KINDS, type ComponentKind } from '@norty-desk/shared';
 
 /** Campo de texto opcional que aceita `null` para limpar. */
 const vazioVirandoNulo = ({ value }: { value: unknown }) =>
@@ -62,4 +63,31 @@ export class VincularAtivoDto {
 export class ResponderPesquisaDto {
   @Type(() => Number) @IsInt() @Min(1) @Max(5) score!: number;
   @IsOptional() @IsString() @MaxLength(2000) comment?: string;
+}
+
+/**
+ * Uma peça dentro do equipamento.
+ *
+ * `attributes` chega como objeto solto de propósito: o que vale nele
+ * muda com o `kind`, e quem decide isso é `validarAtributos`, em
+ * `packages/shared` — a mesma ficha que a tela desenha. Um DTO com
+ * dezessete formatos não teria como ser lido pelos dois lados.
+ */
+export class EscreverComponenteDto {
+  @IsIn(COMPONENT_KINDS) kind!: ComponentKind;
+  @IsString() @MinLength(1) @MaxLength(160) name!: string;
+
+  @IsOptional() @Transform(vazioVirandoNulo) @IsUUID() manufacturerId?: string | null;
+  @IsOptional()
+  @Transform(vazioVirandoNulo)
+  @IsString()
+  @MaxLength(120)
+  serialNumber?: string | null;
+  @IsOptional() @IsObject() attributes?: Record<string, unknown>;
+  @IsOptional() @Transform(vazioVirandoNulo) @IsString() @MaxLength(2000) notes?: string | null;
+}
+
+export class EditarComponenteDto extends EscreverComponenteDto {
+  @IsOptional() @IsIn(COMPONENT_KINDS) declare kind: ComponentKind;
+  @IsOptional() @IsString() @MinLength(1) @MaxLength(160) declare name: string;
 }

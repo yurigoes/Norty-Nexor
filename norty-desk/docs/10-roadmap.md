@@ -222,6 +222,11 @@ O inventário que o chamado referencia.
 - **Componentes** — memória, disco, processador, placa. No GLPI são
   sessenta tabelas (`Device*` mais `Item_Device*`); aqui é **um** modelo
   de componente com tipo e atributos por tipo.
+  ✅ *(entregue — `docs/07-api.md`, seção 18)* Uma linha é uma peça, sem
+  campo de quantidade: "16 GB" sai de uma soma de dois pentes de 8, e é
+  `resumoDoHardware` — função pura, compartilhada — que a faz. A ficha de
+  atributos de cada tipo é validada pelo **mesmo** `validarRespostas` do
+  formulário dinâmico, e desenhada pelo mesmo `CampoDinamico`.
 - **Vínculo com chamado** — "este chamado é sobre este equipamento",
   com histórico.
 - **Localização** em árvore, estado do ativo, fabricante e modelo.

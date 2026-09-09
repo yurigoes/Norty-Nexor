@@ -42,7 +42,7 @@ export function CamposDinamicos({
       </div>
 
       {campos.map((campo) => (
-        <Campo
+        <CampoDinamico
           key={campo.key}
           campo={campo}
           valor={respostas[campo.key]}
@@ -55,17 +55,24 @@ export function CamposDinamicos({
   );
 }
 
-function Campo({
+/**
+ * Um campo, desenhado a partir da sua declaração.
+ *
+ * Exportado porque a ficha do componente do ativo é feita da mesma
+ * matéria — um `FormField` — e desenhar de novo o mesmo `select` seria
+ * ganhar duas telas que divergem no primeiro ajuste.
+ */
+export function CampoDinamico({
   campo,
   valor,
   erro,
-  previa,
+  previa = false,
   aoMudar,
 }: {
   campo: FormField;
   valor: unknown;
   erro?: string;
-  previa: boolean;
+  previa?: boolean;
   aoMudar: (valor: unknown) => void;
 }) {
   const id = `campo-${campo.key}`;

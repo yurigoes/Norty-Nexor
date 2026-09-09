@@ -14,6 +14,7 @@ import type {
   ChangeStatus,
   Channel,
   BillingPeriod,
+  ComponentKind,
   ContractKind,
   CostKind,
   FormSchema,
@@ -653,6 +654,44 @@ export type EscreverModeloDeAtivoRequest = {
   name: string;
   kind?: AssetKind;
   manufacturerId?: string | null;
+};
+
+// ---------------------------------------------------------------------
+// Componentes do ativo
+// ---------------------------------------------------------------------
+
+export type ComponenteView = {
+  id: string;
+  kind: ComponentKind;
+  /** Modelo do componente: "Kingston KVR26N19S8", "Samsung 980". */
+  name: string;
+  manufacturer: CatalogoRef | null;
+  serialNumber: string | null;
+  /** A ficha do tipo, validada por `validarAtributos`. */
+  attributes: Record<string, unknown>;
+  notes: string | null;
+  createdAt: string;
+};
+
+export type EscreverComponenteRequest = {
+  kind: ComponentKind;
+  name: string;
+  manufacturerId?: string | null;
+  serialNumber?: string | null;
+  attributes?: Record<string, unknown>;
+  notes?: string | null;
+};
+
+/**
+ * O ativo com o que está pendurado dentro dele.
+ *
+ * Só acrescenta os componentes ao `AssetView`. O dado financeiro do
+ * ativo (valor de compra, nota, fornecedor) fica de fora de propósito:
+ * ler o ativo é `ativo:ler`, que o agente tem, e quanto a empresa pagou
+ * pela máquina não é informação de quem vai consertá-la.
+ */
+export type AssetDetail = AssetView & {
+  components: ComponenteView[];
 };
 
 // ---------------------------------------------------------------------

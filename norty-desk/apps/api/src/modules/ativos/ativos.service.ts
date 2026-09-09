@@ -1,11 +1,23 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import type { AssetView } from '@norty-desk/shared';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import type { AssetDetail, AssetView, ComponentKind, ComponenteView } from '@norty-desk/shared';
+import { validarAtributos } from '@norty-desk/shared';
 import { Prisma } from '@prisma/client';
 
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { escopoDeLeitura } from '../tickets/tickets.escopo';
-import type { BuscarAtivosDto, EditarAtivoDto, EscreverAtivoDto } from './dto';
+import type {
+  BuscarAtivosDto,
+  EditarAtivoDto,
+  EditarComponenteDto,
+  EscreverAtivoDto,
+  EscreverComponenteDto,
+} from './dto';
 
 const INCLUDE = {
   user: true,
@@ -76,6 +88,119 @@ export class AtivosService {
     if (!ativo) throw new NotFoundException('Ativo não encontrado.');
     const [view] = await this.comCaminho(usuario.organizationId, [ativo]);
     return view!;
+  }
+
+  /** O ativo com o que está pendurado dentro dele. */
+  async detalhe(usuario: UsuarioAutenticado, id: string): Promise<AssetDetail> {
+    const [ativo, componentes] = await Promise.all([
+      this.obter(usuario, id),
+      this.componentes(usuario, id),
+    ]);
+
+    return { ...ativo, components: componentes };
+  }
+
+  // -------------------------------------------------------------------
+  // Componentes
+  // -------------------------------------------------------------------
+
+  async componentes(usuario: UsuarioAutenticado, assetId: string): Promise<ComponenteView[]> {
+    const componentes = await this.prisma.assetComponent.findMany({
+      where: { assetId, organizationId: usuario.organizationId },
+      include: { manufacturer: { select: { id: true, name: true } } },
+      // Pelo tipo e depois pela ordem de entrada: os dois pentes de
+      // memória saem juntos, e o segundo sai depois do primeiro.
+      orderBy: [{ kind: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    return componentes.map(AtivosService.componenteParaView);
+  }
+
+  async adicionarComponente(
+    usuario: UsuarioAutenticado,
+    assetId: string,
+    dto: EscreverComponenteDto,
+  ): Promise<ComponenteView[]> {
+    await this.obter(usuario, assetId);
+    await this.exigirFabricante(usuario, dto.manufacturerId);
+
+    const atributos = AtivosService.exigirFicha(dto.kind, dto.attributes);
+
+    try {
+      await this.prisma.assetComponent.create({
+        data: {
+          organizationId: usuario.organizationId,
+          assetId,
+          kind: dto.kind,
+          name: dto.name,
+          manufacturerId: dto.manufacturerId ?? null,
+          serialNumber: dto.serialNumber ?? null,
+          attributes: atributos,
+          notes: dto.notes ?? null,
+        },
+      });
+    } catch (erro) {
+      throw AtivosService.traduzirSerieDePeca(erro);
+    }
+
+    return this.componentes(usuario, assetId);
+  }
+
+  async editarComponente(
+    usuario: UsuarioAutenticado,
+    assetId: string,
+    componentId: string,
+    dto: EditarComponenteDto,
+  ): Promise<ComponenteView[]> {
+    const atual = await this.prisma.assetComponent.findFirst({
+      where: { id: componentId, assetId, organizationId: usuario.organizationId },
+    });
+    if (!atual) throw new NotFoundException('Componente não encontrado neste ativo.');
+
+    await this.exigirFabricante(usuario, dto.manufacturerId);
+
+    // Trocar o tipo troca a ficha inteira: os atributos do tipo antigo
+    // não valem no novo, e guardá-los "por via das dúvidas" deixaria
+    // uma frequência de memória escondida dentro de um disco.
+    const kind = dto.kind ?? atual.kind;
+    const atributos =
+      dto.attributes === undefined && kind === atual.kind
+        ? (atual.attributes as Prisma.InputJsonObject)
+        : AtivosService.exigirFicha(kind, dto.attributes);
+
+    try {
+      await this.prisma.assetComponent.update({
+        where: { id: componentId },
+        data: {
+          kind,
+          attributes: atributos,
+          ...(dto.name === undefined ? {} : { name: dto.name }),
+          ...(dto.manufacturerId === undefined ? {} : { manufacturerId: dto.manufacturerId }),
+          ...(dto.serialNumber === undefined ? {} : { serialNumber: dto.serialNumber }),
+          ...(dto.notes === undefined ? {} : { notes: dto.notes }),
+        },
+      });
+    } catch (erro) {
+      throw AtivosService.traduzirSerieDePeca(erro);
+    }
+
+    return this.componentes(usuario, assetId);
+  }
+
+  async removerComponente(
+    usuario: UsuarioAutenticado,
+    assetId: string,
+    componentId: string,
+  ): Promise<ComponenteView[]> {
+    const componente = await this.prisma.assetComponent.findFirst({
+      where: { id: componentId, assetId, organizationId: usuario.organizationId },
+      select: { id: true },
+    });
+    if (!componente) throw new NotFoundException('Componente não encontrado neste ativo.');
+
+    await this.prisma.assetComponent.delete({ where: { id: componentId } });
+
+    return this.componentes(usuario, assetId);
   }
 
   /** O histórico do equipamento: é o que responde "essa máquina dá problema?". */
@@ -334,6 +459,77 @@ export class AtivosService {
     });
 
     if (!pessoa) throw new NotFoundException('Pessoa não encontrada nesta organização.');
+  }
+
+  private async exigirFabricante(
+    usuario: UsuarioAutenticado,
+    manufacturerId: string | null | undefined,
+  ): Promise<void> {
+    if (!manufacturerId) return;
+
+    const existe = await this.prisma.manufacturer.count({
+      where: { id: manufacturerId, organizationId: usuario.organizationId },
+    });
+    if (!existe) throw new BadRequestException('Fabricante não encontrado nesta organização.');
+  }
+
+  /**
+   * A ficha do tipo, validada — ou 400 com o campo que está errado.
+   *
+   * A validação é a mesma do formulário dinâmico, e por isso a mensagem
+   * também é: "Capacidade é obrigatório" diz mais que "attributes
+   * inválido", e é a mesma frase que a tela mostraria se a pessoa
+   * tivesse deixado o campo em branco.
+   */
+  private static exigirFicha(
+    kind: ComponentKind,
+    atributos: Record<string, unknown> | undefined,
+  ): Prisma.InputJsonObject {
+    const ficha = atributos ?? {};
+    const erros = validarAtributos(kind, ficha);
+
+    if (erros.length > 0) {
+      throw new BadRequestException(erros.map((e) => e.mensagem).join(' '));
+    }
+
+    // A conversão acontece aqui, depois da validação, e só aqui: o que
+    // passou por `validarAtributos` é texto, número, booleano, data ou
+    // lista de opções — tudo que o JSON do Postgres aceita.
+    return ficha as Prisma.InputJsonObject;
+  }
+
+  private static traduzirSerieDePeca(erro: unknown): unknown {
+    if (erro instanceof Prisma.PrismaClientKnownRequestError && erro.code === 'P2002') {
+      return new ConflictException(
+        'Já existe uma peça com este número de série. Duas linhas com a mesma ' +
+          'série são a mesma peça contada duas vezes — é assim que a memória da ' +
+          'frota dobra sozinha.',
+      );
+    }
+
+    return erro;
+  }
+
+  private static componenteParaView(c: {
+    id: string;
+    kind: ComponentKind;
+    name: string;
+    manufacturer: { id: string; name: string } | null;
+    serialNumber: string | null;
+    attributes: unknown;
+    notes: string | null;
+    createdAt: Date;
+  }): ComponenteView {
+    return {
+      id: c.id,
+      kind: c.kind,
+      name: c.name,
+      manufacturer: c.manufacturer,
+      serialNumber: c.serialNumber,
+      attributes: (c.attributes ?? {}) as Record<string, unknown>,
+      notes: c.notes,
+      createdAt: c.createdAt.toISOString(),
+    };
   }
 
   /**

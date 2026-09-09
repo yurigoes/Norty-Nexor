@@ -1079,6 +1079,345 @@ export function parseTicketNumberFromSubject(subject: string): number | null {
   return match ? Number(match[1]) : null;
 }
 
+// ---------------------------------------------------------------------
+// Componentes do ativo — substitui os ~60 `Device*` / `Item_Device*`
+// ---------------------------------------------------------------------
+
+/**
+ * O que se pendura dentro de um equipamento.
+ *
+ * No GLPI cada um destes é **duas** tabelas: `glpi_deviceprocessors`
+ * mais `glpi_items_deviceprocessors`, `glpi_devicememories` mais
+ * `glpi_items_devicememories`, e assim por diante — perto de sessenta
+ * ao todo, com o mesmo desenho repetido. Toda tela nova precisa saber
+ * em qual delas olhar, e uma consulta de "quanta memória a frota tem"
+ * é uma união de dezessete `SELECT`.
+ *
+ * Aqui é uma tabela com um discriminador. O que muda de um tipo para o
+ * outro são os atributos, e atributo por tipo é ficha — não schema.
+ */
+export const COMPONENT_KINDS = [
+  'PROCESSADOR',
+  'MEMORIA',
+  'DISCO',
+  'PLACA_MAE',
+  'PLACA_DE_REDE',
+  'PLACA_DE_VIDEO',
+  'PLACA_DE_SOM',
+  'CONTROLADORA',
+  'FONTE',
+  'BATERIA',
+  'UNIDADE_OTICA',
+  'FIRMWARE',
+  'GABINETE',
+  'CAMERA',
+  'SENSOR',
+  'SIMCARD',
+  'OUTRO',
+] as const;
+
+export type ComponentKind = (typeof COMPONENT_KINDS)[number];
+
+export const ROTULO_COMPONENTE: Record<ComponentKind, string> = {
+  PROCESSADOR: 'Processador',
+  MEMORIA: 'Memória',
+  DISCO: 'Disco',
+  PLACA_MAE: 'Placa-mãe',
+  PLACA_DE_REDE: 'Placa de rede',
+  PLACA_DE_VIDEO: 'Placa de vídeo',
+  PLACA_DE_SOM: 'Placa de som',
+  CONTROLADORA: 'Controladora',
+  FONTE: 'Fonte',
+  BATERIA: 'Bateria',
+  UNIDADE_OTICA: 'Unidade óptica',
+  FIRMWARE: 'Firmware',
+  GABINETE: 'Gabinete',
+  CAMERA: 'Câmera',
+  SENSOR: 'Sensor',
+  SIMCARD: 'SIM',
+  OUTRO: 'Outro',
+};
+
+/**
+ * Um campo da ficha do componente.
+ *
+ * É um `FormField` com unidade. A ficha é validada pelo mesmo
+ * `validarRespostas` do formulário dinâmico: um formulário é um
+ * formulário, e ter dois validadores seria ter dois comportamentos
+ * para a mesma pergunta. A diferença é que esta ficha **não se edita
+ * pela tela** — um pente DDR4 tem os campos que tem, e deixar o
+ * administrador inventar "capacidade2" só produziria inventário que
+ * não soma.
+ */
+export type AtributoDoComponente = FormField & { unidade?: string };
+
+const opcoes = (...valores: string[]) => valores.map((v) => ({ value: v, label: v }));
+
+export const ATRIBUTOS_DO_COMPONENTE: Record<ComponentKind, readonly AtributoDoComponente[]> = {
+  PROCESSADOR: [
+    { key: 'nucleos', label: 'Núcleos', type: 'NUMERO', required: false },
+    { key: 'threads', label: 'Threads', type: 'NUMERO', required: false },
+    { key: 'frequencia', label: 'Frequência', type: 'NUMERO', required: false, unidade: 'MHz' },
+    {
+      key: 'arquitetura',
+      label: 'Arquitetura',
+      type: 'SELECAO',
+      required: false,
+      options: opcoes('x86_64', 'x86', 'ARM64'),
+    },
+  ],
+  MEMORIA: [
+    // Em MB, não em GB: pente de 512 MB ainda existe em equipamento
+    // velho, e somar a frota inteira em inteiro evita o 0,5 + 0,5 que
+    // não fecha.
+    { key: 'capacidade', label: 'Capacidade', type: 'NUMERO', required: true, unidade: 'MB' },
+    {
+      key: 'tecnologia',
+      label: 'Tecnologia',
+      type: 'SELECAO',
+      required: false,
+      options: opcoes('DDR3', 'DDR4', 'DDR5', 'LPDDR4', 'LPDDR5'),
+    },
+    { key: 'frequencia', label: 'Frequência', type: 'NUMERO', required: false, unidade: 'MHz' },
+    { key: 'slot', label: 'Slot', type: 'TEXTO', required: false },
+  ],
+  DISCO: [
+    { key: 'capacidade', label: 'Capacidade', type: 'NUMERO', required: true, unidade: 'GB' },
+    {
+      key: 'tecnologia',
+      label: 'Tecnologia',
+      type: 'SELECAO',
+      required: false,
+      options: opcoes('HDD', 'SSD', 'NVMe'),
+    },
+    {
+      key: 'interface',
+      label: 'Interface',
+      type: 'SELECAO',
+      required: false,
+      options: opcoes('SATA', 'SAS', 'NVMe', 'USB'),
+    },
+    { key: 'rotacao', label: 'Rotação', type: 'NUMERO', required: false, unidade: 'RPM' },
+  ],
+  PLACA_MAE: [
+    { key: 'chipset', label: 'Chipset', type: 'TEXTO', required: false },
+    { key: 'soquete', label: 'Soquete', type: 'TEXTO', required: false },
+  ],
+  PLACA_DE_REDE: [
+    { key: 'velocidade', label: 'Velocidade', type: 'NUMERO', required: false, unidade: 'Mbps' },
+    { key: 'mac', label: 'Endereço MAC', type: 'TEXTO', required: false },
+    { key: 'sem_fio', label: 'Sem fio', type: 'BOOLEANO', required: false },
+  ],
+  PLACA_DE_VIDEO: [
+    { key: 'memoria', label: 'Memória', type: 'NUMERO', required: false, unidade: 'MB' },
+    { key: 'chipset', label: 'Chipset', type: 'TEXTO', required: false },
+  ],
+  PLACA_DE_SOM: [{ key: 'chipset', label: 'Chipset', type: 'TEXTO', required: false }],
+  CONTROLADORA: [
+    { key: 'interface', label: 'Interface', type: 'TEXTO', required: false },
+  ],
+  FONTE: [
+    { key: 'potencia', label: 'Potência', type: 'NUMERO', required: false, unidade: 'W' },
+    { key: 'redundante', label: 'Redundante', type: 'BOOLEANO', required: false },
+  ],
+  BATERIA: [
+    { key: 'capacidade', label: 'Capacidade', type: 'NUMERO', required: false, unidade: 'mWh' },
+    { key: 'tensao', label: 'Tensão', type: 'NUMERO', required: false, unidade: 'mV' },
+    {
+      key: 'quimica',
+      label: 'Química',
+      type: 'SELECAO',
+      required: false,
+      options: opcoes('Li-ion', 'Li-Po', 'NiMH', 'Chumbo'),
+    },
+  ],
+  UNIDADE_OTICA: [
+    {
+      key: 'tecnologia',
+      label: 'Tecnologia',
+      type: 'SELECAO',
+      required: false,
+      options: opcoes('CD', 'DVD', 'Blu-ray'),
+    },
+    { key: 'gravador', label: 'Grava', type: 'BOOLEANO', required: false },
+  ],
+  FIRMWARE: [
+    { key: 'versao', label: 'Versão', type: 'TEXTO', required: true },
+    { key: 'data', label: 'Data', type: 'DATA', required: false },
+  ],
+  GABINETE: [
+    {
+      key: 'formato',
+      label: 'Formato',
+      type: 'SELECAO',
+      required: false,
+      options: opcoes('Torre', 'Mini', 'SFF', 'Rack'),
+    },
+  ],
+  CAMERA: [{ key: 'resolucao', label: 'Resolução', type: 'TEXTO', required: false }],
+  SENSOR: [{ key: 'tipo', label: 'Tipo', type: 'TEXTO', required: false }],
+  SIMCARD: [
+    // O GLPI guarda PIN e PUK do chip em coluna de texto. Não copiamos:
+    // é credencial, e inventário não é cofre.
+    { key: 'numero', label: 'Número', type: 'TEXTO', required: false },
+    { key: 'operadora', label: 'Operadora', type: 'TEXTO', required: false },
+    { key: 'iccid', label: 'ICCID', type: 'TEXTO', required: false },
+  ],
+  OUTRO: [],
+};
+
+/** A ficha do tipo, no formato que `validarRespostas` já entende. */
+export function esquemaDoComponente(kind: ComponentKind): FormSchema {
+  return { fields: [...ATRIBUTOS_DO_COMPONENTE[kind]] };
+}
+
+export function validarAtributos(
+  kind: ComponentKind,
+  atributos: Record<string, unknown>,
+): ErroDeCampo[] {
+  return validarRespostas(esquemaDoComponente(kind), atributos);
+}
+
+/**
+ * Capacidade legível a partir de megabytes.
+ *
+ * `1024` vira "1 GB" e `1572864` vira "1,5 TB". Inventário se lê em
+ * GB e TB; o banco guarda MB porque é o menor que ainda soma inteiro.
+ */
+export function emCapacidade(megabytes: number): string {
+  if (!Number.isFinite(megabytes)) return '—';
+  if (megabytes >= 1024 * 1024) return `${arredondar(megabytes / (1024 * 1024))} TB`;
+  if (megabytes >= 1024) return `${arredondar(megabytes / 1024)} GB`;
+  return `${arredondar(megabytes)} MB`;
+}
+
+function arredondar(valor: number): string {
+  const uma = Math.round(valor * 10) / 10;
+  return Number.isInteger(uma) ? String(uma) : uma.toString().replace('.', ',');
+}
+
+type ComponenteResumivel = {
+  kind: ComponentKind;
+  name: string;
+  attributes: Record<string, unknown>;
+};
+
+/**
+ * A linha que descreve o componente numa lista.
+ *
+ * "16 GB DDR4 · 2666 MHz" diz mais que "Memória — Kingston". É aqui,
+ * numa função pura, porque a tela e o relatório precisam escrever a
+ * mesma frase — e no GLPI cada tela monta a sua.
+ */
+export function descreverComponente(c: ComponenteResumivel): string {
+  const a = c.attributes ?? {};
+  const numero = (chave: string): number | null =>
+    typeof a[chave] === 'number' && Number.isFinite(a[chave] as number) ? (a[chave] as number) : null;
+  const texto = (chave: string): string | null =>
+    typeof a[chave] === 'string' && (a[chave] as string).trim() ? (a[chave] as string) : null;
+
+  const partes: string[] = [];
+
+  switch (c.kind) {
+    case 'MEMORIA': {
+      const capacidade = numero('capacidade');
+      const cabeca = [capacidade === null ? null : emCapacidade(capacidade), texto('tecnologia')]
+        .filter(Boolean)
+        .join(' ');
+      if (cabeca) partes.push(cabeca);
+      const f = numero('frequencia');
+      if (f !== null) partes.push(`${f} MHz`);
+      break;
+    }
+    case 'DISCO': {
+      const capacidade = numero('capacidade');
+      const cabeca = [
+        capacidade === null ? null : emCapacidade(capacidade * 1024),
+        texto('tecnologia'),
+      ]
+        .filter(Boolean)
+        .join(' ');
+      if (cabeca) partes.push(cabeca);
+      const i = texto('interface');
+      if (i && i !== texto('tecnologia')) partes.push(i);
+      break;
+    }
+    case 'PROCESSADOR': {
+      const n = numero('nucleos');
+      if (n !== null) partes.push(`${n} ${n === 1 ? 'núcleo' : 'núcleos'}`);
+      const f = numero('frequencia');
+      if (f !== null) partes.push(f >= 1000 ? `${arredondar(f / 1000)} GHz` : `${f} MHz`);
+      break;
+    }
+    case 'PLACA_DE_VIDEO': {
+      const m = numero('memoria');
+      if (m !== null) partes.push(emCapacidade(m));
+      const chipset = texto('chipset');
+      if (chipset) partes.push(chipset);
+      break;
+    }
+    case 'FONTE': {
+      const p = numero('potencia');
+      if (p !== null) partes.push(`${p} W`);
+      break;
+    }
+    default: {
+      // Sem frase própria, a ficha vira a frase: só o que está
+      // preenchido, na ordem em que o tipo declara.
+      for (const campo of ATRIBUTOS_DO_COMPONENTE[c.kind]) {
+        const valor = a[campo.key];
+        if (valor === undefined || valor === null || valor === '') continue;
+        const escrito =
+          typeof valor === 'boolean'
+            ? valor
+              ? campo.label
+              : null
+            : `${String(valor)}${campo.unidade ? ` ${campo.unidade}` : ''}`;
+        if (escrito) partes.push(escrito);
+      }
+    }
+  }
+
+  return partes.join(' · ') || c.name;
+}
+
+export type ResumoDeHardware = {
+  /** Soma dos pentes, em MB. */
+  memoriaMB: number;
+  /** Soma dos discos, em MB. */
+  armazenamentoMB: number;
+  nucleos: number;
+  total: number;
+};
+
+/**
+ * O que a máquina tem, somado.
+ *
+ * É a pergunta que o GLPI não responde sem exportar: lá "16 GB" são
+ * duas linhas de 8192 em `glpi_items_devicememories` que ninguém soma
+ * na tela. Um pente é uma linha — não há campo de quantidade, porque
+ * cada pente tem o seu número de série e o seu slot.
+ */
+export function resumoDoHardware(componentes: ComponenteResumivel[]): ResumoDeHardware {
+  const resumo: ResumoDeHardware = {
+    memoriaMB: 0,
+    armazenamentoMB: 0,
+    nucleos: 0,
+    total: componentes.length,
+  };
+
+  for (const c of componentes) {
+    const valor = (chave: string): number =>
+      typeof c.attributes?.[chave] === 'number' ? (c.attributes[chave] as number) : 0;
+
+    if (c.kind === 'MEMORIA') resumo.memoriaMB += valor('capacidade');
+    if (c.kind === 'DISCO') resumo.armazenamentoMB += valor('capacidade') * 1024;
+    if (c.kind === 'PROCESSADOR') resumo.nucleos += valor('nucleos');
+  }
+
+  return resumo;
+}
+
 /** `5511999999999@s.whatsapp.net` → `+5511999999999` */
 export function normalizePhone(raw: string): string {
   const digits = raw.split('@')[0].replace(/\D/g, '');

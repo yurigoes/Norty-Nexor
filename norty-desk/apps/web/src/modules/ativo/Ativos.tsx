@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import type {
   AssetView,
   FabricanteView,
@@ -13,7 +14,7 @@ import {
   ROTULO_ATIVO_STATUS,
 } from '@norty-desk/shared';
 
-import { buscarAtivos, chamadosDoAtivo, criarAtivo, editarAtivo, type ChamadoDoAtivo } from '../../api/ativos';
+import { buscarAtivos, criarAtivo, editarAtivo } from '../../api/ativos';
 import {
   listarFabricantes,
   listarLocalizacoes,
@@ -22,7 +23,6 @@ import {
 import { ErroDaApi } from '../../api/cliente';
 import { listarPessoas, type PessoaView } from '../../api/aprovacoes';
 import { useAutenticacao } from '../../auth/Autenticacao';
-import { dataCurta } from '../../lib/formato';
 
 /**
  * O parque de equipamentos.
@@ -39,7 +39,6 @@ export function Ativos() {
   const [status, setStatus] = useState('');
   const [ativos, setAtivos] = useState<AssetView[] | null>(null);
   const [emEdicao, setEmEdicao] = useState<AssetView | 'novo' | null>(null);
-  const [aberto, setAberto] = useState<AssetView | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
   const recarregar = useCallback(async () => {
@@ -145,7 +144,7 @@ export function Ativos() {
                 {ativos.map((ativo) => (
                   <tr key={ativo.id}>
                     <td className="tabela-titulo-celula">
-                      {ativo.name}
+                      <Link to={`/ativos/${ativo.id}`}>{ativo.name}</Link>
                       <span className="campo-ajuda" style={{ display: 'block' }}>
                         {ROTULO_ATIVO[ativo.kind]}
                         {ativo.manufacturer ? ` · ${ativo.manufacturer.name}` : ''}
@@ -162,13 +161,9 @@ export function Ativos() {
                     </td>
                     <td className="-num">{ativo.ticketCount ?? 0}</td>
                     <td className="-num">
-                      <button
-                        type="button"
-                        className="btn -fantasma -sm"
-                        onClick={() => setAberto(ativo)}
-                      >
-                        Histórico
-                      </button>
+                      <Link to={`/ativos/${ativo.id}`} className="btn -fantasma -sm">
+                        Abrir
+                      </Link>
                       {can('ativo:gerenciar') ? (
                         <button
                           type="button"
@@ -200,7 +195,6 @@ export function Ativos() {
         />
       ) : null}
 
-      {aberto ? <Historico ativo={aberto} aoFechar={() => setAberto(null)} /> : null}
     </div>
   );
 }
@@ -216,63 +210,6 @@ function seloDoStatus(status: AssetView['status']): string {
     default:
       return '-contorno';
   }
-}
-
-function Historico({ ativo, aoFechar }: { ativo: AssetView; aoFechar: () => void }) {
-  const [chamados, setChamados] = useState<ChamadoDoAtivo[] | null>(null);
-
-  useEffect(() => {
-    void chamadosDoAtivo(ativo.id)
-      .then(setChamados)
-      .catch(() => setChamados([]));
-  }, [ativo.id]);
-
-  return (
-    <div className="modal-fundo" role="presentation" onClick={aoFechar}>
-      <div
-        className="modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Histórico de ${ativo.name}`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal-topo">
-          <div>
-            <h3 className="card-titulo">{ativo.name}</h3>
-            <p className="card-sub">
-              {ativo.tag ? `Patrimônio ${ativo.tag}` : 'Sem patrimônio'}
-              {ativo.serialNumber ? ` · série ${ativo.serialNumber}` : ''}
-            </p>
-          </div>
-          <button type="button" className="btn-icone" aria-label="Fechar" onClick={aoFechar}>
-            ×
-          </button>
-        </div>
-
-        <div className="modal-corpo pilha-sm">
-          {!chamados ? (
-            <div className="sk sk-linha" />
-          ) : chamados.length === 0 ? (
-            <p className="campo-ajuda">Nenhum chamado envolveu este equipamento.</p>
-          ) : (
-            chamados.map((c) => (
-              <a key={c.id} href={`/chamados/${c.id}`} className="conversa-anexo">
-                <span className="mono">#{c.number}</span>
-                <span style={{ minWidth: 0, flex: 1 }}>{c.subject}</span>
-                <span className="conversa-anexo-peso">{dataCurta(c.createdAt)}</span>
-              </a>
-            ))
-          )}
-        </div>
-
-        <div className="modal-rodape">
-          <button type="button" className="btn -fantasma" onClick={aoFechar}>
-            Fechar
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 function Formulario({

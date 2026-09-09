@@ -1,5 +1,8 @@
 import type {
+  AssetDetail,
   AssetView,
+  ComponenteView,
+  EscreverComponenteRequest,
   SatisfacaoResumo,
   SurveyPublicView,
   SurveyView,
@@ -26,7 +29,29 @@ export const buscarAtivos = (filtro: {
   limit?: number;
 } = {}) => chamar<AssetView[]>(`/assets${query(filtro)}`);
 
-export const obterAtivo = (id: string) => chamar<AssetView>(`/assets/${id}`);
+/** O ativo com os componentes juntos — a tela de detalhe lê os dois. */
+export const obterAtivo = (id: string) => chamar<AssetDetail>(`/assets/${id}`);
+
+// --- Componentes -------------------------------------------------------
+
+export const componentesDoAtivo = (id: string) =>
+  chamar<ComponenteView[]>(`/assets/${id}/components`);
+
+export const adicionarComponente = (id: string, dados: EscreverComponenteRequest) =>
+  chamar<ComponenteView[]>(`/assets/${id}/components`, { metodo: 'POST', corpo: dados });
+
+export const editarComponente = (
+  id: string,
+  componentId: string,
+  dados: Partial<EscreverComponenteRequest>,
+) =>
+  chamar<ComponenteView[]>(`/assets/${id}/components/${componentId}`, {
+    metodo: 'PATCH',
+    corpo: dados,
+  });
+
+export const removerComponente = (id: string, componentId: string) =>
+  chamar<ComponenteView[]>(`/assets/${id}/components/${componentId}`, { metodo: 'DELETE' });
 
 export type ChamadoDoAtivo = {
   id: string;

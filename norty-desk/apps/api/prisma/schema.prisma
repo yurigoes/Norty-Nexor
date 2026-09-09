@@ -25,72 +25,73 @@ datasource db {
 /// Substitui glpi_entities. Plana, sem herança recursiva.
 /// Ver docs/02-gap-analysis.md, item 7.
 model Organization {
-  id        String   @id @default(uuid()) @db.Uuid
-  slug      String   @unique
-  name      String
-  isActive  Boolean  @default(true)
+  id             String   @id @default(uuid()) @db.Uuid
+  slug           String   @unique
+  name           String
+  isActive       Boolean  @default(true)
   /// Matriz 5x5 urgência x impacto -> prioridade. Null usa o padrão global.
   priorityMatrix Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  memberships   Membership[]
-  teams         Team[]
-  categories    Category[]
-  tickets       Ticket[]
-  agreements    Agreement[]
-  calendars     Calendar[]
+  memberships    Membership[]
+  teams          Team[]
+  categories     Category[]
+  tickets        Ticket[]
+  agreements     Agreement[]
+  calendars      Calendar[]
   pendingReasons PendingReason[]
-  forms         TicketForm[]
-  articles      Article[]
-  channels      ChannelAccount[]
-  suppliers     Supplier[]
-  rules         IntakeRule[]
-  webhooks      OutboundWebhook[]
-  apiKeys       ApiKey[]
-  contacts      Contact[]
-  assets        Asset[]
-  surveys       Survey[]
-  problems      Problem[]
-  changes       Change[]
-  recurrences   RecurringTicket[]
-  templates     Template[]
-  contracts     Contract[]
-  budgets       Budget[]
-  locations     Location[]
-  manufacturers Manufacturer[]
-  assetModels   AssetModel[]
+  forms          TicketForm[]
+  articles       Article[]
+  channels       ChannelAccount[]
+  suppliers      Supplier[]
+  rules          IntakeRule[]
+  webhooks       OutboundWebhook[]
+  apiKeys        ApiKey[]
+  contacts       Contact[]
+  assets         Asset[]
+  surveys        Survey[]
+  problems       Problem[]
+  changes        Change[]
+  recurrences    RecurringTicket[]
+  templates      Template[]
+  contracts      Contract[]
+  budgets        Budget[]
+  locations      Location[]
+  manufacturers  Manufacturer[]
+  assetModels    AssetModel[]
+  components     AssetComponent[]
 
   @@map("organizations")
 }
 
 model User {
-  id           String   @id @default(uuid()) @db.Uuid
-  email        String   @unique
-  name         String
+  id                 String   @id @default(uuid()) @db.Uuid
+  email              String   @unique
+  name               String
   /// Argon2id. A API nunca devolve este campo.
-  passwordHash String
-  phone        String?
-  avatarUrl    String?
-  isActive     Boolean  @default(true)
-  mustChangePassword Boolean @default(true)
-  locale       String   @default("pt-BR")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  passwordHash       String
+  phone              String?
+  avatarUrl          String?
+  isActive           Boolean  @default(true)
+  mustChangePassword Boolean  @default(true)
+  locale             String   @default("pt-BR")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  memberships   Membership[]
-  teamMembers   TeamMember[]
-  actorIn       TicketActor[]
-  authoredEvents TicketEvent[] @relation("AutorDoEvento")
-  approvals     Approval[]
-  refreshTokens RefreshToken[]
-  articles      Article[]
-  assets        Asset[]           @relation("AtivoDoUsuario")
-  problems      Problem[]         @relation("ResponsavelPeloProblema")
-  changes       Change[]          @relation("ResponsavelPelaMudanca")
-  recurrences   RecurringTicket[] @relation("RequerenteDaRecorrencia")
-  costs         TicketCost[]      @relation("AutorDoCusto")
-  articleEdits  ArticleRevision[] @relation("EditorDaRevisao")
+  memberships    Membership[]
+  teamMembers    TeamMember[]
+  actorIn        TicketActor[]
+  authoredEvents TicketEvent[]     @relation("AutorDoEvento")
+  approvals      Approval[]
+  refreshTokens  RefreshToken[]
+  articles       Article[]
+  assets         Asset[]           @relation("AtivoDoUsuario")
+  problems       Problem[]         @relation("ResponsavelPeloProblema")
+  changes        Change[]          @relation("ResponsavelPelaMudanca")
+  recurrences    RecurringTicket[] @relation("RequerenteDaRecorrencia")
+  costs          TicketCost[]      @relation("AutorDoCusto")
+  articleEdits   ArticleRevision[] @relation("EditorDaRevisao")
 
   @@map("users")
 }
@@ -120,13 +121,13 @@ enum Role {
 }
 
 model RefreshToken {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
   /// SHA-256 do token. O valor cru só existe no cookie httpOnly.
-  tokenHash String   @unique
+  tokenHash String    @unique
   expiresAt DateTime
   revokedAt DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -145,12 +146,12 @@ model Team {
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   members      TeamMember[]
   actorIn      TicketActor[]
   categories   Category[]
-  problems     Problem[]    @relation("TimeDoProblema")
-  changes      Change[]     @relation("TimeDaMudanca")
+  problems     Problem[]         @relation("TimeDoProblema")
+  changes      Change[]          @relation("TimeDaMudanca")
   recurrences  RecurringTicket[] @relation("TimeDaRecorrencia")
 
   @@unique([organizationId, name])
@@ -182,7 +183,7 @@ model Contact {
   userId         String?  @db.Uuid
   createdAt      DateTime @default(now())
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   actorIn      TicketActor[]
 
   @@unique([organizationId, email])
@@ -200,7 +201,7 @@ model Supplier {
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   actorIn      TicketActor[]
   contracts    Contract[]
-  assets       Asset[]      @relation("FornecedorDoAtivo")
+  assets       Asset[]       @relation("FornecedorDoAtivo")
 
   @@unique([organizationId, name])
   @@map("suppliers")
@@ -213,33 +214,33 @@ model Supplier {
 /// Substitui glpi_itilcategories. Mantém a árvore — aqui ela é útil e
 /// rasa (categoria > subcategoria), diferente da árvore de entidades.
 model Category {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @db.Uuid
-  parentId       String?  @db.Uuid
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  parentId       String? @db.Uuid
   name           String
   /// Time que recebe o chamado quando cai nesta categoria.
-  defaultTeamId  String?  @db.Uuid
+  defaultTeamId  String? @db.Uuid
   defaultUrgency Int?
-  isActive       Boolean  @default(true)
+  isActive       Boolean @default(true)
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  parent       Category?    @relation("Subcategoria", fields: [parentId], references: [id])
-  children     Category[]   @relation("Subcategoria")
-  defaultTeam  Team?        @relation(fields: [defaultTeamId], references: [id])
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent            Category?         @relation("Subcategoria", fields: [parentId], references: [id])
+  children          Category[]        @relation("Subcategoria")
+  defaultTeam       Team?             @relation(fields: [defaultTeamId], references: [id])
   /// Os acordos aplicados por padrão a um chamado desta categoria.
   ///
   /// É lista, não um só: um chamado precisa de TTO *e* TTR, e quem
   /// vende SLA externo com OLA interno precisa dos quatro. Um `Agreement`
   /// aqui é uma linha de (kind, target) — a "política de atendimento" do
   /// catálogo é o conjunto delas.
-  defaultAgreements Agreement[] @relation("AcordosPadraoDaCategoria")
-  tickets      Ticket[]
-  forms        TicketForm[]
-  articles     Article[]
-  problems     Problem[]
-  changes      Change[]
-  recurrences  RecurringTicket[]
-  templates    Template[]
+  defaultAgreements Agreement[]       @relation("AcordosPadraoDaCategoria")
+  tickets           Ticket[]
+  forms             TicketForm[]
+  articles          Article[]
+  problems          Problem[]
+  changes           Change[]
+  recurrences       RecurringTicket[]
+  templates         Template[]
 
   @@unique([organizationId, parentId, name])
   @@index([organizationId])
@@ -249,13 +250,13 @@ model Category {
 /// Substitui as 12 tabelas de tickettemplate*. O esquema do formulário
 /// é um JSON declarado. Ver docs/02-gap-analysis.md, item 8.
 model TicketForm {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @db.Uuid
-  categoryId     String?  @db.Uuid
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  categoryId     String? @db.Uuid
   name           String
   /// FormSchema em packages/shared/src/domain.ts
   schema         Json
-  isDefault      Boolean  @default(false)
+  isDefault      Boolean @default(false)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   category     Category?    @relation(fields: [categoryId], references: [id])
@@ -294,8 +295,8 @@ enum Channel {
 }
 
 model Ticket {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @db.Uuid
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
   /// Sequencial legível por organização. É o que aparece em [#123] no
   /// assunto do e-mail e nas mensagens de WhatsApp.
   number         Int
@@ -310,22 +311,22 @@ model Ticket {
   impact   Int @default(3)
   priority Int @default(3)
 
-  categoryId String? @db.Uuid
-  formId     String? @db.Uuid
+  categoryId    String? @db.Uuid
+  formId        String? @db.Uuid
   /// Canal em que o chamado nasceu. Define o canal padrão de resposta.
   originChannel Channel @default(WEB)
 
   /// Motivo da pendência atual, quando status = PENDENTE.
-  pendingReasonId String?   @db.Uuid
-  pendingSince    DateTime?
+  pendingReasonId      String?   @db.Uuid
+  pendingSince         DateTime?
   /// Quantas cobranças automáticas já saíram nesta pendência.
-  pendingRemindersSent Int  @default(0)
+  pendingRemindersSent Int       @default(0)
 
   firstResponseAt DateTime?
   solvedAt        DateTime?
   closedAt        DateTime?
   /// Soma do tempo gasto nas tarefas, em segundos.
-  spentSeconds    Int @default(0)
+  spentSeconds    Int       @default(0)
 
   /// Referência do sistema que abriu o chamado pela API pública.
   ///
@@ -341,24 +342,24 @@ model Ticket {
   form          TicketForm?    @relation(fields: [formId], references: [id])
   pendingReason PendingReason? @relation(fields: [pendingReasonId], references: [id])
 
-  actors      TicketActor[]
-  events      TicketEvent[]
-  commitments SlaCommitment[]
-  approvals   Approval[]
-  attachments Attachment[]
+  actors       TicketActor[]
+  events       TicketEvent[]
+  commitments  SlaCommitment[]
+  approvals    Approval[]
+  attachments  Attachment[]
   /// Respostas do formulário dinâmico, chaveadas pelo campo do schema.
   customFields Json?
-  links       TicketLink[] @relation("ChamadoOrigem")
-  linkedBy    TicketLink[] @relation("ChamadoDestino")
-  assets      TicketAsset[]
-  survey      Survey?
-  costs       TicketCost[]
+  links        TicketLink[]    @relation("ChamadoOrigem")
+  linkedBy     TicketLink[]    @relation("ChamadoDestino")
+  assets       TicketAsset[]
+  survey       Survey?
+  costs        TicketCost[]
 
   /// O problema que causa este chamado e a mudança que o resolve.
   /// São os dois vínculos que o ITIL pede e o GLPI resolve com uma
   /// tabela de ligação polimórfica.
-  problemId String? @db.Uuid
-  changeId  String? @db.Uuid
+  problemId String?  @db.Uuid
+  changeId  String?  @db.Uuid
   problem   Problem? @relation(fields: [problemId], references: [id], onDelete: SetNull)
   change    Change?  @relation(fields: [changeId], references: [id], onDelete: SetNull)
 
@@ -445,29 +446,29 @@ enum Visibility {
 /// linhas apontando para registros que não existem mais
 /// (`docs/03-modelo-de-dados.md`, seção 6).
 model TicketEvent {
-  id         String     @id @default(uuid()) @db.Uuid
-  ticketId   String?    @db.Uuid
-  problemId  String?    @db.Uuid
-  changeId   String?    @db.Uuid
-  type       EventType
-  visibility Visibility @default(PUBLICA)
+  id              String     @id @default(uuid()) @db.Uuid
+  ticketId        String?    @db.Uuid
+  problemId       String?    @db.Uuid
+  changeId        String?    @db.Uuid
+  type            EventType
+  visibility      Visibility @default(PUBLICA)
   /// Nulo quando o autor é o sistema (cron de SLA, regra de entrada).
-  authorId   String?    @db.Uuid
+  authorId        String?    @db.Uuid
   /// Quando o autor é externo e ainda não tem conta.
-  authorContactId String? @db.Uuid
-  channel    Channel    @default(WEB)
+  authorContactId String?    @db.Uuid
+  channel         Channel    @default(WEB)
   /// Corpo em texto. HTML sanitizado quando vem de e-mail.
-  body       String?
+  body            String?
   /// Campos específicos do tipo. Tipado em shared como EventPayload.
-  payload    Json?
-  createdAt  DateTime   @default(now())
-  editedAt   DateTime?
+  payload         Json?
+  createdAt       DateTime   @default(now())
+  editedAt        DateTime?
 
-  ticket      Ticket?      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  problem     Problem?     @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  change      Change?      @relation(fields: [changeId], references: [id], onDelete: Cascade)
-  author      User?        @relation("AutorDoEvento", fields: [authorId], references: [id])
-  attachments Attachment[]
+  ticket         Ticket?         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  problem        Problem?        @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  change         Change?         @relation(fields: [changeId], references: [id], onDelete: Cascade)
+  author         User?           @relation("AutorDoEvento", fields: [authorId], references: [id])
+  attachments    Attachment[]
   /// Rastro do canal: mensagem de e-mail ou WhatsApp que originou o evento.
   inboundMessage InboundMessage?
 
@@ -503,22 +504,22 @@ model TicketLink {
 /// Arquivo no MinIO do CT 102. Substitui glpi_documents +
 /// glpi_documents_items + glpi_documenttypes + glpi_documentcategories.
 model Attachment {
-  id          String   @id @default(uuid()) @db.Uuid
+  id           String   @id @default(uuid()) @db.Uuid
   /// Mesmo desenho da linha do tempo: três donos possíveis, exatamente
   /// um preenchido, garantido por `CHECK` no banco.
-  ticketId    String?  @db.Uuid
-  problemId   String?  @db.Uuid
-  changeId    String?  @db.Uuid
-  eventId     String?  @db.Uuid
-  filename    String
-  contentType String
-  sizeBytes   Int
+  ticketId     String?  @db.Uuid
+  problemId    String?  @db.Uuid
+  changeId     String?  @db.Uuid
+  eventId      String?  @db.Uuid
+  filename     String
+  contentType  String
+  sizeBytes    Int
   /// Chave no bucket. A URL é assinada na leitura, com validade curta.
-  storageKey  String   @unique
+  storageKey   String   @unique
   /// SHA-256 do conteúdo, para deduplicação e verificação.
-  checksum    String
-  uploadedById String? @db.Uuid
-  createdAt   DateTime @default(now())
+  checksum     String
+  uploadedById String?  @db.Uuid
+  createdAt    DateTime @default(now())
 
   ticket  Ticket?      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   problem Problem?     @relation(fields: [problemId], references: [id], onDelete: Cascade)
@@ -547,21 +548,21 @@ enum TargetKind {
 
 /// Substitui glpi_slas + glpi_olas (ambas descendiam de LevelAgreement).
 model Agreement {
-  id             String        @id @default(uuid()) @db.Uuid
-  organizationId String        @db.Uuid
-  name           String
-  kind           AgreementKind
-  target         TargetKind
+  id              String        @id @default(uuid()) @db.Uuid
+  organizationId  String        @db.Uuid
+  name            String
+  kind            AgreementKind
+  target          TargetKind
   /// Prazo em segundos de expediente, contado pelo calendário.
   durationSeconds Int
-  calendarId     String?       @db.Uuid
-  isActive       Boolean       @default(true)
+  calendarId      String?       @db.Uuid
+  isActive        Boolean       @default(true)
 
   organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   calendar     Calendar?         @relation(fields: [calendarId], references: [id])
   levels       EscalationLevel[]
   commitments  SlaCommitment[]
-  categories   Category[] @relation("AcordosPadraoDaCategoria")
+  categories   Category[]        @relation("AcordosPadraoDaCategoria")
 
   @@unique([organizationId, name, kind, target])
   @@map("agreements")
@@ -569,15 +570,15 @@ model Agreement {
 
 /// Substitui glpi_slalevels + glpi_olalevels + critérios + ações.
 model EscalationLevel {
-  id          String @id @default(uuid()) @db.Uuid
-  agreementId String @db.Uuid
-  name        String
+  id            String @id @default(uuid()) @db.Uuid
+  agreementId   String @db.Uuid
+  name          String
   /// Deslocamento em segundos relativo ao prazo. Negativo dispara antes
   /// do vencimento (-1800 = 30 min antes); positivo, depois.
   offsetSeconds Int
   /// Critérios e ações declarados. Ver EscalationRule em shared.
-  criteria Json?
-  actions  Json
+  criteria      Json?
+  actions       Json
 
   agreement Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
 
@@ -588,20 +589,20 @@ model EscalationLevel {
 /// O compromisso de prazo de um chamado. Substitui as 17 colunas de
 /// SLA/OLA de glpi_tickets. Ver docs/02-gap-analysis.md, item 5.
 model SlaCommitment {
-  id          String        @id @default(uuid()) @db.Uuid
-  ticketId    String        @db.Uuid
-  agreementId String        @db.Uuid
-  kind        AgreementKind
-  target      TargetKind
-  startedAt   DateTime
+  id              String        @id @default(uuid()) @db.Uuid
+  ticketId        String        @db.Uuid
+  agreementId     String        @db.Uuid
+  kind            AgreementKind
+  target          TargetKind
+  startedAt       DateTime
   /// Vencimento já calculado sobre o calendário.
-  dueAt       DateTime
+  dueAt           DateTime
   /// Segundos descontados por pendência.
-  pausedSeconds Int      @default(0)
-  achievedAt  DateTime?
-  breachedAt  DateTime?
+  pausedSeconds   Int           @default(0)
+  achievedAt      DateTime?
+  breachedAt      DateTime?
   /// Último nível de escalonamento disparado.
-  escalationLevel Int   @default(0)
+  escalationLevel Int           @default(0)
 
   ticket    Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   agreement Agreement @relation(fields: [agreementId], references: [id])
@@ -613,10 +614,10 @@ model SlaCommitment {
 
 /// Calendário de expediente. Substitui glpi_calendars.
 model Calendar {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @db.Uuid
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
   name           String
-  timezone       String   @default("America/Sao_Paulo")
+  timezone       String @default("America/Sao_Paulo")
 
   organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   segments     CalendarSegment[]
@@ -629,10 +630,10 @@ model Calendar {
 
 /// Faixa de expediente. Substitui glpi_calendarsegments.
 model CalendarSegment {
-  id         String @id @default(uuid()) @db.Uuid
-  calendarId String @db.Uuid
+  id          String @id @default(uuid()) @db.Uuid
+  calendarId  String @db.Uuid
   /// 0 = domingo .. 6 = sábado
-  weekday    Int
+  weekday     Int
   /// Minutos desde a meia-noite, no fuso do calendário.
   startMinute Int
   endMinute   Int
@@ -644,12 +645,12 @@ model CalendarSegment {
 }
 
 model Holiday {
-  id         String   @id @default(uuid()) @db.Uuid
-  calendarId String   @db.Uuid
-  name       String
-  date       DateTime @db.Date
+  id          String   @id @default(uuid()) @db.Uuid
+  calendarId  String   @db.Uuid
+  name        String
+  date        DateTime @db.Date
   /// Feriado que cai no mesmo dia todo ano.
-  isRecurring Boolean @default(false)
+  isRecurring Boolean  @default(false)
 
   calendar Calendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
 
@@ -660,16 +661,16 @@ model Holiday {
 /// Substitui glpi_pendingreasons. Cobrança automática e resolução por
 /// inatividade — um dos melhores recursos do GLPI.
 model PendingReason {
-  id             String  @id @default(uuid()) @db.Uuid
-  organizationId String  @db.Uuid
-  name           String
+  id                        String  @id @default(uuid()) @db.Uuid
+  organizationId            String  @db.Uuid
+  name                      String
   /// Intervalo entre cobranças, em segundos. 0 desliga a cobrança.
-  followupIntervalSeconds Int @default(0)
+  followupIntervalSeconds   Int     @default(0)
   /// Quantas cobranças antes de resolver sozinho. 0 nunca resolve.
-  followupsBeforeResolution Int @default(0)
+  followupsBeforeResolution Int     @default(0)
   /// Corpo da cobrança automática.
-  followupTemplate String?
-  isDefault      Boolean @default(false)
+  followupTemplate          String?
+  isDefault                 Boolean @default(false)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   tickets      Ticket[]
@@ -691,24 +692,24 @@ enum ApprovalStatus {
 /// Substitui glpi_ticketvalidations + glpi_validationsteps.
 /// Uma linha por validador por etapa.
 model Approval {
-  id         String         @id @default(uuid()) @db.Uuid
+  id          String         @id @default(uuid()) @db.Uuid
   /// Chamado **ou** mudança: uma mudança normal não executa sem aval, e
   /// é o mesmo motor de etapas e quórum.
-  ticketId   String?        @db.Uuid
-  changeId   String?        @db.Uuid
+  ticketId    String?        @db.Uuid
+  changeId    String?        @db.Uuid
   /// Etapas são resolvidas em ordem crescente.
-  step       Int            @default(1)
+  step        Int            @default(1)
   /// Quantos APROVADO a etapa precisa para avançar.
-  quorum     Int            @default(1)
-  approverId String         @db.Uuid
-  status     ApprovalStatus @default(AGUARDANDO)
-  comment    String?
-  requestedAt DateTime      @default(now())
-  decidedAt  DateTime?
+  quorum      Int            @default(1)
+  approverId  String         @db.Uuid
+  status      ApprovalStatus @default(AGUARDANDO)
+  comment     String?
+  requestedAt DateTime       @default(now())
+  decidedAt   DateTime?
 
-  ticket   Ticket?  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  change   Change?  @relation(fields: [changeId], references: [id], onDelete: Cascade)
-  approver User     @relation(fields: [approverId], references: [id])
+  ticket   Ticket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  change   Change? @relation(fields: [changeId], references: [id], onDelete: Cascade)
+  approver User    @relation(fields: [approverId], references: [id])
 
   @@unique([ticketId, step, approverId])
   @@unique([changeId, step, approverId])
@@ -747,9 +748,9 @@ model Article {
   /// aconteceu uma vez e derrubou a busca de artigos.
   busca Unsupported("tsvector")?
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  author       User         @relation(fields: [authorId], references: [id])
-  category     Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  author       User              @relation(fields: [authorId], references: [id])
+  category     Category?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   revisions    ArticleRevision[]
   problems     Problem[]
 
@@ -949,6 +950,31 @@ enum AssetKind {
   OUTRO
 }
 
+/// O que se pendura dentro de um equipamento.
+///
+/// No GLPI cada um destes é duas tabelas — `glpi_deviceprocessors` mais
+/// `glpi_items_deviceprocessors` e assim por diante, perto de sessenta
+/// ao todo com o mesmo desenho repetido. Aqui é um discriminador.
+enum ComponentKind {
+  PROCESSADOR
+  MEMORIA
+  DISCO
+  PLACA_MAE
+  PLACA_DE_REDE
+  PLACA_DE_VIDEO
+  PLACA_DE_SOM
+  CONTROLADORA
+  FONTE
+  BATERIA
+  UNIDADE_OTICA
+  FIRMWARE
+  GABINETE
+  CAMERA
+  SENSOR
+  SIMCARD
+  OUTRO
+}
+
 enum AssetStatus {
   EM_USO
   EM_ESTOQUE
@@ -963,48 +989,49 @@ enum AssetStatus {
 /// chamado. O inventário completo é a Fase 6 (`docs/10-roadmap.md`) e
 /// vai entrar por importação, não por este modelo.
 model Asset {
-  id             String      @id @default(uuid()) @db.Uuid
-  organizationId String      @db.Uuid
-  kind           AssetKind   @default(OUTRO)
-  status         AssetStatus @default(EM_USO)
-  name           String
+  id                 String      @id @default(uuid()) @db.Uuid
+  organizationId     String      @db.Uuid
+  kind               AssetKind   @default(OUTRO)
+  status             AssetStatus @default(EM_USO)
+  name               String
   /// Etiqueta de patrimônio. É por ela que o suporte procura.
-  tag            String?
-  serialNumber   String?
+  tag                String?
+  serialNumber       String?
   /// Fabricante, modelo e localização vêm do catálogo.
   ///
   /// Eram texto livre, e texto livre é a origem da sujeira de
   /// inventário: "HP", "hp" e "Hewlett-Packard" são três fabricantes
   /// para quem conta, e um só para quem olha.
-  manufacturerId String?  @db.Uuid
-  assetModelId   String?  @db.Uuid
-  locationId     String?  @db.Uuid
+  manufacturerId     String?     @db.Uuid
+  assetModelId       String?     @db.Uuid
+  locationId         String?     @db.Uuid
   /// Quem usa hoje. Nulo quando está em estoque.
-  userId         String?     @db.Uuid
-  purchasedAt    DateTime?
-  warrantyUntil  DateTime?
-  notes          String?
+  userId             String?     @db.Uuid
+  purchasedAt        DateTime?
+  warrantyUntil      DateTime?
+  notes              String?
   /// Dados financeiros do ativo — o `glpi_infocoms` do GLPI.
   ///
   /// Lá é tabela à parte porque é polimórfica sobre sessenta tipos de
   /// item. Aqui o ativo é um modelo só, e cinco colunas custam menos
   /// que uma tabela 1-1 que todo `include` teria de lembrar.
-  purchaseValue  Decimal?  @db.Decimal(12, 2)
-  supplierId     String?   @db.Uuid
-  invoiceNumber  String?
+  purchaseValue      Decimal?    @db.Decimal(12, 2)
+  supplierId         String?     @db.Uuid
+  invoiceNumber      String?
   /// Meses de amortização. Zero ou nulo é bem que não amortiza.
   amortizationMonths Int?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user         User?        @relation("AtivoDoUsuario", fields: [userId], references: [id], onDelete: SetNull)
-  supplier     Supplier?    @relation("FornecedorDoAtivo", fields: [supplierId], references: [id], onDelete: SetNull)
-  manufacturer Manufacturer? @relation(fields: [manufacturerId], references: [id], onDelete: SetNull)
-  assetModel   AssetModel?   @relation(fields: [assetModelId], references: [id], onDelete: SetNull)
-  location     Location?     @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?            @relation("AtivoDoUsuario", fields: [userId], references: [id], onDelete: SetNull)
+  supplier     Supplier?        @relation("FornecedorDoAtivo", fields: [supplierId], references: [id], onDelete: SetNull)
+  manufacturer Manufacturer?    @relation(fields: [manufacturerId], references: [id], onDelete: SetNull)
+  assetModel   AssetModel?      @relation(fields: [assetModelId], references: [id], onDelete: SetNull)
+  location     Location?        @relation(fields: [locationId], references: [id], onDelete: SetNull)
   tickets      TicketAsset[]
   contracts    ContractAsset[]
+  components   AssetComponent[]
 
   /// Patrimônio e série não se repetem na organização: dois registros do
   /// mesmo equipamento são a origem de metade da sujeira de inventário.
@@ -1097,31 +1124,31 @@ model ChannelAccount {
 /// virar evento. A unicidade de externalId é o que impede chamado
 /// duplicado quando dois polls concorrem — correção do GLPI, que não tem.
 model InboundMessage {
-  id              String   @id @default(uuid()) @db.Uuid
-  organizationId  String   @db.Uuid
-  channelAccountId String  @db.Uuid
-  channel         Channel
+  id               String    @id @default(uuid()) @db.Uuid
+  organizationId   String    @db.Uuid
+  channelAccountId String    @db.Uuid
+  channel          Channel
   /// Message-ID do e-mail ou id da mensagem na Evolution.
-  externalId      String
+  externalId       String
   /// Message-ID referenciado em In-Reply-To / References.
-  inReplyTo       String?
-  fromAddress     String
-  subject         String?
-  bodyText        String?
-  bodyHtml        String?
-  rawHeaders      Json?
+  inReplyTo        String?
+  fromAddress      String
+  subject          String?
+  bodyText         String?
+  bodyHtml         String?
+  rawHeaders       Json?
   /// Anexos já gravados no armazenamento na hora do recebimento.
   ///
   /// O binário chega junto com o webhook e está na memória; gravá-lo
   /// ali é mais barato que devolvê-lo ao provedor depois. A lista traz
   /// chave, nome, tipo e tamanho — o `AnexoRecebido` de shared.
-  attachments     Json?
-  receivedAt      DateTime @default(now())
+  attachments      Json?
+  receivedAt       DateTime  @default(now())
   /// Nulo até o processador transformar a mensagem em evento.
-  eventId         String?  @unique @db.Uuid
-  processedAt     DateTime?
+  eventId          String?   @unique @db.Uuid
+  processedAt      DateTime?
   /// Preenchido quando a mensagem é descartada por regra ou erro.
-  discardedReason String?
+  discardedReason  String?
 
   channelAccount ChannelAccount @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
   event          TicketEvent?   @relation(fields: [eventId], references: [id])
@@ -1208,18 +1235,18 @@ model OutboundWebhook {
 }
 
 model WebhookDelivery {
-  id         String         @id @default(uuid()) @db.Uuid
-  webhookId  String         @db.Uuid
-  event      String
-  payload    Json
-  status     DeliveryStatus @default(PENDENTE)
-  attempts   Int            @default(0)
+  id           String         @id @default(uuid()) @db.Uuid
+  webhookId    String         @db.Uuid
+  event        String
+  payload      Json
+  status       DeliveryStatus @default(PENDENTE)
+  attempts     Int            @default(0)
   /// Quando a próxima tentativa pode sair. É o backoff.
-  scheduledFor DateTime     @default(now())
+  scheduledFor DateTime       @default(now())
   responseCode Int?
-  lastError  String?
-  createdAt  DateTime       @default(now())
-  deliveredAt DateTime?
+  lastError    String?
+  createdAt    DateTime       @default(now())
+  deliveredAt  DateTime?
 
   webhook OutboundWebhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
 
@@ -1229,16 +1256,16 @@ model WebhookDelivery {
 
 /// Chave de aplicação para o endpoint público de abertura de chamado.
 model ApiKey {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
   name           String
   /// SHA-256 da chave. O valor cru é mostrado uma única vez, na criação.
-  keyHash        String   @unique
+  keyHash        String    @unique
   /// Permissões nomeadas concedidas a esta chave.
   scopes         String[]
   lastUsedAt     DateTime?
   revokedAt      DateTime?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -1253,20 +1280,20 @@ model ApiKey {
 /// organização, se um dia fizer sentido, entra como sobreposição
 /// aplicada depois da autenticação — não como substituta desta.
 model Brand {
-  id          String   @id @default("unica")
+  id                 String   @id @default("unica")
   /// O que aparece na aba do navegador e no cabeçalho.
-  productName String   @default("Norty Desk")
+  productName        String   @default("Norty Desk")
   /// Frase abaixo do nome, na tela de entrada.
-  tagline     String?
+  tagline            String?
   /// Chaves no armazenamento. Nulas significam usar a marca embutida.
-  logoKey     String?
-  logoContentType String?
-  faviconKey  String?
+  logoKey            String?
+  logoContentType    String?
+  faviconKey         String?
   faviconContentType String?
   /// Muda a cada upload. Entra na URL para o navegador não servir a
   /// logo antiga do cache depois da troca.
-  version     Int      @default(1)
-  updatedAt   DateTime @updatedAt
+  version            Int      @default(1)
+  updatedAt          DateTime @updatedAt
 
   @@map("brand")
 }
@@ -1315,11 +1342,11 @@ model RecurringTicket {
   requesterId    String  @db.Uuid
 
   /// Descritor de recorrência. Union discriminada por `tipo`.
-  schedule Json
-  timezone String @default("America/Sao_Paulo")
+  schedule            Json
+  timezone            String @default("America/Sao_Paulo")
   /// Quantos segundos antes da ocorrência o chamado é aberto: "a
   /// manutenção é dia 20, abra o chamado três dias antes".
-  createBeforeSeconds Int @default(0)
+  createBeforeSeconds Int    @default(0)
 
   startsAt DateTime?
   endsAt   DateTime?
@@ -1420,13 +1447,13 @@ model Contract {
 
   supplierId String? @db.Uuid
 
-  startsAt DateTime
+  startsAt   DateTime
   /// Fim da vigência. Nulo é contrato por prazo indeterminado.
-  endsAt   DateTime?
+  endsAt     DateTime?
   /// Com quantos dias de antecedência avisar do vencimento.
-  noticeDays Int @default(30)
+  noticeDays Int       @default(30)
   /// Renova sozinho se ninguém avisar. Muda o que o aviso significa.
-  autoRenew  Boolean @default(false)
+  autoRenew  Boolean   @default(false)
 
   billingPeriod BillingPeriod @default(MENSAL)
   /// Valor de cada cobrança. Dinheiro é Decimal(12,2), nunca Float.
@@ -1506,7 +1533,7 @@ model TicketCost {
   label    String
 
   /// Só para TEMPO: quantidade de horas e valor da hora.
-  hours     Decimal? @db.Decimal(8, 2)
+  hours      Decimal? @db.Decimal(8, 2)
   hourlyRate Decimal? @db.Decimal(12, 2)
 
   /// O valor da linha. Em TEMPO, é `hours * hourlyRate` calculado no
@@ -1566,9 +1593,10 @@ model Manufacturer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   models       AssetModel[]
   assets       Asset[]
+  components   AssetComponent[]
 
   @@unique([organizationId, name])
   @@map("manufacturers")
@@ -1580,10 +1608,10 @@ model Manufacturer {
 /// `printermodels` e mais três —, todas com as mesmas quatro colunas.
 /// Aqui é um modelo com discriminador, como o próprio ativo.
 model AssetModel {
-  id             String     @id @default(uuid()) @db.Uuid
-  organizationId String     @db.Uuid
-  manufacturerId String?    @db.Uuid
-  kind           AssetKind  @default(OUTRO)
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  manufacturerId String?   @db.Uuid
+  kind           AssetKind @default(OUTRO)
   name           String
 
   createdAt DateTime @default(now())
@@ -1596,4 +1624,44 @@ model AssetModel {
   @@unique([organizationId, manufacturerId, name])
   @@index([organizationId, kind])
   @@map("asset_models")
+}
+
+/// Uma peça dentro de um equipamento.
+///
+/// **Uma linha é uma peça.** Não há coluna de quantidade: dois pentes
+/// de 8 GB são duas linhas, porque cada um tem o seu número de série e
+/// o seu slot — e porque "16 GB" tem de sair de uma soma, não de uma
+/// multiplicação que ninguém revisa.
+///
+/// Os atributos que mudam de um tipo para o outro moram em `attributes`,
+/// validados por `validarAtributos` contra a ficha que
+/// `ATRIBUTOS_DO_COMPONENTE` declara em `packages/shared`. É a mesma
+/// função que valida o formulário dinâmico: um formulário é um
+/// formulário. A diferença é que esta ficha não se edita pela tela.
+model AssetComponent {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid
+  assetId        String        @db.Uuid
+  kind           ComponentKind
+  /// Modelo da peça: "Kingston KVR26N19S8", "Samsung 980".
+  name           String
+  manufacturerId String?       @db.Uuid
+  serialNumber   String?
+  /// A ficha do tipo. `{}` quando o tipo não tem atributo nenhum.
+  attributes     Json          @default("{}")
+  notes          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  asset        Asset         @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  manufacturer Manufacturer? @relation(fields: [manufacturerId], references: [id], onDelete: SetNull)
+
+  /// Série de peça não se repete na organização — quando existe. Duas
+  /// linhas com a mesma série são a mesma peça contada duas vezes, e é
+  /// assim que a memória da frota dobra sozinha.
+  @@unique([organizationId, serialNumber])
+  @@index([assetId, kind])
+  @@map("asset_components")
 }
