@@ -212,9 +212,16 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'time:gerenciar',
   ],
 
-  /** Lê indicadores; não atende chamado. */
+  /** Lê indicadores e dá aval; não atende chamado. */
   GESTOR: [
     'chamado:ler:todos',
+    /**
+     * Aprovar é justamente o ato de gestor. O solicitante já decide as
+     * aprovações em que é designado — negá-las a quem responde pelo
+     * orçamento deixaria o papel sem a única ação que ele exerce sobre
+     * o chamado.
+     */
+    'aprovacao:decidir',
     'artigo:ler',
     'artigo:ler:interno',
     'painel:proprio',

@@ -16,6 +16,7 @@ import {
   modificadorCanal,
   seloStatus,
 } from '../../lib/formato';
+import { Aprovacoes } from '../aprovacao/Aprovacoes';
 import { Conversa } from './Conversa';
 
 export function Chamado() {
@@ -81,7 +82,10 @@ export function Chamado() {
       ) : null}
 
       <div className="grade-conteudo-trilho">
-        <Conversa chamado={chamado} aoMudar={revalidar} />
+        <div className="pilha">
+          <Aprovacoes ticketId={chamado.id} aoMudar={revalidar} />
+          <Conversa chamado={chamado} aoMudar={revalidar} />
+        </div>
 
         <aside className="card trilho-fixo" aria-label="Propriedades do chamado">
           <div className="card-corpo pilha-sm">

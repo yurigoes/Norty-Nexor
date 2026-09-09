@@ -1,7 +1,8 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
 
 import { ProvedorDeAutenticacao, useAutenticacao } from '../auth/Autenticacao';
 import { Login } from '../modules/auth/Login';
+import { MinhasAprovacoes } from '../modules/aprovacao/MinhasAprovacoes';
 import { Canais } from '../modules/canais/Canais';
 import { Diagnostico } from '../modules/canais/Diagnostico';
 import { Chamado } from '../modules/chamado/Chamado';
@@ -57,6 +58,7 @@ function Aplicativo() {
         <main className="conteudo" id="conteudo">
           <Routes>
             <Route path="/" element={<Fila />} />
+            <Route path="/aprovacoes" element={<MinhasAprovacoes />} />
             <Route path="/chamados/novo" element={<NovoChamado />} />
             <Route path="/chamados/:id" element={<Chamado />} />
             <Route path="/config/marca" element={<MarcaConfig />} />
@@ -80,6 +82,11 @@ function Portal() {
           <h1>Meus chamados</h1>
         </div>
         <div className="header-acoes">
+          {/* O portal não tem barra lateral: sem este link, quem só
+              aprova não teria como chegar às suas aprovações. */}
+          <Link to="/aprovacoes" className="btn -fantasma -sm">
+            Aprovações
+          </Link>
           <span className="suave" style={{ fontSize: 'var(--t-corpo-sm)' }}>
             {perfil?.user.name}
           </span>
@@ -92,6 +99,7 @@ function Portal() {
       <main className="conteudo" id="conteudo" style={{ maxWidth: 880 }}>
         <Routes>
           <Route path="/" element={<PortalLista />} />
+          <Route path="/aprovacoes" element={<MinhasAprovacoes noPortal />} />
           <Route path="/chamados/novo" element={<NovoChamado noPortal />} />
           <Route path="/chamados/:id" element={<PortalChamado />} />
           <Route path="*" element={<Navigate to="/" replace />} />

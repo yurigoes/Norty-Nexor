@@ -95,6 +95,16 @@ export function Sidebar() {
           <span>Abrir chamado</span>
         </Link>
 
+        {can('aprovacao:decidir') ? (
+          <Link
+            to="/aprovacoes"
+            className="nav-item"
+            aria-current={local.pathname === '/aprovacoes' ? 'page' : undefined}
+          >
+            <span>Aprovações</span>
+          </Link>
+        ) : null}
+
         {configuracao.length > 0 ? (
           <>
             <div className="nav-grupo-rotulo">Configuração</div>

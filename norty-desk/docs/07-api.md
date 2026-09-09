@@ -310,6 +310,51 @@ também.
 
 ---
 
+## 5.5 Aprovação em etapas
+
+```
+GET  /v1/aprovacoes/minhas                 → o que espera decisão minha
+GET  /v1/tickets/:id/aprovacoes
+POST /v1/tickets/:id/aprovacoes            { approverIds, quorum?, step?, comment? }
+POST /v1/aprovacoes/:id/decidir            { decision, comment? }
+```
+
+Substitui `glpi_ticketvalidations` + `glpi_validationsteps`. Uma linha
+por validador por etapa; as etapas correm em sequência.
+
+**O quórum é uma função pura em `packages/shared`** (`estadoDaEtapa`),
+lida tanto pela API — que decide o status do chamado — quanto pelo
+aplicativo, que desenha a etapa. No GLPI a interface calcula o desfecho
+por conta própria, e é por isso que a tela e o relatório às vezes
+discordam.
+
+Duas condições encerram uma etapa, e a segunda o GLPI não tem:
+
+1. **Quórum atingido** (`aprovados >= quorum`).
+2. **Quórum tornou-se impossível.** Com 3 de 5 exigidos, a terceira
+   recusa já garante que os 3 "sim" não virão; esperar as outras duas
+   respostas deixaria o chamado parado em aprovação para sempre se essas
+   pessoas nunca respondessem.
+
+Uma recusa isolada **não** derruba a etapa enquanto o quórum ainda
+couber nas respostas que faltam: "três de cinco" quer dizer isso mesmo.
+
+Resolvida a última etapa, o chamado volta ao status que tinha antes de
+entrar em aprovação — lido do `from` da mudança de status na linha do
+tempo, não de uma coluna a mais que poderia divergir dela.
+
+**Decidir é pessoal.** Nem supervisor decide no lugar de quem foi
+designado: a permissão diz que a rota abre, e a checagem de
+`approverId` diz de quem é a vez. Em compensação, ter sido designado
+validador é autorização suficiente — um solicitante decide a aprovação
+de um chamado que ele não pode ler, que é o caso de quem responde pelo
+orçamento.
+
+Os eventos de aprovação são **internos**: o cliente não acompanha a
+aprovação interna de quem o atende.
+
+---
+
 ## 6. Intake público (API de aplicação)
 
 ```
