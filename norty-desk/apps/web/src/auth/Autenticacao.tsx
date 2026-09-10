@@ -27,6 +27,8 @@ type Contexto = Sessao & {
   entrar: (login: string, senha: string) => Promise<void>;
   sair: () => Promise<void>;
   revalidar: () => void;
+  /** Busca o `/me` de novo — depois de a pessoa editar os próprios dados. */
+  recarregarPerfil: () => Promise<void>;
   can: (permissao: Permission) => boolean;
   papel: Role | null;
 };
@@ -99,12 +101,13 @@ export function ProvedorDeAutenticacao({ children }: { children: ReactNode }) {
       entrar,
       sair,
       revalidar,
+      recarregarPerfil: carregarPerfil,
       papel: sessao.perfil?.role ?? null,
       // As permissões vêm resolvidas do `/me`: o aplicativo não
       // recalcula a matriz, e as duas pontas não podem divergir.
       can: (permissao) => sessao.perfil?.permissions.includes(permissao) ?? false,
     }),
-    [sessao, entrar, sair, revalidar],
+    [sessao, entrar, sair, revalidar, carregarPerfil],
   );
 
   return (

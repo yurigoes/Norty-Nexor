@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ROLE_PERMISSIONS, type LoginResponse, type MeResponse } from '@norty-desk/shared';
 import * as argon2 from 'argon2';
@@ -6,6 +11,8 @@ import { createHash, randomBytes } from 'node:crypto';
 
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
+import { normalizarUsername } from '../../common/usuario';
+import type { AtualizarPerfilDto } from './dto';
 
 /**
  * Hash de uma senha que não existe.
@@ -208,6 +215,9 @@ export class AuthService {
         id: vinculo.user.id,
         name: vinculo.user.name,
         email: vinculo.user.email,
+        username: vinculo.user.username,
+        phone: vinculo.user.phone,
+        mustChangePassword: vinculo.user.mustChangePassword,
         avatarUrl: vinculo.user.avatarUrl ?? undefined,
       },
       organization: {
@@ -223,6 +233,50 @@ export class AuthService {
   }
 
   /**
+   * A pessoa editando os próprios dados.
+   *
+   * E-mail e nome de usuário são o login: trocá-los pede a senha atual,
+   * pelo mesmo motivo da troca de senha — o computador destravado de um
+   * colega não pode virar a conta dele. A recusa é 400, não 401: um 401
+   * aqui faria o aplicativo tratar senha errada como sessão expirada.
+   */
+  async atualizarPerfil(usuario: UsuarioAutenticado, dto: AtualizarPerfilDto): Promise<MeResponse> {
+    const atual = await this.prisma.user.findUniqueOrThrow({ where: { id: usuario.userId } });
+
+    const email = dto.email === undefined ? undefined : dto.email.toLowerCase().trim();
+    const username =
+      dto.username === undefined ? undefined : dto.username ? normalizarUsername(dto.username) : null;
+
+    const mudaEmail = email !== undefined && email !== atual.email;
+    const mudaUsername = username !== undefined && username !== atual.username;
+
+    if (mudaEmail || mudaUsername) {
+      const confere = dto.senhaAtual ? await argon2.verify(atual.passwordHash, dto.senhaAtual) : false;
+      if (!confere) {
+        throw new BadRequestException('Confirme com a sua senha atual para trocar o e-mail ou o usuário.');
+      }
+    }
+    if (mudaEmail && email && (await this.prisma.user.findUnique({ where: { email } }))) {
+      throw new ConflictException('Este e-mail já está em uso.');
+    }
+    if (mudaUsername && username && (await this.prisma.user.findUnique({ where: { username } }))) {
+      throw new ConflictException('Este nome de usuário já está em uso.');
+    }
+
+    await this.prisma.user.update({
+      where: { id: usuario.userId },
+      data: {
+        name: dto.name?.trim(),
+        phone: dto.phone === undefined ? undefined : dto.phone?.trim() || null,
+        ...(mudaEmail ? { email } : {}),
+        ...(mudaUsername ? { username } : {}),
+      },
+    });
+
+    return this.me(usuario);
+  }
+
+  /**
    * Troca de senha. Exige a senha atual mesmo quando a troca é
    * obrigatória: quem senta no computador destravado de um colega não
    * pode assumir a conta dele.
@@ -234,8 +288,11 @@ export class AuthService {
 
     const usuario = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
 
+    // 400 e não 401: o aplicativo trata 401 como sessão vencida — renova,
+    // repete e, no segundo 401, desloga. Senha atual errada não é sessão
+    // vencida, e deslogar aqui jogava a pessoa na tela de login.
     if (!(await argon2.verify(usuario.passwordHash, atual))) {
-      throw new UnauthorizedException('Senha atual incorreta.');
+      throw new BadRequestException('Senha atual incorreta.');
     }
 
     if (await argon2.verify(usuario.passwordHash, nova)) {

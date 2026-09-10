@@ -90,7 +90,16 @@ export type LoginResponse = {
 };
 
 export type MeResponse = {
-  user: { id: string; name: string; email: string; avatarUrl?: string };
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    username?: string | null;
+    phone?: string | null;
+    /** Senha provisória: o aplicativo não abre antes da troca. */
+    mustChangePassword: boolean;
+    avatarUrl?: string;
+  };
   organization: OrganizationRef;
   role: Role;
   /** Já resolvidas pela matriz — o aplicativo não recalcula. */

@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   HttpCode,
+  Patch,
   Post,
   Req,
   Res,
@@ -16,7 +17,7 @@ import { CurrentUser, type UsuarioAutenticado } from '../../common/decorators/cu
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AuthService } from './auth.service';
 import { COOKIE_REFRESH, gravarRefresh, limparRefresh } from './cookie';
-import { LoginDto, OrganizacaoAtivaDto, TrocarSenhaDto } from './dto';
+import { AtualizarPerfilDto, LoginDto, OrganizacaoAtivaDto, TrocarSenhaDto } from './dto';
 
 /**
  * Decisões que não devem ser desfeitas (`docs/11-infra.md`, seção 6):
@@ -98,6 +99,15 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   me(@CurrentUser() usuario: UsuarioAutenticado): Promise<MeResponse> {
     return this.auth.me(usuario);
+  }
+
+  @Patch('me')
+  @UseGuards(JwtAuthGuard)
+  atualizarPerfil(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Body() dto: AtualizarPerfilDto,
+  ): Promise<MeResponse> {
+    return this.auth.atualizarPerfil(usuario, dto);
   }
 
   @Post('trocar-senha')

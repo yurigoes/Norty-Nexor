@@ -68,7 +68,7 @@ export function Sidebar() {
       permissao: 'config:canais' as const,
     },
     { rotulo: 'Webhooks', para: '/config/webhooks', permissao: 'config:webhooks' as const },
-    { rotulo: 'Pessoas e times', para: null, permissao: 'pessoa:gerenciar' as const },
+    { rotulo: 'Pessoas', para: '/config/pessoas', permissao: 'pessoa:gerenciar' as const },
     { rotulo: 'Auditoria', para: '/config/auditoria', permissao: 'auditoria:ler' as const },
   ].filter((item) => can(item.permissao));
 
@@ -196,7 +196,15 @@ export function Sidebar() {
       </nav>
 
       <div className="sidebar-rodape">
-        <button type="button" className="conta" onClick={() => void sair()}>
+        {/* O bloco da conta abre "Minha conta"; sair é um botão à parte.
+            Antes o bloco inteiro era o "sair", e quem clicava no próprio
+            nome caía na tela de login. */}
+        <Link
+          to="/conta"
+          className="conta"
+          aria-current={local.pathname === '/conta' ? 'page' : undefined}
+          style={{ textDecoration: 'none', color: 'inherit' }}
+        >
           <span className="avatar -sm" aria-hidden="true">
             {iniciais(perfil?.user.name ?? '?')}
           </span>
@@ -206,6 +214,9 @@ export function Sidebar() {
               {perfil?.organization.name} · {perfil?.role.toLowerCase()}
             </span>
           </span>
+        </Link>
+        <button type="button" className="btn -fantasma -sm" onClick={() => void sair()}>
+          Sair
         </button>
       </div>
     </aside>

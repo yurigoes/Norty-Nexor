@@ -16,6 +16,8 @@ import {
   MinLength,
 } from 'class-validator';
 
+import { MSG_USERNAME, USERNAME_REGEX } from '../../common/usuario';
+
 const PAPEIS = ['SOLICITANTE', 'AGENTE', 'SUPERVISOR', 'GESTOR', 'ADMINISTRADOR'] as const;
 
 export class CriarCategoriaDto {
@@ -51,16 +53,6 @@ export class MembroDoTimeDto {
   @IsUUID() userId!: string;
   @IsOptional() @IsBoolean() isManager?: boolean;
 }
-
-/**
- * Nome de usuário: 3 a 64 caracteres — letras, dígitos, ponto, hífen e
- * sublinhado —, começando por letra ou dígito, guardado em minúsculas.
- * Sem "@": é isso que deixa o login decidir entre e-mail e usuário sem
- * ambiguidade.
- */
-export const USERNAME_REGEX = /^[a-z0-9][a-z0-9._-]{2,63}$/i;
-const MSG_USERNAME =
-  'Nome de usuário: 3 a 64 caracteres, só letras, dígitos, ponto, hífen ou sublinhado.';
 
 export class CriarUsuarioDto {
   @IsEmail() @MaxLength(255) email!: string;

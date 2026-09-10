@@ -1,4 +1,14 @@
-import { IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Matches,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
+
+import { MSG_USERNAME, USERNAME_REGEX } from '../../common/usuario';
 
 export class LoginDto {
   /** E-mail ou nome de usuário — o serviço decide pelo "@". */
@@ -23,6 +33,22 @@ export class LoginDto {
 export class OrganizacaoAtivaDto {
   @IsUUID()
   organizationId!: string;
+}
+
+/**
+ * O que a própria pessoa muda em si. Perfil e organização, não: isso é do
+ * administrador. E-mail e usuário são o login, então trocá-los pede a
+ * senha atual (`senhaAtual`).
+ */
+export class AtualizarPerfilDto {
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(200) name?: string;
+  /** `null` apaga. */
+  @IsOptional() @IsString() @MaxLength(32) phone?: string | null;
+  @IsOptional() @IsEmail({}, { message: 'Informe um e-mail válido.' }) @MaxLength(255) email?: string;
+  /** `null` apaga. */
+  @IsOptional() @IsString() @Matches(USERNAME_REGEX, { message: MSG_USERNAME })
+  username?: string | null;
+  @IsOptional() @IsString() @MaxLength(200) senhaAtual?: string;
 }
 
 export class TrocarSenhaDto {

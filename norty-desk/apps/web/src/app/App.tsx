@@ -2,10 +2,13 @@ import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from 'react
 
 import { ProvedorDeAutenticacao, useAutenticacao } from '../auth/Autenticacao';
 import { Login } from '../modules/auth/Login';
+import { MinhaConta } from '../modules/conta/MinhaConta';
+import { TrocaObrigatoria } from '../modules/conta/TrocarSenha';
 import { MinhasAprovacoes } from '../modules/aprovacao/MinhasAprovacoes';
 import { Canais } from '../modules/canais/Canais';
 import { Auditoria } from '../modules/auditoria/Auditoria';
 import { Categorias } from '../modules/configuracao/Categorias';
+import { Pessoas } from '../modules/configuracao/Pessoas';
 import { Formularios } from '../modules/configuracao/Formularios';
 import { CatalogoDoAtivo } from '../modules/configuracao/CatalogoDoAtivo';
 import { Contratos } from '../modules/configuracao/Contratos';
@@ -74,6 +77,9 @@ function Raiz() {
 
   if (!perfil) return <Login />;
 
+  // Senha provisória (conta nova ou redefinida): nada abre antes da troca.
+  if (perfil.user.mustChangePassword) return <TrocaObrigatoria />;
+
   // Duas superfícies distintas, não uma com "modo simplificado": o
   // solicitante nunca vê a fila, e o agente nunca vê o portal
   // (`docs/02-gap-analysis.md`, item 9).
@@ -108,6 +114,7 @@ function Aplicativo() {
             <Route path="/chamados/:id" element={<Chamado />} />
             <Route path="/config/marca" element={<MarcaConfig />} />
             <Route path="/config/categorias" element={<Categorias />} />
+            <Route path="/config/pessoas" element={<Pessoas />} />
             <Route path="/config/sla" element={<Sla />} />
             <Route path="/config/recorrencias" element={<Recorrencias />} />
             <Route path="/config/formularios" element={<Formularios />} />
@@ -118,6 +125,7 @@ function Aplicativo() {
             <Route path="/config/canais/diagnostico" element={<Diagnostico />} />
             <Route path="/config/webhooks" element={<Webhooks />} />
             <Route path="/config/auditoria" element={<Auditoria />} />
+            <Route path="/conta" element={<MinhaConta />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
@@ -141,9 +149,9 @@ function Portal() {
           <Link to="/aprovacoes" className="btn -fantasma -sm">
             Aprovações
           </Link>
-          <span className="suave" style={{ fontSize: 'var(--t-corpo-sm)' }}>
+          <Link to="/conta" className="btn -fantasma -sm" title="Minha conta">
             {perfil?.user.name}
-          </span>
+          </Link>
           <button type="button" className="btn -fantasma -sm" onClick={() => void sair()}>
             Sair
           </button>
@@ -158,6 +166,7 @@ function Portal() {
           <Route path="/conhecimento/:id" element={<Artigo />} />
           <Route path="/chamados/novo" element={<NovoChamado noPortal />} />
           <Route path="/chamados/:id" element={<PortalChamado />} />
+          <Route path="/conta" element={<MinhaConta />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

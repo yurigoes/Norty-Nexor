@@ -28,6 +28,18 @@ export const sair = () => chamar<void>('/auth/logout', { metodo: 'POST' });
 
 export const meuPerfil = () => chamar<MeResponse>('/auth/me');
 
+export type AtualizarPerfil = {
+  name?: string;
+  phone?: string | null;
+  email?: string;
+  username?: string | null;
+  /** Obrigatória quando o e-mail ou o usuário mudam. */
+  senhaAtual?: string;
+};
+
+export const atualizarPerfil = (dados: AtualizarPerfil) =>
+  chamar<MeResponse>('/auth/me', { metodo: 'PATCH', corpo: dados });
+
 export const trocarSenha = (atual: string, nova: string) =>
   chamar<void>('/auth/trocar-senha', { metodo: 'POST', corpo: { atual, nova } });
 
