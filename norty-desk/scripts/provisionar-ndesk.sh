@@ -52,8 +52,44 @@ done
 [ -z "$ID" ] && falhar "não achei ID livre entre 120 e 199."
 echo "  usará o ID $ID  (ocupados: $(echo $usados | tr '\n' ' '))"
 
+# ---------------------------------------------------------------------
+# "Segue o padrão da casa" não é força de expressão: Docker dentro de
+# LXC depende de `nesting`, e em container não privilegiado ainda
+# depende do armazenamento aceitar overlay2. Em vez de escolher no
+# escuro, copia-se a configuração de um container que comprovadamente
+# roda Docker neste mesmo host.
+PRIV="${PRIV:-}"
+if [ "$TIPO" = "lxc" ] && [ -z "$PRIV" ]; then
+  titulo "Como são os containers que já rodam Docker aqui"
+  referencia=""
+  for ct in $(pct list 2>/dev/null | awk 'NR>1 && $2=="running"{print $1}'); do
+    pct exec "$ct" -- sh -c 'command -v docker >/dev/null 2>&1' 2>/dev/null || continue
+    referencia="$ct"; break
+  done
+
+  if [ -n "$referencia" ]; then
+    unpriv=$(pct config "$referencia" 2>/dev/null | awk -F': ' '/^unprivileged/{print $2}')
+    feats=$(pct config "$referencia" 2>/dev/null | awk -F': ' '/^features/{print $2}')
+    nome_ref=$(pct config "$referencia" 2>/dev/null | awk -F': ' '/^hostname/{print $2}')
+    echo "  referência: CT $referencia ($nome_ref)"
+    echo "  unprivileged: ${unpriv:-0}   features: ${feats:-(nenhuma)}"
+    PRIV="${unpriv:-0}"
+    case "$feats" in
+      *nesting*) FEATURES="$feats";;
+      *) FEATURES="${feats:+$feats,}nesting=1,keyctl=1"
+         aviso "a referência não declara nesting; acrescentando — sem ele o dockerd morre sem dizer o motivo.";;
+    esac
+  else
+    aviso "nenhum container com Docker encontrado para servir de referência."
+    PRIV=1; FEATURES="nesting=1,keyctl=1"
+  fi
+else
+  PRIV="${PRIV:-1}"; FEATURES="${FEATURES:-nesting=1,keyctl=1}"
+fi
+
 printf '\n\033[1mVai criar %s "%s" com id %s, %s MB, %s núcleos, disco %s GB.\033[0m\n' \
   "$TIPO" "$NOME" "$ID" "$MEM" "$NUCLEOS" "$DISCO"
+[ "$TIPO" = "lxc" ] && printf '\033[1munprivileged=%s  features=%s\033[0m\n' "$PRIV" "$FEATURES"
 read -rp "Confirma? (digite SIM) " ok
 [ "$ok" = "SIM" ] || falhar "cancelado por quem está no terminal."
 
@@ -70,7 +106,7 @@ if [ "$TIPO" = "lxc" ]; then
   pct create "$ID" "local:vztmpl/$MODELO" \
     --hostname "$NOME" --cores "$NUCLEOS" --memory "$MEM" --swap 512 \
     --rootfs "$ARMAZEM:$DISCO" --net0 "name=eth0,bridge=$PONTE,ip=dhcp" \
-    --features nesting=1,keyctl=1 --unprivileged 1 --onboot 1 --start 1
+    --features "$FEATURES" --unprivileged "$PRIV" --onboot 1 --start 1
   echo "  criado; aguardando rede"
   for _ in $(seq 1 30); do pct exec "$ID" -- getent hosts deb.debian.org >/dev/null 2>&1 && break; sleep 2; done
   dentro() { pct exec "$ID" -- bash -lc "$1"; }

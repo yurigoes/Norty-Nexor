@@ -35,21 +35,25 @@ pode acontecer, e como saber que deu certo.
 4. **Não usar `--force`, não recriar máquina existente, não apagar
    volume.** Se algo já existe, pare e pergunte.
 
-## Decisão a tomar antes de começar
+## Já decidido: LXC
 
-O Yuri pediu "VM". O parque inteiro do thor é **LXC** (`pct`), incluindo
-os containers que já rodam Docker. Os dois caminhos funcionam:
+**A NDesk é um container LXC** (`TIPO=lxc`, que é o padrão do script).
+Decidido pelo Yuri em 10/09/2026: segue o padrão da casa — o parque
+inteiro do thor é LXC, inclusive os containers que já rodam Docker.
+Não pergunte de novo, não proponha VM.
 
-| | LXC (`TIPO=lxc`, padrão) | VM (`TIPO=vm`) |
-|---|---|---|
-| Igual ao resto do parque | sim | não |
-| Consumo | menor | maior |
-| Docker | precisa de `nesting=1` (o script já põe) | nativo |
-| Isolamento | menor | maior |
-| Passos até o fim | script vai até o fim | script cria e **para**: o resto exige SSH na VM |
+O que isso implica na prática: Docker dentro de LXC exige `nesting=1`,
+e em container não privilegiado ainda depende de o armazenamento aceitar
+overlay2. Em vez de escolher no escuro, o script **procura um container
+que já roda Docker neste host e copia a configuração dele** —
+`unprivileged` e `features` — mostrando qual serviu de referência antes
+de criar. Seguir o padrão da casa deixa de ser força de expressão.
 
-Pergunte ao Yuri qual ele quer. Na dúvida, LXC — é o padrão da casa, e
-o script leva até o fim.
+Se nenhum container com Docker for encontrado, ele avisa e usa
+`unprivileged=1, nesting=1, keyctl=1`.
+
+O caminho de VM (`TIPO=vm`) continua no script, para o caso de um dia
+ser preciso. Não é o caso agora.
 
 ## O passo a passo
 
