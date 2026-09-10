@@ -271,7 +271,15 @@ O inventário que o chamado referencia.
 
 ## Fase 8 — Projetos e o que resta
 
-- **Projetos**, tarefas, times, custos e kanban.
+- **Projetos**, tarefas, times, custos e kanban. **Feito em 10/09/2026**
+  (`72b25f9`): projeto com código, situação, prioridade, responsável, time,
+  subprojetos e datas (as reais se preenchem sozinhas); tarefas com
+  responsável, horas, percentual, subtarefa e predecessora, em quadro e
+  linha do tempo; percentual do projeto ponderado pelas horas; chamados
+  vinculados pelo escopo de leitura e custo somado deles.
+- **Agenda** da pessoa ou do time: compromissos avulsos, tarefas de chamado
+  agendadas e tarefas de projeto, sem cópia; compromisso privado aparece
+  como "Ocupado" para os outros. **Feito em 10/09/2026** (`72b25f9`).
 - **Reservas** de equipamento.
 - **Análise de impacto** em grafo.
 - Planejamento de capacidade e custo por chamado.

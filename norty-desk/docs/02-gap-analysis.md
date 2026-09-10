@@ -310,7 +310,7 @@ seguem valendo:
 | Datacenter: rack, PDU, sala, cabo, estêncil | ~25 | 7 | |
 | Dicionários de regra | ~40 | 7 | catálogo do mesmo motor da fase 2 |
 | Inventário automático (agente, `RuleImportAsset`) | ~12 | 7 | recebe o inventário do agente GLPI |
-| Projetos e tarefas de projeto | ~15 | 8 | |
+| Projetos e tarefas de projeto | ~15 | **8 ✅** | quadro, linha do tempo, custo dos chamados; agenda da equipe junto |
 | Reservas de equipamento | 2 | 8 | |
 | Análise de impacto em grafo | 6 | 8 | |
 
