@@ -11,6 +11,8 @@ import { Categorias } from '../modules/configuracao/Categorias';
 import { Pessoas } from '../modules/configuracao/Pessoas';
 import { Software } from '../modules/software/Software';
 import { Softwares } from '../modules/software/Softwares';
+import { Consumivel } from '../modules/consumiveis/Consumivel';
+import { Consumiveis } from '../modules/consumiveis/Consumiveis';
 import { Diretorios } from '../modules/configuracao/Diretorios';
 import { Formularios } from '../modules/configuracao/Formularios';
 import { CatalogoDoAtivo } from '../modules/configuracao/CatalogoDoAtivo';
@@ -105,6 +107,8 @@ function Aplicativo() {
             <Route path="/ativos/:id" element={<Ativo />} />
             <Route path="/software" element={<Softwares />} />
             <Route path="/software/:id" element={<Software />} />
+            <Route path="/consumiveis" element={<Consumiveis />} />
+            <Route path="/consumiveis/:id" element={<Consumivel />} />
             {/* `erros-conhecidos` antes de `:id`, ou casaria com ele. */}
             <Route path="/problemas/erros-conhecidos" element={<ErrosConhecidos />} />
             <Route path="/problemas/:id" element={<Problema />} />

@@ -89,6 +89,8 @@ export const PERMISSIONS = [
   'ativo:gerenciar',
   /** Localização, fabricante e modelo — o catálogo que o ativo referencia. */
   'ativo:catalogo',
+  /** Registrar a saída de consumível (entregar toner, papel). Entrada e ajuste são de quem gerencia. */
+  'consumivel:movimentar',
 
   // --- Contrato, orçamento e custo -------------------------------------
   'contrato:ler',
@@ -143,7 +145,7 @@ const IMPLICA: Partial<Record<Permission, readonly Permission[]>> = {
   'chamado:atribuir': ['chamado:atribuir:a-mim'],
   'artigo:publicar': ['artigo:escrever'],
   'artigo:ler:interno': ['artigo:ler'],
-  'ativo:gerenciar': ['ativo:ler', 'ativo:catalogo'],
+  'ativo:gerenciar': ['ativo:ler', 'ativo:catalogo', 'consumivel:movimentar'],
   'ativo:catalogo': ['ativo:ler'],
   'problema:gerenciar': ['problema:ler'],
   'contrato:gerenciar': ['contrato:ler'],
@@ -210,6 +212,12 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'painel:time',
     'pessoa:ler',
     'ativo:ler',
+    /**
+     * Entregar o toner é gesto de quem atende: sem isso o agente troca o
+     * cartucho e o estoque só descobre no inventário. Receber compra e
+     * ajustar saldo continuam de quem gerencia ativos.
+     */
+    'consumivel:movimentar',
     /**
      * Ler, não gerenciar — como no ativo. Vincular o chamado ao
      * problema é o gesto de todo dia de quem atende; escrever a causa

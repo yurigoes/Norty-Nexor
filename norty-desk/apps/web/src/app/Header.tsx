@@ -26,6 +26,8 @@ const TITULOS: { prefixo: string; titulo: string }[] = [
   { prefixo: '/config/autenticacao', titulo: 'Autenticação' },
   { prefixo: '/config/pessoas', titulo: 'Pessoas' },
   { prefixo: '/painel', titulo: 'Painel' },
+  { prefixo: '/consumiveis/', titulo: 'Consumível' },
+  { prefixo: '/consumiveis', titulo: 'Consumíveis' },
   { prefixo: '/software/', titulo: 'Software' },
   { prefixo: '/software', titulo: 'Software e licenças' },
   { prefixo: '/ativos/', titulo: 'Equipamento' },

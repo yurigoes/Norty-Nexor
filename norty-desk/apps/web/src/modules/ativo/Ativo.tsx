@@ -32,6 +32,7 @@ import { useAutenticacao } from '../../auth/Autenticacao';
 import { CampoDinamico } from '../formulario/CamposDinamicos';
 import { dataCurta } from '../../lib/formato';
 import { SoftwareDoAtivoCard } from './SoftwareDoAtivo';
+import { SuprimentosDoAtivoCard } from './SuprimentosDoAtivo';
 
 /**
  * O equipamento por dentro.
@@ -98,6 +99,7 @@ export function Ativo() {
 
       <Identificacao ativo={ativo} />
       <Hardware ativo={ativo} podeEditar={can('ativo:gerenciar')} aoMudar={setAtivo} />
+      <SuprimentosDoAtivoCard assetId={ativo.id} kind={ativo.kind} />
       <SoftwareDoAtivoCard assetId={ativo.id} />
       <Historico chamados={chamados} />
     </div>

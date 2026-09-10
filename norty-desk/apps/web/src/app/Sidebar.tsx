@@ -141,6 +141,16 @@ export function Sidebar() {
           </Link>
         ) : null}
 
+        {can('ativo:ler') ? (
+          <Link
+            to="/consumiveis"
+            className="nav-item"
+            aria-current={local.pathname.startsWith('/consumiveis') ? 'page' : undefined}
+          >
+            <span>Consumíveis</span>
+          </Link>
+        ) : null}
+
         {can('problema:ler') ? (
           <Link
             to="/problemas"

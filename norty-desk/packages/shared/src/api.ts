@@ -1314,3 +1314,87 @@ export type InstalarSoftwareRequest = {
 
 export type AtribuirLicencaRequest = { assetId: string } | { userId: string };
 
+// ---------------------------------------------------------------------
+// Consumíveis e cartuchos (Fase 6)
+// ---------------------------------------------------------------------
+
+export const CONSUMABLE_KINDS = ['CONSUMIVEL', 'TONER'] as const;
+export type ConsumableKind = (typeof CONSUMABLE_KINDS)[number];
+export const ROTULO_CONSUMIVEL: Record<ConsumableKind, string> = {
+  CONSUMIVEL: 'Consumível',
+  TONER: 'Toner / cartucho',
+};
+
+export const MOVEMENT_KINDS = ['ENTRADA', 'SAIDA', 'AJUSTE'] as const;
+export type MovementKind = (typeof MOVEMENT_KINDS)[number];
+export const ROTULO_MOVIMENTO: Record<MovementKind, string> = {
+  ENTRADA: 'Entrada',
+  SAIDA: 'Saída',
+  AJUSTE: 'Ajuste',
+};
+
+export type ConsumivelView = {
+  id: string;
+  kind: ConsumableKind;
+  name: string;
+  /** Código do fabricante (ex.: CF258A). É por ele que se compra. */
+  reference: string | null;
+  manufacturer: CatalogoRef | null;
+  location: CatalogoRef | null;
+  minStock: number;
+  unit: string;
+  notes: string | null;
+  isActive: boolean;
+  /** Saldo: entradas − saídas ± ajustes. */
+  stock: number;
+  /** Saldo no mínimo ou abaixo — hora de comprar. */
+  belowMin: boolean;
+  compatibleModels: CatalogoRef[];
+  lastMovementAt: string | null;
+};
+
+export type MovimentoView = {
+  id: string;
+  kind: MovementKind;
+  /** Positivo em entrada e saída; com sinal no ajuste. */
+  quantity: number;
+  /** Saldo logo depois deste movimento. */
+  stockAfter: number;
+  asset: { id: string; name: string; tag: string | null } | null;
+  user: { id: string; name: string } | null;
+  author: { id: string; name: string } | null;
+  note: string | null;
+  createdAt: string;
+};
+
+export type ConsumivelDetail = ConsumivelView & { movements: MovimentoView[] };
+
+/** O que a tela do equipamento mostra de suprimentos. */
+export type SuprimentosDoAtivo = {
+  /** Consumíveis compatíveis com o modelo do equipamento (ou todos os toners, sem modelo). */
+  compatible: ConsumivelView[];
+  /** O que já foi entregue para este equipamento, mais recente primeiro. */
+  recent: (MovimentoView & { item: CatalogoRef })[];
+};
+
+export type WriteConsumivelRequest = {
+  name: string;
+  kind?: ConsumableKind;
+  reference?: string | null;
+  manufacturerId?: string | null;
+  locationId?: string | null;
+  minStock?: number;
+  unit?: string;
+  notes?: string | null;
+  isActive?: boolean;
+  compatibleModelIds?: string[];
+};
+
+export type MovimentarRequest = {
+  kind: MovementKind;
+  quantity: number;
+  assetId?: string;
+  userId?: string;
+  note?: string | null;
+};
+

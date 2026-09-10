@@ -64,6 +64,8 @@ model Organization {
   authSources    AuthSource[]
   software       Software[]
   softwareLicenses SoftwareLicense[]
+  consumables    ConsumableItem[]
+  consumableMovements ConsumableMovement[]
 
   @@map("organizations")
 }
@@ -105,6 +107,8 @@ model User {
   costs          TicketCost[]      @relation("AutorDoCusto")
   articleEdits   ArticleRevision[] @relation("EditorDaRevisao")
   licenses       LicenseAssignment[]
+  consumablesReceived ConsumableMovement[] @relation("DestinatarioDoConsumivel")
+  consumableMovements ConsumableMovement[] @relation("AutorDoMovimento")
 
   @@unique([authSourceId, externalId])
   @@map("users")
@@ -1054,6 +1058,7 @@ model Asset {
   components   AssetComponent[]
   software     SoftwareInstallation[]
   licenses     LicenseAssignment[]
+  consumables  ConsumableMovement[]
 
   /// Patrimônio e série não se repetem na organização: dois registros do
   /// mesmo equipamento são a origem de metade da sujeira de inventário.
@@ -1600,7 +1605,8 @@ model Location {
   parent       Location?    @relation("Sublocalizacao", fields: [parentId], references: [id])
   children     Location[]   @relation("Sublocalizacao")
 
-  assets Asset[]
+  assets      Asset[]
+  consumables ConsumableItem[]
 
   @@unique([organizationId, parentId, name])
   @@index([organizationId])
@@ -1621,6 +1627,7 @@ model Manufacturer {
   assets       Asset[]
   components   AssetComponent[]
   software     Software[]
+  consumables  ConsumableItem[]
 
   @@unique([organizationId, name])
   @@map("manufacturers")
@@ -1644,6 +1651,7 @@ model AssetModel {
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   manufacturer Manufacturer? @relation(fields: [manufacturerId], references: [id], onDelete: SetNull)
   assets       Asset[]
+  consumables  ConsumableItemModel[]
 
   @@unique([organizationId, manufacturerId, name])
   @@index([organizationId, kind])
@@ -1874,3 +1882,93 @@ model LicenseAssignment {
   @@index([userId])
   @@map("license_assignments")
 }
+
+// =========================================================
+//  Consumíveis e cartuchos — Fase 6 (docs/10-roadmap.md)
+// ---------------------------------------------------------
+//  O GLPI guarda uma linha por unidade. Aqui o estoque é a soma
+//  das movimentações: responde "quanto tem", "para quem foi" e
+//  "quantos toners esta impressora comeu" sem mil linhas para
+//  cem caixas de papel.
+// =========================================================
+
+enum ConsumableKind {
+  CONSUMIVEL
+  TONER
+}
+
+enum MovementKind {
+  ENTRADA
+  SAIDA
+  AJUSTE
+}
+
+model ConsumableItem {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  kind           ConsumableKind @default(CONSUMIVEL)
+  name           String
+  /// Código do fabricante (ex.: CF258A). É por ele que se compra.
+  reference      String?
+  manufacturerId String?        @db.Uuid
+  /// Onde fica o estoque.
+  locationId     String?        @db.Uuid
+  /// No mínimo ou abaixo, a lista avisa que é hora de comprar.
+  minStock       Int            @default(0)
+  unit           String         @default("un")
+  notes          String?
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  organization     Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  manufacturer     Manufacturer?         @relation(fields: [manufacturerId], references: [id], onDelete: SetNull)
+  location         Location?             @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  compatibleModels ConsumableItemModel[]
+  movements        ConsumableMovement[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, kind])
+  @@map("consumable_items")
+}
+
+/// Modelo de equipamento que usa o consumível — como a impressora sabe qual toner leva.
+model ConsumableItemModel {
+  itemId       String @db.Uuid
+  assetModelId String @db.Uuid
+
+  item       ConsumableItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  assetModel AssetModel     @relation(fields: [assetModelId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, assetModelId])
+  @@index([assetModelId])
+  @@map("consumable_item_models")
+}
+
+model ConsumableMovement {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  itemId         String       @db.Uuid
+  kind           MovementKind
+  /// Positiva em entrada e saída; com sinal no ajuste (CHECK no banco).
+  quantity       Int
+  /// Para onde foi (só na saída): um equipamento ou uma pessoa.
+  assetId        String?      @db.Uuid
+  userId         String?      @db.Uuid
+  /// Quem registrou.
+  authorId       String?      @db.Uuid
+  note           String?
+  createdAt      DateTime     @default(now())
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  item         ConsumableItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  asset        Asset?         @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  user         User?          @relation("DestinatarioDoConsumivel", fields: [userId], references: [id], onDelete: SetNull)
+  author       User?          @relation("AutorDoMovimento", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([itemId, createdAt])
+  @@index([assetId])
+  @@index([organizationId])
+  @@map("consumable_movements")
+}
+
