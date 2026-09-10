@@ -9,6 +9,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -51,11 +52,22 @@ export class MembroDoTimeDto {
   @IsOptional() @IsBoolean() isManager?: boolean;
 }
 
+/**
+ * Nome de usuário: 3 a 64 caracteres — letras, dígitos, ponto, hífen e
+ * sublinhado —, começando por letra ou dígito, guardado em minúsculas.
+ * Sem "@": é isso que deixa o login decidir entre e-mail e usuário sem
+ * ambiguidade.
+ */
+export const USERNAME_REGEX = /^[a-z0-9][a-z0-9._-]{2,63}$/i;
+const MSG_USERNAME =
+  'Nome de usuário: 3 a 64 caracteres, só letras, dígitos, ponto, hífen ou sublinhado.';
+
 export class CriarUsuarioDto {
   @IsEmail() @MaxLength(255) email!: string;
   @IsString() @MinLength(2) @MaxLength(200) name!: string;
   @IsEnum(PAPEIS) role!: (typeof PAPEIS)[number];
   @IsOptional() @IsString() @MaxLength(32) phone?: string;
+  @IsOptional() @IsString() @Matches(USERNAME_REGEX, { message: MSG_USERNAME }) username?: string;
 }
 
 export class EditarUsuarioDto {
@@ -63,6 +75,9 @@ export class EditarUsuarioDto {
   @IsOptional() @IsEnum(PAPEIS) role?: (typeof PAPEIS)[number];
   @IsOptional() @IsString() @MaxLength(32) phone?: string;
   @IsOptional() @IsBoolean() isActive?: boolean;
+  /** `null` apaga o nome de usuário; ausente, mantém. */
+  @IsOptional() @IsString() @Matches(USERNAME_REGEX, { message: MSG_USERNAME })
+  username?: string | null;
 }
 
 export class CriarChaveDto {

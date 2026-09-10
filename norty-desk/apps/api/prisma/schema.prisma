@@ -68,6 +68,9 @@ model Organization {
 model User {
   id                 String   @id @default(uuid()) @db.Uuid
   email              String   @unique
+  /// Login alternativo ao e-mail: minúsculas, sem "@". Opcional hoje; é o
+  /// que o LDAP vai preencher (o `login_field` do GLPI) — ver docs/13.
+  username           String?  @unique
   name               String
   /// Argon2id. A API nunca devolve este campo.
   passwordHash       String

@@ -59,6 +59,34 @@ describe('autenticação', () => {
     assert.equal(inexistente.corpo.title, errada.corpo.title);
   });
 
+  it('aceita o nome de usuário no lugar do e-mail, com a mesma recusa', async () => {
+    await prisma.user.update({
+      where: { email: 'agente@teste.dev' },
+      data: { username: 'agente.teste' },
+    });
+    const c = comoAgente();
+
+    // Maiúsculas e espaço em volta não mudam quem é a pessoa.
+    const certo = await c.post<{ accessToken: string }>('/auth/login', {
+      login: '  Agente.Teste ',
+      password: '123456',
+    });
+    const errada = await c.post<{ title: string }>('/auth/login', {
+      login: 'agente.teste',
+      password: 'errada',
+    });
+    const inexistente = await c.post<{ title: string }>('/auth/login', {
+      login: 'ninguem.aqui',
+      password: '123456',
+    });
+
+    assert.equal(certo.status, 200);
+    assert.ok(certo.corpo.accessToken);
+    assert.equal(errada.status, 401);
+    assert.equal(inexistente.status, 401);
+    assert.equal(errada.corpo.title, inexistente.corpo.title);
+  });
+
   it('devolve as permissões já resolvidas em /me', async () => {
     const c = await entrar('agente@teste.dev');
     const r = await c.get<{ role: string; permissions: string[]; teamIds: string[] }>('/auth/me');

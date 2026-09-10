@@ -10,6 +10,13 @@ COPY packages/shared packages/shared
 RUN npm run build -w @norty-desk/shared
 
 COPY apps/web apps/web
+# Base da API gravada no bundle. Sem isto o Vite cai no padrão do código
+# (`/v1`, que só existe no proxy do `vite dev`) e, em produção, o login vai
+# para /v1/auth/login: o nginx entrega o index.html do SPA e o POST volta
+# 405 — "Não foi possível falar com o servidor". O nginx só encaminha /api/.
+# (E `GET /v1/health` responde 200 com o index.html, o que engana o teste.)
+ARG VITE_API_URL=/api/v1
+ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build -w @norty-desk/web
 
 FROM nginx:1.27-alpine AS runtime

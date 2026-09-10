@@ -44,17 +44,22 @@ export class AuthService {
   /**
    * Login.
    *
-   * A mensagem é idêntica para e-mail inexistente e senha errada, e o
-   * caminho do e-mail inexistente também paga o custo de um `verify` —
+   * A mensagem é idêntica para login inexistente e senha errada, e o
+   * caminho do login inexistente também paga o custo de um `verify` —
    * senão o relógio conta o que a mensagem esconde.
    */
-  async login(email: string, senha: string): Promise<LoginResponse> {
-    const usuario = await this.prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() },
-      include: {
-        memberships: { include: { organization: true }, orderBy: { createdAt: 'asc' } },
-      },
-    });
+  async login(identificador: string, senha: string): Promise<LoginResponse> {
+    // E-mail tem "@" e nome de usuário não pode ter (a validação recusa),
+    // então o "@" escolhe o campo sem ambiguidade.
+    const chave = identificador.toLowerCase().trim();
+    const usuario = chave
+      ? await this.prisma.user.findUnique({
+          where: chave.includes('@') ? { email: chave } : { username: chave },
+          include: {
+            memberships: { include: { organization: true }, orderBy: { createdAt: 'asc' } },
+          },
+        })
+      : null;
 
     const hash = usuario?.passwordHash ?? HASH_FANTASMA;
     let confere = false;
@@ -65,11 +70,11 @@ export class AuthService {
     }
 
     if (!usuario || !usuario.isActive || !confere) {
-      throw new UnauthorizedException('E-mail ou senha inválidos.');
+      throw new UnauthorizedException('Usuário ou senha inválidos.');
     }
 
     if (usuario.memberships.length === 0) {
-      throw new UnauthorizedException('E-mail ou senha inválidos.');
+      throw new UnauthorizedException('Usuário ou senha inválidos.');
     }
 
     return {
@@ -78,6 +83,7 @@ export class AuthService {
         id: usuario.id,
         name: usuario.name,
         email: usuario.email,
+        username: usuario.username,
         mustChangePassword: usuario.mustChangePassword,
       },
       organizations: usuario.memberships.map((v) => ({

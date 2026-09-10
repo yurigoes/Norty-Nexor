@@ -20,8 +20,9 @@ import { chamar } from './cliente';
 
 // --- Autenticação -----------------------------------------------------
 
-export const entrar = (email: string, password: string) =>
-  chamar<LoginResponse>('/auth/login', { metodo: 'POST', corpo: { email, password } });
+/** `login` é o e-mail ou o nome de usuário. */
+export const entrar = (login: string, password: string) =>
+  chamar<LoginResponse>('/auth/login', { metodo: 'POST', corpo: { login, password } });
 
 export const sair = () => chamar<void>('/auth/logout', { metodo: 'POST' });
 

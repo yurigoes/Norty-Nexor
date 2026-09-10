@@ -267,6 +267,7 @@ export class CatalogoService {
                 OR: [
                   { name: { contains: filtro.q, mode: 'insensitive' } },
                   { email: { contains: filtro.q, mode: 'insensitive' } },
+                  { username: { contains: filtro.q, mode: 'insensitive' } },
                 ],
               },
             }
@@ -283,6 +284,7 @@ export class CatalogoService {
       id: v.user.id,
       name: v.user.name,
       email: v.user.email,
+      username: v.user.username,
       phone: v.user.phone,
       avatarUrl: v.user.avatarUrl,
       isActive: v.user.isActive,
@@ -324,9 +326,15 @@ export class CatalogoService {
       return { id: existente.id, email, name: existente.name, role: dto.role, senhaProvisoria: null };
     }
 
+    const username = dto.username ? dto.username.toLowerCase().trim() : null;
+    if (username && (await this.prisma.user.findUnique({ where: { username } }))) {
+      throw new ConflictException('Este nome de usuário já está em uso.');
+    }
+
     const criado = await this.prisma.user.create({
       data: {
         email,
+        username,
         name: dto.name,
         phone: dto.phone,
         passwordHash: await AuthService.hashDeSenha(provisoria),
@@ -340,6 +348,7 @@ export class CatalogoService {
     return {
       id: criado.id,
       email: criado.email,
+      username: criado.username,
       name: criado.name,
       role: dto.role,
       senhaProvisoria: provisoria,
@@ -363,10 +372,17 @@ export class CatalogoService {
       await this.exigirOutroAdministrador(usuario.organizationId, id);
     }
 
+    const username =
+      dto.username === undefined ? undefined : dto.username ? dto.username.toLowerCase().trim() : null;
+    if (username) {
+      const dono = await this.prisma.user.findUnique({ where: { username } });
+      if (dono && dono.id !== id) throw new ConflictException('Este nome de usuário já está em uso.');
+    }
+
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id },
-        data: { name: dto.name, phone: dto.phone, isActive: dto.isActive },
+        data: { name: dto.name, phone: dto.phone, isActive: dto.isActive, username },
       }),
       ...(dto.role
         ? [

@@ -1,9 +1,18 @@
-import { IsEmail, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 
 export class LoginDto {
-  @IsEmail({}, { message: 'Informe um e-mail válido.' })
+  /** E-mail ou nome de usuário — o serviço decide pelo "@". */
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
   @MaxLength(255)
-  email!: string;
+  login?: string;
+
+  /** Nome antigo do campo, ainda aceito de clientes que o enviam. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  email?: string;
 
   @IsString()
   @MinLength(1)

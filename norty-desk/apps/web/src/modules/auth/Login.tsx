@@ -16,7 +16,7 @@ export function Login() {
   const { entrar } = useAutenticacao();
   const marca = useMarca();
 
-  const [email, setEmail] = useState('');
+  const [login, setLogin] = useState('');
   const [senha, setSenha] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -27,9 +27,9 @@ export function Login() {
     setEnviando(true);
 
     try {
-      await entrar(email, senha);
+      await entrar(login, senha);
     } catch (e) {
-      // A mensagem vem da API e é idêntica para e-mail inexistente e
+      // A mensagem vem da API e é idêntica para login inexistente e
       // senha errada. Especializá-la aqui desfaria a proteção do lado do
       // servidor, que é onde ela vale.
       setErro(e instanceof ErroDaApi ? e.message : 'Não foi possível entrar agora.');
@@ -80,7 +80,7 @@ export function Login() {
           </div>
 
           <h1>Entrar</h1>
-          <p>Use o e-mail da sua conta {marca.productName}.</p>
+          <p>Use o e-mail ou o usuário da sua conta {marca.productName}.</p>
 
           {erro ? (
             <div className="alerta-bloco -erro" style={{ marginTop: 'var(--e-5)' }}>
@@ -91,19 +91,22 @@ export function Login() {
 
           <div className="login-campos">
             <div className="campo">
-              <label className="campo-rotulo" htmlFor="email">
-                E-mail
+              <label className="campo-rotulo" htmlFor="login">
+                E-mail ou usuário
               </label>
               <input
-                id="email"
+                id="login"
                 className="input"
-                type="email"
+                type="text"
                 autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 autoFocus
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="voce@empresa.com.br"
+                value={login}
+                onChange={(e) => setLogin(e.target.value)}
+                placeholder="voce@empresa.com.br ou nome.sobrenome"
               />
             </div>
 

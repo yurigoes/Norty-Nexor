@@ -37,7 +37,7 @@ export class AuthController {
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) resposta: Response,
   ): Promise<LoginResponse> {
-    const sessao = await this.auth.login(dto.email, dto.password);
+    const sessao = await this.auth.login(dto.login ?? dto.email ?? '', dto.password);
 
     // A primeira organização da lista é a ativa. Trocar é uma chamada
     // explícita, que emite token novo.

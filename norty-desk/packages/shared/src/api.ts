@@ -77,14 +77,15 @@ export type CategoryRef = {
 // Autenticação
 // ---------------------------------------------------------------------
 
-export type LoginRequest = { email: string; password: string };
+/** `login` aceita e-mail ou nome de usuário; `email` é o nome antigo do campo. */
+export type LoginRequest = { login: string; password: string };
 
 export type OrganizationRef = { id: string; slug: string; name: string; role: Role };
 
 export type LoginResponse = {
   /** JWT de 15 minutos, guardado em memória. O refresh vai no cookie. */
   accessToken: string;
-  user: { id: string; name: string; email: string; mustChangePassword: boolean };
+  user: { id: string; name: string; email: string; username?: string | null; mustChangePassword: boolean };
   organizations: OrganizationRef[];
 };
 
