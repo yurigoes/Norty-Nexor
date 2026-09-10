@@ -249,7 +249,12 @@ O inventário que o chamado referencia.
   ocupado por equipamento ou por pessoa. A conformidade é por software: a
   instalação está coberta se a máquina — ou a pessoa que a usa — ocupa um
   assento. Chave cifrada e visível só para quem gerencia ativos.
-- **Consumíveis e cartuchos**, com estoque e alerta de mínimo.
+- **Consumíveis e cartuchos**, com estoque e alerta de mínimo. **Feito em
+  10/09/2026** (`6f09560`): estoque pela soma de movimentações (entrada,
+  saída para equipamento ou pessoa, ajuste auditado), modelos compatíveis,
+  aviso no mínimo, e a troca de toner em um clique na tela da impressora.
+  Saída com a linha do item travada: saldo nunca fica negativo. Permissão
+  `consumivel:movimentar` para o agente registrar saídas.
 - **Rede**: portas, conexões, IP, faixa, VLAN, FQDN.
 
 ---

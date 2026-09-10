@@ -305,7 +305,7 @@ seguem valendo:
 | Ativos: computador, monitor, impressora, telefone, periférico, equipamento de rede | ~30 | 5 | modelo de ativo com tipo |
 | Componentes (`Device*`, `Item_Device*`) | ~60 | 5 | **um** modelo de componente com tipo, não sessenta tabelas |
 | Software, versões e licenças | ~10 | **6 ✅** | 5 tabelas; conformidade por software, assento de máquina ou pessoa |
-| Consumíveis e cartuchos | ~8 | 6 | |
+| Consumíveis e cartuchos | ~8 | **6 ✅** | estoque por movimentação, não uma linha por unidade |
 | Rede: portas, IP, VLAN, FQDN | ~30 | 6 | |
 | Datacenter: rack, PDU, sala, cabo, estêncil | ~25 | 7 | |
 | Dicionários de regra | ~40 | 7 | catálogo do mesmo motor da fase 2 |
