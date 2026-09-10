@@ -4,8 +4,8 @@ Central de serviços (service desk) da Norty. Monorepo com o aplicativo
 web, a API e o domínio compartilhado entre os dois.
 
 ```
-desk.norty.com.br      → apps/web    (React + Vite)
-desk.norty.com.br/api  → apps/api    (NestJS + Prisma + PostgreSQL)
+chamados.norty.com.br      → apps/web    (React + Vite)
+chamados.norty.com.br/api  → apps/api    (NestJS + Prisma + PostgreSQL)
 ```
 
 ## Estrutura

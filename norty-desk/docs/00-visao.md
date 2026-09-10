@@ -2,6 +2,17 @@
 
 ## O problema
 
+> **Correção de 10/09/2026.** O parágrafo abaixo está factualmente
+> errado e é mantido por honestidade de registro: **a Norty não opera um
+> GLPI.** O levantamento em thor e heimdall não achou GLPI em máquina
+> nenhuma; `desk.norty.com.br` é uma aplicação Next.js no heimdall, que
+> passa a ser retaguarda. O Norty Desk sobe em `chamados.norty.com.br`.
+>
+> O que **não** muda: a paridade funcional com o GLPI segue como
+> requisito, e a leitura de por que o GLPI acerta no domínio e erra na
+> implementação continua valendo — ela veio da documentação e do código
+> do GLPI 11, não da instalação da Norty.
+
 A Norty opera hoje um GLPI em `desk.norty.com.br`. O GLPI acerta no
 domínio: é ITIL de verdade, com chamado, requisição, problema, mudança,
 SLA e OLA separados, aprovação em etapas, base de conhecimento e

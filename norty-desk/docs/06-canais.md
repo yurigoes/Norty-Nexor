@@ -103,7 +103,7 @@ O `Message-ID` que o Desk gera segue o formato do GLPI, para
 compatibilidade com bases migradas:
 
 ```
-<Norty_Desk_Ticket_{ticketId}_{uuid}@desk.norty.com.br>
+<Norty_Desk_Ticket_{ticketId}_{uuid}@chamados.norty.com.br>
 ```
 
 ### 2.3 Do e-mail ao chamado

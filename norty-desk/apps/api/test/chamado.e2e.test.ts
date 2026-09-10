@@ -396,10 +396,18 @@ describe('ciclo de vida', () => {
     assert.equal(pausado.corpo.status, 'PENDENTE');
     assert.ok(pausado.corpo.pendingSince);
 
-    // Empurra a pendência para trás no banco, para haver o que descontar.
+    // Sete dias para trás, não três horas.
+    //
+    // O desconto é de tempo **útil**, e o calendário da fixtura é
+    // seg–sex das 9 às 18. Com três horas, a suíte só passava se
+    // rodasse dentro do expediente: às 22h, ou num sábado, as três
+    // horas caíam inteiras fora da janela, o desconto dava zero e o
+    // prazo não se movia. Uma semana contém pelo menos um dia útil
+    // inteiro em qualquer instante do ano — inclusive rodando de
+    // madrugada, que é quando a integração contínua roda.
     await prisma.ticket.update({
       where: { id: chamado.id },
-      data: { pendingSince: new Date(Date.now() - 3 * 3600 * 1000) },
+      data: { pendingSince: new Date(Date.now() - 7 * 24 * 3600 * 1000) },
     });
 
     const retomado = await supervisor.post<TicketDetail>(`/tickets/${chamado.id}/retomar`);

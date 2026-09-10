@@ -240,7 +240,7 @@ export class SatisfacaoService {
   // -------------------------------------------------------------------
 
   private baseDoPortal(): string {
-    const origem = this.config.get<string>('WEB_ORIGIN') ?? 'https://desk.norty.com.br';
+    const origem = this.config.get<string>('WEB_ORIGIN') ?? 'https://chamados.norty.com.br';
     return origem.split(',')[0]!.replace(/\/$/, '');
   }
 

@@ -1,4 +1,10 @@
-# Bloco do Norty Desk para o ingress da Norty.
+# ALTERNATIVA ao túnel Cloudflare — use um OU outro, nunca os dois.
+#
+# Na VM NDesk quem publica é o `cloudflared` do compose: ele sai de
+# dentro para a Cloudflare, e a VM não abre 80 nem 443. Este bloco só
+# serve se um dia o Desk for servido por trás do ingress da Norty, com
+# IP alcançável — aí o túnel sai do compose e este bloco entra.
+#
 # Ver docs/11-infra.md, seção 4.
 #
 # Um domínio só. A API vive em /api/*, servida pelo nginx do
@@ -6,7 +12,7 @@
 # não existe caminho até a API que não passe pelo mesmo domínio
 # e pelo mesmo cookie de sessão. É o desenho do LICITA+.
 
-desk.norty.com.br {
+chamados.norty.com.br {
     encode gzip zstd
     reverse_proxy 192.168.15.75:3060
 }

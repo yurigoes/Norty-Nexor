@@ -1,6 +1,6 @@
 # 07 — Contratos de API
 
-Base: `https://desk.norty.com.br/api/v1`
+Base: `https://chamados.norty.com.br/api/v1`
 
 A API não tem host próprio: vive sob `/api` no mesmo domínio do
 aplicativo. Ver `docs/11-infra.md`, seção 4.
@@ -29,7 +29,7 @@ Nada de `session_token`, nada de `searchOption: 12`
 
 ```json
 {
-  "type": "https://desk.norty.com.br/erros/sla-nao-encontrado",
+  "type": "https://chamados.norty.com.br/erros/sla-nao-encontrado",
   "title": "Acordo de nível de serviço não encontrado",
   "status": 404,
   "detail": "O acordo 8f2c... não pertence a esta organização.",
@@ -203,7 +203,7 @@ Aceita o RFC822 cru ou o formato normalizado:
 ```json
 {
   "messageId": "<CAJ8x...@mail.gmail.com>",
-  "inReplyTo": "<Norty_Desk_Ticket_8f2c..._a1b2@desk.norty.com.br>",
+  "inReplyTo": "<Norty_Desk_Ticket_8f2c..._a1b2@chamados.norty.com.br>",
   "references": ["<...>"],
   "from": { "email": "fulano@cliente.com.br", "name": "Fulano" },
   "to": [{ "email": "suporte@norty.com.br" }],

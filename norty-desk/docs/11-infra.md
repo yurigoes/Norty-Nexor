@@ -7,17 +7,34 @@ pela tabela antes de qualquer mudança — não escaneie às cegas.**
 
 ## 1. Onde o Desk mora
 
+Decidido em 10/09/2026, depois do levantamento em thor e heimdall: o
+Desk **não** vai para o CT 105 do thor. Sobe numa VM própria.
+
 | Item | Valor |
 |---|---|
-| Container | **CT 105 Asgard** (`norty-apps-fase3`), `192.168.15.75` |
-| Código no host | `/srv/apps-fase3/norty-desk` |
-| Caminho no container | `/opt/fase3/norty-desk` |
-| Domínio | `desk.norty.com.br` |
+| Máquina | VM **NDesk** |
+| Caminho | `/opt/norty-desk` |
+| Domínio | `chamados.norty.com.br` |
+| Publicação | **túnel Cloudflare** (`cloudflared` no compose) |
 | API | `/api/*` no mesmo domínio — **sem host próprio** (ver 4) |
 
-**Regra de ouro da Norty:** o código mora **no host thor** em `/srv/...`
-e entra no container por bind-mount em `/opt/...`. Edite no host,
-reconstrua dentro do container com Docker Compose.
+**Nenhuma porta é publicada para fora.** O `cloudflared` sai de dentro
+para a Cloudflare e volta entregando em `desk-web` pela rede interna do
+compose: a VM não abre 80 nem 443, não precisa de IP público e não tem
+certificado para renovar. A única porta amarrada é `127.0.0.1:3060`,
+para depurar de dentro.
+
+### O que fica em `desk.norty.com.br`
+
+Uma aplicação Next.js num container `norty-desk` no **heimdall**
+(`178.105.111.15`), atrás do `norty-caddy`, no ar desde agosto. **Fica
+como retaguarda e não se toca.** Não é GLPI — não há GLPI em máquina
+nenhuma da Norty (ver `docs/00-visao.md`, correção no topo).
+
+**Regra de ouro da Norty:** no thor, o código mora no host em `/srv/...`
+e entra no container por bind-mount em `/opt/...`. Na VM NDesk não há
+essa indireção: é uma VM, não um CT, e o repositório fica direto em
+`/opt/norty-desk`.
 
 ### Containers do cluster
 
@@ -81,7 +98,7 @@ pct exec 102 -- curl -s -X POST http://localhost:8080/instance/create \
 ```
 
 O webhook aponta para
-`https://desk.norty.com.br/api/v1/channels/whatsapp/inbound/<channelAccountId>`,
+`https://chamados.norty.com.br/api/v1/channels/whatsapp/inbound/<channelAccountId>`,
 com o segredo HMAC gravado em `ChannelAccount.config.webhookSecret`.
 
 ## 3. Deploy
@@ -112,7 +129,7 @@ pct exec 105 -- bash -c 'cd /opt/fase3/norty-desk && docker compose exec -T desk
 Um domínio só:
 
 ```caddyfile
-desk.norty.com.br {
+chamados.norty.com.br {
     encode gzip zstd
     reverse_proxy 192.168.15.75:3060
 }
@@ -126,8 +143,8 @@ não passe pelo mesmo domínio — e, portanto, pelo mesmo cookie de sessão.
 Isso vale também para os webhooks:
 
 ```
-https://desk.norty.com.br/api/v1/channels/email/inbound/<id>
-https://desk.norty.com.br/api/v1/channels/whatsapp/inbound/<id>
+https://chamados.norty.com.br/api/v1/channels/email/inbound/<id>
+https://chamados.norty.com.br/api/v1/channels/whatsapp/inbound/<id>
 ```
 
 O `client_max_body_size` do nginx está em 32 MB: anexo de e-mail e mídia

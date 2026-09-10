@@ -32,7 +32,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     }
 
     const problema: ProblemDetails = {
-      type: `https://desk.norty.com.br/erros/${status}`,
+      type: `https://chamados.norty.com.br/erros/${status}`,
       title: ehEsperado ? exception.message : 'Erro interno',
       status,
       instance: request.originalUrl,

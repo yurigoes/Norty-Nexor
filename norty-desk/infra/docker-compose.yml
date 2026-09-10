@@ -1,24 +1,26 @@
 # =========================================================
-#  NORTY DESK — Thor / Proxmox
+#  NORTY DESK — VM NDesk
 # ---------------------------------------------------------
-#  Segue a convenção da infra Norty: o código mora no host em
-#  /srv/apps-fase3/norty-desk e entra no CT 105 por bind-mount
-#  em /opt/fase3/norty-desk. Edita-se no host, reconstrói-se
-#  dentro do container.
+#  Publicado em https://chamados.norty.com.br por túnel
+#  Cloudflare. O `desk.norty.com.br` continua sendo o Desk
+#  antigo do heimdall, que fica de retaguarda e não se toca.
 #
 #  Banco, Redis, MinIO e Evolution NÃO sobem aqui: são a infra
 #  compartilhada do CT 102 Yggdrasil (192.168.15.72).
 #
-#  Publica só uma porta alta, nunca 80 ou 443: quem termina TLS
-#  e resolve o domínio é o ingress da Norty. A API **não publica
-#  porta nenhuma** — ela só é alcançável pelo nginx do front,
-#  pela rede interna do compose. É o mesmo desenho do LICITA+, e
-#  é o que garante que não exista caminho até a API que não passe
-#  pelo mesmo domínio (e, portanto, pelo mesmo cookie de sessão).
+#  **Nenhuma porta é publicada para fora.** Quem alcança o mundo
+#  é o `cloudflared`, que sai de dentro para a Cloudflare e volta
+#  entregando em `desk-web` pela rede interna do compose. Não há
+#  80 nem 443 abertos na VM, e nada em 0.0.0.0 — um servidor que
+#  não escuta é um servidor que não se ataca pela porta.
 #
-#  Subir:
-#    pct exec 105 -- bash -c \
-#      'cd /opt/fase3/norty-desk && docker compose up -d --build'
+#  A API não publica porta nem para o host: ela só é alcançável
+#  pelo nginx do front. É o desenho do LICITA+, e é o que garante
+#  que não exista caminho até a API que não passe pelo mesmo
+#  domínio — e, portanto, pelo mesmo cookie de sessão.
+#
+#  Subir, na VM NDesk:
+#    cd /opt/norty-desk && docker compose up -d --build
 # =========================================================
 
 name: norty-desk
@@ -81,8 +83,11 @@ services:
       # página inteira ficar indisponível por causa do banco.
       desk-api:
         condition: service_started
+    # Só no laço local, e só se `DESK_PORT` for definido: serve
+    # para depurar de dentro da VM (`curl 127.0.0.1:3060`) sem
+    # abrir nada para a rede. Quem publica é o túnel.
     ports:
-      - "${DESK_PORT:-3060}:80"
+      - "127.0.0.1:${DESK_PORT:-3060}:80"
     environment:
       TZ: America/Bahia
     healthcheck:
@@ -91,6 +96,30 @@ services:
       timeout: 4s
       retries: 3
       start_period: 5s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    networks: [desk]
+
+  # A porta de entrada. Sai de dentro para a Cloudflare e recebe
+  # de volta o tráfego de chamados.norty.com.br — por isso a VM
+  # não precisa de IP público, nem de 80/443 abertos, nem de
+  # certificado para renovar.
+  #
+  # O token é o segredo do túnel: quem o tem publica no lugar
+  # deste serviço. Vem de `infra/.env` (que o .gitignore recusa),
+  # nunca daqui.
+  desk-tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: desk-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TZ: America/Bahia
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?defina TUNNEL_TOKEN em infra/.env}
+    depends_on:
+      desk-web:
+        condition: service_started
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }

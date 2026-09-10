@@ -1,5 +1,26 @@
 # 09 — Migração do GLPI
 
+> **Correção de 10/09/2026 — não há GLPI.**
+>
+> Este documento foi escrito supondo que `desk.norty.com.br` fosse um
+> GLPI. O levantamento em thor e heimdall
+> (`scripts/achar-desk.sh`, `scripts/achar-desk-vps.sh`) não encontrou
+> GLPI em nenhuma das duas máquinas — nem instalação, nem banco. O que
+> responde por `desk.norty.com.br` é uma aplicação Next.js num container
+> `norty-desk` no heimdall, no ar desde agosto.
+>
+> A decisão tomada: esse Desk do heimdall **fica como retaguarda, e não
+> se toca**. O Norty Desk deste repositório sobe na VM `NDesk`,
+> publicado em `chamados.norty.com.br` por túnel Cloudflare.
+>
+> O que muda daqui: **não há migração de dados de legado a fazer.** A
+> paridade funcional com o GLPI continua sendo requisito — o que deixou
+> de existir é a carga de dados. O resto deste documento descreve um
+> trabalho que não vai acontecer como está escrito; foi mantido porque o
+> desenho de validação e de caminho de volta serve para qualquer carga
+> futura, inclusive a partir do Desk do heimdall, se um dia se decidir
+> por ela.
+
 Migrar do MySQL do GLPI para o Postgres do Desk. Escrito para ser
 executado uma vez, com validação, e com caminho de volta.
 

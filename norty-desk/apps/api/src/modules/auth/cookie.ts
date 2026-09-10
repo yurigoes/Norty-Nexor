@@ -5,7 +5,7 @@ import type { CookieOptions, Response } from 'express';
  *
  * `httpOnly` tira o token do alcance do JavaScript — um XSS no
  * aplicativo não consegue lê-lo. `sameSite: lax` basta porque
- * aplicativo e API vivem no mesmo domínio (`desk.norty.com.br/api`,
+ * aplicativo e API vivem no mesmo domínio (`chamados.norty.com.br/api`,
  * ver `docs/11-infra.md`, seção 4); não há requisição de origem
  * cruzada a acomodar.
  *
