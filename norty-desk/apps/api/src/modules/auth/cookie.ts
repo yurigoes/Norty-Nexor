@@ -1,5 +1,7 @@
 import type { CookieOptions, Response } from 'express';
 
+import { prefixoPublico } from '../../common/prefixo-publico';
+
 /**
  * O refresh token mora num cookie `httpOnly`.
  *
@@ -10,26 +12,27 @@ import type { CookieOptions, Response } from 'express';
  * cruzada a acomodar.
  *
  * O `path` é o da rota de renovação: o cookie não viaja em toda
- * chamada de API, só onde é usado.
+ * chamada de API, só onde é usado. E é o caminho **de fora**
+ * (`/api/v1/auth` atrás do nginx): com o de dentro (`/v1/auth`) o
+ * navegador nunca devolvia o cookie ao `/api/v1/auth/refresh`, e todo
+ * recarregamento de página jogava a pessoa no login.
  */
 export const COOKIE_REFRESH = 'nd_refresh';
 
-const PREFIXO = process.env.API_PREFIX ?? 'v1';
-
-function opcoes(expiraEm?: Date): CookieOptions {
+function opcoes(resposta: Response, expiraEm?: Date): CookieOptions {
   return {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    path: `/${PREFIXO}/auth`,
+    path: `${prefixoPublico(resposta.req)}/auth`,
     expires: expiraEm,
   };
 }
 
 export function gravarRefresh(resposta: Response, valor: string, expiraEm: Date): void {
-  resposta.cookie(COOKIE_REFRESH, valor, opcoes(expiraEm));
+  resposta.cookie(COOKIE_REFRESH, valor, opcoes(resposta, expiraEm));
 }
 
 export function limparRefresh(resposta: Response): void {
-  resposta.clearCookie(COOKIE_REFRESH, opcoes());
+  resposta.clearCookie(COOKIE_REFRESH, opcoes(resposta));
 }
