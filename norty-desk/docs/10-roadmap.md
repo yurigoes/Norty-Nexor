@@ -242,7 +242,13 @@ O inventário que o chamado referencia.
 
 ## Fase 6 — Software, consumíveis e rede
 
-- **Software**, versões e **licenças**, com contagem de uso.
+- **Software**, versões e **licenças**, com contagem de uso. **Feito em
+  10/09/2026** (`d87ee21`): software com editora do catálogo, versões,
+  instalação por equipamento, licença (perpétua, assinatura, OEM, volume,
+  gratuita) com assentos, validade, valor, fornecedor e contrato, e assento
+  ocupado por equipamento ou por pessoa. A conformidade é por software: a
+  instalação está coberta se a máquina — ou a pessoa que a usa — ocupa um
+  assento. Chave cifrada e visível só para quem gerencia ativos.
 - **Consumíveis e cartuchos**, com estoque e alerta de mínimo.
 - **Rede**: portas, conexões, IP, faixa, VLAN, FQDN.
 

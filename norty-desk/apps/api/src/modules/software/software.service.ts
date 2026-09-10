@@ -156,6 +156,7 @@ export class SoftwareService {
 
   async criar(usuario: UsuarioAutenticado, dto: EscreverSoftwareDto, ip?: string): Promise<SoftwareDetail> {
     await this.exigirDaOrganizacao(usuario, 'manufacturer', dto.manufacturerId, 'Fabricante');
+    await this.exigirNomeLivre(usuario, dto.name, dto.manufacturerId ?? null);
     const software = await SoftwareService.semDuplicata(
       () =>
         this.prisma.software.create({
@@ -188,6 +189,12 @@ export class SoftwareService {
   ): Promise<SoftwareDetail> {
     const antes = await this.exigirSoftware(usuario, id);
     await this.exigirDaOrganizacao(usuario, 'manufacturer', dto.manufacturerId, 'Fabricante');
+    await this.exigirNomeLivre(
+      usuario,
+      dto.name ?? antes.name,
+      dto.manufacturerId === undefined ? antes.manufacturerId : dto.manufacturerId,
+      id,
+    );
     const depois = await SoftwareService.semDuplicata(
       () =>
         this.prisma.software.update({
@@ -663,6 +670,36 @@ export class SoftwareService {
     const software = await this.prisma.software.findFirst({ where: { id, organizationId: usuario.organizationId } });
     if (!software) throw new NotFoundException('Software não encontrado.');
     return software;
+  }
+
+  /**
+   * O índice único (organização, fabricante, nome) não pega dois "Office"
+   * sem fabricante — no Postgres, NULL é diferente de NULL — nem "Office" e
+   * "office". Os dois são o mesmo software para quem conta licença, e
+   * duplicado divide as instalações entre dois registros.
+   */
+  private async exigirNomeLivre(
+    usuario: UsuarioAutenticado,
+    nome: string,
+    manufacturerId: string | null,
+    ignorarId?: string,
+  ): Promise<void> {
+    const existente = await this.prisma.software.findFirst({
+      where: {
+        organizationId: usuario.organizationId,
+        name: { equals: nome.trim(), mode: 'insensitive' },
+        manufacturerId,
+        ...(ignorarId ? { NOT: { id: ignorarId } } : {}),
+      },
+      select: { name: true },
+    });
+    if (existente) {
+      throw new ConflictException(
+        manufacturerId
+          ? `Já existe "${existente.name}" deste fabricante.`
+          : `Já existe "${existente.name}" sem fabricante — use esse, ou informe o fabricante.`,
+      );
+    }
   }
 
   private async exigirLicenca(usuario: UsuarioAutenticado, id: string) {
