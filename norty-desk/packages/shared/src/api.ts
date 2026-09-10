@@ -1177,3 +1177,140 @@ export type DashboardResponse = {
   cartoes: DashboardCard[];
   series: Record<string, SeriePonto[]>;
 };
+
+// ---------------------------------------------------------------------
+// Software e licenças (Fase 6)
+// ---------------------------------------------------------------------
+
+export const LICENSE_KINDS = ['PERPETUA', 'ASSINATURA', 'OEM', 'VOLUME', 'GRATUITA'] as const;
+export type LicenseKind = (typeof LICENSE_KINDS)[number];
+
+export const ROTULO_LICENCA: Record<LicenseKind, string> = {
+  PERPETUA: 'Perpétua',
+  ASSINATURA: 'Assinatura',
+  OEM: 'OEM (veio com o equipamento)',
+  VOLUME: 'Volume',
+  GRATUITA: 'Gratuita',
+};
+
+/**
+ * Situação de uma licença, calculada na API:
+ * - `excedida`: mais assentos ocupados do que comprados;
+ * - `vencida`: passou do `expiresAt`;
+ * - `vencendo`: vence nos próximos 30 dias;
+ * - `ok`: nada disso.
+ * Excedida ganha de vencida: é a que dá multa em auditoria.
+ */
+export type SituacaoDaLicenca = 'ok' | 'vencendo' | 'vencida' | 'excedida';
+
+export type SoftwareView = {
+  id: string;
+  name: string;
+  category: string | null;
+  manufacturer: CatalogoRef | null;
+  isActive: boolean;
+  notes: string | null;
+  versionCount: number;
+  installCount: number;
+  /** Assentos comprados, somando as licenças. Nulo quando alguma é ilimitada. */
+  seats: number | null;
+  seatsUsed: number;
+  /** Equipamentos com o software instalado e sem assento de licença dele. */
+  unlicensedInstalls: number;
+  /** A validade mais próxima entre as licenças que vencem. */
+  nextExpiry: string | null;
+};
+
+export type VersaoDeSoftwareView = {
+  id: string;
+  name: string;
+  installCount: number;
+};
+
+export type InstalacaoView = {
+  id: string;
+  installedAt: string | null;
+  software: CatalogoRef;
+  version: CatalogoRef;
+  asset: { id: string; name: string; tag: string | null };
+  /** Se o equipamento ocupa um assento de alguma licença deste software. */
+  licensed: boolean;
+};
+
+export type AtribuicaoView = {
+  id: string;
+  assignedAt: string;
+  asset: { id: string; name: string; tag: string | null } | null;
+  user: { id: string; name: string; email: string | null } | null;
+};
+
+export type LicencaView = {
+  id: string;
+  software: CatalogoRef;
+  name: string;
+  kind: LicenseKind;
+  version: CatalogoRef | null;
+  seats: number | null;
+  seatsUsed: number;
+  purchasedAt: string | null;
+  expiresAt: string | null;
+  /** Decimal como texto, como nos outros valores em dinheiro. */
+  purchaseValue: string | null;
+  supplier: CatalogoRef | null;
+  contract: { id: string; number: string; name: string } | null;
+  notes: string | null;
+  situacao: SituacaoDaLicenca;
+  /** Existe chave guardada? A chave em si só vai para quem gerencia ativos. */
+  hasKey: boolean;
+  licenseKey?: string | null;
+  assignments: AtribuicaoView[];
+};
+
+export type SoftwareDetail = SoftwareView & {
+  versions: VersaoDeSoftwareView[];
+  installations: InstalacaoView[];
+  licenses: LicencaView[];
+};
+
+/** O que a tela do equipamento mostra de software. */
+export type SoftwareDoAtivo = {
+  installations: InstalacaoView[];
+  licenses: {
+    assignmentId: string;
+    license: { id: string; name: string; kind: LicenseKind; expiresAt: string | null };
+    software: CatalogoRef;
+  }[];
+};
+
+export type WriteSoftwareRequest = {
+  name: string;
+  manufacturerId?: string | null;
+  category?: string | null;
+  notes?: string | null;
+  isActive?: boolean;
+};
+
+export type WriteLicenseRequest = {
+  name: string;
+  kind?: LicenseKind;
+  versionId?: string | null;
+  /** Ausente mantém a chave guardada; `null` apaga. */
+  licenseKey?: string | null;
+  seats?: number | null;
+  purchasedAt?: string | null;
+  expiresAt?: string | null;
+  purchaseValue?: number | null;
+  supplierId?: string | null;
+  contractId?: string | null;
+  notes?: string | null;
+};
+
+/** Instalar pelo nome da versão: a versão é criada se ainda não existir. */
+export type InstalarSoftwareRequest = {
+  softwareId: string;
+  version: string;
+  installedAt?: string | null;
+};
+
+export type AtribuirLicencaRequest = { assetId: string } | { userId: string };
+

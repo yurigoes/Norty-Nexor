@@ -31,6 +31,7 @@ import { listarFabricantes } from '../../api/catalogoAtivo';
 import { useAutenticacao } from '../../auth/Autenticacao';
 import { CampoDinamico } from '../formulario/CamposDinamicos';
 import { dataCurta } from '../../lib/formato';
+import { SoftwareDoAtivoCard } from './SoftwareDoAtivo';
 
 /**
  * O equipamento por dentro.
@@ -97,6 +98,7 @@ export function Ativo() {
 
       <Identificacao ativo={ativo} />
       <Hardware ativo={ativo} podeEditar={can('ativo:gerenciar')} aoMudar={setAtivo} />
+      <SoftwareDoAtivoCard assetId={ativo.id} />
       <Historico chamados={chamados} />
     </div>
   );

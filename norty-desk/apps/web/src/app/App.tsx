@@ -9,6 +9,8 @@ import { Canais } from '../modules/canais/Canais';
 import { Auditoria } from '../modules/auditoria/Auditoria';
 import { Categorias } from '../modules/configuracao/Categorias';
 import { Pessoas } from '../modules/configuracao/Pessoas';
+import { Software } from '../modules/software/Software';
+import { Softwares } from '../modules/software/Softwares';
 import { Diretorios } from '../modules/configuracao/Diretorios';
 import { Formularios } from '../modules/configuracao/Formularios';
 import { CatalogoDoAtivo } from '../modules/configuracao/CatalogoDoAtivo';
@@ -101,6 +103,8 @@ function Aplicativo() {
             <Route path="/painel" element={<Painel />} />
             <Route path="/ativos" element={<Ativos />} />
             <Route path="/ativos/:id" element={<Ativo />} />
+            <Route path="/software" element={<Softwares />} />
+            <Route path="/software/:id" element={<Software />} />
             {/* `erros-conhecidos` antes de `:id`, ou casaria com ele. */}
             <Route path="/problemas/erros-conhecidos" element={<ErrosConhecidos />} />
             <Route path="/problemas/:id" element={<Problema />} />

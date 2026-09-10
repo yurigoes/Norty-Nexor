@@ -131,6 +131,16 @@ export function Sidebar() {
           </Link>
         ) : null}
 
+        {can('ativo:ler') ? (
+          <Link
+            to="/software"
+            className="nav-item"
+            aria-current={local.pathname.startsWith('/software') ? 'page' : undefined}
+          >
+            <span>Software e licenças</span>
+          </Link>
+        ) : null}
+
         {can('problema:ler') ? (
           <Link
             to="/problemas"
