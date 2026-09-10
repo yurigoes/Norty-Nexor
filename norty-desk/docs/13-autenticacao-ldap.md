@@ -4,10 +4,9 @@ Como o GLPI conversa com o LDAP, lido no código-fonte dele
 (`glpi-project/glpi`, ramo `main`, `src/Auth.php` e `src/AuthLDAP.php`),
 e como isso vira o desenho do Norty Desk.
 
-> **Estado em 10/09/2026.** Já no ar: login por **e-mail ou nome de
-> usuário**, no mesmo campo (`User.username`, opcional e único). LDAP e
-> e-mail opcional ainda **não** — são o próximo passo, e este documento é
-> o ponto de partida.
+> **Estado em 10/09/2026.** No ar: login por **e-mail** ou por **nome de
+> usuário + empresa**, e-mail opcional, e o **LDAP/AD por organização**
+> (seção 2). Falta: grupos do AD virando equipes e perfis, e réplicas.
 
 ---
 
@@ -74,61 +73,93 @@ diretório. A conexão tenta o principal e, se falhar, as réplicas em ordem
 
 ## 2. Como fica no Norty Desk
 
-### O que já está feito
+### Decisões do Yuri (10/09/2026)
 
-- `User.username` (opcional, único, minúsculas, 3–64 caracteres, sem `@`).
-- A tela de login tem um campo só, "E-mail ou usuário". A API decide pelo
-  `@`: com `@` procura por e-mail, sem `@` por usuário. A mensagem de erro
-  é a mesma para login inexistente e senha errada, e os dois caminhos pagam
-  o custo de um `argon2.verify`.
-- `POST /v1/users` e `PATCH /v1/users/:id` aceitam `username` (conflito de
-  unicidade responde 409; `null` na edição apaga).
-- O corpo do login é `{ login, password }`. `{ email, password }` segue
-  aceito, para clientes antigos.
+- Quem autentica no AD e ainda não existe é **criado na hora**, como no GLPI.
+- Perfil padrão de quem entra pelo AD: **Solicitante**.
+- **E-mail opcional** — conta de AD sem `mail` existe.
+- **Nome de usuário único por organização** — dois clientes podem ter o seu
+  `jsilva`. Por isso o login por usuário pede a empresa.
 
-### O que o LDAP pede do modelo
+### O modelo
 
-1. **`AuthSource` por organização** — o equivalente a `glpi_authldaps`,
-   mas pendurado em `Organization`, porque o Desk é multiempresa: cada
-   cliente traz o próprio AD. Mesmos campos da tabela da seção 1. A senha da
-   conta de serviço vai cifrada, como as senhas de canal já são hoje
-   (`CHANNEL_SECRET_KEY`).
-2. **Usuário marcado com a origem**: `authSourceId` (nulo = conta local) e
-   `externalId` (o valor do `sync_field`). O login de um usuário LDAP nunca
-   compara senha local — vai sempre ao diretório.
-3. **E-mail opcional**. Hoje `User.email` é obrigatório e único; conta de
-   AD sem e-mail precisa existir. A migração torna o campo anulável e
-   mantém a unicidade só quando preenchido. Chamados por e-mail continuam
-   exigindo e-mail, é claro — só a conta não.
-4. **Grupos → equipes e perfis**: mapeamento configurável de grupo do
-   diretório para `Team` e para `Role` na organização.
+| Onde | O quê |
+|---|---|
+| `users.email` | Opcional; único quando preenchido. |
+| `memberships.username` | O nome de usuário, **no vínculo** com a organização; único por organização. |
+| `users.authSourceId`, `users.externalId` | Conta de diretório: a fonte que a criou e o valor do `syncField` (o `objectGUID`, em hex). Único por fonte. Nulo = conta local. |
+| `auth_sources` | O `glpi_authldaps`, por organização: servidor, porta, StartTLS/LDAPS, base, conta de serviço (senha cifrada com `CHANNEL_SECRET_KEY`), campos de login/sync/e-mail/nome/telefone, filtro extra, tempo limite, ordem, criar-na-hora e perfil padrão. |
 
-### O fluxo de login, com LDAP
+A migração `20260910180000_identidade_por_organizacao` move o `username`
+de `users` para `memberships` antes de apagar a coluna — o diff do Prisma
+apagava primeiro e o valor se perdia.
+
+### O fluxo de login
 
 ```
-login digitado
-  ├─ tem "@" → procura por e-mail
-  └─ sem "@" → procura por username
+login digitado (+ empresa, quando não tem "@")
+  ├─ com "@" → procura por e-mail (global)
+  └─ sem "@" → sem empresa: 400 "Informe a empresa"
+               com empresa: procura o vínculo (username, empresa)
         │
-        ├─ achou e é conta local        → argon2.verify
-        ├─ achou e é conta de diretório → bind no AuthSource dela
-        └─ não achou → para cada AuthSource ativo da organização:
-                         busca (login_field=...) & condition
-                         1 resultado? bind com a senha
-                         ok → cria o usuário (username = login_field,
-                              externalId = sync_field, e-mail se houver)
+        ├─ achou, conta local        → argon2.verify
+        ├─ achou, conta de diretório → bind na fonte DELA, com o login do vínculo
+        │                              (mesmo que tenha digitado o e-mail);
+        │                              objectGUID diferente do guardado → recusa
+        └─ não achou (usuário + empresa) → fontes ativas da empresa, pela ordem:
+               conta de serviço → busca (loginField=escapado) & filtro
+               1 resultado → bind com a senha digitada
+                 ok    → vincula (mesmo objectGUID já conhecido) ou cria
+                 senha → para ali: 401
+               0 ou 2 → próxima fonte
 ```
 
-A tela de login pode ganhar o seletor de fonte do GLPI, mas não precisa:
-com o `username` único por instalação, a busca acima resolve sozinha.
+- **Diretório fora do ar não é senha errada**: responde **503** "Não foi
+  possível falar com o diretório (AD) da empresa", nunca "usuário ou senha
+  inválidos" — senão uma queda do AD vira, para a empresa inteira, uma fila
+  de reset de senha. Só é 503 se nenhuma fonte que respondeu conhecia a
+  pessoa.
+- **Senha vazia** é recusada antes de abrir conexão: bind com senha vazia é
+  bind anônimo, e muitos servidores respondem sucesso.
+- O login digitado entra no filtro **escapado** (RFC 4515), e os nomes de
+  atributo configurados só aceitam letras, números e hífen — os dois são as
+  portas de injeção de filtro.
+- A cada login, **nome, e-mail e telefone** voltam a ser os do diretório.
+  E-mail que já é de outra conta não é copiado.
+- **Não se funde conta por coincidência**: se o login do AD já é de uma
+  conta local da empresa, ou o e-mail do AD já é de outra conta, a conta de
+  diretório não assume a existente. No primeiro caso o login é recusado
+  (e fica no log `Login`); no segundo, a pessoa nasce sem e-mail.
+- Conta de diretório não troca senha, e-mail nem usuário pelo Desk: vêm do
+  AD. A senha guardada nela é aleatória e nunca abre a conta.
+- O perfil de quem é criado na hora vai no máximo até **Supervisor**. Gestor
+  e administrador só por um administrador, em Pessoas — quem administra o AD
+  do cliente não vira administrador do Desk criando uma conta lá.
 
-### Decisões que ficam para o Yuri
+### A tela
 
-- Provisionamento automático: quem autentica no AD vira usuário na hora, ou
-  só quem um administrador já cadastrou?
-- Perfil padrão de quem entra pelo LDAP (sugestão: `SOLICITANTE`).
-- Se o `username` passa a ser único **por organização** (dois clientes com
-  o mesmo `jsilva`) — aí o login precisa saber a organização antes, por
-  subdomínio ou seletor.
-- Biblioteca: `ldapts` (TypeScript, promessas, StartTLS, paginação) é a
-  candidata natural para a API NestJS.
+**Configuração → Autenticação (AD)** (`/config/autenticacao`, permissão
+`config:autenticacao`, que só o administrador tem). Botões que preenchem os
+campos para **Active Directory** (`sAMAccountName`, `objectGUID`, só pessoas
+e contas habilitadas) e **OpenLDAP** (`uid`, `entryUUID`,
+`inetOrgPerson`). "Salvar e testar" confere conexão, conta de serviço e
+base; com um login no campo de teste, procura a pessoa e mostra o que o
+diretório devolve — sem a senha dela, que o administrador não tem.
+
+API: `GET/POST /v1/auth-sources`, `PATCH/DELETE /v1/auth-sources/:id`
+(desativar; as pessoas criadas pela fonte apontam para ela),
+`POST /v1/auth-sources/:id/testar` `{ login? }`. A senha de serviço nunca
+volta: a resposta traz `hasBindPassword`; na edição, ausente mantém, texto
+troca, `null` apaga.
+
+Biblioteca: **`ldapts` 8.2** (a 9 exige Node 22; a imagem é Node 20).
+
+### O que ainda não tem
+
+- **Grupos → equipes e perfis** (`group_*` do GLPI).
+- **Réplicas**: um servidor por fonte. Com dois DCs, duas fontes na ordem.
+- **Login por UPN** (`nome@empresa.local`): o `@` manda para a busca por
+  e-mail. Use o `sAMAccountName`.
+- **Tempo de resposta**: o caminho do diretório demora o que o AD demora, e
+  o local o que o argon2 demora; dá para distinguir pelo relógio se um login
+  existe como conta local. O GLPI tem o mesmo comportamento.

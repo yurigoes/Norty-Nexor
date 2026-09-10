@@ -2,16 +2,21 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ROLE_PERMISSIONS, type LoginResponse, type MeResponse } from '@norty-desk/shared';
+import { Prisma, type AuthSource } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { createHash, randomBytes } from 'node:crypto';
 
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { normalizarUsername } from '../../common/usuario';
+import { DiretorioService } from '../diretorio/diretorio.service';
+import { ErroDeDiretorio, type PessoaDoDiretorio, type ResultadoLdap } from '../diretorio/ldap';
 import type { AtualizarPerfilDto } from './dto';
 
 /**
@@ -26,6 +31,18 @@ const HASH_FANTASMA =
 
 const OPCOES_ARGON = { type: argon2.argon2id, memoryCost: 65536, timeCost: 3, parallelism: 4 } as const;
 
+type UsuarioComVinculos = Prisma.UserGetPayload<{
+  include: { memberships: { include: { organization: true } } };
+}>;
+
+/**
+ * Diretório fora do ar não é senha errada. Responder "usuário ou senha
+ * inválidos" aqui faria uma queda do AD parecer, para a empresa inteira,
+ * que todo mundo esqueceu a senha — e o suporte iria resetar senhas.
+ */
+const MSG_DIRETORIO_FORA =
+  'Não foi possível falar com o diretório (AD) da empresa. Tente de novo em instantes.';
+
 export type ParDeTokens = {
   accessToken: string;
   /** Valor cru do refresh. Só existe aqui e no cookie — nunca no banco. */
@@ -35,9 +52,12 @@ export type ParDeTokens = {
 
 @Injectable()
 export class AuthService {
+  private readonly log = new Logger('Login');
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
+    private readonly diretorio: DiretorioService,
   ) {}
 
   static hashDeRefresh(cru: string): string {
@@ -75,28 +95,26 @@ export class AuthService {
             .findFirst({ where: { username: chave, organization: { slug } }, select: { userId: true } })
             .then((v) => (v ? { id: v.userId } : null));
 
-    const usuario = alvo
-      ? await this.prisma.user.findUnique({
-          where: { id: alvo.id },
-          include: {
-            memberships: { include: { organization: true }, orderBy: { createdAt: 'asc' } },
-          },
-        })
-      : null;
+    let usuario = alvo ? await this.carregar(alvo.id) : null;
 
-    const hash = usuario?.passwordHash ?? HASH_FANTASMA;
-    let confere = false;
-    try {
-      confere = await argon2.verify(hash, senha);
-    } catch {
-      confere = false;
+    if (usuario?.authSourceId) {
+      // Conta de diretório: a senha é sempre a do AD. A guardada aqui é
+      // aleatória e não abre esta conta.
+      usuario = await this.entrarPeloDiretorio(usuario, senha);
+    } else if (usuario) {
+      if (!(await argon2.verify(usuario.passwordHash, senha).catch(() => false))) usuario = null;
+    } else {
+      // Ninguém com esse login aqui. Com usuário + empresa, pode ser o
+      // primeiro acesso de alguém do AD dela: o GLPI cria na hora.
+      usuario =
+        chave && !chave.includes('@') && slug
+          ? await this.provisionarPeloDiretorio(chave, senha, slug)
+          : null;
+      // Sem conta para conferir, o relógio ainda paga um verify.
+      if (!usuario) await argon2.verify(HASH_FANTASMA, senha).catch(() => false);
     }
 
-    if (!usuario || !usuario.isActive || !confere) {
-      throw new UnauthorizedException('Usuário ou senha inválidos.');
-    }
-
-    if (usuario.memberships.length === 0) {
+    if (!usuario || !usuario.isActive || usuario.memberships.length === 0) {
       throw new UnauthorizedException('Usuário ou senha inválidos.');
     }
 
@@ -122,6 +140,179 @@ export class AuthService {
         role: v.role,
       })),
     };
+  }
+
+  private carregar(id: string): Promise<UsuarioComVinculos | null> {
+    return this.prisma.user.findUnique({
+      where: { id },
+      include: { memberships: { include: { organization: true }, orderBy: { createdAt: 'asc' } } },
+    });
+  }
+
+  /**
+   * Quem já veio do diretório entra sempre por ele — pela fonte que o
+   * criou, com o login do vínculo na organização dela (é o que o AD
+   * conhece), mesmo que tenha digitado o e-mail.
+   */
+  private async entrarPeloDiretorio(
+    usuario: UsuarioComVinculos,
+    senha: string,
+  ): Promise<UsuarioComVinculos | null> {
+    const fonte = await this.prisma.authSource.findUnique({ where: { id: usuario.authSourceId! } });
+    if (!fonte?.isActive) return null;
+
+    const login = usuario.memberships.find((v) => v.organizationId === fonte.organizationId)?.username;
+    if (!login) return null;
+
+    let resultado: ResultadoLdap;
+    try {
+      resultado = await this.diretorio.autenticar(fonte, login, senha);
+    } catch (e) {
+      if (!(e instanceof ErroDeDiretorio)) throw e;
+      this.log.warn(`Fonte "${fonte.name}": ${e.message}`);
+      throw new ServiceUnavailableException(MSG_DIRETORIO_FORA);
+    }
+    if (!resultado.ok) return null;
+
+    // O mesmo login com outro objectGUID é outra conta no AD — alguém que
+    // herdou o login de quem saiu. Não herda também o histórico no Desk.
+    const { externalId } = resultado.pessoa;
+    if (usuario.externalId && externalId && usuario.externalId !== externalId) {
+      this.log.warn(
+        `"${login}" na fonte "${fonte.name}": o ${fonte.syncField} mudou — outra conta no AD com o mesmo login. Recusado.`,
+      );
+      return null;
+    }
+
+    await this.sincronizar(usuario.id, resultado.pessoa);
+    return this.carregar(usuario.id);
+  }
+
+  /**
+   * O primeiro acesso de alguém do diretório: tenta as fontes ativas da
+   * empresa, na ordem configurada, como o GLPI. Achou a pessoa e a senha
+   * não bateu? Para ali — a mesma senha errada não vira certa noutro AD.
+   */
+  private async provisionarPeloDiretorio(
+    login: string,
+    senha: string,
+    slug: string,
+  ): Promise<UsuarioComVinculos | null> {
+    const organizacao = await this.prisma.organization.findFirst({ where: { slug }, select: { id: true } });
+    if (!organizacao) return null;
+
+    let queda = false;
+    for (const fonte of await this.diretorio.fontesAtivas(organizacao.id)) {
+      let resultado: ResultadoLdap;
+      try {
+        resultado = await this.diretorio.autenticar(fonte, login, senha);
+      } catch (e) {
+        if (!(e instanceof ErroDeDiretorio)) throw e;
+        this.log.warn(`Fonte "${fonte.name}": ${e.message}`);
+        queda = true;
+        continue;
+      }
+      if (resultado.ok) return this.vincular(fonte, organizacao.id, resultado.pessoa);
+      if (resultado.motivo === 'senha') return null;
+    }
+
+    // Só é "fora do ar" se nenhuma fonte que respondeu conhecia a pessoa.
+    if (queda) throw new ServiceUnavailableException(MSG_DIRETORIO_FORA);
+    return null;
+  }
+
+  private async vincular(
+    fonte: AuthSource,
+    organizationId: string,
+    pessoa: PessoaDoDiretorio,
+  ): Promise<UsuarioComVinculos | null> {
+    const username = pessoa.login.toLowerCase().trim();
+
+    try {
+      // Já entrou antes e o login mudou no AD — o objectGUID não muda. O
+      // vínculo acompanha o login novo.
+      const existente = pessoa.externalId
+        ? await this.prisma.user.findUnique({
+            where: { authSourceId_externalId: { authSourceId: fonte.id, externalId: pessoa.externalId } },
+            select: { id: true },
+          })
+        : null;
+
+      if (existente) {
+        await this.prisma.membership.upsert({
+          where: { userId_organizationId: { userId: existente.id, organizationId } },
+          create: { userId: existente.id, organizationId, role: fonte.defaultRole, username },
+          update: { username },
+        });
+        await this.sincronizar(existente.id, pessoa);
+        return this.carregar(existente.id);
+      }
+
+      if (!fonte.autoCreate) {
+        this.log.log(`"${username}" autenticou na fonte "${fonte.name}", que não cria contas sozinha.`);
+        return null;
+      }
+
+      // E-mail que já é de outra conta não vincula: seria entregar aquela
+      // conta a quem administra o AD. A pessoa nasce sem e-mail.
+      const emailLivre =
+        pessoa.email &&
+        !(await this.prisma.user.findUnique({ where: { email: pessoa.email }, select: { id: true } }));
+      if (pessoa.email && !emailLivre) {
+        this.log.warn(`"${username}" (fonte "${fonte.name}"): o e-mail do AD já é de outra conta; criada sem e-mail.`);
+      }
+
+      const criado = await this.prisma.user.create({
+        data: {
+          name: pessoa.nome ?? pessoa.login,
+          email: emailLivre ? pessoa.email : null,
+          phone: pessoa.telefone,
+          // Ninguém conhece esta senha: a conta só abre pelo diretório.
+          passwordHash: await AuthService.hashDeSenha(randomBytes(32).toString('base64url')),
+          mustChangePassword: false,
+          authSourceId: fonte.id,
+          externalId: pessoa.externalId,
+          memberships: { create: { organizationId, role: fonte.defaultRole, username } },
+        },
+        select: { id: true },
+      });
+      this.log.log(`"${username}" criado(a) pela fonte "${fonte.name}" como ${fonte.defaultRole}.`);
+      return this.carregar(criado.id);
+    } catch (e) {
+      // O login já é de uma conta local desta empresa: não se funde conta
+      // local com conta de diretório por coincidência de nome.
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        this.log.warn(`"${username}" (fonte "${fonte.name}"): o login já é de outra conta nesta organização. Recusado.`);
+        return null;
+      }
+      throw e;
+    }
+  }
+
+  /** A cada login, nome, e-mail e telefone voltam a ser os do diretório — como no GLPI. */
+  private async sincronizar(userId: string, pessoa: PessoaDoDiretorio): Promise<void> {
+    const emailLivre =
+      pessoa.email &&
+      !(await this.prisma.user.findFirst({
+        where: { email: pessoa.email, NOT: { id: userId } },
+        select: { id: true },
+      }));
+
+    try {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          ...(pessoa.nome ? { name: pessoa.nome } : {}),
+          ...(emailLivre ? { email: pessoa.email } : {}),
+          ...(pessoa.telefone ? { phone: pessoa.telefone } : {}),
+          ...(pessoa.externalId ? { externalId: pessoa.externalId } : {}),
+        },
+      });
+    } catch (e) {
+      // Sincronizar é conveniência: um conflito aqui não impede a entrada.
+      if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002')) throw e;
+      this.log.warn(`Sincronização de ${userId} com o diretório recusada por unicidade; login segue.`);
+    }
   }
 
   /** Emite o par de tokens para um vínculo já validado. */

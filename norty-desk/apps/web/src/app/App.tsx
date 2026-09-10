@@ -9,6 +9,7 @@ import { Canais } from '../modules/canais/Canais';
 import { Auditoria } from '../modules/auditoria/Auditoria';
 import { Categorias } from '../modules/configuracao/Categorias';
 import { Pessoas } from '../modules/configuracao/Pessoas';
+import { Diretorios } from '../modules/configuracao/Diretorios';
 import { Formularios } from '../modules/configuracao/Formularios';
 import { CatalogoDoAtivo } from '../modules/configuracao/CatalogoDoAtivo';
 import { Contratos } from '../modules/configuracao/Contratos';
@@ -115,6 +116,7 @@ function Aplicativo() {
             <Route path="/config/marca" element={<MarcaConfig />} />
             <Route path="/config/categorias" element={<Categorias />} />
             <Route path="/config/pessoas" element={<Pessoas />} />
+            <Route path="/config/autenticacao" element={<Diretorios />} />
             <Route path="/config/sla" element={<Sla />} />
             <Route path="/config/recorrencias" element={<Recorrencias />} />
             <Route path="/config/formularios" element={<Formularios />} />

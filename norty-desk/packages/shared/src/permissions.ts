@@ -112,6 +112,8 @@ export const PERMISSIONS = [
   'config:canais',
   'config:webhooks',
   'config:chaves-api',
+  /** Fontes de autenticação (LDAP/AD) da organização. */
+  'config:autenticacao',
 
   // --- Pessoas --------------------------------------------------------
   'pessoa:ler',
