@@ -16,7 +16,7 @@ titulo() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 # com profundidade limitada, podando o que não é configuração; só os
 # arquivos que casaram é que passam pelo grep.
 BUSCA="find /etc/caddy /etc/nginx /etc/apache2 /etc/traefik /srv /opt /root \
-  -maxdepth 4 \
+  -maxdepth 6 \
   \\( -name node_modules -o -name .git -o -name vendor -o -name dist \\) -prune -o \
   -type f \\( -name 'Caddyfile' -o -name '*.caddy' -o -name '*.conf' \
      -o -name 'docker-compose*.yml' -o -name 'docker-compose*.yaml' \
