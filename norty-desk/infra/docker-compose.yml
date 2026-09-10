@@ -1,5 +1,5 @@
 # =========================================================
-#  NORTY DESK — VM NDesk
+#  NORTY DESK — máquina NDesk
 # ---------------------------------------------------------
 #  Publicado em https://chamados.norty.com.br por túnel
 #  Cloudflare. O `desk.norty.com.br` continua sendo o Desk
@@ -8,19 +8,29 @@
 #  Banco, Redis, MinIO e Evolution NÃO sobem aqui: são a infra
 #  compartilhada do CT 102 Yggdrasil (192.168.15.72).
 #
-#  **Nenhuma porta é publicada para fora.** Quem alcança o mundo
-#  é o `cloudflared`, que sai de dentro para a Cloudflare e volta
-#  entregando em `desk-web` pela rede interna do compose. Não há
-#  80 nem 443 abertos na VM, e nada em 0.0.0.0 — um servidor que
-#  não escuta é um servidor que não se ataca pela porta.
+#  Dois jeitos de publicar, escolhidos no infra/.env:
 #
-#  A API não publica porta nem para o host: ela só é alcançável
-#  pelo nginx do front. É o desenho do LICITA+, e é o que garante
-#  que não exista caminho até a API que não passe pelo mesmo
-#  domínio — e, portanto, pelo mesmo cookie de sessão.
+#  1. Conector externo — o que está no ar desde 10/09/2026.
+#     A rota de chamados.norty.com.br vive num túnel que já
+#     existe no parque (`norty-thor-yugo-family`, conector no
+#     CT 102) e aponta para http://<IP da NDesk>:3060. Aqui não
+#     roda cloudflared nenhum: um segundo conector do mesmo
+#     túnel passaria a receber pedidos dos outros sites dele,
+#     que esta máquina não serve. Para o conector de outro CT
+#     alcançar o front, DESK_BIND=0.0.0.0.
 #
-#  Subir, na VM NDesk:
-#    cd /opt/norty-desk && docker compose up -d --build
+#  2. Conector próprio — túnel exclusivo do chamados, com
+#     COMPOSE_PROFILES=tunnel e TUNNEL_TOKEN no infra/.env. O
+#     túnel aponta para http://desk-web:80, pela rede interna do
+#     compose, e o front volta a escutar só em 127.0.0.1.
+#
+#  Nos dois, a API não publica porta nem para o host: ela só é
+#  alcançável pelo nginx do front. É o desenho do LICITA+, e é o
+#  que garante que não exista caminho até a API que não passe
+#  pelo mesmo domínio — e, portanto, pelo mesmo cookie de sessão.
+#
+#  Subir, na NDesk:
+#    cd /opt/norty-desk && bash scripts/subir-ndesk.sh
 # =========================================================
 
 name: norty-desk
@@ -83,11 +93,12 @@ services:
       # página inteira ficar indisponível por causa do banco.
       desk-api:
         condition: service_started
-    # Só no laço local, e só se `DESK_PORT` for definido: serve
-    # para depurar de dentro da VM (`curl 127.0.0.1:3060`) sem
-    # abrir nada para a rede. Quem publica é o túnel.
+    # 127.0.0.1 por padrão: só serve para depurar de dentro da
+    # máquina (`curl 127.0.0.1:3060`). No modo de conector externo
+    # o infra/.env define DESK_BIND=0.0.0.0, porque é por esta
+    # porta que o conector, em outro CT, chega ao front.
     ports:
-      - "127.0.0.1:${DESK_PORT:-3060}:80"
+      - "${DESK_BIND:-127.0.0.1}:${DESK_PORT:-3060}:80"
     environment:
       TZ: America/Bahia
     healthcheck:
@@ -101,22 +112,35 @@ services:
       options: { max-size: "10m", max-file: "3" }
     networks: [desk]
 
-  # A porta de entrada. Sai de dentro para a Cloudflare e recebe
-  # de volta o tráfego de chamados.norty.com.br — por isso a VM
-  # não precisa de IP público, nem de 80/443 abertos, nem de
-  # certificado para renovar.
+  # A porta de entrada no modo de conector próprio. Sai de dentro
+  # para a Cloudflare e recebe de volta o tráfego de
+  # chamados.norty.com.br — sem IP público, sem 80/443 abertos,
+  # sem certificado para renovar.
+  #
+  # Só sobe com COMPOSE_PROFILES=tunnel. No modo de conector
+  # externo ele NÃO pode subir com o token do túnel compartilhado:
+  # viraria réplica de um túnel cujos outros sites esta máquina não
+  # serve, e a Cloudflare sortearia pedidos deles para cá.
   #
   # O token é o segredo do túnel: quem o tem publica no lugar
   # deste serviço. Vem de `infra/.env` (que o .gitignore recusa),
-  # nunca daqui.
+  # nunca daqui. `:-` e não `:?`: com `:?` o compose recusava
+  # interpretar o arquivo inteiro sem o token — até um
+  # `up desk-api` — mesmo com este serviço fora do profile.
+  #
+  # `--protocol http2`: em QUIC o canal de controle dos conectores
+  # do thor cai em laço (`control stream encountered a failure`),
+  # e um conector nesse estado segue servindo a configuração velha
+  # sem receber as mudanças feitas no painel. Em TCP isso não ocorre.
   desk-tunnel:
     image: cloudflare/cloudflared:latest
     container_name: desk-tunnel
+    profiles: ["tunnel"]
     restart: unless-stopped
-    command: tunnel --no-autoupdate run
+    command: tunnel --no-autoupdate --protocol http2 run
     environment:
       TZ: America/Bahia
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?defina TUNNEL_TOKEN em infra/.env}
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
     depends_on:
       desk-web:
         condition: service_started

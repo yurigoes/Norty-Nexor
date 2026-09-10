@@ -8,6 +8,11 @@
 # NÃO TOCA em nada que já existe: escolhe um ID livre, e recusa se o
 # nome NDesk já estiver em uso. O heimdall não é tocado em hipótese
 # alguma — ele é a retaguarda.
+#
+# No LXC, o que não for passado por variável é copiado de um container
+# que já roda Docker neste host: `unprivileged`, `features`, o
+# armazenamento do disco e a rede (gateway, DNS, domínio de busca).
+# O IP é fixo, o próximo livre da sequência do parque.
 set -euo pipefail
 
 TIPO="${TIPO:-lxc}"
@@ -16,7 +21,13 @@ MEM="${MEM:-4096}"
 DISCO="${DISCO:-20}"
 NUCLEOS="${NUCLEOS:-2}"
 PONTE="${PONTE:-vmbr0}"
-ARMAZEM="${ARMAZEM:-local-lvm}"
+ARMAZEM="${ARMAZEM:-}"      # vazio = o mesmo da referência
+IP="${IP:-}"                # vazio = próximo livre; "dhcp" para forçar DHCP
+GW="${GW:-}"
+DNS="${DNS:-}"
+DOMINIO="${DOMINIO:-}"
+PRIV="${PRIV:-}"
+FEATURES="${FEATURES:-}"
 REPO="${REPO:-https://github.com/yurigoes/Norty-Nexor.git}"
 RAMO="${RAMO:-claude/brave-turing-b299vy}"
 
@@ -58,38 +69,86 @@ echo "  usará o ID $ID  (ocupados: $(echo $usados | tr '\n' ' '))"
 # depende do armazenamento aceitar overlay2. Em vez de escolher no
 # escuro, copia-se a configuração de um container que comprovadamente
 # roda Docker neste mesmo host.
-PRIV="${PRIV:-}"
-if [ "$TIPO" = "lxc" ] && [ -z "$PRIV" ]; then
+referencia=""
+ref_ip=""
+if [ "$TIPO" = "lxc" ]; then
   titulo "Como são os containers que já rodam Docker aqui"
-  referencia=""
   for ct in $(pct list 2>/dev/null | awk 'NR>1 && $2=="running"{print $1}'); do
     pct exec "$ct" -- sh -c 'command -v docker >/dev/null 2>&1' 2>/dev/null || continue
     referencia="$ct"; break
   done
 
   if [ -n "$referencia" ]; then
-    unpriv=$(pct config "$referencia" 2>/dev/null | awk -F': ' '/^unprivileged/{print $2}')
-    feats=$(pct config "$referencia" 2>/dev/null | awk -F': ' '/^features/{print $2}')
-    nome_ref=$(pct config "$referencia" 2>/dev/null | awk -F': ' '/^hostname/{print $2}')
+    cfg() { pct config "$referencia" 2>/dev/null | awk -F': ' -v k="$1" '$1==k{print $2; exit}'; }
+    unpriv=$(cfg unprivileged); feats=$(cfg features); nome_ref=$(cfg hostname)
+    rootfs=$(cfg rootfs); net0=$(cfg net0)
     echo "  referência: CT $referencia ($nome_ref)"
-    echo "  unprivileged: ${unpriv:-0}   features: ${feats:-(nenhuma)}"
-    PRIV="${unpriv:-0}"
-    case "$feats" in
-      *nesting*) FEATURES="$feats";;
-      *) FEATURES="${feats:+$feats,}nesting=1,keyctl=1"
-         aviso "a referência não declara nesting; acrescentando — sem ele o dockerd morre sem dizer o motivo.";;
-    esac
+    echo "  unprivileged: ${unpriv:-0}   features: ${feats:-(nenhuma)}   armazenamento: ${rootfs%%:*}"
+
+    [ -z "$PRIV" ] && PRIV="${unpriv:-0}"
+    if [ -z "$FEATURES" ]; then
+      case "$feats" in
+        *nesting*) FEATURES="$feats";;
+        *) FEATURES="${feats:+$feats,}nesting=1,keyctl=1"
+           aviso "a referência não declara nesting; acrescentando — sem ele o dockerd morre sem dizer o motivo.";;
+      esac
+    fi
+
+    # O padrão do Proxmox (local-lvm) não existe no thor — lá todo
+    # disco mora em local-srv — e o `pct create` morria com
+    # "storage 'local-lvm' does not exist". O disco vai para onde o da
+    # referência está.
+    [ -z "$ARMAZEM" ] && ARMAZEM="${rootfs%%:*}"
+
+    ref_ip=$(echo "$net0" | grep -oE 'ip=[0-9.]+/[0-9]+' | cut -d= -f2 || true)
+    [ -z "$GW" ] && GW=$(echo "$net0" | grep -oE 'gw=[0-9.]+' | cut -d= -f2 || true)
+    [ -z "$DNS" ] && DNS=$(cfg nameserver)
+    [ -z "$DOMINIO" ] && DOMINIO=$(cfg searchdomain)
   else
     aviso "nenhum container com Docker encontrado para servir de referência."
-    PRIV=1; FEATURES="nesting=1,keyctl=1"
+  fi
+
+  [ -z "$PRIV" ] && PRIV=1
+  [ -z "$FEATURES" ] && FEATURES="nesting=1,keyctl=1"
+  [ -z "$ARMAZEM" ] && falhar "sem referência para descobrir o armazenamento. Rode com ARMAZEM=<nome> (veja: pvesm status)."
+
+  # IP fixo, como o parque inteiro (.70 em diante, em sequência). Com
+  # DHCP a NDesk nasceu em .191 e a rota do túnel apontava para um
+  # endereço que podia mudar no próximo lease — o 502 voltaria sozinho.
+  if [ -z "$IP" ] && [ -n "$ref_ip" ]; then
+    titulo "Escolhendo um IP fixo"
+    prefixo="${ref_ip%.*}"; mascara="${ref_ip#*/}"
+    maior=$(grep -hoE "ip=${prefixo//./\\.}\.[0-9]+/" /etc/pve/lxc/*.conf 2>/dev/null \
+              | grep -oE '[0-9]+/$' | tr -d / | sort -n | tail -1 || true)
+    inicio=$(( ${maior:-69} + 1 ))
+    for n in $(seq "$inicio" $(( inicio + 9 ))); do
+      cand="$prefixo.$n"
+      if grep -qE "ip=${cand//./\\.}/" /etc/pve/lxc/*.conf /etc/pve/qemu-server/*.conf 2>/dev/null; then
+        continue
+      fi
+      if ping -c1 -W1 "$cand" >/dev/null 2>&1; then
+        echo "  $cand responde na rede; pulando"
+        continue
+      fi
+      IP="$cand/$mascara"; break
+    done
+    [ -n "$IP" ] && echo "  usará $IP  (gateway ${GW:-?}, DNS ${DNS:-?})"
+  fi
+  if [ -z "$IP" ] || [ "$IP" = "dhcp" ]; then
+    IP=dhcp
+    aviso "IP por DHCP: se o lease mudar, a rota do túnel aponta para o nada. Prefira IP=<endereço>/<máscara>."
   fi
 else
   PRIV="${PRIV:-1}"; FEATURES="${FEATURES:-nesting=1,keyctl=1}"
+  ARMAZEM="${ARMAZEM:-local-lvm}"
 fi
 
-printf '\n\033[1mVai criar %s "%s" com id %s, %s MB, %s núcleos, disco %s GB.\033[0m\n' \
-  "$TIPO" "$NOME" "$ID" "$MEM" "$NUCLEOS" "$DISCO"
-[ "$TIPO" = "lxc" ] && printf '\033[1munprivileged=%s  features=%s\033[0m\n' "$PRIV" "$FEATURES"
+printf '\n\033[1mVai criar %s "%s" com id %s, %s MB, %s núcleos, disco %s GB em %s.\033[0m\n' \
+  "$TIPO" "$NOME" "$ID" "$MEM" "$NUCLEOS" "$DISCO" "$ARMAZEM"
+if [ "$TIPO" = "lxc" ]; then
+  printf '\033[1munprivileged=%s  features=%s\033[0m\n' "$PRIV" "$FEATURES"
+  printf '\033[1mrede: %s%s\033[0m\n' "$IP" "${GW:+  gateway $GW}"
+fi
 read -rp "Confirma? (digite SIM) " ok
 [ "$ok" = "SIM" ] || falhar "cancelado por quem está no terminal."
 
@@ -101,11 +160,20 @@ if [ "$TIPO" = "lxc" ]; then
   [ -z "$MODELO" ] && falhar "não achei modelo debian-12. Rode: pveam update"
   pveam list local 2>/dev/null | grep -q "$MODELO" || { echo "  baixando $MODELO"; pveam download local "$MODELO"; }
 
+  if [ "$IP" = "dhcp" ]; then
+    rede="name=eth0,bridge=$PONTE,ip=dhcp"
+  else
+    rede="name=eth0,bridge=$PONTE,ip=$IP${GW:+,gw=$GW}"
+  fi
+  extras=()
+  [ -n "$DNS" ] && extras+=(--nameserver "$DNS")
+  [ -n "$DOMINIO" ] && extras+=(--searchdomain "$DOMINIO")
+
   # `nesting=1` é o que permite Docker dentro do container. Sem isso o
   # dockerd sobe e morre, com erro que não diz o motivo.
   pct create "$ID" "local:vztmpl/$MODELO" \
     --hostname "$NOME" --cores "$NUCLEOS" --memory "$MEM" --swap 512 \
-    --rootfs "$ARMAZEM:$DISCO" --net0 "name=eth0,bridge=$PONTE,ip=dhcp" \
+    --rootfs "$ARMAZEM:$DISCO" --net0 "$rede" "${extras[@]}" \
     --features "$FEATURES" --unprivileged "$PRIV" --onboot 1 --start 1
   echo "  criado; aguardando rede"
   for _ in $(seq 1 30); do pct exec "$ID" -- getent hosts deb.debian.org >/dev/null 2>&1 && break; sleep 2; done
@@ -146,30 +214,37 @@ titulo "Trazendo o código"
 dentro "rm -rf /tmp/nd && git clone -q -b '$RAMO' '$REPO' /tmp/nd && \
   rm -rf /opt/norty-desk && mv /tmp/nd/norty-desk /opt/norty-desk && rm -rf /tmp/nd"
 dentro "cp -n /opt/norty-desk/infra/.env.exemplo /opt/norty-desk/infra/.env; \
-        cp -n /opt/norty-desk/apps/api/.env.example /opt/norty-desk/apps/api/.env; true"
+        cp -n /opt/norty-desk/apps/api/.env.example /opt/norty-desk/apps/api/.env; \
+        sed -i 's#^WEB_ORIGIN=.*#WEB_ORIGIN=https://chamados.norty.com.br#' /opt/norty-desk/apps/api/.env; true"
 
 titulo "A infra compartilhada responde daqui?"
 dentro "getent hosts 192.168.15.72 >/dev/null; \
   (exec 3<>/dev/tcp/192.168.15.72/5432) 2>/dev/null && echo '  ok Postgres do CT 102' \
   || echo '  NÃO alcança o Postgres do CT 102 (192.168.15.72:5432)'"
 
+ENDERECO="${IP%/*}"
+[ "$IP" = "dhcp" ] && ENDERECO="<IP do container>"
+
 cat <<FINAL
 
-$( [ "$TIPO" = lxc ] && echo "Container" || echo "VM" ) $NOME criado com id $ID.
+Container $NOME criado com id $ID, rede $IP.
 
 Falta o que é segredo, e por isso não é automático:
 
-  1. TUNNEL_TOKEN em /opt/norty-desk/infra/.env
-     (Cloudflare → Zero Trust → Networks → Tunnels → chamados.norty.com.br)
-  2. DATABASE_URL e WEB_ORIGIN em /opt/norty-desk/apps/api/.env
-     WEB_ORIGIN=https://chamados.norty.com.br
+  1. DATABASE_URL em /opt/norty-desk/apps/api/.env
+     (base nortydesk no Postgres do CT 102 — ver docs/12, seção 4)
+  2. Só no modo de conector próprio: TUNNEL_TOKEN e
+     COMPOSE_PROFILES=tunnel em /opt/norty-desk/infra/.env
+
+JWT_SECRET e CHANNEL_SECRET_KEY o subir-ndesk.sh gera sozinho.
 
 Depois, de dentro:
 
   pct exec $ID -- bash -lc 'cd /opt/norty-desk && bash scripts/subir-ndesk.sh'
 
-No painel da Cloudflare, o túnel aponta para http://desk-web:80 — nome
-de serviço da rede do compose, não IP.
+No painel da Cloudflare, a rota de chamados.norty.com.br:
+  conector externo (o de hoje):  http://$ENDERECO:3060
+  conector próprio:              http://desk-web:80
 
 O heimdall não foi tocado: desk.norty.com.br segue de retaguarda.
 FINAL
