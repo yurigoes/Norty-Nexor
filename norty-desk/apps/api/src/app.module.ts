@@ -29,6 +29,8 @@ import { SatisfacaoModule } from './modules/satisfacao/satisfacao.module';
 import { SlaModule } from './modules/sla/sla.module';
 import { SoftwareModule } from './modules/software/software.module';
 import { ConsumiveisModule } from './modules/consumiveis/consumiveis.module';
+import { ProjetosModule } from './modules/projetos/projetos.module';
+import { AgendaModule } from './modules/agenda/agenda.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { TicketsModule } from './modules/tickets/tickets.module';
 import { TranscricaoModule } from './modules/transcricao/transcricao.module';
@@ -66,6 +68,8 @@ import { TranscricaoModule } from './modules/transcricao/transcricao.module';
     CatalogoDoAtivoModule,
     SoftwareModule,
     ConsumiveisModule,
+    ProjetosModule,
+    AgendaModule,
     ModelosModule,
     TarefasModule,
     SatisfacaoModule,

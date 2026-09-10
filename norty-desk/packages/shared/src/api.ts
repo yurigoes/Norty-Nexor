@@ -1398,3 +1398,152 @@ export type MovimentarRequest = {
   note?: string | null;
 };
 
+// ---------------------------------------------------------------------
+// Projetos (Fase 8)
+// ---------------------------------------------------------------------
+
+export const PROJECT_STATUSES = ['PLANEJADO', 'EM_ANDAMENTO', 'PAUSADO', 'CONCLUIDO', 'CANCELADO'] as const;
+export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
+export const ROTULO_PROJETO_STATUS: Record<ProjectStatus, string> = {
+  PLANEJADO: 'Planejado',
+  EM_ANDAMENTO: 'Em andamento',
+  PAUSADO: 'Pausado',
+  CONCLUIDO: 'Concluído',
+  CANCELADO: 'Cancelado',
+};
+
+export const PROJECT_TASK_STATUSES = ['A_FAZER', 'EM_ANDAMENTO', 'BLOQUEADA', 'CONCLUIDA'] as const;
+export type ProjectTaskStatus = (typeof PROJECT_TASK_STATUSES)[number];
+export const ROTULO_TAREFA_PROJETO: Record<ProjectTaskStatus, string> = {
+  A_FAZER: 'A fazer',
+  EM_ANDAMENTO: 'Em andamento',
+  BLOQUEADA: 'Bloqueada',
+  CONCLUIDA: 'Concluída',
+};
+
+export type PessoaRef = { id: string; name: string };
+
+export type ProjetoView = {
+  id: string;
+  code: string | null;
+  name: string;
+  description: string | null;
+  status: ProjectStatus;
+  /** 1 (mais baixa) a 5 (mais alta). */
+  priority: number;
+  manager: PessoaRef | null;
+  team: CatalogoRef | null;
+  parent: { id: string; name: string; code: string | null } | null;
+  plannedStart: string | null;
+  plannedEnd: string | null;
+  realStart: string | null;
+  realEnd: string | null;
+  /** Das tarefas, ponderado pelas horas previstas (sem horas, cada tarefa pesa 1). */
+  percentDone: number;
+  taskCount: number;
+  openTaskCount: number;
+  ticketCount: number;
+  /** Passou do fim previsto sem concluir. */
+  late: boolean;
+};
+
+export type TarefaDeProjetoView = {
+  id: string;
+  parentId: string | null;
+  name: string;
+  description: string | null;
+  status: ProjectTaskStatus;
+  assignee: PessoaRef | null;
+  plannedStart: string | null;
+  plannedEnd: string | null;
+  plannedMinutes: number | null;
+  spentMinutes: number;
+  percentDone: number;
+  /** Ordem dentro da coluna do quadro. */
+  position: number;
+  dependsOn: { id: string; name: string; status: ProjectTaskStatus } | null;
+  /** A predecessora ainda não foi concluída. */
+  blockedByDependency: boolean;
+  late: boolean;
+  completedAt: string | null;
+};
+
+export type ChamadoDoProjeto = { id: string; number: number; subject: string; status: string };
+
+export type ProjetoDetail = ProjetoView & {
+  tasks: TarefaDeProjetoView[];
+  /** Só os chamados que quem pede pode ler. */
+  tickets: ChamadoDoProjeto[];
+  children: ProjetoView[];
+  /** Soma dos custos dos chamados vinculados. Nulo para quem não lê custo. */
+  totalCost: string | null;
+};
+
+export type WriteProjetoRequest = {
+  name: string;
+  code?: string | null;
+  description?: string | null;
+  status?: ProjectStatus;
+  priority?: number;
+  managerId?: string | null;
+  teamId?: string | null;
+  parentId?: string | null;
+  plannedStart?: string | null;
+  plannedEnd?: string | null;
+};
+
+export type WriteTarefaDeProjetoRequest = {
+  name: string;
+  description?: string | null;
+  status?: ProjectTaskStatus;
+  assigneeId?: string | null;
+  parentId?: string | null;
+  plannedStart?: string | null;
+  plannedEnd?: string | null;
+  plannedMinutes?: number | null;
+  percentDone?: number;
+  /** Somado ao já apontado, como no chamado. */
+  addSpentMinutes?: number;
+  position?: number;
+  dependsOnId?: string | null;
+};
+
+// ---------------------------------------------------------------------
+// Agenda (Fase 8)
+// ---------------------------------------------------------------------
+
+export const AGENDA_ITEM_KINDS = ['EVENTO', 'TAREFA_CHAMADO', 'TAREFA_PROJETO'] as const;
+export type AgendaItemKind = (typeof AGENDA_ITEM_KINDS)[number];
+
+/** Um item da agenda, venha de onde vier. */
+export type AgendaItem = {
+  kind: AgendaItemKind;
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  allDay: boolean;
+  user: PessoaRef | null;
+  /** Caminho no aplicativo (chamado, projeto) ou nulo. */
+  link: string | null;
+  done: boolean;
+  /** Compromisso privado de outra pessoa: aparece como "Ocupado". */
+  private: boolean;
+  /** Quem pede pode editar (dono ou quem marcou). */
+  editable: boolean;
+  location: string | null;
+  description: string | null;
+};
+
+export type EventoRequest = {
+  title: string;
+  description?: string | null;
+  startsAt: string;
+  endsAt: string;
+  allDay?: boolean;
+  isPrivate?: boolean;
+  location?: string | null;
+  /** De quem é o compromisso. Ausente = de quem marca. */
+  ownerId?: string;
+};
+

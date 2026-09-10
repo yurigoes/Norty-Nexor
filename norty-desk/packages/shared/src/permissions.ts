@@ -92,6 +92,12 @@ export const PERMISSIONS = [
   /** Registrar a saída de consumível (entregar toner, papel). Entrada e ajuste são de quem gerencia. */
   'consumivel:movimentar',
 
+  // --- Projetos e agenda ----------------------------------------------
+  'projeto:ler',
+  'projeto:gerenciar',
+  /** Ver a agenda da equipe e marcar compromissos. */
+  'agenda:usar',
+
   // --- Contrato, orçamento e custo -------------------------------------
   'contrato:ler',
   'contrato:gerenciar',
@@ -153,6 +159,7 @@ const IMPLICA: Partial<Record<Permission, readonly Permission[]>> = {
   'mudanca:gerenciar': ['mudanca:ler'],
   'mudanca:executar': ['mudanca:ler'],
   'satisfacao:configurar': ['satisfacao:ler'],
+  'projeto:gerenciar': ['projeto:ler'],
 };
 
 /** Fecha a lista sobre as implicações. */
@@ -237,6 +244,12 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
      * contrato do fornecedor é outra conversa.
      */
     'custo:lancar',
+    /**
+     * Ler o projeto e mexer só nas tarefas que são dele (situação,
+     * percentual, horas): quem executa é quem sabe onde a tarefa está.
+     */
+    'projeto:ler',
+    'agenda:usar',
   ],
 
   SUPERVISOR: [
@@ -288,6 +301,8 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'custo:ler',
     'custo:lancar',
     'satisfacao:ler',
+    'projeto:gerenciar',
+    'agenda:usar',
   ],
 
   /** Lê indicadores e dá aval; não atende chamado. */
@@ -314,6 +329,8 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'contrato:ler',
     'custo:ler',
     'satisfacao:ler',
+    'projeto:ler',
+    'agenda:usar',
   ],
 
   ADMINISTRADOR: [...PERMISSIONS],

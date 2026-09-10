@@ -13,6 +13,9 @@ import { Software } from '../modules/software/Software';
 import { Softwares } from '../modules/software/Softwares';
 import { Consumivel } from '../modules/consumiveis/Consumivel';
 import { Consumiveis } from '../modules/consumiveis/Consumiveis';
+import { Projeto } from '../modules/projeto/Projeto';
+import { Projetos } from '../modules/projeto/Projetos';
+import { Agenda } from '../modules/agenda/Agenda';
 import { Diretorios } from '../modules/configuracao/Diretorios';
 import { Formularios } from '../modules/configuracao/Formularios';
 import { CatalogoDoAtivo } from '../modules/configuracao/CatalogoDoAtivo';
@@ -109,6 +112,9 @@ function Aplicativo() {
             <Route path="/software/:id" element={<Software />} />
             <Route path="/consumiveis" element={<Consumiveis />} />
             <Route path="/consumiveis/:id" element={<Consumivel />} />
+            <Route path="/projetos" element={<Projetos />} />
+            <Route path="/projetos/:id" element={<Projeto />} />
+            <Route path="/agenda" element={<Agenda />} />
             {/* `erros-conhecidos` antes de `:id`, ou casaria com ele. */}
             <Route path="/problemas/erros-conhecidos" element={<ErrosConhecidos />} />
             <Route path="/problemas/:id" element={<Problema />} />

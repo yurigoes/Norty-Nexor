@@ -66,6 +66,8 @@ model Organization {
   softwareLicenses SoftwareLicense[]
   consumables    ConsumableItem[]
   consumableMovements ConsumableMovement[]
+  projects       Project[]
+  agendaEvents   AgendaEvent[]
 
   @@map("organizations")
 }
@@ -109,6 +111,10 @@ model User {
   licenses       LicenseAssignment[]
   consumablesReceived ConsumableMovement[] @relation("DestinatarioDoConsumivel")
   consumableMovements ConsumableMovement[] @relation("AutorDoMovimento")
+  managedProjects     Project[]            @relation("GerenteDoProjeto")
+  projectTasks        ProjectTask[]        @relation("ResponsavelDaTarefaDeProjeto")
+  agendaEvents        AgendaEvent[]        @relation("DonoDoCompromisso")
+  agendaEventsCreated AgendaEvent[]        @relation("QuemMarcouOCompromisso")
 
   @@unique([authSourceId, externalId])
   @@map("users")
@@ -176,6 +182,7 @@ model Team {
   problems     Problem[]         @relation("TimeDoProblema")
   changes      Change[]          @relation("TimeDaMudanca")
   recurrences  RecurringTicket[] @relation("TimeDaRecorrencia")
+  projects     Project[]         @relation("TimeDoProjeto")
 
   @@unique([organizationId, name])
   @@map("teams")
@@ -378,6 +385,8 @@ model Ticket {
   assets       TicketAsset[]
   survey       Survey?
   costs        TicketCost[]
+  projects     ProjectTicket[]
+  agendaEvents AgendaEvent[]
 
   /// O problema que causa este chamado e a mudança que o resolve.
   /// São os dois vínculos que o ITIL pede e o GLPI resolve com uma
@@ -1970,5 +1979,136 @@ model ConsumableMovement {
   @@index([assetId])
   @@index([organizationId])
   @@map("consumable_movements")
+}
+
+// =========================================================
+//  Projetos e agenda — Fase 8 (docs/10-roadmap.md)
+// =========================================================
+
+enum ProjectStatus {
+  PLANEJADO
+  EM_ANDAMENTO
+  PAUSADO
+  CONCLUIDO
+  CANCELADO
+}
+
+enum ProjectTaskStatus {
+  A_FAZER
+  EM_ANDAMENTO
+  BLOQUEADA
+  CONCLUIDA
+}
+
+model Project {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid
+  /// Código curto que a empresa usa ("PRJ-2026-04"). Único na organização.
+  code           String?
+  name           String
+  description    String?
+  status         ProjectStatus @default(PLANEJADO)
+  /// 1 (mais baixa) a 5 (mais alta).
+  priority       Int           @default(3)
+  managerId      String?       @db.Uuid
+  teamId         String?       @db.Uuid
+  /// Subprojeto de outro.
+  parentId       String?       @db.Uuid
+  plannedStart   DateTime?
+  plannedEnd     DateTime?
+  /// Preenchidos sozinhos ao entrar em andamento e ao concluir.
+  realStart      DateTime?
+  realEnd        DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  manager      User?           @relation("GerenteDoProjeto", fields: [managerId], references: [id], onDelete: SetNull)
+  team         Team?           @relation("TimeDoProjeto", fields: [teamId], references: [id], onDelete: SetNull)
+  parent       Project?        @relation("Subprojeto", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Project[]       @relation("Subprojeto")
+  tasks        ProjectTask[]
+  tickets      ProjectTicket[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+  @@map("projects")
+}
+
+model ProjectTask {
+  id             String            @id @default(uuid()) @db.Uuid
+  projectId      String            @db.Uuid
+  /// Subtarefa de outra.
+  parentId       String?           @db.Uuid
+  name           String
+  description    String?
+  status         ProjectTaskStatus @default(A_FAZER)
+  assigneeId     String?           @db.Uuid
+  plannedStart   DateTime?
+  plannedEnd     DateTime?
+  plannedMinutes Int?
+  /// Somado a cada apontamento, como o tempo do chamado.
+  spentMinutes   Int               @default(0)
+  percentDone    Int               @default(0)
+  /// Ordem dentro da coluna do quadro.
+  position       Int               @default(0)
+  /// Predecessora: esta só começa de verdade quando aquela conclui.
+  dependsOnId    String?           @db.Uuid
+  completedAt    DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  project    Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent     ProjectTask?  @relation("Subtarefa", fields: [parentId], references: [id], onDelete: SetNull)
+  children   ProjectTask[] @relation("Subtarefa")
+  assignee   User?         @relation("ResponsavelDaTarefaDeProjeto", fields: [assigneeId], references: [id], onDelete: SetNull)
+  dependsOn  ProjectTask?  @relation("Predecessora", fields: [dependsOnId], references: [id], onDelete: SetNull)
+  dependents ProjectTask[] @relation("Predecessora")
+
+  @@index([projectId, status, position])
+  @@index([assigneeId, plannedStart])
+  @@map("project_tasks")
+}
+
+model ProjectTicket {
+  projectId String   @db.Uuid
+  ticketId  String   @db.Uuid
+  addedAt   DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  ticket  Ticket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, ticketId])
+  @@index([ticketId])
+  @@map("project_tickets")
+}
+
+/// Compromisso avulso na agenda — reunião, visita, folga. Tarefas de
+/// chamado e de projeto entram na agenda pelas próprias datas, sem cópia.
+model AgendaEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  title          String
+  description    String?
+  location       String?
+  startsAt       DateTime
+  endsAt         DateTime
+  allDay         Boolean  @default(false)
+  /// Para os outros aparece só como "Ocupado".
+  isPrivate      Boolean  @default(false)
+  ownerId        String   @db.Uuid
+  createdById    String?  @db.Uuid
+  ticketId       String?  @db.Uuid
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner        User         @relation("DonoDoCompromisso", fields: [ownerId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation("QuemMarcouOCompromisso", fields: [createdById], references: [id], onDelete: SetNull)
+  ticket       Ticket?      @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId, startsAt])
+  @@index([organizationId, startsAt])
+  @@map("agenda_events")
 }
 

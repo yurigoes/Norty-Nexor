@@ -151,6 +151,26 @@ export function Sidebar() {
           </Link>
         ) : null}
 
+        {can('projeto:ler') ? (
+          <Link
+            to="/projetos"
+            className="nav-item"
+            aria-current={local.pathname.startsWith('/projetos') ? 'page' : undefined}
+          >
+            <span>Projetos</span>
+          </Link>
+        ) : null}
+
+        {can('agenda:usar') ? (
+          <Link
+            to="/agenda"
+            className="nav-item"
+            aria-current={local.pathname === '/agenda' ? 'page' : undefined}
+          >
+            <span>Agenda</span>
+          </Link>
+        ) : null}
+
         {can('problema:ler') ? (
           <Link
             to="/problemas"
