@@ -61,14 +61,19 @@ for ct in $CTS; do
 done
 [ -z "$achou_glpi" ] && echo "(nenhuma)"
 
-titulo "Bancos existentes — [GLPI] é legado a migrar, [Desk] é o nosso"
-# "nortydesk" casa com o filtro `desk`: sem rótulo, a nossa própria base
-# apareceria como se fosse legado do GLPI.
+titulo "Bancos existentes"
+# Marcar de [Desk] tudo que não é GLPI foi uma bobagem da primeira
+# versão: num host com quinze aplicações, `visualstock` e `festou`
+# apareciam como se fossem nossos. Só o que casa com o nome é rotulado;
+# o resto é o que é — banco de outra aplicação.
 rotular() {
   local onde="$1" n
   for n in $2; do
-    case "$n" in *[Gg][Ll][Pp][Ii]*) echo "  [GLPI] $onde: $n";;
-                 *) echo "  [Desk] $onde: $n";; esac
+    case "$n" in
+      *[Gg][Ll][Pp][Ii]*)                 echo "  [GLPI — legado] $onde: $n";;
+      *desk*|*Desk*|*norty_desk*|*nortydesk*) echo "  [DESK — nosso]  $onde: $n";;
+      *)                                  echo "  (outra app)      $onde: $n";;
+    esac
   done
 }
 for ct in $CTS; do
