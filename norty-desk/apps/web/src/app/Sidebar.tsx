@@ -151,6 +151,26 @@ export function Sidebar() {
           </Link>
         ) : null}
 
+        {can('ativo:ler') ? (
+          <Link
+            to="/rede"
+            className="nav-item"
+            aria-current={local.pathname === '/rede' ? 'page' : undefined}
+          >
+            <span>Rede</span>
+          </Link>
+        ) : null}
+
+        {can('ativo:ler') ? (
+          <Link
+            to="/datacenter"
+            className="nav-item"
+            aria-current={local.pathname.startsWith('/datacenter') ? 'page' : undefined}
+          >
+            <span>Datacenter</span>
+          </Link>
+        ) : null}
+
         {can('projeto:ler') ? (
           <Link
             to="/projetos"

@@ -68,6 +68,12 @@ model Organization {
   consumableMovements ConsumableMovement[]
   projects       Project[]
   agendaEvents   AgendaEvent[]
+  vlans          Vlan[]
+  ipNetworks     IpNetwork[]
+  networkPorts   NetworkPort[]
+  ipAddresses    IpAddress[]
+  dcRooms        DcRoom[]
+  racks          Rack[]
 
   @@map("organizations")
 }
@@ -1068,6 +1074,9 @@ model Asset {
   software     SoftwareInstallation[]
   licenses     LicenseAssignment[]
   consumables  ConsumableMovement[]
+  networkPorts NetworkPort[]
+  ipAddresses  IpAddress[]
+  rackItem     RackItem?
 
   /// Patrimônio e série não se repetem na organização: dois registros do
   /// mesmo equipamento são a origem de metade da sujeira de inventário.
@@ -1616,6 +1625,7 @@ model Location {
 
   assets      Asset[]
   consumables ConsumableItem[]
+  dcRooms     DcRoom[]
 
   @@unique([organizationId, parentId, name])
   @@index([organizationId])
@@ -2110,5 +2120,177 @@ model AgendaEvent {
   @@index([ownerId, startsAt])
   @@index([organizationId, startsAt])
   @@map("agenda_events")
+}
+
+// =========================================================
+//  Rede — Fase 6 (docs/10-roadmap.md)
+// ---------------------------------------------------------
+//  Endereço em `inet` do Postgres: o banco valida o formato, normaliza
+//  e o índice único barra IP duplicado na organização — a briga de IP
+//  que o GLPI só descobre quando alguém fica sem rede.
+// =========================================================
+
+enum PortKind {
+  ETHERNET
+  WIFI
+  FIBRA
+  OUTRA
+}
+
+model Vlan {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  /// 802.1Q: 1 a 4094 (CHECK no banco).
+  tag            Int
+  name           String
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  networks     IpNetwork[]
+  ports        NetworkPort[]
+
+  @@unique([organizationId, tag])
+  @@map("vlans")
+}
+
+model IpNetwork {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String
+  /// Endereço de rede com máscara ("192.168.15.0/24").
+  cidr           String   @db.Inet
+  gateway        String?  @db.Inet
+  vlanId         String?  @db.Uuid
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vlan         Vlan?        @relation(fields: [vlanId], references: [id], onDelete: SetNull)
+  addresses    IpAddress[]
+
+  @@unique([organizationId, cidr])
+  @@map("ip_networks")
+}
+
+model NetworkPort {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  assetId        String   @db.Uuid
+  /// Como o equipamento chama a porta: "eth0", "Gi1/0/12".
+  name           String
+  kind           PortKind @default(ETHERNET)
+  /// Minúsculas, separado por dois-pontos.
+  mac            String?
+  speedMbps      Int?
+  vlanId         String?  @db.Uuid
+  /// A porta do outro lado do cabo. Gravada dos dois lados.
+  connectedToId  String?  @unique @db.Uuid
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  asset         Asset        @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  vlan          Vlan?        @relation(fields: [vlanId], references: [id], onDelete: SetNull)
+  connectedTo   NetworkPort? @relation("Conexao", fields: [connectedToId], references: [id], onDelete: SetNull)
+  connectedFrom NetworkPort? @relation("Conexao")
+  ips           IpAddress[]
+
+  @@unique([assetId, name])
+  @@unique([organizationId, mac])
+  @@map("network_ports")
+}
+
+model IpAddress {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  /// Sem máscara (CHECK no banco). Único na organização.
+  address        String   @db.Inet
+  /// A sub-rede que contém o endereço, achada ao gravar.
+  networkId      String?  @db.Uuid
+  assetId        String?  @db.Uuid
+  portId         String?  @db.Uuid
+  fqdn           String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  network      IpNetwork?   @relation(fields: [networkId], references: [id], onDelete: SetNull)
+  asset        Asset?       @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  port         NetworkPort? @relation(fields: [portId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, address])
+  @@index([networkId])
+  @@index([assetId])
+  @@map("ip_addresses")
+}
+
+// =========================================================
+//  Datacenter — Fase 7 (docs/10-roadmap.md)
+// =========================================================
+
+enum RackFace {
+  FRENTE
+  TRAS
+  AMBAS
+}
+
+model DcRoom {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String
+  locationId     String?  @db.Uuid
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  location     Location?    @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  racks        Rack[]
+
+  @@unique([organizationId, name])
+  @@map("dc_rooms")
+}
+
+model Rack {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  roomId         String?  @db.Uuid
+  name           String
+  /// Altura útil em U.
+  units          Int      @default(42)
+  /// Onde fica na sala: "fila B, posição 3".
+  position       String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  room         DcRoom?      @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  items        RackItem[]
+
+  @@unique([organizationId, name])
+  @@map("racks")
+}
+
+/// Um equipamento num rack. Um equipamento está em um rack só (assetId único).
+model RackItem {
+  id        String   @id @default(uuid()) @db.Uuid
+  rackId    String   @db.Uuid
+  assetId   String   @unique @db.Uuid
+  /// U de baixo (1 = o mais baixo).
+  positionU Int
+  heightU   Int      @default(1)
+  face      RackFace @default(FRENTE)
+  createdAt DateTime @default(now())
+
+  rack  Rack  @relation(fields: [rackId], references: [id], onDelete: Cascade)
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([rackId])
+  @@map("rack_items")
 }
 

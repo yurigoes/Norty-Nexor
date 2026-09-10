@@ -255,13 +255,19 @@ O inventário que o chamado referencia.
   aviso no mínimo, e a troca de toner em um clique na tela da impressora.
   Saída com a linha do item travada: saldo nunca fica negativo. Permissão
   `consumivel:movimentar` para o agente registrar saídas.
-- **Rede**: portas, conexões, IP, faixa, VLAN, FQDN.
+- **Rede**: portas, conexões, IP, faixa, VLAN, FQDN. **Feito em 10/09/2026**:
+  endereços em `inet` do Postgres (IP duplicado barrado pelo banco, com o dono
+  na mensagem), sub-redes com uso por contenção e próximo IP livre, VLANs,
+  portas com MAC normalizado e o cabo gravado dos dois lados.
 
 ---
 
 ## Fase 7 — Datacenter e automação de inventário
 
-- **Rack, PDU, sala, cabo, gabinete**, com desenho de ocupação.
+- **Rack, PDU, sala, cabo, gabinete**, com desenho de ocupação. **Rack e sala
+  feitos em 10/09/2026**: posição em U com face (frente, trás, profundidade
+  inteira), sem sobreposição (rack travado na gravação), desenho de pé na tela.
+  PDU e gabinete entram como equipamentos no rack; cabo é a conexão de portas.
 - **Dicionários de regra** — o mesmo motor da Fase 2, com o catálogo de
   alvos que normaliza fabricante, modelo e sistema operacional.
 - **Inventário automático** — recepção do que o agente do GLPI já

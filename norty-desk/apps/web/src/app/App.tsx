@@ -16,6 +16,9 @@ import { Consumiveis } from '../modules/consumiveis/Consumiveis';
 import { Projeto } from '../modules/projeto/Projeto';
 import { Projetos } from '../modules/projeto/Projetos';
 import { Agenda } from '../modules/agenda/Agenda';
+import { Rede } from '../modules/rede/Rede';
+import { Datacenter } from '../modules/datacenter/Datacenter';
+import { Rack } from '../modules/datacenter/Rack';
 import { Diretorios } from '../modules/configuracao/Diretorios';
 import { Formularios } from '../modules/configuracao/Formularios';
 import { CatalogoDoAtivo } from '../modules/configuracao/CatalogoDoAtivo';
@@ -115,6 +118,9 @@ function Aplicativo() {
             <Route path="/projetos" element={<Projetos />} />
             <Route path="/projetos/:id" element={<Projeto />} />
             <Route path="/agenda" element={<Agenda />} />
+            <Route path="/rede" element={<Rede />} />
+            <Route path="/datacenter" element={<Datacenter />} />
+            <Route path="/datacenter/racks/:id" element={<Rack />} />
             {/* `erros-conhecidos` antes de `:id`, ou casaria com ele. */}
             <Route path="/problemas/erros-conhecidos" element={<ErrosConhecidos />} />
             <Route path="/problemas/:id" element={<Problema />} />

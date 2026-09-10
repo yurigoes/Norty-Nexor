@@ -31,6 +31,8 @@ import { SoftwareModule } from './modules/software/software.module';
 import { ConsumiveisModule } from './modules/consumiveis/consumiveis.module';
 import { ProjetosModule } from './modules/projetos/projetos.module';
 import { AgendaModule } from './modules/agenda/agenda.module';
+import { RedeModule } from './modules/rede/rede.module';
+import { DatacenterModule } from './modules/datacenter/datacenter.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { TicketsModule } from './modules/tickets/tickets.module';
 import { TranscricaoModule } from './modules/transcricao/transcricao.module';
@@ -70,6 +72,8 @@ import { TranscricaoModule } from './modules/transcricao/transcricao.module';
     ConsumiveisModule,
     ProjetosModule,
     AgendaModule,
+    RedeModule,
+    DatacenterModule,
     ModelosModule,
     TarefasModule,
     SatisfacaoModule,

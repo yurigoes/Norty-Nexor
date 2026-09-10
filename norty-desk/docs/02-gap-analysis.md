@@ -306,8 +306,8 @@ seguem valendo:
 | Componentes (`Device*`, `Item_Device*`) | ~60 | 5 | **um** modelo de componente com tipo, não sessenta tabelas |
 | Software, versões e licenças | ~10 | **6 ✅** | 5 tabelas; conformidade por software, assento de máquina ou pessoa |
 | Consumíveis e cartuchos | ~8 | **6 ✅** | estoque por movimentação, não uma linha por unidade |
-| Rede: portas, IP, VLAN, FQDN | ~30 | 6 | |
-| Datacenter: rack, PDU, sala, cabo, estêncil | ~25 | 7 | |
+| Rede: portas, IP, VLAN, FQDN | ~30 | **6 ✅** | `inet` do Postgres; conflito de IP barrado no banco |
+| Datacenter: rack, PDU, sala, cabo, estêncil | ~25 | **7 ✅ (rack, sala)** | U com face, sem sobreposição; PDU é equipamento; estêncil não |
 | Dicionários de regra | ~40 | 7 | catálogo do mesmo motor da fase 2 |
 | Inventário automático (agente, `RuleImportAsset`) | ~12 | 7 | recebe o inventário do agente GLPI |
 | Projetos e tarefas de projeto | ~15 | **8 ✅** | quadro, linha do tempo, custo dos chamados; agenda da equipe junto |

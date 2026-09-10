@@ -1547,3 +1547,160 @@ export type EventoRequest = {
   ownerId?: string;
 };
 
+// ---------------------------------------------------------------------
+// Rede: VLAN, sub-rede, IP e porta (Fase 6)
+// ---------------------------------------------------------------------
+
+export const PORT_KINDS = ['ETHERNET', 'WIFI', 'FIBRA', 'OUTRA'] as const;
+export type PortKind = (typeof PORT_KINDS)[number];
+export const ROTULO_PORTA: Record<PortKind, string> = {
+  ETHERNET: 'Ethernet',
+  WIFI: 'Wi-Fi',
+  FIBRA: 'Fibra',
+  OUTRA: 'Outra',
+};
+
+export type VlanRef = { id: string; tag: number; name: string };
+export type AtivoRef = { id: string; name: string; tag: string | null };
+
+export type VlanView = VlanRef & { notes: string | null; networkCount: number; portCount: number };
+
+export type SubRedeView = {
+  id: string;
+  name: string;
+  /** Endereço de rede com máscara, como o Postgres normaliza ("192.168.15.0/24"). */
+  cidr: string;
+  gateway: string | null;
+  vlan: VlanRef | null;
+  notes: string | null;
+  /** Hosts utilizáveis (sem rede e broadcast). Nulo em IPv6 — grande demais para contar. */
+  total: number | null;
+  used: number;
+  percent: number | null;
+};
+
+export type IpView = {
+  id: string;
+  address: string;
+  fqdn: string | null;
+  notes: string | null;
+  asset: AtivoRef | null;
+  port: { id: string; name: string } | null;
+  network: { id: string; name: string; cidr: string } | null;
+};
+
+export type SubRedeDetail = SubRedeView & {
+  addresses: IpView[];
+  /** Primeiro IPv4 livre (fora rede, broadcast e gateway). */
+  nextFree: string | null;
+};
+
+export type PortaView = {
+  id: string;
+  name: string;
+  kind: PortKind;
+  mac: string | null;
+  speedMbps: number | null;
+  vlan: VlanRef | null;
+  notes: string | null;
+  /** A porta do outro lado do cabo, e o equipamento dela. */
+  connectedTo: { id: string; name: string; asset: AtivoRef } | null;
+  ips: IpView[];
+};
+
+export type RedeDoAtivo = {
+  ports: PortaView[];
+  /** IPs do equipamento que não estão presos a uma porta. */
+  ips: IpView[];
+};
+
+export type WriteVlanRequest = { tag: number; name: string; notes?: string | null };
+export type WriteSubRedeRequest = {
+  name: string;
+  cidr: string;
+  gateway?: string | null;
+  vlanId?: string | null;
+  notes?: string | null;
+};
+export type WritePortaRequest = {
+  name: string;
+  kind?: PortKind;
+  mac?: string | null;
+  speedMbps?: number | null;
+  vlanId?: string | null;
+  notes?: string | null;
+};
+export type WriteIpRequest = {
+  address: string;
+  assetId?: string | null;
+  portId?: string | null;
+  fqdn?: string | null;
+  notes?: string | null;
+};
+
+// ---------------------------------------------------------------------
+// Datacenter: sala, rack e posição no rack (Fase 7)
+// ---------------------------------------------------------------------
+
+export const RACK_FACES = ['FRENTE', 'TRAS', 'AMBAS'] as const;
+export type RackFace = (typeof RACK_FACES)[number];
+export const ROTULO_FACE: Record<RackFace, string> = {
+  FRENTE: 'Frente',
+  TRAS: 'Trás',
+  AMBAS: 'Profundidade inteira',
+};
+
+export type SalaView = {
+  id: string;
+  name: string;
+  location: CatalogoRef | null;
+  notes: string | null;
+  rackCount: number;
+};
+
+export type RackView = {
+  id: string;
+  name: string;
+  room: CatalogoRef | null;
+  /** Altura útil em U (padrão 42). */
+  units: number;
+  /** Us ocupados em qualquer face. */
+  usedUnits: number;
+  /** Onde o rack fica na sala ("fila B, posição 3"). */
+  position: string | null;
+  notes: string | null;
+};
+
+export type ItemDeRackView = {
+  id: string;
+  asset: AtivoRef & { kind: string };
+  /** U de baixo (1 = o mais baixo). */
+  positionU: number;
+  heightU: number;
+  face: RackFace;
+};
+
+export type RackDetail = RackView & {
+  items: ItemDeRackView[];
+  /** Faixas livres na frente, de baixo para cima. */
+  freeRanges: { from: number; to: number }[];
+};
+
+export type OndeEstaNoRack = {
+  itemId: string;
+  rack: { id: string; name: string; room: CatalogoRef | null };
+  positionU: number;
+  heightU: number;
+  face: RackFace;
+} | null;
+
+export type WriteSalaRequest = { name: string; locationId?: string | null; notes?: string | null };
+export type WriteRackRequest = {
+  name: string;
+  roomId?: string | null;
+  units?: number;
+  position?: string | null;
+  notes?: string | null;
+};
+export type ColocarNoRackRequest = { assetId: string; positionU: number; heightU?: number; face?: RackFace };
+
