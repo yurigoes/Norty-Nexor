@@ -20,9 +20,15 @@ import { chamar } from './cliente';
 
 // --- Autenticação -----------------------------------------------------
 
-/** `login` é o e-mail ou o nome de usuário. */
-export const entrar = (login: string, password: string) =>
-  chamar<LoginResponse>('/auth/login', { metodo: 'POST', corpo: { login, password } });
+/**
+ * `login` é o e-mail ou o nome de usuário. Com nome de usuário vai também
+ * a organização, porque o usuário só é único dentro dela.
+ */
+export const entrar = (login: string, password: string, organization?: string) =>
+  chamar<LoginResponse>('/auth/login', {
+    metodo: 'POST',
+    corpo: { login, password, ...(organization ? { organization } : {}) },
+  });
 
 export const sair = () => chamar<void>('/auth/logout', { metodo: 'POST' });
 
@@ -31,7 +37,7 @@ export const meuPerfil = () => chamar<MeResponse>('/auth/me');
 export type AtualizarPerfil = {
   name?: string;
   phone?: string | null;
-  email?: string;
+  email?: string | null;
   username?: string | null;
   /** Obrigatória quando o e-mail ou o usuário mudam. */
   senhaAtual?: string;

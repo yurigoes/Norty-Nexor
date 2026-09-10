@@ -3,6 +3,7 @@ import { createHash, randomBytes } from 'node:crypto';
 
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { normalizarUsername } from '../../common/usuario';
 import { AuthService } from '../auth/auth.service';
 import type {
   CriarCategoriaDto,
@@ -263,17 +264,15 @@ export class CatalogoService {
         ...(filtro.role ? { role: filtro.role } : {}),
         ...(filtro.q
           ? {
-              user: {
-                OR: [
-                  { name: { contains: filtro.q, mode: 'insensitive' } },
-                  { email: { contains: filtro.q, mode: 'insensitive' } },
-                  { username: { contains: filtro.q, mode: 'insensitive' } },
-                ],
-              },
+              OR: [
+                { user: { name: { contains: filtro.q, mode: 'insensitive' } } },
+                { user: { email: { contains: filtro.q, mode: 'insensitive' } } },
+                { username: { contains: filtro.q, mode: 'insensitive' } },
+              ],
             }
           : {}),
       },
-      include: { user: true },
+      include: { user: { include: { authSource: { select: { name: true } } } } },
       orderBy: { user: { name: 'asc' } },
       take: Math.min(filtro.limit ?? 100, 200),
     });
@@ -284,7 +283,8 @@ export class CatalogoService {
       id: v.user.id,
       name: v.user.name,
       email: v.user.email,
-      username: v.user.username,
+      username: v.username,
+      authSourceName: v.user.authSource?.name ?? null,
       phone: v.user.phone,
       avatarUrl: v.user.avatarUrl,
       isActive: v.user.isActive,
@@ -301,10 +301,22 @@ export class CatalogoService {
    * troca obrigatória.
    */
   async criarUsuario(usuario: UsuarioAutenticado, dto: CriarUsuarioDto) {
-    const email = dto.email.toLowerCase().trim();
+    const email = dto.email ? dto.email.toLowerCase().trim() : null;
+    const username = dto.username ? normalizarUsername(dto.username) : null;
+    if (!email && !username) {
+      throw new BadRequestException('Informe o e-mail ou o nome de usuário — é por eles que a pessoa entra.');
+    }
+    if (
+      username &&
+      (await this.prisma.membership.findFirst({
+        where: { organizationId: usuario.organizationId, username },
+      }))
+    ) {
+      throw new ConflictException('Este nome de usuário já está em uso nesta organização.');
+    }
     const provisoria = randomBytes(9).toString('base64url');
 
-    const existente = await this.prisma.user.findUnique({ where: { email } });
+    const existente = email ? await this.prisma.user.findUnique({ where: { email } }) : null;
 
     if (existente) {
       const jaVinculado = await this.prisma.membership.findUnique({
@@ -321,26 +333,28 @@ export class CatalogoService {
           userId: existente.id,
           organizationId: usuario.organizationId,
           role: dto.role,
+          username,
         },
       });
-      return { id: existente.id, email, name: existente.name, role: dto.role, senhaProvisoria: null };
-    }
-
-    const username = dto.username ? dto.username.toLowerCase().trim() : null;
-    if (username && (await this.prisma.user.findUnique({ where: { username } }))) {
-      throw new ConflictException('Este nome de usuário já está em uso.');
+      return {
+        id: existente.id,
+        email,
+        username,
+        name: existente.name,
+        role: dto.role,
+        senhaProvisoria: null,
+      };
     }
 
     const criado = await this.prisma.user.create({
       data: {
         email,
-        username,
         name: dto.name,
         phone: dto.phone,
         passwordHash: await AuthService.hashDeSenha(provisoria),
         mustChangePassword: true,
         memberships: {
-          create: { organizationId: usuario.organizationId, role: dto.role },
+          create: { organizationId: usuario.organizationId, role: dto.role, username },
         },
       },
     });
@@ -348,7 +362,7 @@ export class CatalogoService {
     return {
       id: criado.id,
       email: criado.email,
-      username: criado.username,
+      username,
       name: criado.name,
       role: dto.role,
       senhaProvisoria: provisoria,
@@ -373,24 +387,32 @@ export class CatalogoService {
     }
 
     const username =
-      dto.username === undefined ? undefined : dto.username ? dto.username.toLowerCase().trim() : null;
+      dto.username === undefined ? undefined : dto.username ? normalizarUsername(dto.username) : null;
     if (username) {
-      const dono = await this.prisma.user.findUnique({ where: { username } });
-      if (dono && dono.id !== id) throw new ConflictException('Este nome de usuário já está em uso.');
+      const dono = await this.prisma.membership.findFirst({
+        where: { organizationId: usuario.organizationId, username, NOT: { userId: id } },
+      });
+      if (dono) throw new ConflictException('Este nome de usuário já está em uso nesta organização.');
+    }
+    if (username === null) {
+      const pessoa = await this.prisma.user.findUnique({ where: { id }, select: { email: true } });
+      if (!pessoa?.email) {
+        throw new BadRequestException('Sem e-mail, o nome de usuário é o único jeito de esta pessoa entrar.');
+      }
     }
 
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id },
-        data: { name: dto.name, phone: dto.phone, isActive: dto.isActive, username },
+        data: { name: dto.name, phone: dto.phone, isActive: dto.isActive },
       }),
-      ...(dto.role
+      ...(dto.role || username !== undefined
         ? [
             this.prisma.membership.update({
               where: {
                 userId_organizationId: { userId: id, organizationId: usuario.organizationId },
               },
-              data: { role: dto.role },
+              data: { role: dto.role, username },
             }),
           ]
         : []),

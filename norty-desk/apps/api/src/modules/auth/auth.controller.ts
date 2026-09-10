@@ -38,9 +38,10 @@ export class AuthController {
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) resposta: Response,
   ): Promise<LoginResponse> {
-    const sessao = await this.auth.login(dto.login ?? dto.email ?? '', dto.password);
+    const sessao = await this.auth.login(dto.login ?? dto.email ?? '', dto.password, dto.organization);
 
-    // A primeira organização da lista é a ativa. Trocar é uma chamada
+    // A primeira organização da lista é a ativa — no login por usuário é a
+    // informada, que o serviço põe na frente. Trocar depois é uma chamada
     // explícita, que emite token novo.
     const primeira = sessao.organizations[0]!;
     const tokens = await this.auth.emitirTokens(sessao.user.id, primeira.id);

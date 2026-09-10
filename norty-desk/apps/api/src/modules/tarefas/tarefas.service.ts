@@ -242,7 +242,7 @@ export class TarefasService {
   /** Responsável que saiu da organização vira `null`, não um id cru na tela. */
   private static responsavel(
     id: string | undefined,
-    pessoas: Map<string, { id: string; name: string; email: string }>,
+    pessoas: Map<string, { id: string; name: string; email: string | null }>,
   ): PartyRef | null {
     if (!id) return null;
     const pessoa = pessoas.get(id);
@@ -260,7 +260,7 @@ export class TarefasService {
 
   private static paraView(
     evento: EventoDeTarefa,
-    pessoas: Map<string, { id: string; name: string; email: string }>,
+    pessoas: Map<string, { id: string; name: string; email: string | null }>,
   ): TicketTaskView {
     const payload = evento.payload as unknown as TaskPayload | null;
 

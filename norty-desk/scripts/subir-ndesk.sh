@@ -103,12 +103,31 @@ falta=0
 alcanca "${host_banco:-192.168.15.72}" "${porta_banco:-5432}" "Postgres" || falta=1
 [ "$falta" = 1 ] && falhar "sem banco não adianta subir. Verifique a rota da máquina até o CT 102."
 
-titulo "Construir e subir"
-docker compose -f infra/docker-compose.yml --env-file infra/.env up -d --build
+titulo "Construir"
+docker compose -f infra/docker-compose.yml --env-file infra/.env build
 
+# A migração roda ANTES de a API nova subir, num contêiner de uma vez só
+# com a imagem nova. Na ordem antiga — subir e depois migrar —, a API nova
+# nascia contra o schema velho. Em 10/09/2026 o `up` abortou esperando o
+# healthcheck no disco lento do thor, a migração nunca rodou, e todo login
+# passou a responder 500 ("column users.username does not exist").
 titulo "Migrar o banco"
 docker compose -f infra/docker-compose.yml --env-file infra/.env \
-  exec -T desk-api npx prisma migrate deploy
+  run --rm --no-deps -T desk-api npx prisma migrate deploy
+
+titulo "Subir"
+# O `up` pode desistir do worker se a API demorar a ficar saudável (no HDD
+# do thor, demora). Isso não é falha: espera a saúde com calma e repete o
+# `up`, que então sobe o que faltou.
+docker compose -f infra/docker-compose.yml --env-file infra/.env up -d || true
+estado=ausente
+for _ in $(seq 1 60); do
+  estado=$(docker inspect -f '{{.State.Health.Status}}' desk-api 2>/dev/null || echo ausente)
+  [ "$estado" = healthy ] && break
+  sleep 5
+done
+[ "$estado" = healthy ] || falhar "a API não ficou saudável em 5 minutos. Veja: docker logs desk-api"
+docker compose -f infra/docker-compose.yml --env-file infra/.env up -d
 
 titulo "Estado"
 docker compose -f infra/docker-compose.yml --env-file infra/.env ps

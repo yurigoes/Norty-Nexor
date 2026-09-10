@@ -78,7 +78,7 @@ export function Pessoas() {
       pessoa
         ? {
             id: pessoa.id,
-            email: pessoa.email,
+            email: pessoa.email ?? '',
             name: pessoa.name,
             phone: pessoa.phone ?? '',
             username: pessoa.username ?? '',
@@ -108,7 +108,7 @@ export function Pessoas() {
       } else {
         setCriada(
           await criarPessoa({
-            email: edicao.email.trim(),
+            ...(edicao.email.trim() ? { email: edicao.email.trim() } : {}),
             name: edicao.name.trim(),
             role: edicao.role,
             ...(edicao.phone.trim() ? { phone: edicao.phone.trim() } : {}),
@@ -172,13 +172,12 @@ export function Pessoas() {
           {edicao.id ? null : (
             <div className="campo">
               <label className="campo-rotulo" htmlFor="pessoa-email">
-                E-mail
+                E-mail (opcional se houver nome de usuário)
               </label>
               <input
                 id="pessoa-email"
                 className="input"
                 type="email"
-                required
                 value={edicao.email}
                 onChange={(e) => setEdicao({ ...edicao, email: e.target.value })}
               />
@@ -309,8 +308,11 @@ export function Pessoas() {
                   <tr key={p.id}>
                     <td className="tabela-titulo-celula">{p.name}</td>
                     <td>
-                      {p.email}
+                      {p.email ?? <span className="suave">sem e-mail</span>}
                       {p.username ? <span className="suave"> · {p.username}</span> : null}
+                      {p.authSourceName ? (
+                        <span className="suave"> · AD {p.authSourceName}</span>
+                      ) : null}
                     </td>
                     <td>{rotuloDoPapel(p.role)}</td>
                     <td>

@@ -63,7 +63,7 @@ export type PartyRef = {
   kind: PartyKind;
   id: string;
   name: string;
-  email?: string;
+  email?: string | null;
   phone?: string;
 };
 
@@ -78,14 +78,19 @@ export type CategoryRef = {
 // ---------------------------------------------------------------------
 
 /** `login` aceita e-mail ou nome de usuário; `email` é o nome antigo do campo. */
-export type LoginRequest = { login: string; password: string };
+export type LoginRequest = {
+  login: string;
+  password: string;
+  /** Slug da organização. Obrigatório quando `login` é nome de usuário. */
+  organization?: string;
+};
 
 export type OrganizationRef = { id: string; slug: string; name: string; role: Role };
 
 export type LoginResponse = {
   /** JWT de 15 minutos, guardado em memória. O refresh vai no cookie. */
   accessToken: string;
-  user: { id: string; name: string; email: string; username?: string | null; mustChangePassword: boolean };
+  user: { id: string; name: string; email: string | null; username?: string | null; mustChangePassword: boolean };
   organizations: OrganizationRef[];
 };
 
@@ -93,8 +98,10 @@ export type MeResponse = {
   user: {
     id: string;
     name: string;
-    email: string;
+    email: string | null;
     username?: string | null;
+    /** Nome do diretório (AD) que autentica a pessoa; nulo = conta local. */
+    authSourceName?: string | null;
     phone?: string | null;
     /** Senha provisória: o aplicativo não abre antes da troca. */
     mustChangePassword: boolean;
@@ -358,7 +365,7 @@ export type AuditEntry = {
   diff: Record<string, { de: unknown; para: unknown }> | null;
   ip: string | null;
   createdAt: string;
-  actor: { id: string; name: string; email: string } | null;
+  actor: { id: string; name: string; email: string | null } | null;
 };
 
 // ---------------------------------------------------------------------

@@ -55,7 +55,8 @@ export class MembroDoTimeDto {
 }
 
 export class CriarUsuarioDto {
-  @IsEmail() @MaxLength(255) email!: string;
+  /** Opcional desde que haja nome de usuário — é por um dos dois que a pessoa entra. */
+  @IsOptional() @IsEmail() @MaxLength(255) email?: string;
   @IsString() @MinLength(2) @MaxLength(200) name!: string;
   @IsEnum(PAPEIS) role!: (typeof PAPEIS)[number];
   @IsOptional() @IsString() @MaxLength(32) phone?: string;

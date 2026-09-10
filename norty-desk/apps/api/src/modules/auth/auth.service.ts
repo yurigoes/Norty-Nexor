@@ -55,13 +55,29 @@ export class AuthService {
    * caminho do login inexistente também paga o custo de um `verify` —
    * senão o relógio conta o que a mensagem esconde.
    */
-  async login(identificador: string, senha: string): Promise<LoginResponse> {
-    // E-mail tem "@" e nome de usuário não pode ter (a validação recusa),
-    // então o "@" escolhe o campo sem ambiguidade.
+  async login(identificador: string, senha: string, organizacao?: string): Promise<LoginResponse> {
     const chave = identificador.toLowerCase().trim();
-    const usuario = chave
+    const slug = organizacao?.toLowerCase().trim() || undefined;
+
+    // Com "@" o login é o e-mail, que é global. Sem "@" é o nome de
+    // usuário, que só é único dentro da organização (decisão do Yuri) —
+    // sem ela não há como saber de quem se trata. Pedir a empresa não
+    // revela nada: é sobre a forma do pedido, não sobre a conta.
+    if (chave && !chave.includes('@') && !slug) {
+      throw new BadRequestException('Informe a empresa para entrar com nome de usuário.');
+    }
+
+    const alvo = !chave
+      ? null
+      : chave.includes('@')
+        ? await this.prisma.user.findUnique({ where: { email: chave }, select: { id: true } })
+        : await this.prisma.membership
+            .findFirst({ where: { username: chave, organization: { slug } }, select: { userId: true } })
+            .then((v) => (v ? { id: v.userId } : null));
+
+    const usuario = alvo
       ? await this.prisma.user.findUnique({
-          where: chave.includes('@') ? { email: chave } : { username: chave },
+          where: { id: alvo.id },
           include: {
             memberships: { include: { organization: true }, orderBy: { createdAt: 'asc' } },
           },
@@ -84,16 +100,22 @@ export class AuthService {
       throw new UnauthorizedException('Usuário ou senha inválidos.');
     }
 
+    // A organização informada vem primeiro: é para ela que o controller
+    // emite o token.
+    const vinculos = [...usuario.memberships].sort(
+      (a, b) => Number(b.organization.slug === slug) - Number(a.organization.slug === slug),
+    );
+
     return {
       accessToken: '',
       user: {
         id: usuario.id,
         name: usuario.name,
         email: usuario.email,
-        username: usuario.username,
+        username: vinculos[0]?.username ?? null,
         mustChangePassword: usuario.mustChangePassword,
       },
-      organizations: usuario.memberships.map((v) => ({
+      organizations: vinculos.map((v) => ({
         id: v.organization.id,
         slug: v.organization.slug,
         name: v.organization.name,
@@ -207,7 +229,10 @@ export class AuthService {
           organizationId: usuario.organizationId,
         },
       },
-      include: { user: true, organization: true },
+      include: {
+        user: { include: { authSource: { select: { name: true } } } },
+        organization: true,
+      },
     });
 
     return {
@@ -215,7 +240,8 @@ export class AuthService {
         id: vinculo.user.id,
         name: vinculo.user.name,
         email: vinculo.user.email,
-        username: vinculo.user.username,
+        username: vinculo.username,
+        authSourceName: vinculo.user.authSource?.name ?? null,
         phone: vinculo.user.phone,
         mustChangePassword: vinculo.user.mustChangePassword,
         avatarUrl: vinculo.user.avatarUrl ?? undefined,
@@ -241,15 +267,30 @@ export class AuthService {
    * aqui faria o aplicativo tratar senha errada como sessão expirada.
    */
   async atualizarPerfil(usuario: UsuarioAutenticado, dto: AtualizarPerfilDto): Promise<MeResponse> {
-    const atual = await this.prisma.user.findUniqueOrThrow({ where: { id: usuario.userId } });
+    const vinculo = await this.prisma.membership.findUniqueOrThrow({
+      where: {
+        userId_organizationId: { userId: usuario.userId, organizationId: usuario.organizationId },
+      },
+      include: { user: true },
+    });
+    const atual = vinculo.user;
 
-    const email = dto.email === undefined ? undefined : dto.email.toLowerCase().trim();
+    const email =
+      dto.email === undefined ? undefined : dto.email ? dto.email.toLowerCase().trim() : null;
     const username =
       dto.username === undefined ? undefined : dto.username ? normalizarUsername(dto.username) : null;
 
     const mudaEmail = email !== undefined && email !== atual.email;
-    const mudaUsername = username !== undefined && username !== atual.username;
+    const mudaUsername = username !== undefined && username !== vinculo.username;
 
+    if ((mudaEmail || mudaUsername) && atual.authSourceId) {
+      throw new BadRequestException('Conta do diretório: o e-mail e o usuário vêm do AD.');
+    }
+    const emailFinal = email === undefined ? atual.email : email;
+    const usernameFinal = username === undefined ? vinculo.username : username;
+    if (!emailFinal && !usernameFinal) {
+      throw new BadRequestException('Mantenha ao menos um jeito de entrar: e-mail ou nome de usuário.');
+    }
     if (mudaEmail || mudaUsername) {
       const confere = dto.senhaAtual ? await argon2.verify(atual.passwordHash, dto.senhaAtual) : false;
       if (!confere) {
@@ -259,19 +300,29 @@ export class AuthService {
     if (mudaEmail && email && (await this.prisma.user.findUnique({ where: { email } }))) {
       throw new ConflictException('Este e-mail já está em uso.');
     }
-    if (mudaUsername && username && (await this.prisma.user.findUnique({ where: { username } }))) {
-      throw new ConflictException('Este nome de usuário já está em uso.');
+    if (
+      mudaUsername &&
+      username &&
+      (await this.prisma.membership.findFirst({
+        where: { organizationId: usuario.organizationId, username, NOT: { userId: usuario.userId } },
+      }))
+    ) {
+      throw new ConflictException('Este nome de usuário já está em uso nesta organização.');
     }
 
-    await this.prisma.user.update({
-      where: { id: usuario.userId },
-      data: {
-        name: dto.name?.trim(),
-        phone: dto.phone === undefined ? undefined : dto.phone?.trim() || null,
-        ...(mudaEmail ? { email } : {}),
-        ...(mudaUsername ? { username } : {}),
-      },
-    });
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: usuario.userId },
+        data: {
+          name: dto.name?.trim(),
+          phone: dto.phone === undefined ? undefined : dto.phone?.trim() || null,
+          ...(mudaEmail ? { email } : {}),
+        },
+      }),
+      ...(mudaUsername
+        ? [this.prisma.membership.update({ where: { id: vinculo.id }, data: { username } })]
+        : []),
+    ]);
 
     return this.me(usuario);
   }
@@ -287,6 +338,10 @@ export class AuthService {
     }
 
     const usuario = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+
+    if (usuario.authSourceId) {
+      throw new BadRequestException('A senha desta conta é a do diretório (AD) — troque por lá.');
+    }
 
     // 400 e não 401: o aplicativo trata 401 como sessão vencida — renova,
     // repete e, no segundo 401, desloga. Senha atual errada não é sessão

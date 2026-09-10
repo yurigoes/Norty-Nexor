@@ -154,7 +154,7 @@ export class SlaJobs {
         originChannel: string;
         actors: {
           role: string;
-          user: { name: string; email: string } | null;
+          user: { name: string; email: string | null } | null;
           team: { id: string; name: string; email: string | null } | null;
           contact: { email: string | null; phone: string | null } | null;
         }[];
@@ -377,7 +377,7 @@ export class SlaJobs {
     originChannel: string;
     actors: {
       role: string;
-      user: { email: string } | null;
+      user: { email: string | null } | null;
       contact: { email: string | null; phone: string | null } | null;
     }[];
   }): { canal: 'EMAIL' | 'WHATSAPP'; endereco: string } | null {
@@ -408,7 +408,7 @@ export class SlaJobs {
       pendingRemindersSent: number;
       actors: {
         role: string;
-        user: { email: string } | null;
+        user: { email: string | null } | null;
         contact: { email: string | null; phone: string | null } | null;
       }[];
     },

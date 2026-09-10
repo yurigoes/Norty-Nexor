@@ -59,9 +59,10 @@ describe('autenticação', () => {
     assert.equal(inexistente.corpo.title, errada.corpo.title);
   });
 
-  it('aceita o nome de usuário no lugar do e-mail, com a mesma recusa', async () => {
-    await prisma.user.update({
-      where: { email: 'agente@teste.dev' },
+  it('aceita usuário + empresa no lugar do e-mail, com a mesma recusa', async () => {
+    // O nome de usuário mora no vínculo: é único dentro da organização.
+    await prisma.membership.updateMany({
+      where: { user: { email: 'agente@teste.dev' }, organization: { slug: 'teste' } },
       data: { username: 'agente.teste' },
     });
     const c = comoAgente();
@@ -70,13 +71,26 @@ describe('autenticação', () => {
     const certo = await c.post<{ accessToken: string }>('/auth/login', {
       login: '  Agente.Teste ',
       password: '123456',
+      organization: 'TESTE',
     });
     const errada = await c.post<{ title: string }>('/auth/login', {
       login: 'agente.teste',
       password: 'errada',
+      organization: 'teste',
     });
     const inexistente = await c.post<{ title: string }>('/auth/login', {
       login: 'ninguem.aqui',
+      password: '123456',
+      organization: 'teste',
+    });
+    // O mesmo usuário noutra organização é outra pessoa (ou ninguém).
+    const outraEmpresa = await c.post<{ title: string }>('/auth/login', {
+      login: 'agente.teste',
+      password: '123456',
+      organization: 'outra',
+    });
+    const semEmpresa = await c.post<{ title: string }>('/auth/login', {
+      login: 'agente.teste',
       password: '123456',
     });
 
@@ -84,7 +98,9 @@ describe('autenticação', () => {
     assert.ok(certo.corpo.accessToken);
     assert.equal(errada.status, 401);
     assert.equal(inexistente.status, 401);
+    assert.equal(outraEmpresa.status, 401);
     assert.equal(errada.corpo.title, inexistente.corpo.title);
+    assert.equal(semEmpresa.status, 400);
   });
 
   it('devolve as permissões já resolvidas em /me', async () => {

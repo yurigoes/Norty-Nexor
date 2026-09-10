@@ -6,8 +6,10 @@ import { chamar } from './cliente';
 export type Pessoa = {
   id: string;
   name: string;
-  email: string;
+  email: string | null;
   username: string | null;
+  /** Diretório (AD) que autentica a pessoa; nulo = conta local. */
+  authSourceName: string | null;
   phone: string | null;
   avatarUrl: string | null;
   isActive: boolean;
@@ -16,7 +18,8 @@ export type Pessoa = {
 };
 
 export type NovaPessoa = {
-  email: string;
+  /** Opcional desde que haja nome de usuário. */
+  email?: string;
   name: string;
   role: Role;
   phone?: string;
@@ -26,7 +29,7 @@ export type NovaPessoa = {
 /** A senha provisória aparece só aqui, uma vez. `null` quando a pessoa já existia noutra organização. */
 export type PessoaCriada = {
   id: string;
-  email: string;
+  email: string | null;
   username: string | null;
   name: string;
   role: Role;

@@ -150,7 +150,7 @@ export class SaidaService {
     atores: {
       role: string;
       userId: string | null;
-      user: { email: string } | null;
+      user: { email: string | null } | null;
       contact: { email: string | null; phone: string | null } | null;
     }[],
     canal: Channel,

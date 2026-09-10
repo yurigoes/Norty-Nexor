@@ -40,14 +40,15 @@ export function MinhaConta() {
     if (!perfil) return;
     setNome(perfil.user.name);
     setTelefone(perfil.user.phone ?? '');
-    setEmail(perfil.user.email);
+    setEmail(perfil.user.email ?? '');
     setUsuario(perfil.user.username ?? '');
   }, [perfil]);
 
   if (!perfil) return null;
 
+  const doDiretorio = Boolean(perfil.user.authSourceName);
   const mudaLogin =
-    email.trim().toLowerCase() !== perfil.user.email ||
+    email.trim().toLowerCase() !== (perfil.user.email ?? '') ||
     usuario.trim().toLowerCase() !== (perfil.user.username ?? '');
 
   const atalhos = CONFIGURACOES.filter((c) => can(c.permissao));
@@ -62,7 +63,7 @@ export function MinhaConta() {
       await api.atualizarPerfil({
         name: nome.trim(),
         phone: telefone.trim() || null,
-        email: email.trim(),
+        email: email.trim() || null,
         username: usuario.trim() || null,
         ...(mudaLogin ? { senhaAtual } : {}),
       });
@@ -138,7 +139,7 @@ export function MinhaConta() {
               className="input"
               type="email"
               autoComplete="email"
-              required
+              disabled={doDiretorio}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -153,12 +154,13 @@ export function MinhaConta() {
               autoComplete="username"
               autoCapitalize="none"
               spellCheck={false}
+              disabled={doDiretorio}
               placeholder="nome.sobrenome"
               value={usuario}
               onChange={(e) => setUsuario(e.target.value)}
             />
             <span className="suave" style={{ fontSize: 'var(--t-corpo-sm)' }}>
-              Opcional. Permite entrar com ele no lugar do e-mail.
+              Entra com ele e a empresa no lugar do e-mail. É preciso ter ao menos um dos dois.
             </span>
           </div>
 
@@ -189,7 +191,14 @@ export function MinhaConta() {
 
       <section className="pilha-sm">
         <h3>Senha</h3>
-        <TrocarSenha />
+        {doDiretorio ? (
+          <p className="suave">
+            Sua conta é autenticada pelo diretório {perfil.user.authSourceName}: a senha e o login
+            são os de lá.
+          </p>
+        ) : (
+          <TrocarSenha />
+        )}
       </section>
 
       {atalhos.length > 0 ? (

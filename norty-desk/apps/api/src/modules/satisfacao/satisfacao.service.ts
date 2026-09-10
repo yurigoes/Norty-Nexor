@@ -249,7 +249,7 @@ export class SatisfacaoService {
     originChannel: string;
     actors: {
       role: string;
-      user: { email: string } | null;
+      user: { email: string | null } | null;
       contact: { email: string | null; phone: string | null } | null;
     }[];
   }): { canal: 'EMAIL' | 'WHATSAPP'; endereco: string } | null {

@@ -24,6 +24,12 @@ export class LoginDto {
   @MaxLength(255)
   email?: string;
 
+  /** Slug da organização — obrigatório quando `login` é nome de usuário. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  organization?: string;
+
   @IsString()
   @MinLength(1)
   @MaxLength(200)
@@ -44,7 +50,9 @@ export class AtualizarPerfilDto {
   @IsOptional() @IsString() @MinLength(2) @MaxLength(200) name?: string;
   /** `null` apaga. */
   @IsOptional() @IsString() @MaxLength(32) phone?: string | null;
-  @IsOptional() @IsEmail({}, { message: 'Informe um e-mail válido.' }) @MaxLength(255) email?: string;
+  /** `null` apaga — desde que sobre o nome de usuário. */
+  @IsOptional() @IsEmail({}, { message: 'Informe um e-mail válido.' }) @MaxLength(255)
+  email?: string | null;
   /** `null` apaga. */
   @IsOptional() @IsString() @Matches(USERNAME_REGEX, { message: MSG_USERNAME })
   username?: string | null;

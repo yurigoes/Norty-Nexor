@@ -53,7 +53,9 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 20s
+      # No HDD do thor a API leva bem mais que 20 s para subir; com a
+      # folga curta o compose desistia do worker no meio do deploy.
+      start_period: 90s
     logging:
       # Sem limite, o json-file cresce até encher o disco do CT.
       driver: json-file

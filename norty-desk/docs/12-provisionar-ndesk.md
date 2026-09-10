@@ -232,6 +232,13 @@ grandes via `pct exec` chegaram truncados no fim.
   compartilhada é decisão de arquitetura dele.
 - **`password authentication failed for user "nortydesk"`** → o role
   do exemplo não existe no CT 102. Ver a seção 4.
+- **Todo login dá 500 logo depois de um deploy** (`column ... does not exist`
+  no log da API) → a migração não rodou. Versões antigas do `subir-ndesk.sh`
+  migravam *depois* de subir: se o `up` abortava esperando o healthcheck (no
+  HDD do thor, a API demora), a migração nunca rodava. Foi o que deixou o login
+  em 500 por 13 minutos em 10/09/2026. Conserto imediato:
+  `docker exec -w /app/apps/api desk-api npx prisma migrate deploy`. O script
+  atual migra antes de subir, com a imagem nova.
 - **API em laço de reinício, `JWT_SECRET ausente ou curto demais`** →
   rode o `subir-ndesk.sh` atual, que gera o segredo.
 - **API morre no boot com `libssl.so.1.1: No such file or directory`**

@@ -38,7 +38,12 @@ export function TrocarSenha() {
     setEnviando(true);
     try {
       await api.trocarSenha(atual, nova);
-      if (perfil) await entrar(perfil.user.email, nova);
+      // Entra de novo pelo caminho que a pessoa tem: e-mail, ou usuário +
+      // empresa quando a conta não tem e-mail.
+      if (perfil?.user.email) await entrar(perfil.user.email, nova);
+      else if (perfil?.user.username) {
+        await entrar(perfil.user.username, nova, perfil.organization.slug);
+      }
       setAtual('');
       setNova('');
       setConfirmacao('');

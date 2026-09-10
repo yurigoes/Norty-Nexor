@@ -646,6 +646,9 @@ export class AprovacoesService {
     });
 
     for (const pessoa of pessoas) {
+      // Conta de diretório pode não ter e-mail: sem endereço, o aviso por
+      // e-mail não tem para onde ir. A aprovação segue na fila da pessoa.
+      if (!pessoa.email) continue;
       await this.saida.enfileirarAviso({
         organizationId: alvo.organizationId,
         ticketId: alvo.ticketId ?? null,

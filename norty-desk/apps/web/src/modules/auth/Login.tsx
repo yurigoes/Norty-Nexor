@@ -12,12 +12,34 @@ const PONTOS = [
   'Nota interna que nunca sai para o cliente',
 ];
 
+const CHAVE_EMPRESA = 'norty-desk:empresa';
+
+/** A empresa digitada da última vez. O navegador pode recusar o armazenamento. */
+function lerEmpresaLembrada(): string {
+  try {
+    return localStorage.getItem(CHAVE_EMPRESA) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function lembrarEmpresa(slug: string): void {
+  try {
+    localStorage.setItem(CHAVE_EMPRESA, slug);
+  } catch {
+    // Sem armazenamento, só não lembra.
+  }
+}
+
 export function Login() {
   const { entrar } = useAutenticacao();
   const marca = useMarca();
 
   const [login, setLogin] = useState('');
   const [senha, setSenha] = useState('');
+  const [empresa, setEmpresa] = useState(lerEmpresaLembrada);
+  // E-mail é global; nome de usuário só é único dentro da empresa.
+  const porUsuario = login.trim() !== '' && !login.includes('@');
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
@@ -27,7 +49,9 @@ export function Login() {
     setEnviando(true);
 
     try {
-      await entrar(login, senha);
+      const slug = empresa.trim().toLowerCase();
+      await entrar(login, senha, porUsuario ? slug : undefined);
+      if (porUsuario) lembrarEmpresa(slug);
     } catch (e) {
       // A mensagem vem da API e é idêntica para login inexistente e
       // senha errada. Especializá-la aqui desfaria a proteção do lado do
@@ -109,6 +133,24 @@ export function Login() {
                 placeholder="voce@empresa.com.br ou nome.sobrenome"
               />
             </div>
+
+            {porUsuario ? (
+              <div className="campo">
+                <label className="campo-rotulo" htmlFor="empresa">
+                  Empresa
+                </label>
+                <input
+                  id="empresa"
+                  className="input"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  required
+                  value={empresa}
+                  onChange={(e) => setEmpresa(e.target.value)}
+                  placeholder="identificador da empresa (ex.: norty)"
+                />
+              </div>
+            ) : null}
 
             <div className="campo">
               <label className="campo-rotulo" htmlFor="senha">

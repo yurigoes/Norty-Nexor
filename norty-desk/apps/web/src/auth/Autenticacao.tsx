@@ -24,7 +24,7 @@ type Sessao = {
 };
 
 type Contexto = Sessao & {
-  entrar: (login: string, senha: string) => Promise<void>;
+  entrar: (login: string, senha: string, organizacao?: string) => Promise<void>;
   sair: () => Promise<void>;
   revalidar: () => void;
   /** Busca o `/me` de novo — depois de a pessoa editar os próprios dados. */
@@ -77,8 +77,8 @@ export function ProvedorDeAutenticacao({ children }: { children: ReactNode }) {
   }, [carregarPerfil]);
 
   const entrar = useCallback(
-    async (login: string, senha: string) => {
-      const resposta = await api.entrar(login, senha);
+    async (login: string, senha: string, organizacao?: string) => {
+      const resposta = await api.entrar(login, senha, organizacao);
       guardarToken(resposta.accessToken);
       await carregarPerfil();
     },

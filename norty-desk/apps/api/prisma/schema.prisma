@@ -61,16 +61,16 @@ model Organization {
   manufacturers  Manufacturer[]
   assetModels    AssetModel[]
   components     AssetComponent[]
+  authSources    AuthSource[]
 
   @@map("organizations")
 }
 
 model User {
   id                 String   @id @default(uuid()) @db.Uuid
-  email              String   @unique
-  /// Login alternativo ao e-mail: minúsculas, sem "@". Opcional hoje; é o
-  /// que o LDAP vai preencher (o `login_field` do GLPI) — ver docs/13.
-  username           String?  @unique
+  /// Opcional: conta de diretório pode não ter e-mail (decisão do Yuri,
+  /// 10/09/2026). Único quando preenchido.
+  email              String?  @unique
   name               String
   /// Argon2id. A API nunca devolve este campo.
   passwordHash       String
@@ -79,9 +79,16 @@ model User {
   isActive           Boolean  @default(true)
   mustChangePassword Boolean  @default(true)
   locale             String   @default("pt-BR")
+  /// Diretório que autentica esta pessoa (LDAP). Nulo = conta local, que
+  /// entra com a senha guardada aqui.
+  authSourceId       String?  @db.Uuid
+  /// Identificador estável no diretório — o `sync_field` do GLPI (ex.:
+  /// objectGUID). Sobrevive a troca de login no AD.
+  externalId         String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
+  authSource     AuthSource?       @relation(fields: [authSourceId], references: [id], onDelete: SetNull)
   memberships    Membership[]
   teamMembers    TeamMember[]
   actorIn        TicketActor[]
@@ -96,6 +103,7 @@ model User {
   costs          TicketCost[]      @relation("AutorDoCusto")
   articleEdits   ArticleRevision[] @relation("EditorDaRevisao")
 
+  @@unique([authSourceId, externalId])
   @@map("users")
 }
 
@@ -105,12 +113,17 @@ model Membership {
   userId         String   @db.Uuid
   organizationId String   @db.Uuid
   role           Role
+  /// Login por nome de usuário, único dentro da organização (decisão do
+  /// Yuri, 10/09/2026): dois clientes podem ter o seu `jsilva`. Minúsculas,
+  /// sem "@" — ver common/usuario.ts.
+  username       String?
   createdAt      DateTime @default(now())
 
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([userId, organizationId])
+  @@unique([organizationId, username])
   @@index([organizationId])
   @@map("memberships")
 }
@@ -1667,4 +1680,62 @@ model AssetComponent {
   @@unique([organizationId, serialNumber])
   @@index([assetId, kind])
   @@map("asset_components")
+}
+
+// ---------------------------------------------------------------------
+// Fontes de autenticação (docs/13)
+// ---------------------------------------------------------------------
+
+enum AuthSourceKind {
+  LDAP
+}
+
+enum LdapSecurity {
+  NONE
+  STARTTLS
+  LDAPS
+}
+
+/// Diretório que autentica as pessoas de uma organização — o equivalente
+/// a `glpi_authldaps`, mas por organização, porque cada cliente traz o
+/// próprio AD.
+model AuthSource {
+  id              String         @id @default(uuid()) @db.Uuid
+  organizationId  String         @db.Uuid
+  name            String
+  kind            AuthSourceKind @default(LDAP)
+  isActive        Boolean        @default(true)
+  /// Ordem de tentativa quando a organização tem mais de um diretório.
+  position        Int            @default(0)
+  host            String
+  port            Int            @default(389)
+  security        LdapSecurity   @default(STARTTLS)
+  baseDn          String
+  /// Conta de serviço que faz as buscas. Vazia = bind anônimo.
+  bindDn          String?
+  /// Cifrada com CHANNEL_SECRET_KEY (channels/segredos.ts). Nunca sai da API.
+  bindPassword    String?
+  loginField      String         @default("sAMAccountName")
+  syncField       String         @default("objectGUID")
+  /// Filtro extra, combinado com o do login num `(& ...)`.
+  userFilter      String?
+  emailField      String         @default("mail")
+  nameField       String         @default("displayName")
+  phoneField      String?        @default("telephoneNumber")
+  timeoutMs       Int            @default(5000)
+  /// Cria a pessoa no primeiro login bem-sucedido (decisão do Yuri).
+  autoCreate      Boolean        @default(true)
+  defaultRole     Role           @default(SOLICITANTE)
+  lastTestAt      DateTime?
+  lastTestOk      Boolean?
+  lastTestMessage String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users        User[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("auth_sources")
 }
