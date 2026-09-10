@@ -143,6 +143,131 @@ consulta "SELECT YEAR(date) AS ano, COUNT(*) AS chamados FROM glpi_tickets
   | tee "$SAIDA/07-por-ano.txt"
 
 # ---------------------------------------------------------------------
+# 4. As áreas que decidem a ordem das fases 5 a 8
+# ---------------------------------------------------------------------
+#
+# O roadmap (docs/10-roadmap.md, "Sobre a ordem") condiciona a ordem das
+# fases ao que a base real tem: se `glpi_racks` estiver vazia, a Fase 7
+# é cadastro que ninguém vai preencher. Contar aqui é o que transforma
+# essa suposição em número.
+#
+# As tabelas mudam de versão para versão do GLPI, e uma que não existe
+# aborta a consulta inteira. Por isso o COUNT sai montado a partir do
+# que o `information_schema` diz que existe: o que não está lá aparece
+# como ausente, não como erro.
+
+# Consulta sem moldura, uma linha por registro — para ler em bash.
+consulta_bruta() {
+  pct exec "$CT" -- sh -c \
+    "mysql -h '$DB_HOST' -u '$DB_USER' -p'$DB_PASS' '$DB_NAME' -N -B -e \"$1\"" \
+    2>/dev/null
+}
+
+contar_area() {
+  local titulo="$1"; shift
+  local candidatas="$*"
+
+  # A lista entre aspas é montada aqui, e não dentro da string SQL: a
+  # primeira versão usava `printf` dentro de três níveis de aspas e saía
+  # `IN ("tabela,""outra,")` — aspas duplas dobradas e vírgula sobrando,
+  # que no MySQL não casa com nada. Toda área aparecia como inexistente,
+  # sem erro nenhum na tela.
+  local lista=""
+  local t
+  for t in $candidatas; do
+    lista="${lista}${lista:+, }'$t'"
+  done
+
+  local existentes
+  existentes=$(consulta_bruta "SELECT table_name FROM information_schema.tables \
+    WHERE table_schema = '$DB_NAME' AND table_name IN ($lista);")
+
+  printf '\n-- %s\n' "$titulo"
+
+  if [ -z "$existentes" ]; then
+    echo "(nenhuma destas tabelas existe nesta versão do GLPI)"
+    for t in $candidatas; do echo "  ausente: $t"; done
+    return
+  fi
+
+  local uniao=""
+  for t in $existentes; do
+    uniao="${uniao}${uniao:+ UNION ALL }SELECT '$t' AS tabela, COUNT(*) AS linhas FROM \`$t\`"
+  done
+  consulta "$uniao ORDER BY linhas DESC;"
+
+  # O que foi pedido e não existe também é resposta.
+  for t in $candidatas; do
+    echo "$existentes" | grep -qx "$t" || echo "  ausente: $t"
+  done
+}
+
+log "Fase 5 — ativos e componentes (confere o que já foi construído)"
+{
+  contar_area "Ativos por tipo" \
+    glpi_computers glpi_monitors glpi_printers glpi_phones \
+    glpi_peripherals glpi_networkequipments
+  contar_area "Catálogo do ativo" \
+    glpi_locations glpi_manufacturers glpi_computermodels glpi_monitormodels \
+    glpi_printermodels glpi_phonemodels glpi_peripheralmodels \
+    glpi_networkequipmentmodels glpi_states
+  contar_area "Componentes instalados" \
+    glpi_items_deviceprocessors glpi_items_devicememories \
+    glpi_items_deviceharddrives glpi_items_devicenetworkcards \
+    glpi_items_devicegraphiccards glpi_items_devicemotherboards \
+    glpi_items_devicepowersupplies glpi_items_devicebatteries \
+    glpi_items_devicesimcards glpi_items_devicefirmwares
+} | tee "$SAIDA/08-fase5-ativos.txt"
+
+log "Fase 6 — software, licenças, consumíveis e rede"
+{
+  contar_area "Software e licenças" \
+    glpi_softwares glpi_softwareversions glpi_softwarelicenses \
+    glpi_items_softwareversions glpi_items_softwarelicenses \
+    glpi_softwarecategories
+  contar_area "Consumíveis e cartuchos" \
+    glpi_consumableitems glpi_consumables glpi_cartridgeitems glpi_cartridges
+  contar_area "Rede" \
+    glpi_networkports glpi_networkportethernets glpi_networknames \
+    glpi_ipaddresses glpi_ipnetworks glpi_vlans glpi_wifinetworks \
+    glpi_networkaliases glpi_fqdns
+} | tee "$SAIDA/09-fase6.txt"
+
+log "Fase 7 — datacenter"
+{
+  contar_area "Rack, sala, PDU e cabo" \
+    glpi_racks glpi_datacenters glpi_dcrooms glpi_pdus glpi_enclosures \
+    glpi_cables glpi_items_racks glpi_passivedcequipments
+} | tee "$SAIDA/10-fase7-datacenter.txt"
+
+# Se o agente continuar mandando dado, a Fase 7 é receber o que ele
+# manda; se parou, é cadastro manual — e o desenho muda.
+log "Fase 7 — o inventário automático ainda roda?"
+{
+  contar_area "Agentes e regras de importação" \
+    glpi_agents glpi_agenttypes glpi_rulematchedlogs glpi_unmanageds \
+    glpi_refusedequipments glpi_lockedfields
+  consulta "SELECT name, value FROM glpi_configs
+            WHERE context='inventory' OR name LIKE '%inventory%';"
+  # A pergunta real não é se a tabela existe, é se chegou dado esta
+  # semana. Um agente que parou em 2023 é cadastro manual disfarçado.
+  consulta "SELECT id, name, last_contact,
+                   DATEDIFF(NOW(), last_contact) AS dias_sem_falar
+            FROM glpi_agents
+            ORDER BY last_contact DESC LIMIT 20;"
+  consulta "SELECT COUNT(*) AS agentes_ativos_7d FROM glpi_agents
+            WHERE last_contact > DATE_SUB(NOW(), INTERVAL 7 DAY);"
+} | tee "$SAIDA/11-fase7-inventario.txt"
+
+log "Fase 8 — projetos e reservas"
+{
+  contar_area "Projetos e reservas" \
+    glpi_projects glpi_projecttasks glpi_projectstates \
+    glpi_reservationitems glpi_reservations glpi_contracts glpi_suppliers \
+    glpi_budgets glpi_infocoms glpi_ticketcosts
+} | tee "$SAIDA/12-fase8.txt"
+
+# ---------------------------------------------------------------------
 log "Empacotando"
 tar -czf "$SAIDA.tar.gz" -C "$(dirname "$SAIDA")" "$(basename "$SAIDA")"
 
@@ -151,6 +276,16 @@ cat <<FIM
 Pronto.
 
   Pacote:  $SAIDA.tar.gz
+
+As duas perguntas que decidem a ordem das fases 5 a 8
+(docs/10-roadmap.md, "Sobre a ordem"):
+
+  1. O que a base tem      → 09-fase6.txt e 10-fase7-datacenter.txt
+     Área com zero linha é cadastro que ninguém vai preencher.
+
+  2. De onde vem o dado    → 11-fase7-inventario.txt
+     Olhe `agentes_ativos_7d`. Zero significa que o agente parou, e a
+     Fase 7 vira cadastro manual — o que muda o desenho dela.
 
 O script leu a senha do banco do config_db.php mas NÃO a gravou nos
 arquivos. Confirme antes de enviar:
