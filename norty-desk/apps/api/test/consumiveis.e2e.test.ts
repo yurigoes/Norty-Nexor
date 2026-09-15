@@ -8,7 +8,7 @@ import type {
   SuprimentosDoAtivo,
 } from '@norty-desk/shared';
 
-import { Cliente, type Api, type Fixtura, limparBanco, prisma, semear, subirApi } from './apoio';
+import { Cliente, type Api, limparBanco, prisma, semear, subirApi } from './apoio';
 
 /**
  * Consumíveis e cartuchos.
@@ -21,11 +21,10 @@ import { Cliente, type Api, type Fixtura, limparBanco, prisma, semear, subirApi 
  */
 
 let api: Api;
-let f: Fixtura;
 
 before(async () => {
   await limparBanco();
-  f = await semear();
+  await semear();
   api = await subirApi();
 });
 
