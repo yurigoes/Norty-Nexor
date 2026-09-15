@@ -41,7 +41,7 @@ export class TranscricaoService {
    * cliente já mandou o áudio e está esperando atendimento, não uma
    * mensagem de erro sobre um recurso interno.
    */
-  async transcrever(audio: Buffer, contentType: string): Promise<string | null> {
+  async transcrever(audio: Buffer, _contentType: string): Promise<string | null> {
     const base = this.config.get<string>('OLLAMA_BASE_URL');
     if (!base) return null;
 

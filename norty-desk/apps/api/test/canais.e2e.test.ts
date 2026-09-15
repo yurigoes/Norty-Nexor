@@ -85,13 +85,6 @@ async function despacharTudo(): Promise<void> {
   await despacho.despachar();
 }
 
-async function chamadoPorNumero(numero: number) {
-  return prisma.ticket.findFirstOrThrow({
-    where: { organizationId: f.organizacao.id, number: numero },
-    include: { actors: { include: { contact: true } }, events: true, attachments: true },
-  });
-}
-
 // ---------------------------------------------------------------------
 
 describe('e-mail: entrada', () => {

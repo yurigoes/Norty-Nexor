@@ -9,7 +9,7 @@
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run test:e2e",
-    "lint": "eslint src --ext .ts",
+    "lint": "eslint src test",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "db:seed": "ts-node -r dotenv/config --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed.ts",

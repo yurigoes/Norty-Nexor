@@ -4,7 +4,6 @@ import type {
   AssetView,
   SatisfacaoResumo,
   SurveyPublicView,
-  SurveyView,
   TicketDetail,
 } from '@norty-desk/shared';
 

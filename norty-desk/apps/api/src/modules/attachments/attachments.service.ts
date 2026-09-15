@@ -33,7 +33,7 @@ export class AttachmentsService {
       .normalize('NFKD')
       .replace(/[^\w.\- ]+/g, '')
       .replace(/\s+/g, '-')
-      .replace(/^[.\-]+/, '')
+      .replace(/^[.-]+/, '')
       .slice(0, 120);
 
     return limpo || 'arquivo';
