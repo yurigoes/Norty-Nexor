@@ -465,21 +465,36 @@ export class SoftwareService {
       throw new BadRequestException('Informe o equipamento ou a pessoa — um dos dois.');
     }
     const licenca = await this.exigirLicenca(usuario, licenseId);
-    if (licenca.seats !== null && licenca._count.assignments >= licenca.seats) {
-      throw new ConflictException(
-        `Sem assento livre nesta licença: ${licenca._count.assignments} de ${licenca.seats} ocupados.`,
-      );
-    }
     if (dto.assetId) await this.exigirAtivo(usuario, dto.assetId);
     if (dto.userId) await this.exigirPessoa(usuario, dto.userId);
 
-    await SoftwareService.semDuplicata(
-      () =>
-        this.prisma.licenseAssignment.create({
-          data: { licenseId, assetId: dto.assetId ?? null, userId: dto.userId ?? null },
-        }),
-      dto.assetId ? 'Este equipamento já ocupa um assento desta licença.' : 'Esta pessoa já ocupa um assento desta licença.',
-    );
+    // A contagem e a gravação correm com a linha da licença travada.
+    //
+    // Sem a trava, duas atribuições simultâneas liam "0 de 1 ocupados",
+    // as duas passavam, e a licença terminava com dois assentos numa de
+    // um — permanentemente `excedida`, e sem nada no banco que
+    // impedisse. É a regra 4 do CLAUDE.md, e é o mesmo desenho que
+    // `ConsumiveisService.movimentar` já usava para o último toner.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM software_licenses WHERE id = ${licenseId}::uuid FOR UPDATE`;
+
+      if (licenca.seats !== null) {
+        const ocupados = await tx.licenseAssignment.count({ where: { licenseId } });
+        if (ocupados >= licenca.seats) {
+          throw new ConflictException(
+            `Sem assento livre nesta licença: ${ocupados} de ${licenca.seats} ocupados.`,
+          );
+        }
+      }
+
+      await SoftwareService.semDuplicata(
+        () =>
+          tx.licenseAssignment.create({
+            data: { licenseId, assetId: dto.assetId ?? null, userId: dto.userId ?? null },
+          }),
+        dto.assetId ? 'Este equipamento já ocupa um assento desta licença.' : 'Esta pessoa já ocupa um assento desta licença.',
+      );
+    });
     return this.detalhe(usuario, licenca.softwareId);
   }
 

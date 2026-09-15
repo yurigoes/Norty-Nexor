@@ -154,12 +154,16 @@ export class DatacenterService {
     const rack = await this.exigirRack(usuario, id);
     await this.exigirSalaOpcional(usuario, dto.roomId);
     if (dto.units !== undefined && dto.units < rack.units) {
-      const maisAlto = await this.prisma.rackItem.findFirst({
-        where: { rackId: id },
-        orderBy: { positionU: 'desc' },
-        select: { positionU: true, heightU: true },
-      });
-      const alturaUsada = maisAlto ? maisAlto.positionU + maisAlto.heightU - 1 : 0;
+      // O mais alto é o de maior **topo**, não o de maior U inicial.
+      // Ordenar por `positionU` escolhia o errado: um equipamento de 4U
+      // começando no U38 vai até o 41, mas perdia para um de 1U no U40
+      // — e o rack encolhia deixando o primeiro para fora, que a tela
+      // desenha por cima do cabeçalho.
+      const [{ topo }] = await this.prisma.$queryRaw<{ topo: number | null }[]>`
+        SELECT MAX("positionU" + "heightU" - 1)::int AS topo
+        FROM rack_items WHERE "rackId" = ${id}::uuid
+      `;
+      const alturaUsada = topo ?? 0;
       if (alturaUsada > dto.units) {
         throw new ConflictException(`Há equipamento até o U ${alturaUsada}: o rack não pode ter menos que isso.`);
       }

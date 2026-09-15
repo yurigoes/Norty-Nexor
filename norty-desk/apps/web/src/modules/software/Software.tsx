@@ -74,15 +74,39 @@ function formDe(l: LicencaView | null): FormLicenca {
   };
 }
 
+/**
+ * Texto para número, recusando o que não é número.
+ *
+ * Em branco é `null` — "não informado". Mas `Number('1.000')` é `NaN`,
+ * e `JSON.stringify` transforma `NaN` em `null`: o campo chegava à API
+ * como "não informado" em vez de ser recusado, e em `seats` isso
+ * significa **ilimitado**. Um erro de digitação tirava o limite da
+ * licença sem que ninguém visse.
+ */
+function numero(texto: string): number | null {
+  const limpo = texto.trim();
+  if (limpo === '') return null;
+  const n = Number(limpo);
+  if (!Number.isFinite(n)) throw new ErroDeFormulario(`"${limpo}" não é um número.`);
+  return n;
+}
+
+/** Erro de preenchimento, mostrado no formulário como a API mostraria. */
+export class ErroDeFormulario extends Error {}
+
 function paraApi(f: FormLicenca): WriteLicenseRequest {
   return {
     name: f.name.trim(),
     kind: f.kind,
     versionId: f.versionId || null,
-    seats: f.ilimitada ? null : f.seats.trim() === '' ? null : Number(f.seats),
+    // `Number('1.000')` é NaN, e NaN vira `null` no JSON — que aqui
+    // significa "assentos ilimitados". Digitar o separador de milhar
+    // tirava o limite da licença em silêncio, e a checagem de assento
+    // deixava de valer. `numero()` recusa em vez de virar nulo.
+    seats: f.ilimitada ? null : numero(f.seats),
     purchasedAt: f.purchasedAt || null,
     expiresAt: f.expiresAt || null,
-    purchaseValue: f.purchaseValue.trim() === '' ? null : Number(f.purchaseValue.replace(',', '.')),
+    purchaseValue: numero(f.purchaseValue.replace(/\./g, '').replace(',', '.')),
     supplierId: f.supplierId || null,
     contractId: f.contractId || null,
     notes: f.notes.trim() || null,
@@ -134,7 +158,11 @@ export function Software() {
       if (sucesso) setAviso(sucesso);
       return true;
     } catch (e) {
-      setErro(e instanceof ErroDaApi ? e.message : 'Não foi possível concluir.');
+      setErro(
+        e instanceof ErroDaApi || e instanceof ErroDeFormulario
+          ? e.message
+          : 'Não foi possível concluir.',
+      );
       return false;
     }
   }
@@ -175,9 +203,11 @@ export function Software() {
   async function salvarLicenca(evento: FormEvent) {
     evento.preventDefault();
     if (!licenca) return;
-    const dados = paraApi(licenca);
     const ok = await agir(
-      () => (licenca.id ? editarLicenca(licenca.id, dados) : criarLicenca(id, dados)),
+      () => {
+        const dados = paraApi(licenca);
+        return licenca.id ? editarLicenca(licenca.id, dados) : criarLicenca(id, dados);
+      },
       licenca.id ? 'Licença atualizada.' : 'Licença cadastrada.',
     );
     if (ok) setLicenca(null);

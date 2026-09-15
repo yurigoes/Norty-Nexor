@@ -388,6 +388,25 @@ export class CatalogoService {
 
     const username =
       dto.username === undefined ? undefined : dto.username ? normalizarUsername(dto.username) : null;
+
+    // Conta do diretório: o usuário é o login do AD.
+    //
+    // `entrarPeloDiretorio` usa `membership.username` como o nome com
+    // que faz o bind no AD. Limpá-lo aqui deixa a pessoa sem conseguir
+    // entrar nem pelo e-mail, com "Usuário ou senha inválidos" e a
+    // senha do AD certa — e ninguém liga uma coisa à outra. O próprio
+    // dono já é barrado disto em `auth.atualizarPerfil`; faltava o
+    // caminho do administrador.
+    if (username !== undefined && username !== vinculo.username) {
+      const pessoa = await this.prisma.user.findUnique({
+        where: { id },
+        select: { authSourceId: true },
+      });
+      if (pessoa?.authSourceId) {
+        throw new BadRequestException('Conta do diretório: o nome de usuário vem do AD.');
+      }
+    }
+
     if (username) {
       const dono = await this.prisma.membership.findFirst({
         where: { organizationId: usuario.organizationId, username, NOT: { userId: id } },

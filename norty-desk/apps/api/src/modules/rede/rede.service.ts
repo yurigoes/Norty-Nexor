@@ -343,10 +343,21 @@ export class RedeService {
         throw new ConflictException(`A porta ${p.name} de ${p.asset.name} já está ligada a outra — desligue antes.`);
       }
     }
-    await this.prisma.$transaction([
-      this.prisma.networkPort.update({ where: { id: a.id }, data: { connectedToId: b.id } }),
-      this.prisma.networkPort.update({ where: { id: b.id }, data: { connectedToId: a.id } }),
-    ]);
+    // A gravação passa pelo `gravando` para o índice único virar 409.
+    //
+    // A checagem acima corre fora da transação: duas pessoas ligando
+    // portas diferentes à mesma porta livre passavam as duas, e a
+    // segunda estourava um P2002 cru em `connectedToId` — 500 e
+    // mensagem genérica em produção, quando o certo é dizer que a porta
+    // acabou de ser ocupada.
+    await this.gravando(
+      () =>
+        this.prisma.$transaction([
+          this.prisma.networkPort.update({ where: { id: a.id }, data: { connectedToId: b.id } }),
+          this.prisma.networkPort.update({ where: { id: b.id }, data: { connectedToId: a.id } }),
+        ]),
+      'Uma das portas acabou de ser ligada a outra — recarregue e tente de novo.',
+    );
     return this.doAtivo(usuario, a.assetId);
   }
 
