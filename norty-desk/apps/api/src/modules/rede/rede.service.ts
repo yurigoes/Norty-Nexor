@@ -92,6 +92,22 @@ export class RedeService {
   // Sub-redes
   // -------------------------------------------------------------------
 
+  /**
+   * A máscara de volta, que o cliente do Prisma perde na leitura.
+   *
+   * `192.168.15.0/24` numa coluna `inet` volta como `192.168.15.0` pelo
+   * cliente tipado: a máscara some, `normalizarCidr` devolve nulo e a
+   * sub-rede aparece sem total nem próximo IP livre. Um `::text` no
+   * SQL preserva o que o Postgres guarda.
+   */
+  private async mascaras(ids: string[]): Promise<Map<string, string>> {
+    if (ids.length === 0) return new Map();
+    const linhas = await this.prisma.$queryRaw<{ id: string; cidr: string }[]>(Prisma.sql`
+      SELECT id, cidr::text AS cidr FROM ip_networks WHERE id IN (${Prisma.join(ids)}::uuid)
+    `);
+    return new Map(linhas.map((l) => [l.id, l.cidr]));
+  }
+
   async subredes(usuario: UsuarioAutenticado): Promise<SubRedeView[]> {
     const redes = await this.prisma.ipNetwork.findMany({
       where: { organizationId: usuario.organizationId },
@@ -106,7 +122,10 @@ export class RedeService {
        GROUP BY n.id
     `);
     const porId = new Map(usos.map((u) => [u.id, Number(u.usados)]));
-    return redes.map((r) => RedeService.subredeParaView(r, porId.get(r.id) ?? 0));
+    const comMascara = await this.mascaras(redes.map((r) => r.id));
+    return redes.map((r) =>
+      RedeService.subredeParaView({ ...r, cidr: comMascara.get(r.id) ?? r.cidr }, porId.get(r.id) ?? 0),
+    );
   }
 
   async subrede(usuario: UsuarioAutenticado, id: string): Promise<SubRedeDetail> {
@@ -115,6 +134,7 @@ export class RedeService {
       include: { vlan: VLAN },
     });
     if (!rede) throw new NotFoundException('Sub-rede não encontrada.');
+    rede.cidr = (await this.mascaras([rede.id])).get(rede.id) ?? rede.cidr;
 
     const ids = await this.prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
       SELECT id FROM ip_addresses
@@ -139,19 +159,23 @@ export class RedeService {
     const gateway = await this.validarGateway(dto.gateway, c);
     await this.exigirVlan(usuario, dto.vlanId);
 
-    const rede = await this.gravando(
+    // A gravação é em SQL cru, com `::inet` explícito.
+    //
+    // Pelo cliente tipado do Prisma **nenhuma** sub-rede era gravada:
+    // ele serializa a string como endereço simples e o driver recusa a
+    // máscara com `AddrParseError`, virando 500. O gateway passava por
+    // ser IP puro, o que escondia o problema. É a mesma forma que o
+    // resto deste módulo já usa para ler `inet`.
+    const texto = cidrTexto(c);
+    const [rede] = await this.gravando(
       () =>
-        this.prisma.ipNetwork.create({
-          data: {
-            organizationId: usuario.organizationId,
-            name: dto.name.trim(),
-            cidr: cidrTexto(c),
-            gateway,
-            vlanId: dto.vlanId ?? null,
-            notes: dto.notes ?? null,
-          },
-        }),
-      `A sub-rede ${cidrTexto(c)} já está cadastrada.`,
+        this.prisma.$queryRaw<{ id: string; cidr: string }[]>(Prisma.sql`
+          INSERT INTO ip_networks ("id", "organizationId", "name", "cidr", "gateway", "vlanId", "notes", "createdAt", "updatedAt")
+          VALUES (gen_random_uuid(), ${usuario.organizationId}::uuid, ${dto.name.trim()},
+                  ${texto}::inet, ${gateway}::inet, ${dto.vlanId ?? null}::uuid, ${dto.notes ?? null}, now(), now())
+          RETURNING "id", "cidr"::text AS cidr
+        `),
+      `A sub-rede ${texto} já está cadastrada.`,
     );
     // IPs cadastrados antes da sub-rede passam a apontar para ela.
     await this.prisma.$executeRaw(Prisma.sql`
