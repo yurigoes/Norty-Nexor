@@ -454,13 +454,22 @@ export function Projeto() {
 
 /** Barras por tarefa entre o início mais cedo e o fim mais tarde. Sem biblioteca: é só proporção. */
 function LinhaDoTempo({ tarefas }: { tarefas: TarefaDeProjetoView[] }) {
+  // Fixado na montagem, não lido durante a renderização.
+  //
+  // `Date.now()` no corpo do componente faz a posição do marcador de
+  // hoje depender de **quando** o React resolveu re-renderizar: duas
+  // renderizações da mesma tela desenham a linha em lugares
+  // diferentes. Aqui ele é lido uma vez, e o hook fica antes do
+  // `return null` porque hook depois de saída antecipada é a regra
+  // dos hooks quebrada.
+  const [hoje] = useState(() => Date.now());
+
   const comDatas = tarefas.filter((t) => t.plannedStart || t.plannedEnd);
   if (comDatas.length === 0) return null;
   const ms = (s: string | null, reserva: string | null) => new Date((s ?? reserva)!).getTime();
   const inicio = Math.min(...comDatas.map((t) => ms(t.plannedStart, t.plannedEnd)));
   const fim = Math.max(...comDatas.map((t) => ms(t.plannedEnd, t.plannedStart))) + 24 * 3600 * 1000;
   const total = Math.max(fim - inicio, 1);
-  const hoje = Date.now();
 
   return (
     <section className="card">

@@ -40,6 +40,11 @@ for db in $BANCOS; do
   echo "  banco $db: ok"
 done
 
+# Sem isto, `agendaEvent` e `projectTask` não existem no cliente e o
+# typecheck acusa erro em código correto — o schema andou, o cliente não.
+titulo "Cliente do Prisma"
+(cd apps/api && npx prisma generate 2>&1 | tail -1)
+
 titulo "Migrações"
 (cd apps/api && npx prisma migrate deploy 2>&1 | tail -1)
 (cd apps/api && DATABASE_URL="postgresql://$PAPEL@127.0.0.1:5432/nortydesk_test?schema=public" \

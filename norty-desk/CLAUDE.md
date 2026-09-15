@@ -26,6 +26,7 @@ npm run dev:api          # API em http://localhost:3061/v1
 npm run dev:web          # aplicativo em http://localhost:5174
 npm run build            # shared → api → web, nesta ordem
 npm run typecheck
+npm run lint               # ESLint 10, formato plano, `eslint.config.mjs`
 
 # Banco (precisa de DATABASE_URL em apps/api/.env)
 npm run db:migrate       # aplica migrações
@@ -74,7 +75,14 @@ Três armadilhas que já custaram caro aqui:
      --script > prisma/migrations/<carimbo>_<nome>/migration.sql
    ```
 
-3. **`typecheck` não pode emitir.** Era `tsc -b --noEmit false`, que
+3. **O ambiente não sobrevive ao reinício do contêiner.**
+   O cluster do Postgres é reinicializado: some o papel `desk`, somem os
+   bancos, e o cliente do Prisma fica atrás do schema. A suíte então
+   falha com "Authentication failed" e o typecheck acusa erro em código
+   correto — os dois parecem defeito e não são.
+   `bash scripts/preparar-ambiente.sh` recria tudo, e é idempotente.
+
+4. **`typecheck` não pode emitir.** Era `tsc -b --noEmit false`, que
    escrevia `.js` ao lado de cada `.tsx`; o Vite resolve `./Componente`
    para o `.js` velho antes do `.tsx`, e o aplicativo congelava na versão
    do momento em que alguém rodou o typecheck. Hoje é
