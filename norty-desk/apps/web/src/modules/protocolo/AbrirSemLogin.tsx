@@ -6,12 +6,26 @@ import {
   formatarProtocolo,
   pareceDocumento,
   type AberturaPublicaResposta,
+  type CategoriaPublica,
   type EmpresaPublica,
+  type ModeloDeChamado,
 } from '@norty-desk/shared';
 
-import { abrirChamadoPublico, buscarEmpresas } from '../../api/protocolo';
+import {
+  abrirChamadoPublico,
+  anexarNoPublico,
+  buscarEmpresas,
+  modelosPublicos,
+  tiposPublicos,
+} from '../../api/protocolo';
 import { useMarca } from '../../api/marca';
 import { MarcaCompleta } from '../../components/Marca';
+import { CamposDinamicos } from '../formulario/CamposDinamicos';
+
+/** Os mesmos tetos da API, para a tela não prometer o que ela recusa. */
+const MAXIMO_DE_OBSERVADORES = 3;
+const MAXIMO_DE_ANEXOS = 5;
+const TAMANHO_MAXIMO = 10 * 1024 * 1024;
 
 /**
  * Abrir chamado sem entrar.
@@ -219,8 +233,33 @@ function Descrever({
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
-  // Uma das duas formas de retorno basta, mas alguma é obrigatória:
-  // chamado sem retorno é chamado que ninguém consegue responder.
+  const [tipos, setTipos] = useState<CategoriaPublica[]>([]);
+  const [modelos, setModelos] = useState<ModeloDeChamado[]>([]);
+  const [tipo, setTipo] = useState('');
+  const [modelo, setModelo] = useState<ModeloDeChamado | null>(null);
+  const [respostas, setRespostas] = useState<Record<string, unknown>>({});
+  const [observadores, setObservadores] = useState<string[]>([]);
+  const [arquivos, setArquivos] = useState<File[]>([]);
+
+  useEffect(() => {
+    void tiposPublicos(empresa.id).then(setTipos);
+    void modelosPublicos(empresa.id).then(setModelos);
+  }, [empresa.id]);
+
+  /**
+   * Escolher o modelo troca os campos — e as respostas vão junto.
+   *
+   * Manter as antigas mandaria chaves de outro schema, que a API recusa
+   * com uma mensagem sobre um campo que a pessoa não vê mais.
+   */
+  function escolherModelo(escolhido: ModeloDeChamado | null) {
+    setModelo(escolhido);
+    setRespostas({});
+    // O modelo pode trazer a categoria dele; ela vence a escolha
+    // manual, porque foi quem montou o modelo que a decidiu.
+    if (escolhido?.category) setTipo(escolhido.category.id);
+  }
+
   const temRetorno = email.trim().length > 0 || telefone.trim().length > 0;
   const pronto =
     nome.trim().length >= 3 &&
@@ -242,8 +281,30 @@ function Descrever({
       ...(telefone.trim() ? { requesterPhone: telefone.trim() } : {}),
       subject: assunto.trim(),
       description: descricao.trim(),
+      ...(tipo ? { categoryId: tipo } : {}),
+      ...(modelo ? { formId: modelo.id, customFields: respostas } : {}),
+      ...(observadores.length > 0 ? { observerEmails: observadores } : {}),
     })
-      .then(aoAbrir)
+      .then(async (aberto) => {
+        // Os anexos vão depois, pelo protocolo. Um que falhe não
+        // desfaz o chamado — ele já existe, e dizer "não consegui
+        // abrir" seria mentira que gera um segundo chamado igual.
+        const falhas: string[] = [];
+        for (const arquivo of arquivos) {
+          try {
+            await anexarNoPublico(aberto.protocol, arquivo);
+          } catch {
+            falhas.push(arquivo.name);
+          }
+        }
+        if (falhas.length > 0) {
+          setErro(
+            `Chamado aberto, mas não consegui anexar: ${falhas.join(', ')}. ` +
+              'Você pode mandar por e-mail respondendo o chamado.',
+          );
+        }
+        aoAbrir(aberto);
+      })
       .catch((e: Error) => setErro(e.message))
       .finally(() => setEnviando(false));
   }
@@ -262,6 +323,51 @@ function Descrever({
           <div className="alerta-bloco -erro" role="status">
             <span aria-hidden="true">!</span>
             <span>{erro}</span>
+          </div>
+        ) : null}
+
+        {modelos.length > 0 ? (
+          <div className="campo">
+            <span className="campo-rotulo">Do que se trata?</span>
+            <div className="modelos">
+              {modelos.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  className={`modelo ${modelo?.id === m.id ? '-escolhido' : ''}`}
+                  aria-pressed={modelo?.id === m.id}
+                  onClick={() => escolherModelo(modelo?.id === m.id ? null : m)}
+                >
+                  <strong>{m.name}</strong>
+                  {m.description ? <span className="modelo-frase">{m.description}</span> : null}
+                </button>
+              ))}
+            </div>
+            <span className="campo-ajuda">
+              Escolher um traz as perguntas certas. Se nenhum servir, descreva abaixo.
+            </span>
+          </div>
+        ) : null}
+
+        {tipos.length > 0 && !modelo?.category ? (
+          <div className="campo">
+            <label className="campo-rotulo" htmlFor="tipo">
+              Tipo de chamado
+            </label>
+            <select
+              id="tipo"
+              className="select"
+              value={tipo}
+              onChange={(e) => setTipo(e.target.value)}
+            >
+              <option value="">Não sei classificar</option>
+              {tipos.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+            <span className="campo-ajuda">O tipo leva o chamado direto para quem atende.</span>
           </div>
         ) : null}
 
@@ -340,11 +446,183 @@ function Descrever({
           />
         </div>
 
+        {modelo ? (
+          <CamposDinamicos
+            schema={modelo.schema}
+            respostas={respostas}
+            noPortal
+            aoMudar={(chave, valor) =>
+              setRespostas((atual) => {
+                const proximo = { ...atual };
+                if (valor === '' || valor === undefined || valor === null) delete proximo[chave];
+                else proximo[chave] = valor;
+                return proximo;
+              })
+            }
+          />
+        ) : null}
+
+        <Observadores escolhidos={observadores} aoMudar={setObservadores} />
+        <Anexos escolhidos={arquivos} aoMudar={setArquivos} />
+
         <button type="submit" className="btn -primario" disabled={!pronto || enviando}>
           {enviando ? 'Abrindo…' : 'Abrir chamado'}
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Quem acompanha junto, por e-mail.
+ *
+ * E-mail e não uma lista de pessoas: quem abre sem login não conhece
+ * ninguém do sistema, e oferecer-lhe o catálogo da empresa entregaria
+ * os nomes a quem só digitou um CNPJ.
+ */
+function Observadores({
+  escolhidos,
+  aoMudar,
+}: {
+  escolhidos: string[];
+  aoMudar: (e: string[]) => void;
+}) {
+  const [digitado, setDigitado] = useState('');
+
+  const valido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(digitado.trim());
+  const cheio = escolhidos.length >= MAXIMO_DE_OBSERVADORES;
+
+  function somar() {
+    const email = digitado.trim().toLowerCase();
+    if (!valido || cheio || escolhidos.includes(email)) return;
+    aoMudar([...escolhidos, email]);
+    setDigitado('');
+  }
+
+  return (
+    <div className="campo">
+      <label className="campo-rotulo" htmlFor="observador-publico">
+        Quem mais acompanha? (opcional)
+      </label>
+
+      {escolhidos.length > 0 ? (
+        <div className="linha" style={{ gap: 'var(--e-2)', flexWrap: 'wrap' }}>
+          {escolhidos.map((e) => (
+            <span key={e} className="selo -contorno">
+              {e}
+              <button
+                type="button"
+                className="selo-x"
+                aria-label={`Tirar ${e}`}
+                onClick={() => aoMudar(escolhidos.filter((x) => x !== e))}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {!cheio ? (
+        <div className="linha" style={{ gap: 'var(--e-2)' }}>
+          <input
+            id="observador-publico"
+            className="input"
+            type="email"
+            value={digitado}
+            onChange={(e) => setDigitado(e.target.value)}
+            placeholder="chefe@suaempresa.com.br"
+            // Enter aqui soma o e-mail; sem isto ele enviaria o
+            // formulário inteiro com o campo pela metade.
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                somar();
+              }
+            }}
+          />
+          <button type="button" className="btn -secundario" disabled={!valido} onClick={somar}>
+            Somar
+          </button>
+        </div>
+      ) : null}
+
+      <span className="campo-ajuda">
+        {cheio
+          ? `São no máximo ${MAXIMO_DE_OBSERVADORES}.`
+          : 'Eles recebem as respostas do chamado junto com você.'}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Os arquivos.
+ *
+ * Escolhidos aqui e enviados **depois** de o chamado existir, pelo
+ * protocolo. A tela mostra a lista antes de enviar para que a pessoa
+ * possa tirar o que anexou por engano — depois de aberto, quem retira
+ * é quem tem conta.
+ */
+function Anexos({
+  escolhidos,
+  aoMudar,
+}: {
+  escolhidos: File[];
+  aoMudar: (a: File[]) => void;
+}) {
+  const campo = useRef<HTMLInputElement>(null);
+  const cheio = escolhidos.length >= MAXIMO_DE_ANEXOS;
+
+  return (
+    <div className="campo">
+      <span className="campo-rotulo">Anexos (opcional)</span>
+
+      {escolhidos.length > 0 ? (
+        <ul className="pilha-sm" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          {escolhidos.map((a, i) => (
+            <li key={`${a.name}-${i}`} className="linha-entre">
+              <span className="campo-ajuda">
+                📎 {a.name} · {Math.max(1, Math.round(a.size / 1024))} KB
+              </span>
+              <button
+                type="button"
+                className="btn -fantasma -sm"
+                aria-label={`Tirar ${a.name}`}
+                onClick={() => aoMudar(escolhidos.filter((_, j) => j !== i))}
+              >
+                Tirar
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      <input
+        ref={campo}
+        type="file"
+        multiple
+        hidden
+        onChange={(e) => {
+          const novos = [...(e.target.files ?? [])].filter((a) => a.size <= TAMANHO_MAXIMO);
+          aoMudar([...escolhidos, ...novos].slice(0, MAXIMO_DE_ANEXOS));
+          // Sem limpar, escolher o mesmo arquivo de novo não dispara
+          // `change` e a pessoa acha que o clique não funcionou.
+          e.target.value = '';
+        }}
+      />
+
+      <button
+        type="button"
+        className="btn -secundario"
+        disabled={cheio}
+        onClick={() => campo.current?.click()}
+      >
+        {cheio ? `São no máximo ${MAXIMO_DE_ANEXOS} arquivos` : 'Escolher arquivos'}
+      </button>
+
+      <span className="campo-ajuda">Foto do erro, foto da etiqueta, log. Até 10 MB cada.</span>
+    </div>
   );
 }
 

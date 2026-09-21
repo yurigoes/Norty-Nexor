@@ -533,6 +533,11 @@ export class TicketsService {
     ticketType?: TicketType;
     agreementIds?: string[];
     regrasAplicadas?: string[];
+    /** O modelo respondido e as respostas dele, já validadas. */
+    formId?: string;
+    customFields?: Record<string, unknown>;
+    /** Quem acompanha junto, como contato. */
+    observerContactIds?: string[];
   }): Promise<{ id: string; number: number }> {
     // Sem categoria e sem regra que classifique, o chamado nasce sem
     // categoria: melhor sem do que na primeira que apareceu.
@@ -573,11 +578,17 @@ export class TicketsService {
           priority,
           categoryId: categoria?.id,
           clientId: dados.clientId ?? null,
+          formId: dados.formId,
+          customFields: (dados.customFields as Prisma.InputJsonValue) ?? undefined,
           originChannel: dados.channel,
           actors: {
             create: [
               { role: 'REQUERENTE', contactId: dados.contactId },
               ...(timeFinal ? [{ role: 'ATRIBUIDO' as const, teamId: timeFinal }] : []),
+              ...(dados.observerContactIds ?? []).map((contactId) => ({
+                role: 'OBSERVADOR' as const,
+                contactId,
+              })),
             ],
           },
         },

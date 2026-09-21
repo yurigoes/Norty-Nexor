@@ -268,6 +268,25 @@ export type AbrirPublicoRequest = {
   requesterPhone?: string;
   subject: string;
   description: string;
+  /** O tipo de chamado, que também decide para quem ele vai. */
+  categoryId?: string;
+  /** O modelo escolhido, e as respostas dos campos dele. */
+  formId?: string;
+  customFields?: Record<string, unknown>;
+  /**
+   * Quem acompanha junto, por e-mail.
+   *
+   * E-mail e não id: quem abre sem login não conhece id de ninguém, e
+   * dar-lhe uma lista de pessoas seria entregar o catálogo da empresa
+   * a quem só digitou um nome.
+   */
+  observerEmails?: string[];
+};
+
+/** Um tipo de chamado, como a tela sem login o enxerga. */
+export type CategoriaPublica = {
+  id: string;
+  name: string;
 };
 
 /** O que a pessoa leva da tela: o protocolo para acompanhar. */
@@ -1119,6 +1138,30 @@ export type FormularioView = {
   schema: FormSchema;
   /** Quantos chamados já responderam a este formulário. */
   ticketCount: number;
+  /** Aparece na lista de modelos que a pessoa escolhe ao abrir. */
+  isModel: boolean;
+  /** Vale também na abertura sem login. */
+  isPublic: boolean;
+  description: string | null;
+  position: number;
+};
+
+/**
+ * Um modelo de chamado, como a tela de abertura o enxerga.
+ *
+ * É o mesmo `TicketForm` visto do outro lado: lá é "o formulário que a
+ * categoria traz", aqui é "o botão que a pessoa clica". Vem com o
+ * schema junto porque escolher o modelo e carregar os campos é um
+ * gesto só — buscar os campos numa segunda chamada faria a tela piscar
+ * vazia entre o clique e a resposta.
+ */
+export type ModeloDeChamado = {
+  id: string;
+  name: string;
+  description: string | null;
+  schema: FormSchema;
+  /** A categoria que o modelo já traz, quando ele tem uma. */
+  category: CategoryRef | null;
 };
 
 export type EscreverFormularioRequest = {

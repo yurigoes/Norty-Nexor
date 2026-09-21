@@ -1,8 +1,10 @@
 import type {
   AberturaPublicaResposta,
   AbrirPublicoRequest,
+  CategoriaPublica,
   ConsultaPublica,
   EmpresaPublica,
+  ModeloDeChamado,
 } from '@norty-desk/shared';
 
 /**
@@ -60,4 +62,35 @@ export async function abrirChamadoPublico(
 
   if (!resposta.ok) throw new Error(await mensagemDoErro(resposta));
   return (await resposta.json()) as AberturaPublicaResposta;
+}
+
+export async function tiposPublicos(clientId: string): Promise<CategoriaPublica[]> {
+  const r = await fetch(`${BASE}/publico/empresas/${clientId}/tipos`);
+  if (!r.ok) return [];
+  return (await r.json()) as CategoriaPublica[];
+}
+
+export async function modelosPublicos(clientId: string): Promise<ModeloDeChamado[]> {
+  const r = await fetch(`${BASE}/publico/empresas/${clientId}/modelos`);
+  if (!r.ok) return [];
+  return (await r.json()) as ModeloDeChamado[];
+}
+
+/**
+ * Anexa depois de aberto, pelo protocolo.
+ *
+ * Duas chamadas e não uma: o corpo do chamado é JSON, e misturar
+ * `multipart` ali faria toda abertura pagar o preço de um formulário de
+ * arquivo para anexar nada.
+ */
+export async function anexarNoPublico(protocolo: string, arquivo: File): Promise<void> {
+  const forma = new FormData();
+  forma.append('file', arquivo);
+
+  const r = await fetch(`${BASE}/publico/chamados/${encodeURIComponent(protocolo)}/anexos`, {
+    method: 'POST',
+    body: forma,
+  });
+
+  if (!r.ok) throw new Error(await mensagemDoErro(r));
 }

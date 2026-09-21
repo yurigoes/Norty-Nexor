@@ -9,6 +9,7 @@ import {
   type FormSchema,
   type FormularioResolvido,
   type FormularioView,
+  type ModeloDeChamado,
   type Role,
   can,
   validarRespostas,
@@ -54,6 +55,38 @@ export class FormulariosService {
   // -------------------------------------------------------------------
   // Consulta
   // -------------------------------------------------------------------
+
+  /**
+   * Os modelos que a pessoa escolhe ao abrir chamado.
+   *
+   * `somentePublicos` é o recorte da tela sem login: um modelo com
+   * campo interno ("custo estimado", "contrato") não deve aparecer
+   * para quem só quer dizer que a impressora parou. Por isso é uma
+   * marca própria, e não a ausência de `isModel`.
+   *
+   * O schema vem junto: escolher o modelo e carregar os campos é um
+   * gesto só, e buscá-los numa segunda chamada faria a tela piscar
+   * vazia entre o clique e a resposta.
+   */
+  async modelos(organizationId: string, somentePublicos = false): Promise<ModeloDeChamado[]> {
+    const formularios = await this.prisma.ticketForm.findMany({
+      where: {
+        organizationId,
+        isModel: true,
+        ...(somentePublicos ? { isPublic: true } : {}),
+      },
+      include: { category: { select: { id: true, name: true } } },
+      orderBy: [{ position: 'asc' }, { name: 'asc' }],
+    });
+
+    return formularios.map((f) => ({
+      id: f.id,
+      name: f.name,
+      description: f.description,
+      schema: f.schema as unknown as FormSchema,
+      category: f.category ? { id: f.category.id, name: f.category.name } : null,
+    }));
+  }
 
   async listar(usuario: UsuarioAutenticado): Promise<FormularioView[]> {
     const formularios = await this.prisma.ticketForm.findMany({
@@ -207,6 +240,10 @@ export class FormulariosService {
             schema: schema as unknown as Prisma.InputJsonValue,
             categoryId: dto.categoryId ?? null,
             isDefault: dto.isDefault ?? false,
+            isModel: dto.isModel ?? false,
+            isPublic: dto.isPublic ?? false,
+            description: dto.description ?? null,
+            position: dto.position ?? 0,
           },
           include: INCLUDE,
         });
@@ -248,6 +285,10 @@ export class FormulariosService {
             schema: schema as unknown as Prisma.InputJsonValue,
             ...(dto.categoryId === undefined ? {} : { categoryId: dto.categoryId }),
             ...(dto.isDefault === undefined ? {} : { isDefault: dto.isDefault }),
+            ...(dto.isModel === undefined ? {} : { isModel: dto.isModel }),
+            ...(dto.isPublic === undefined ? {} : { isPublic: dto.isPublic }),
+            ...(dto.description === undefined ? {} : { description: dto.description }),
+            ...(dto.position === undefined ? {} : { position: dto.position }),
           },
           include: INCLUDE,
         });
@@ -361,6 +402,10 @@ export class FormulariosService {
       category: f.category ? { id: f.category.id, name: f.category.name } : null,
       schema: f.schema as unknown as FormSchema,
       ticketCount: f._count.tickets,
+      isModel: f.isModel,
+      isPublic: f.isPublic,
+      description: f.description,
+      position: f.position,
     };
   }
 }

@@ -4,10 +4,13 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
+  IsInt,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
+  Min,
   MinLength,
   ValidateNested,
 } from 'class-validator';
@@ -60,6 +63,10 @@ export class EscreverFormularioDto {
 
   @IsOptional() @Transform(vazioVirandoNulo) @IsUUID() categoryId?: string | null;
   @IsOptional() @IsBoolean() isDefault?: boolean;
+  @IsOptional() @IsBoolean() isModel?: boolean;
+  @IsOptional() @IsBoolean() isPublic?: boolean;
+  @IsOptional() @Transform(vazioVirandoNulo) @IsString() @MaxLength(200) description?: string | null;
+  @IsOptional() @IsInt() @Min(0) @Max(999) position?: number;
 }
 
 export class EditarFormularioDto {
@@ -69,4 +76,8 @@ export class EditarFormularioDto {
 
   @IsOptional() @Transform(vazioVirandoNulo) @IsUUID() categoryId?: string | null;
   @IsOptional() @IsBoolean() isDefault?: boolean;
+  @IsOptional() @IsBoolean() isModel?: boolean;
+  @IsOptional() @IsBoolean() isPublic?: boolean;
+  @IsOptional() @Transform(vazioVirandoNulo) @IsString() @MaxLength(200) description?: string | null;
+  @IsOptional() @IsInt() @Min(0) @Max(999) position?: number;
 }

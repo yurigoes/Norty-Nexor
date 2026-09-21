@@ -11,7 +11,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import type { FormularioResolvido, FormularioView } from '@norty-desk/shared';
+import type { FormularioResolvido, FormularioView, ModeloDeChamado } from '@norty-desk/shared';
 
 import { CurrentUser, type UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
@@ -39,6 +39,19 @@ export class FormulariosController {
     @Query('categoryId') categoryId?: string,
   ): Promise<FormularioResolvido> {
     return this.formularios.resolver(usuario.organizationId, categoryId || null);
+  }
+
+  /**
+   * Os modelos escolhíveis na abertura.
+   *
+   * `chamado:criar` como o `resolver` acima, e pela mesma razão: quem
+   * abre chamado precisa ver os modelos, e configurá-los é outra
+   * conversa. Vem antes de `:id` para não cair no `ParseUUIDPipe`.
+   */
+  @Get('modelos')
+  @RequirePermission('chamado:criar')
+  modelos(@CurrentUser() usuario: UsuarioAutenticado): Promise<ModeloDeChamado[]> {
+    return this.formularios.modelos(usuario.organizationId);
   }
 
   @Get()

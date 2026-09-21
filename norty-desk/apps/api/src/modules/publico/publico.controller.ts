@@ -1,8 +1,24 @@
-import { Body, Controller, Get, Param, Post, Query, Req, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  Req,
+  Res,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type {
   AberturaPublicaResposta,
+  AttachmentView,
+  CategoriaPublica,
   ConsultaPublica,
   EmpresaPublica,
+  ModeloDeChamado,
 } from '@norty-desk/shared';
 import type { Request, Response } from 'express';
 
@@ -41,12 +57,42 @@ export class PublicoController {
     return this.abertura.buscarEmpresas(filtro.q, ipDaRequisicao(requisicao));
   }
 
+  /** Os tipos de chamado que esta empresa pode escolher sem login. */
+  @Get('empresas/:clientId/tipos')
+  tipos(@Param('clientId', ParseUUIDPipe) clientId: string): Promise<CategoriaPublica[]> {
+    return this.abertura.tiposPublicos(clientId);
+  }
+
+  /** Os modelos que valem na abertura sem login, com os campos junto. */
+  @Get('empresas/:clientId/modelos')
+  modelos(@Param('clientId', ParseUUIDPipe) clientId: string): Promise<ModeloDeChamado[]> {
+    return this.abertura.modelosPublicos(clientId);
+  }
+
   @Post('chamados')
   abrirChamado(
     @Body() dto: AbrirPublicoDto,
     @Req() requisicao: Request,
   ): Promise<AberturaPublicaResposta> {
     return this.abertura.abrir(dto, ipDaRequisicao(requisicao));
+  }
+
+  /**
+   * O anexo da abertura sem login.
+   *
+   * Separado do `POST /chamados` de propósito: o corpo do chamado é
+   * JSON, e misturar `multipart` ali faria toda abertura pagar o preço
+   * de um formulário de arquivo para anexar nada. Quem anexa já tem o
+   * protocolo em mãos — é ele a credencial, como na consulta.
+   */
+  @Post('chamados/:protocolo/anexos')
+  @UseInterceptors(FileInterceptor('file'))
+  anexar(
+    @Param('protocolo') protocolo: string,
+    @UploadedFile() arquivo: Express.Multer.File,
+    @Req() requisicao: Request,
+  ): Promise<AttachmentView> {
+    return this.abertura.anexar(protocolo, arquivo, ipDaRequisicao(requisicao));
   }
 
   @Get('protocolo/:codigo')

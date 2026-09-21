@@ -4,14 +4,22 @@ import {
   SEMELHANCA_MINIMA_DO_NOME,
   documentoInvalido,
   nomeDeEmpresaNormalizado,
+  normalizarProtocolo,
+  validarRespostas,
   pareceDocumento,
   soDigitos,
   type AberturaPublicaResposta,
+  type AttachmentView,
+  type CategoriaPublica,
   type EmpresaPublica,
+  type FormSchema,
+  type ModeloDeChamado,
 } from '@norty-desk/shared';
 
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { ThrottleService } from '../../common/throttle/throttle.service';
+import { AttachmentsService } from '../attachments/attachments.service';
+import { FormulariosService } from '../formularios/formularios.service';
 import { TicketsService } from '../tickets/tickets.service';
 import type { AbrirPublicoDto } from './dto';
 
@@ -23,6 +31,28 @@ import type { AbrirPublicoDto } from './dto';
  * quem digita três letras não provou ser ninguém.
  */
 const QUANTAS_SUGESTOES = 5;
+
+/**
+ * Quantos observadores a abertura sem login aceita.
+ *
+ * Três é o time que acompanha junto; trinta é lista de distribuição, e
+ * uma lista de distribuição montada por quem não tem conta é a forma
+ * mais barata de usar o Desk para mandar e-mail não solicitado.
+ */
+const MAXIMO_DE_OBSERVADORES = 3;
+
+/**
+ * Teto de arquivos por chamado aberto sem login.
+ *
+ * O protocolo é a credencial, e credencial que dá disco ilimitado é
+ * disco de graça para quem a tiver. Cinco cobre foto do erro, foto da
+ * etiqueta e um log; quem precisa de mais responde pelo e-mail do
+ * chamado, que passa pelos limites de canal.
+ */
+const MAXIMO_DE_ANEXOS_PUBLICOS = 5;
+
+/** Menor que o interno: 25 MB sem sessão nenhuma é generoso demais. */
+const TAMANHO_MAXIMO_PUBLICO = 10 * 1024 * 1024;
 
 /**
  * Abertura de chamado sem login.
@@ -47,7 +77,41 @@ export class AberturaService {
     private readonly prisma: PrismaService,
     private readonly throttle: ThrottleService,
     private readonly tickets: TicketsService,
+    private readonly formularios: FormulariosService,
+    private readonly anexos: AttachmentsService,
   ) {}
+
+  /**
+   * Os tipos de chamado que a abertura sem login oferece.
+   *
+   * Só os marcados como públicos. A organização vem do cliente
+   * escolhido, nunca do corpo: sem isso, qualquer um listaria a
+   * taxonomia de qualquer organização passando um id.
+   */
+  async tiposPublicos(clientId: string): Promise<CategoriaPublica[]> {
+    const cliente = await this.prisma.client.findFirst({
+      where: { id: clientId, isActive: true },
+      select: { organizationId: true },
+    });
+    if (!cliente) return [];
+
+    return this.prisma.category.findMany({
+      where: { organizationId: cliente.organizationId, isActive: true, isPublic: true },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  /** Os modelos que valem na abertura sem login. Mesma regra de escopo. */
+  async modelosPublicos(clientId: string): Promise<ModeloDeChamado[]> {
+    const cliente = await this.prisma.client.findFirst({
+      where: { id: clientId, isActive: true },
+      select: { organizationId: true },
+    });
+    if (!cliente) return [];
+
+    return this.formularios.modelos(cliente.organizationId, true);
+  }
 
   private async exigirLiberado(ip: string, prefixo: string): Promise<string[]> {
     const chaves = [ThrottleService.chaveDeIp(`${prefixo}:${ip}`)];
@@ -190,6 +254,23 @@ export class AberturaService {
       phone: telefone,
     });
 
+    // Categoria e modelo vêm do corpo, então não se confia neles: têm
+    // de ser da organização do cliente **e** estar marcados como
+    // públicos. Sem isso, quem soubesse um id usaria a tela sem login
+    // para abrir chamado numa categoria interna.
+    const categoria = await this.validarCategoria(cliente.organizationId, dto.categoryId);
+    const { formId, customFields } = await this.validarModelo(
+      cliente.organizationId,
+      dto.formId,
+      dto.customFields,
+    );
+
+    const observadores = await this.resolverObservadores(
+      cliente.organizationId,
+      dto.observerEmails ?? [],
+      email,
+    );
+
     const { id, number } = await this.tickets.abrirPorCanal({
       organizationId: cliente.organizationId,
       contactId: contato,
@@ -197,6 +278,10 @@ export class AberturaService {
       channel: 'WEB',
       subject: dto.subject.trim(),
       description: dto.description.trim(),
+      categoryId: categoria ?? undefined,
+      formId: formId ?? undefined,
+      customFields,
+      observerContactIds: observadores,
     });
 
     await this.throttle.limpar(chaves);
@@ -207,6 +292,133 @@ export class AberturaService {
     });
 
     return { protocol, number };
+  }
+
+  /**
+   * Anexa arquivo a um chamado aberto sem login.
+   *
+   * A credencial é o protocolo, como na consulta — e valem as mesmas
+   * contenções, mais duas próprias do armazenamento: um teto de
+   * arquivos por chamado e um limite de tamanho menor que o interno.
+   * Sem eles, um protocolo conhecido seria disco de graça.
+   */
+  async anexar(
+    digitado: string,
+    arquivo: Express.Multer.File,
+    ip: string,
+  ): Promise<AttachmentView> {
+    const chaves = await this.exigirLiberado(ip, 'ANEXO');
+
+    const codigo = normalizarProtocolo(digitado);
+    const chamado = codigo
+      ? await this.prisma.ticket.findUnique({
+          where: { protocol: codigo },
+          select: {
+            id: true,
+            status: true,
+            organizationId: true,
+            originChannel: true,
+            _count: { select: { attachments: true } },
+          },
+        })
+      : null;
+
+    if (!chamado) {
+      await this.throttle.registrarFalha(chaves);
+      throw new NotFoundException('Protocolo não encontrado.');
+    }
+
+    if (chamado._count.attachments >= MAXIMO_DE_ANEXOS_PUBLICOS) {
+      throw new BadRequestException(
+        `Este chamado já tem ${MAXIMO_DE_ANEXOS_PUBLICOS} arquivos. ` +
+          'Responda pelo e-mail do chamado para mandar mais.',
+      );
+    }
+
+    await this.throttle.limpar(chaves);
+
+    return this.anexos.guardar(chamado, arquivo, null, undefined, TAMANHO_MAXIMO_PUBLICO);
+  }
+
+  /** A categoria tem de ser da organização e estar marcada como pública. */
+  private async validarCategoria(
+    organizationId: string,
+    categoryId: string | undefined,
+  ): Promise<string | null> {
+    if (!categoryId) return null;
+
+    const categoria = await this.prisma.category.findFirst({
+      where: { id: categoryId, organizationId, isActive: true, isPublic: true },
+      select: { id: true },
+    });
+    if (!categoria) throw new BadRequestException('Tipo de chamado não disponível.');
+    return categoria.id;
+  }
+
+  /**
+   * O modelo e as respostas dele.
+   *
+   * As respostas passam pelo **mesmo** `validarRespostas` da abertura
+   * com login: um formulário é um formulário, e ter um validador
+   * frouxo do lado de fora seria ter a porta dos fundos aberta
+   * justamente onde ninguém provou ser ninguém.
+   */
+  private async validarModelo(
+    organizationId: string,
+    formId: string | undefined,
+    respostas: Record<string, unknown> | undefined,
+  ): Promise<{ formId: string | null; customFields: Record<string, unknown> | undefined }> {
+    if (!formId) return { formId: null, customFields: undefined };
+
+    const modelo = await this.prisma.ticketForm.findFirst({
+      where: { id: formId, organizationId, isModel: true, isPublic: true },
+      select: { id: true, schema: true },
+    });
+    if (!modelo) throw new BadRequestException('Modelo de chamado não disponível.');
+
+    const dadas = respostas ?? {};
+    const problemas = validarRespostas(modelo.schema as unknown as FormSchema, dadas);
+
+    if (problemas.length > 0) {
+      throw new BadRequestException(problemas.map((p) => p.mensagem).join(' '));
+    }
+
+    return {
+      formId: modelo.id,
+      customFields: Object.keys(dadas).length > 0 ? dadas : undefined,
+    };
+  }
+
+  /**
+   * Quem acompanha junto, por e-mail.
+   *
+   * E-mail e não id: quem abre sem login não conhece id de ninguém, e
+   * oferecer-lhe uma lista de pessoas entregaria o catálogo da empresa
+   * a quem só digitou um nome.
+   *
+   * Cada observador vira um `Contact`, como o requerente. Quem já tem
+   * conta com aquele e-mail não é promovido aqui — virar usuário do
+   * chamado por indicação de um estranho seria deixar qualquer um
+   * inscrever qualquer pessoa.
+   */
+  private async resolverObservadores(
+    organizationId: string,
+    emails: string[],
+    doRequerente: string | null,
+  ): Promise<string[]> {
+    const limpos = [
+      ...new Set(
+        emails
+          .map((e) => e.trim().toLowerCase())
+          .filter((e) => e.length > 0 && e !== doRequerente),
+      ),
+    ].slice(0, MAXIMO_DE_OBSERVADORES);
+
+    const ids: string[] = [];
+    for (const email of limpos) {
+      ids.push(await this.resolverContato(organizationId, { name: email, email, phone: null }));
+    }
+    return ids;
   }
 
   /**

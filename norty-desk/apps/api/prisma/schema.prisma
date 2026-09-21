@@ -348,6 +348,13 @@ model Category {
   defaultAssigneeId String? @db.Uuid
   defaultUrgency    Int?
   isActive          Boolean @default(true)
+  /// Aparece na abertura sem login?
+  ///
+  /// Opt-in, e não o contrário: a taxonomia interna tem ramo que não se
+  /// mostra a estranho ("Jurídico > Rescisão"), e um padrão que
+  /// publicasse tudo faria de cada categoria nova um vazamento que
+  /// ninguém decidiu.
+  isPublic          Boolean @default(false)
 
   organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   parent            Category?         @relation("Subcategoria", fields: [parentId], references: [id])
@@ -376,6 +383,13 @@ model Category {
 
 /// Substitui as 12 tabelas de tickettemplate*. O esquema do formulário
 /// é um JSON declarado. Ver docs/02-gap-analysis.md, item 8.
+/// Formulário dinâmico — e também o "modelo de chamado".
+///
+/// São a mesma coisa vista de dois lados. Deduzido da categoria, é o
+/// formulário que aparece sozinho; escolhido pelo nome ("Impressora"),
+/// é o modelo que a pessoa clica para carregar os campos certos. Ter
+/// duas tabelas para isso seria manter dois construtores de campo e
+/// dois validadores para a mesma pergunta.
 model TicketForm {
   id             String  @id @default(uuid()) @db.Uuid
   organizationId String  @db.Uuid
@@ -385,11 +399,28 @@ model TicketForm {
   schema         Json
   isDefault      Boolean @default(false)
 
+  /// Aparece na lista de modelos que a pessoa escolhe ao abrir.
+  ///
+  /// Nem todo formulário é modelo: um que existe só para herdar numa
+  /// subcategoria não deve poluir a lista de quem vai abrir chamado.
+  isModel     Boolean @default(false)
+  /// A frase sob o nome, na lista de modelos.
+  description String?
+  /// Ordem na lista. Empate desempata por nome.
+  position    Int     @default(0)
+  /// Vale também na abertura sem login?
+  ///
+  /// Separado de `isModel` porque a tela pública não tem sessão: um
+  /// modelo com campo interno ("custo estimado", "contrato") não deve
+  /// aparecer para quem só quer dizer que a impressora parou.
+  isPublic    Boolean @default(false)
+
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   category     Category?    @relation(fields: [categoryId], references: [id])
   tickets      Ticket[]
 
   @@unique([organizationId, name])
+  @@index([organizationId, isModel, position])
   @@map("ticket_forms")
 }
 

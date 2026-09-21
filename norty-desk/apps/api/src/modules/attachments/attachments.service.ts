@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { podeRemoverAnexo, type AttachmentView } from '@norty-desk/shared';
+import { podeRemoverAnexo, type AttachmentView, type Channel } from '@norty-desk/shared';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Readable } from 'node:stream';
 
@@ -61,15 +61,36 @@ export class AttachmentsService {
     eventId?: string,
   ): Promise<AttachmentView> {
     const chamado = await this.exigirChamadoVisivel(usuario, ticketId);
+    return this.guardar(chamado, arquivo, usuario.userId, eventId);
+  }
+
+  /**
+   * Guarda o arquivo e registra o evento.
+   *
+   * Separado de `enviar` porque a abertura sem login também anexa, e
+   * não tem usuário para autorizar — lá a credencial é o protocolo. O
+   * que **não** pode divergir entre os dois caminhos é isto: o nome
+   * saneado, o limite de tamanho e o checksum. Duas implementações
+   * disso dariam duas ideias de "nome seguro", e a mais frouxa seria a
+   * que vale.
+   */
+  async guardar(
+    chamado: { id: string; status: string; organizationId: string; originChannel: Channel },
+    arquivo: { originalname: string; mimetype: string; size: number; buffer: Buffer },
+    uploadedById: string | null,
+    eventId?: string,
+    tamanhoMaximo = TAMANHO_MAXIMO,
+  ): Promise<AttachmentView> {
+    const ticketId = chamado.id;
 
     if (chamado.status === 'FECHADO') {
       throw new BadRequestException('Chamado fechado. Reabra antes de anexar.');
     }
 
     if (!arquivo?.buffer?.length) throw new BadRequestException('Arquivo vazio.');
-    if (arquivo.size > TAMANHO_MAXIMO) {
+    if (arquivo.size > tamanhoMaximo) {
       throw new BadRequestException(
-        `Arquivo acima do limite de ${Math.round(TAMANHO_MAXIMO / 1024 / 1024)} MB.`,
+        `Arquivo acima do limite de ${Math.round(tamanhoMaximo / 1024 / 1024)} MB.`,
       );
     }
 
@@ -90,7 +111,7 @@ export class AttachmentsService {
             ticketId,
             type: 'ANEXO',
             visibility: 'PUBLICA',
-            authorId: usuario.userId,
+            authorId: uploadedById,
             channel: chamado.originChannel,
             body: nome,
           },
@@ -107,7 +128,7 @@ export class AttachmentsService {
         sizeBytes: arquivo.size,
         storageKey,
         checksum: `sha256:${checksum}`,
-        uploadedById: usuario.userId,
+        uploadedById,
       },
     });
 
