@@ -38,7 +38,11 @@ export class CatalogoService {
         organizationId: usuario.organizationId,
         ...(incluirInativas ? {} : { isActive: true }),
       },
-      include: { defaultTeam: true, defaultAgreements: { select: { id: true, name: true } } },
+      include: {
+        defaultTeam: { select: { id: true, name: true } },
+        defaultAssignee: { select: { id: true, name: true } },
+        defaultAgreements: { select: { id: true, name: true } },
+      },
       orderBy: { name: 'asc' },
     });
 
@@ -63,11 +67,27 @@ export class CatalogoService {
         ownName: c.name,
         parentId: c.parentId,
         isActive: c.isActive,
-        defaultTeam: c.defaultTeam ? { id: c.defaultTeam.id, name: c.defaultTeam.name } : null,
+        defaultTeam: c.defaultTeam,
+        defaultAssignee: c.defaultAssignee,
         defaultUrgency: c.defaultUrgency,
         defaultAgreements: c.defaultAgreements,
       }))
       .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }
+
+  /**
+   * Quem recebe o chamado deste tipo tem de ser desta organização.
+   *
+   * O id vem do corpo da requisição, e id de corpo não se confia: sem
+   * isto dava para rotear os chamados de uma categoria para alguém de
+   * outra empresa.
+   */
+  private async validarResponsavel(organizationId: string, userId: string | undefined) {
+    if (!userId) return;
+    const vinculo = await this.prisma.membership.count({ where: { userId, organizationId } });
+    if (!vinculo) {
+      throw new BadRequestException('Responsável não encontrado nesta organização.');
+    }
   }
 
   private async validarPai(organizationId: string, parentId: string | undefined) {
@@ -104,6 +124,7 @@ export class CatalogoService {
   async criarCategoria(usuario: UsuarioAutenticado, dto: CriarCategoriaDto) {
     await this.validarPai(usuario.organizationId, dto.parentId);
     await this.validarAcordos(usuario.organizationId, dto.defaultAgreementIds);
+    await this.validarResponsavel(usuario.organizationId, dto.defaultAssigneeId);
 
     const irmaoComMesmoNome = await this.prisma.category.findFirst({
       where: {
@@ -122,6 +143,7 @@ export class CatalogoService {
         name: dto.name,
         parentId: dto.parentId,
         defaultTeamId: dto.defaultTeamId,
+        defaultAssigneeId: dto.defaultAssigneeId,
         defaultUrgency: dto.defaultUrgency,
         ...(dto.defaultAgreementIds
           ? { defaultAgreements: { connect: dto.defaultAgreementIds.map((id) => ({ id })) } }
@@ -144,6 +166,7 @@ export class CatalogoService {
 
     await this.validarPai(usuario.organizationId, dto.parentId);
     await this.validarAcordos(usuario.organizationId, dto.defaultAgreementIds);
+    await this.validarResponsavel(usuario.organizationId, dto.defaultAssigneeId);
 
     await this.prisma.category.update({
       where: { id },
@@ -151,6 +174,7 @@ export class CatalogoService {
         name: dto.name,
         parentId: dto.parentId,
         defaultTeamId: dto.defaultTeamId,
+        defaultAssigneeId: dto.defaultAssigneeId,
         defaultUrgency: dto.defaultUrgency,
         isActive: dto.isActive,
         ...(dto.defaultAgreementIds

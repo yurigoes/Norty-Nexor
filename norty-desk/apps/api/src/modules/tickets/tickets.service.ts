@@ -367,9 +367,15 @@ export class TicketsService {
         });
       }
 
-      // A categoria carrega o time que atende. Cai na fila certa sem o
+      // A categoria carrega quem atende: uma pessoa, um time, ou nada.
+      //
+      // A pessoa tem precedência sobre o time — quem configurou o tipo
+      // apontando para alguém quis aquele alguém, e cair na fila do
+      // time seria ignorar a configuração. Cai na fila certa sem o
       // agente precisar distribuir na mão.
-      if (categoria?.defaultTeamId) {
+      if (categoria?.defaultAssigneeId) {
+        atores.push({ role: 'ATRIBUIDO', userId: categoria.defaultAssigneeId });
+      } else if (categoria?.defaultTeamId) {
         atores.push({ role: 'ATRIBUIDO', teamId: categoria.defaultTeamId });
       }
 
@@ -380,7 +386,7 @@ export class TicketsService {
           subject: dto.subject.trim(),
           description: dto.description,
           type: dto.type ?? 'INCIDENTE',
-          status: categoria?.defaultTeamId ? 'ATRIBUIDO' : 'NOVO',
+          status: categoria?.defaultAssigneeId || categoria?.defaultTeamId ? 'ATRIBUIDO' : 'NOVO',
           urgency,
           impact,
           priority,

@@ -105,6 +105,7 @@ model User {
   memberships         Membership[]
   teamMembers         TeamMember[]
   actorIn             TicketActor[]
+  categoriasPadrao    Category[]           @relation("ResponsavelPadraoDaCategoria")
   authoredEvents      TicketEvent[]        @relation("AutorDoEvento")
   approvals           Approval[]
   refreshTokens       RefreshToken[]
@@ -314,19 +315,24 @@ model Supplier {
 /// Substitui glpi_itilcategories. Mantém a árvore — aqui ela é útil e
 /// rasa (categoria > subcategoria), diferente da árvore de entidades.
 model Category {
-  id             String  @id @default(uuid()) @db.Uuid
-  organizationId String  @db.Uuid
-  parentId       String? @db.Uuid
-  name           String
+  id                String  @id @default(uuid()) @db.Uuid
+  organizationId    String  @db.Uuid
+  parentId          String? @db.Uuid
+  name              String
   /// Time que recebe o chamado quando cai nesta categoria.
-  defaultTeamId  String? @db.Uuid
-  defaultUrgency Int?
-  isActive       Boolean @default(true)
+  defaultTeamId     String? @db.Uuid
+  /// Pessoa que recebe o chamado deste tipo, quando o destino não é um
+  /// time inteiro. Tem precedência sobre o time: quem nomeia uma pessoa
+  /// quis aquela pessoa.
+  defaultAssigneeId String? @db.Uuid
+  defaultUrgency    Int?
+  isActive          Boolean @default(true)
 
   organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   parent            Category?         @relation("Subcategoria", fields: [parentId], references: [id])
   children          Category[]        @relation("Subcategoria")
   defaultTeam       Team?             @relation(fields: [defaultTeamId], references: [id])
+  defaultAssignee   User?             @relation("ResponsavelPadraoDaCategoria", fields: [defaultAssigneeId], references: [id], onDelete: SetNull)
   /// Os acordos aplicados por padrão a um chamado desta categoria.
   ///
   /// É lista, não um só: um chamado precisa de TTO *e* TTR, e quem
@@ -480,6 +486,10 @@ model Ticket {
   @@index([problemId])
   @@index([changeId])
   @@index([recurringTicketId])
+  /// A fila do portal do cliente. Declarado aqui, e não só na
+  /// migração, porque o que o Prisma não vê ele apaga: o `migrate diff`
+  /// seguinte já tentou derrubá-lo (ver CLAUDE.md, armadilha 2).
+  @@index([clientId, status, createdAt(sort: Desc)], map: "tickets_cliente_fila")
   @@map("tickets")
 }
 

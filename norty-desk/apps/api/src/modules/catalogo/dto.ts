@@ -24,6 +24,8 @@ export class CriarCategoriaDto {
   @IsString() @MinLength(2) @MaxLength(120) name!: string;
   @IsOptional() @IsUUID() parentId?: string;
   @IsOptional() @IsUUID() defaultTeamId?: string;
+  /** Pessoa que recebe. Tem precedência sobre o time. */
+  @IsOptional() @IsUUID() defaultAssigneeId?: string;
   @IsOptional() @IsInt() @Min(1) @Max(5) defaultUrgency?: number;
 
   /** Os acordos que um chamado desta categoria recebe ao nascer. */
