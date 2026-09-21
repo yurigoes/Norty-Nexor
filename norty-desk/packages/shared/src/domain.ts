@@ -444,6 +444,27 @@ export function validarSchema(schema: FormSchema): ErroDeCampo[] {
   return erros;
 }
 
+/**
+ * O mesmo formulário, sem o que é da casa.
+ *
+ * Campo `internal` é pergunta de quem atende — "custo estimado",
+ * "número do contrato". Escondê-lo na tela não basta: quem abre sem
+ * login recebe o schema em JSON, e o rótulo do campo interno ia junto,
+ * contando ao visitante o que a empresa controla por dentro.
+ *
+ * `isPublic` é marca da ficha inteira e não resolve isto: o caso real
+ * é o modelo que deve mesmo ser público e tem *um* campo interno.
+ *
+ * Serve às duas pontas: a API recorta antes de responder e antes de
+ * validar — assim a resposta a um campo interno vira "chave
+ * desconhecida", que é o que ela é nessa porta — e o aplicativo
+ * recorta para desenhar. Esconder o campo é conveniência; recortar o
+ * schema na API é a proteção (CLAUDE.md, regra 2).
+ */
+export function schemaSemInternos(schema: FormSchema): FormSchema {
+  return { ...schema, fields: schema.fields.filter((c) => !c.internal) };
+}
+
 function vazio(valor: unknown): boolean {
   return (
     valor === undefined ||

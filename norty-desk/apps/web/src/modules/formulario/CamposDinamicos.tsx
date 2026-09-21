@@ -1,4 +1,5 @@
 import type { FormField, FormSchema } from '@norty-desk/shared';
+import { schemaSemInternos } from '@norty-desk/shared';
 
 /**
  * Os campos do formulário da categoria.
@@ -32,7 +33,7 @@ export function CamposDinamicos({
    */
   previa?: boolean;
 }) {
-  const campos = noPortal ? schema.fields.filter((c) => !c.internal) : schema.fields;
+  const campos = noPortal ? schemaSemInternos(schema).fields : schema.fields;
   if (campos.length === 0) return null;
 
   return (

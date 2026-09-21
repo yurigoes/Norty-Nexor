@@ -425,6 +425,9 @@
 .tabela tbody tr:hover { background: var(--superficie-hover); }
 .tabela .-num { text-align: right; font-variant-numeric: tabular-nums; }
 .tabela-titulo-celula { font-weight: var(--p-semi); color: var(--texto-forte); }
+/* A segunda linha da célula é apoio, não título: sem isto ela
+   herdava o semibold da célula e disputava a leitura com o nome. */
+.tabela-titulo-celula .campo-ajuda { font-weight: var(--p-regular); }
 
 .tabela th.-ordenavel { cursor: pointer; user-select: none; }
 .tabela th.-ordenavel:hover { color: var(--texto-forte); }

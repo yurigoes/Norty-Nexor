@@ -140,6 +140,13 @@ describe('modelo de chamado', () => {
         ],
       },
       { key: 'diagnostico', label: 'Diagnóstico', type: 'TEXTO', required: false },
+      {
+        key: 'custo_estimado',
+        label: 'Custo estimado do reparo',
+        type: 'NUMERO',
+        required: false,
+        internal: true,
+      },
     ],
   };
 
@@ -182,6 +189,37 @@ describe('modelo de chamado', () => {
     assert.equal(modelo.description, 'Não imprime, atola, sai borrado.');
     assert.equal(modelo.schema.fields.length, 3);
     assert.equal(modelo.schema.fields[0]?.key, 'patrimonio');
+  });
+
+  it('o campo interno não sai no JSON de quem não fez login', async () => {
+    const r = await pegar<ModeloDeChamado[]>(`/publico/empresas/${cliente.id}/modelos`);
+    const modelo = (r.corpo ?? [])[0];
+
+    assert.ok(modelo);
+    assert.deepEqual(
+      modelo.schema.fields.map((c) => c.key),
+      ['patrimonio', 'andar', 'diagnostico'],
+    );
+
+    // Pelo texto inteiro, e não só pelas chaves: o que não pode sair
+    // desta porta é o **rótulo** — "custo estimado do reparo" conta ao
+    // visitante o que a empresa controla por dentro, e esconder o campo
+    // na tela não impediria ele de vir no corpo da resposta.
+    assert.doesNotMatch(JSON.stringify(r.corpo), /[Cc]usto estimado/);
+  });
+
+  it('responder a um campo interno é chave desconhecida nesta porta', async () => {
+    await liberar();
+    const modelo = await prisma.ticketForm.findFirstOrThrow({
+      where: { organizationId: f.organizacao.id, name: 'Impressora' },
+    });
+
+    const r = await abrir({
+      formId: modelo.id,
+      customFields: { patrimonio: 'PAT-9', custo_estimado: 1200 },
+    });
+    assert.equal(r.status, 400, JSON.stringify(r.corpo));
+    assert.match(JSON.stringify(r.corpo), /desconhecid/i);
   });
 
   it('as respostas são gravadas no chamado', async () => {

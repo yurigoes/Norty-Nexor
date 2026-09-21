@@ -4,6 +4,7 @@ import {
   SEMELHANCA_MINIMA_DO_NOME,
   documentoInvalido,
   nomeDeEmpresaNormalizado,
+  schemaSemInternos,
   normalizarProtocolo,
   validarRespostas,
   pareceDocumento,
@@ -377,7 +378,14 @@ export class AberturaService {
     if (!modelo) throw new BadRequestException('Modelo de chamado não disponível.');
 
     const dadas = respostas ?? {};
-    const problemas = validarRespostas(modelo.schema as unknown as FormSchema, dadas);
+    // Contra o schema **público**: o campo interno não foi oferecido
+    // aqui, então responder a ele é chave desconhecida — o mesmo `400`
+    // que o resto do corpo leva. Validar contra o schema inteiro
+    // aceitaria a resposta de quem lesse o id do campo em outro lugar.
+    const problemas = validarRespostas(
+      schemaSemInternos(modelo.schema as unknown as FormSchema),
+      dadas,
+    );
 
     if (problemas.length > 0) {
       throw new BadRequestException(problemas.map((p) => p.mensagem).join(' '));

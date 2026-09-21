@@ -1207,6 +1207,12 @@ export type EscreverFormularioRequest = {
   schema: FormSchema;
   categoryId?: string | null;
   isDefault?: boolean;
+  /** Aparece na lista de quem vai abrir chamado. */
+  isModel?: boolean;
+  /** Vale também na abertura sem login. Só faz sentido com `isModel`. */
+  isPublic?: boolean;
+  description?: string | null;
+  position?: number;
 };
 
 /** O formulário que vale para uma categoria, já resolvido pela API. */

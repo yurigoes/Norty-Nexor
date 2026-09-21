@@ -283,3 +283,43 @@ o agente se autentica para escrever. Chave de aplicação por máquina,
 chave por organização e certificado de cliente resolvem de jeitos
 diferentes, e nenhum deles deve ser escolhido sem saber como o agente
 vai ser distribuído.
+
+## 9. A tela de configuração dos modelos
+
+Uma tela, não duas. Modelo e formulário são o mesmo `TicketForm`: a
+diferença é a marca `isModel`, que decide se ele é escolhido a dedo na
+abertura ou se só chega pela categoria. Duas telas mexendo na mesma
+tabela fariam alguém editar o "modelo" num lugar e não entender por que
+o "formulário" mudou no outro — então `/config/formularios` virou
+`/config/modelos-de-chamado`, e o endereço antigo redireciona para ele.
+
+A coluna **Onde aparece** existe porque a pergunta que a tabela precisa
+responder de relance é essa: `modelo` quando é oferecido na abertura,
+`sem login` quando também vale na tela pública, e "Só pela categoria"
+quando nenhuma das duas. Sem ela, "por que este não aparece na abertura?"
+só se responde abrindo a ficha.
+
+Na barra lateral, "Modelos" sozinho ao lado de "Modelos de chamado" não
+dizia qual era qual: os textos prontos de resposta passaram a se chamar
+**Modelos de resposta**.
+
+### O campo interno e a porta sem login
+
+`isPublic` marca a ficha inteira, e por isso não bastava. O caso real é
+o modelo que **deve** mesmo ser público e tem um campo interno — "custo
+estimado do reparo", "número do contrato". A tela escondia esse campo,
+mas a API mandava o schema inteiro: o rótulo ia no JSON que o navegador
+de quem não fez login recebe, contando ao visitante o que a empresa
+controla por dentro. Esconder o campo era conveniência sem guard
+(CLAUDE.md, regra 2).
+
+`schemaSemInternos` (em `packages/shared`) recorta, e as duas pontas da
+API o usam: ao **responder** a lista de modelos públicos, e ao
+**validar** a abertura — assim responder a um campo interno vira "chave
+desconhecida", que é o que ela é nessa porta. O aplicativo usa a mesma
+função para desenhar.
+
+Fica registrado o limite: o resto do formulário público é visível para
+qualquer pessoa com o endereço. Pergunta cuja *existência* já diz algo
+sobre a empresa tem de ser marcada como interna — é isso que o texto de
+ajuda da tela diz, em vez de prometer sigilo que a porta não tem.

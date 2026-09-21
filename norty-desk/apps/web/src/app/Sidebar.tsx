@@ -48,8 +48,18 @@ export function Sidebar() {
     { rotulo: 'Marca', para: '/config/marca', permissao: 'organizacao:gerenciar' as const },
     { rotulo: 'Categorias', para: '/config/categorias', permissao: 'config:categorias' as const },
     { rotulo: 'SLA e calendários', para: '/config/sla', permissao: 'config:sla' as const },
-    { rotulo: 'Formulários', para: '/config/formularios', permissao: 'config:formularios' as const },
-    { rotulo: 'Modelos', para: '/config/modelos', permissao: 'config:modelos' as const },
+    {
+      rotulo: 'Modelos de chamado',
+      para: '/config/modelos-de-chamado',
+      permissao: 'config:formularios' as const,
+    },
+    {
+      // "Modelos" sozinho, ao lado de "Modelos de chamado", não dizia
+      // qual era qual: estes são os textos prontos da resposta.
+      rotulo: 'Modelos de resposta',
+      para: '/config/modelos',
+      permissao: 'config:modelos' as const,
+    },
     { rotulo: 'Contratos e custo', para: '/config/contratos', permissao: 'contrato:ler' as const },
     {
       rotulo: 'Catálogo do ativo',

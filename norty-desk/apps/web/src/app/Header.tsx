@@ -16,8 +16,10 @@ const TITULOS: { prefixo: string; titulo: string }[] = [
   { prefixo: '/config/categorias', titulo: 'Categorias' },
   { prefixo: '/config/sla', titulo: 'SLA e calendários' },
   { prefixo: '/config/recorrencias', titulo: 'Chamados recorrentes' },
-  { prefixo: '/config/formularios', titulo: 'Formulários' },
-  { prefixo: '/config/modelos', titulo: 'Modelos' },
+  // Antes de '/config/modelos': a lista casa por prefixo e ganha a
+  // primeira: invertido, o título aqui viraria "Modelos de resposta".
+  { prefixo: '/config/modelos-de-chamado', titulo: 'Modelos de chamado' },
+  { prefixo: '/config/modelos', titulo: 'Modelos de resposta' },
   { prefixo: '/config/contratos', titulo: 'Contratos e custo' },
   { prefixo: '/config/catalogo-ativos', titulo: 'Catálogo do ativo' },
   { prefixo: '/config/marca', titulo: 'Marca' },

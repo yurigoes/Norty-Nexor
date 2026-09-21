@@ -12,6 +12,7 @@ import {
   type ModeloDeChamado,
   type Role,
   can,
+  schemaSemInternos,
   validarRespostas,
   validarSchema,
 } from '@norty-desk/shared';
@@ -59,10 +60,13 @@ export class FormulariosService {
   /**
    * Os modelos que a pessoa escolhe ao abrir chamado.
    *
-   * `somentePublicos` é o recorte da tela sem login: um modelo com
-   * campo interno ("custo estimado", "contrato") não deve aparecer
-   * para quem só quer dizer que a impressora parou. Por isso é uma
-   * marca própria, e não a ausência de `isModel`.
+   * `somentePublicos` é o recorte da tela sem login, e ele corta em
+   * dois níveis. A ficha inteira sai quando não está marcada como
+   * pública — por isso a marca é própria, e não a ausência de
+   * `isModel`. E dentro da que fica, o campo interno ("custo
+   * estimado", "contrato") sai do schema: esconder na tela não
+   * bastaria, porque é este JSON que o navegador de quem não fez login
+   * recebe, e o rótulo do campo interno ia junto.
    *
    * O schema vem junto: escolher o modelo e carregar os campos é um
    * gesto só, e buscá-los numa segunda chamada faria a tela piscar
@@ -83,7 +87,9 @@ export class FormulariosService {
       id: f.id,
       name: f.name,
       description: f.description,
-      schema: f.schema as unknown as FormSchema,
+      schema: somentePublicos
+        ? schemaSemInternos(f.schema as unknown as FormSchema)
+        : (f.schema as unknown as FormSchema),
       category: f.category ? { id: f.category.id, name: f.category.name } : null,
     }));
   }

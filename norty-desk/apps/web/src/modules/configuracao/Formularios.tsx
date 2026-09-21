@@ -13,7 +13,16 @@ import {
 import { CamposDinamicos } from '../formulario/CamposDinamicos';
 
 /**
- * Formulários por categoria.
+ * Modelos de chamado.
+ *
+ * Uma ficha só, com dois papéis. **Deduzida da categoria**, ela é o
+ * formulário que aparece sozinho quando alguém classifica o chamado;
+ * **marcada como modelo**, ela vira o botão "Impressora" que a pessoa
+ * clica para carregar as perguntas certas.
+ *
+ * Por isso há uma tela e não duas: são as mesmas fichas, e ter duas
+ * telas mexendo na mesma tabela faria alguém editar o "modelo" num
+ * lugar e não entender por que o "formulário" mudou no outro.
  *
  * Substitui as doze tabelas `tickettemplate*` do GLPI. O montador tem
  * prévia ao lado porque formulário se avalia vendo: a lista de campos
@@ -36,14 +45,16 @@ export function Formularios() {
     <div className="pilha" style={{ maxWidth: 1040 }}>
       <div className="cabecalho-secao">
         <div>
-          <h2 className="titulo-seccao">Formulários</h2>
+          <h2 className="titulo-seccao">Modelos de chamado</h2>
           <p>
-            Os campos que a categoria acrescenta ao chamado. A categoria filha herda o formulário
-            da categoria acima; sem nenhum na árvore, vale o formulário padrão da organização.
+            As perguntas que cada tipo de chamado precisa fazer. Marcado como{' '}
+            <strong>modelo</strong>, ele vira um botão na abertura e carrega os campos ao ser
+            escolhido; sem a marca, ele ainda vale pela categoria — a filha herda o da categoria
+            acima, e sem nenhum na árvore vale o padrão da organização.
           </p>
         </div>
         <button type="button" className="btn -primario" onClick={() => setEmEdicao('novo')}>
-          Novo formulário
+          Novo modelo
         </button>
       </div>
 
@@ -58,7 +69,7 @@ export function Formularios() {
         <div className="sk sk-bloco" />
       ) : formularios.length === 0 ? (
         <div className="vazio">
-          <h3>Nenhum formulário</h3>
+          <h3>Nenhum modelo</h3>
           <p>
             Patrimônio, andar, ramal: o que o atendimento sempre precisa perguntar e hoje vem no
             corpo do texto, quando vem.
@@ -70,7 +81,8 @@ export function Formularios() {
             <table className="tabela">
               <thead>
                 <tr>
-                  <th>Formulário</th>
+                  <th>Modelo</th>
+                  <th>Onde aparece</th>
                   <th>Categoria</th>
                   <th className="-num">Campos</th>
                   <th className="-num">Chamados</th>
@@ -78,7 +90,17 @@ export function Formularios() {
                 </tr>
               </thead>
               <tbody>
-                {formularios.map((f) => (
+                {[...formularios]
+                  .sort(
+                    (a, b) =>
+                      // Os modelos primeiro, e entre eles a mesma ordem
+                      // que a tela de abertura mostra: a lista aqui tem
+                      // de parecer com a lista de lá.
+                      Number(b.isModel) - Number(a.isModel) ||
+                      a.position - b.position ||
+                      a.name.localeCompare(b.name, 'pt-BR'),
+                  )
+                  .map((f) => (
                   <tr key={f.id}>
                     <td className="tabela-titulo-celula">
                       {f.name}
@@ -87,6 +109,14 @@ export function Formularios() {
                           padrão
                         </span>
                       ) : null}
+                      {f.description ? (
+                        <span className="campo-ajuda" style={{ display: 'block' }}>
+                          {f.description}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td>
+                      <OndeAparece formulario={f} />
                     </td>
                     <td>{f.category?.name ?? '—'}</td>
                     <td className="-num">{f.schema.fields.length}</td>
@@ -101,7 +131,7 @@ export function Formularios() {
                       </button>
                     </td>
                   </tr>
-                ))}
+                  ))}
               </tbody>
             </table>
           </div>
@@ -133,6 +163,27 @@ export function Formularios() {
   );
 }
 
+/**
+ * Em que porta esta ficha aparece.
+ *
+ * Um modelo é escolhido a dedo na abertura; uma ficha sem a marca só
+ * chega pela categoria, e quem lê a tabela precisa ver a diferença sem
+ * abrir a ficha — é ela que explica por que uma aparece na abertura e a
+ * outra não.
+ */
+function OndeAparece({ formulario }: { formulario: FormularioView }) {
+  if (!formulario.isModel) {
+    return <span className="campo-ajuda">Só pela categoria</span>;
+  }
+
+  return (
+    <span className="linha" style={{ gap: 'var(--e-1)', flexWrap: 'wrap' }}>
+      <span className="selo -contorno">modelo</span>
+      {formulario.isPublic ? <span className="selo -info">sem login</span> : null}
+    </span>
+  );
+}
+
 const CAMPO_NOVO: FormField = { key: '', label: '', type: 'TEXTO', required: false };
 
 function Montador({
@@ -148,12 +199,20 @@ function Montador({
     schema: FormSchema;
     categoryId?: string | null;
     isDefault?: boolean;
+    isModel?: boolean;
+    isPublic?: boolean;
+    description?: string | null;
+    position?: number;
   }) => Promise<void>;
   aoRemover?: () => Promise<void>;
 }) {
   const [name, setName] = useState(formulario?.name ?? '');
   const [categoryId, setCategoryId] = useState(formulario?.category?.id ?? '');
   const [isDefault, setIsDefault] = useState(formulario?.isDefault ?? false);
+  const [isModel, setIsModel] = useState(formulario?.isModel ?? false);
+  const [isPublic, setIsPublic] = useState(formulario?.isPublic ?? false);
+  const [description, setDescription] = useState(formulario?.description ?? '');
+  const [position, setPosition] = useState(String(formulario?.position ?? 0));
   const [fields, setFields] = useState<FormField[]>(formulario?.schema.fields ?? []);
   const [categorias, setCategorias] = useState<CategoriaView[]>([]);
   const [previa, setPrevia] = useState<Record<string, unknown>>({});
@@ -187,11 +246,11 @@ function Montador({
         className="modal -lg"
         role="dialog"
         aria-modal="true"
-        aria-label={formulario ? 'Editar formulário' : 'Novo formulário'}
+        aria-label={formulario ? 'Editar modelo' : 'Novo modelo'}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-topo">
-          <h3 className="card-titulo">{formulario ? 'Editar formulário' : 'Novo formulário'}</h3>
+          <h3 className="card-titulo">{formulario ? 'Editar modelo' : 'Novo modelo'}</h3>
           <button type="button" className="btn-icone" aria-label="Fechar" onClick={aoFechar}>
             ×
           </button>
@@ -203,7 +262,19 @@ function Montador({
             e.preventDefault();
             setErro(null);
             setOcupado(true);
-            void aoSalvar({ name, schema, categoryId: categoryId || null, isDefault })
+            void aoSalvar({
+              name,
+              schema,
+              categoryId: categoryId || null,
+              isDefault,
+              isModel,
+              // Ficha que não é modelo não aparece na abertura, e
+              // portanto não pode ficar pública por engano: desmarcar
+              // "modelo" apaga a abertura sem login junto.
+              isPublic: isModel && isPublic,
+              description: description.trim() || null,
+              position: Number(position) || 0,
+            })
               .catch((e2: unknown) =>
                 setErro(e2 instanceof ErroDaApi ? e2.message : 'Não foi possível salvar.'),
               )
@@ -268,6 +339,86 @@ function Montador({
               Vale quando a categoria — e nenhuma acima dela — tem formulário próprio. Só um por
               organização: marcar este desmarca o outro.
             </span>
+
+            <div className="divisor-texto">
+              <span>Na abertura</span>
+            </div>
+
+            <label className="switch">
+              <input
+                type="checkbox"
+                checked={isModel}
+                onChange={(e) => setIsModel(e.target.checked)}
+              />
+              <span className="switch-trilho" aria-hidden="true">
+                <span className="switch-bolinha" />
+              </span>
+              <span>Oferecer como modelo na abertura</span>
+            </label>
+            <span className="campo-ajuda">
+              Vira um cartão que a pessoa clica — “Impressora”, “Acesso à rede” — e que carrega
+              estes campos. Sem a marca, a ficha continua valendo pela categoria.
+            </span>
+
+            {isModel ? (
+              <>
+                <div className="campo">
+                  <label className="campo-rotulo" htmlFor="descricao-formulario">
+                    Descrição do cartão (opcional)
+                  </label>
+                  <input
+                    id="descricao-formulario"
+                    className="input"
+                    maxLength={200}
+                    placeholder="Não imprime, atola, sem toner"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                  />
+                  <span className="campo-ajuda">
+                    A linha embaixo do nome. É ela que faz alguém escolher o cartão certo em vez do
+                    primeiro da lista.
+                  </span>
+                </div>
+
+                <div className="campo-grupo">
+                  <div className="campo">
+                    <label className="campo-rotulo" htmlFor="posicao-formulario">
+                      Ordem
+                    </label>
+                    <input
+                      id="posicao-formulario"
+                      className="input"
+                      type="number"
+                      min={0}
+                      max={999}
+                      value={position}
+                      onChange={(e) => setPosition(e.target.value)}
+                    />
+                    <span className="campo-ajuda">
+                      Menor primeiro. Empate desempata pelo nome.
+                    </span>
+                  </div>
+                </div>
+
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={isPublic}
+                    onChange={(e) => setIsPublic(e.target.checked)}
+                  />
+                  <span className="switch-trilho" aria-hidden="true">
+                    <span className="switch-bolinha" />
+                  </span>
+                  <span>Também na abertura sem login</span>
+                </label>
+                <span className="campo-ajuda">
+                  Quem abre pelo protocolo não fez login. Campo “só para quem atende” fica de fora
+                  — nem aparece, nem é aceito por lá. O resto do formulário, porém, fica visível
+                  para qualquer pessoa com o endereço: pergunta cuja existência já diz algo sobre a
+                  empresa deve ser marcada como interna.
+                </span>
+              </>
+            ) : null}
 
             <div className="divisor-texto">
               <span>Campos</span>

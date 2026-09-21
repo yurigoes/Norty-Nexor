@@ -162,7 +162,13 @@ function Aplicativo() {
             <Route path="/config/autenticacao" element={<Diretorios />} />
             <Route path="/config/sla" element={<Sla />} />
             <Route path="/config/recorrencias" element={<Recorrencias />} />
-            <Route path="/config/formularios" element={<Formularios />} />
+            <Route path="/config/modelos-de-chamado" element={<Formularios />} />
+            {/* O endereço antigo continua funcionando: a tela mudou de
+                nome, mas quem já a tinha nos favoritos não mudou. */}
+            <Route
+              path="/config/formularios"
+              element={<Navigate to="/config/modelos-de-chamado" replace />}
+            />
             <Route path="/config/modelos" element={<Modelos />} />
             <Route path="/config/contratos" element={<Contratos />} />
             <Route path="/config/catalogo-ativos" element={<CatalogoDoAtivo />} />
