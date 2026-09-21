@@ -1765,3 +1765,134 @@ export function assinaturaInvalida(dataUrl: string): string | null {
   }
   return null;
 }
+
+// ---------------------------------------------------------------------
+// Identificar a empresa: nome aproximado ou documento exato
+// ---------------------------------------------------------------------
+
+/**
+ * Formas societárias que não distinguem empresa nenhuma.
+ *
+ * Sem tirá-las, digitar "ltda" casaria com a carteira inteira: numa
+ * busca por semelhança o sufixo comum pontua igual ao nome. Medido:
+ * "xyz ltda" contra "Empresa do João … LTDA" dava 0,556 — acima de
+ * qualquer limiar razoável — e cai a zero quando o sufixo sai dos dois
+ * lados.
+ */
+const FORMAS_SOCIETARIAS = ['ltda', 'me', 'epp', 'eireli', 'sa', 's/a', 'ss', 's/s'];
+
+/** Mesma regra do `translate` da coluna gerada. Ver a migração. */
+const COM_ACENTO = 'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑáàâãäéèêëíìîïóòôõöúùûüçñ';
+const SEM_ACENTO = 'AAAAAEEEEIIIIOOOOOUUUUCNaaaaaeeeeiiiiooooouuuucn';
+
+function tirarAcento(texto: string): string {
+  let saida = '';
+  for (const c of texto) {
+    const i = COM_ACENTO.indexOf(c);
+    saida += i >= 0 ? SEM_ACENTO[i] : c;
+  }
+  return saida;
+}
+
+/**
+ * O nome de empresa reduzido à forma que a busca compara.
+ *
+ * Minúsculas, sem acento, sem forma societária no fim, espaços
+ * colapsados. A **mesma** transformação é uma coluna gerada no banco
+ * (ver a migração); são duas implementações da mesma regra, e por isso
+ * existe um teste que confere as duas contra a mesma lista de nomes.
+ * Divergir aqui faria a busca não achar o que está gravado.
+ *
+ * Só o fim é limpo: uma empresa chamada "ME Informática" continua
+ * sendo "me informatica", porque ali "ME" é o nome, não a forma.
+ */
+export function nomeDeEmpresaNormalizado(nome: string): string {
+  let texto = tirarAcento(nome).toLowerCase().replace(/\s+/g, ' ').trim();
+
+  // Em laço porque "Alpha Sistemas LTDA ME" tem duas: uma passada só
+  // tiraria a última e deixaria a outra pontuando.
+  for (;;) {
+    const antes = texto;
+    for (const forma of FORMAS_SOCIETARIAS) {
+      const escapada = forma.replace('/', '\\/');
+      texto = texto.replace(new RegExp(`[\\s,]+${escapada}\\.?$`), '');
+    }
+    texto = texto.trim();
+    if (texto === antes) break;
+  }
+
+  // Nome que era só a forma societária volta ao que era: melhor buscar
+  // por "ltda" do que por nada.
+  return texto || tirarAcento(nome).toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/** Só os dígitos. É assim que CNPJ e CPF são comparados. */
+export function soDigitos(texto: string): string {
+  return texto.replace(/\D/g, '');
+}
+
+/**
+ * O que a pessoa digitou é um documento, e não um nome?
+ *
+ * A decisão é pela forma, não pelo conteúdo: quem digita onze ou
+ * quatorze dígitos está digitando CPF ou CNPJ, com ou sem pontuação.
+ * Qualquer outra coisa é nome.
+ */
+export function pareceDocumento(digitado: string): boolean {
+  const digitos = soDigitos(digitado);
+  if (digitos.length !== 11 && digitos.length !== 14) return false;
+
+  // Um nome não vira documento por conter números: "Loja 24 Horas" tem
+  // dígitos, mas também tem letras.
+  return !/[a-zA-Z]/.test(digitado);
+}
+
+/** Dígitos verificadores de CNPJ, pelo módulo 11. */
+function cnpjConfere(d: string): boolean {
+  if (/^(\d)\1{13}$/.test(d)) return false;
+
+  const calcular = (ate: number): number => {
+    const pesos = ate === 12 ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2] : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    let soma = 0;
+    for (let i = 0; i < ate; i += 1) soma += Number(d[i]) * pesos[i]!;
+    const resto = soma % 11;
+    return resto < 2 ? 0 : 11 - resto;
+  };
+
+  return calcular(12) === Number(d[12]) && calcular(13) === Number(d[13]);
+}
+
+/** Dígitos verificadores de CPF, pelo módulo 11. */
+function cpfConfere(d: string): boolean {
+  if (/^(\d)\1{10}$/.test(d)) return false;
+
+  const calcular = (ate: number): number => {
+    let soma = 0;
+    for (let i = 0; i < ate; i += 1) soma += Number(d[i]) * (ate + 1 - i);
+    const resto = (soma * 10) % 11;
+    return resto === 10 ? 0 : resto;
+  };
+
+  return calcular(9) === Number(d[9]) && calcular(10) === Number(d[10]);
+}
+
+/**
+ * O documento está malformado, ou `null` se está bem formado.
+ *
+ * Serve para a **mensagem**, não para barrar a busca: dizer "confira os
+ * dígitos" é mais útil do que "não encontrei" quando a pessoa trocou um
+ * número. Documento bem formado que não existe na carteira continua
+ * sendo "não encontrei", que é a verdade.
+ */
+export function documentoInvalido(digitado: string): string | null {
+  const d = soDigitos(digitado);
+  if (d.length === 14) return cnpjConfere(d) ? null : 'CNPJ com dígito verificador errado.';
+  if (d.length === 11) return cpfConfere(d) ? null : 'CPF com dígito verificador errado.';
+  return 'Informe um CNPJ de 14 dígitos ou um CPF de 11.';
+}
+
+/** Abaixo disto a semelhança é ruído. Ver a calibração na migração. */
+export const SEMELHANCA_MINIMA_DO_NOME = 0.5;
+
+/** Menos que isto não é busca, é a pessoa ainda digitando. */
+export const MINIMO_PARA_BUSCAR_EMPRESA = 3;

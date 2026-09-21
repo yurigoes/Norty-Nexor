@@ -29,6 +29,7 @@ import { Sla } from '../modules/configuracao/Sla';
 import { Ativo } from '../modules/ativo/Ativo';
 import { Ativos } from '../modules/ativo/Ativos';
 import { Pesquisa } from '../modules/ativo/Pesquisa';
+import { AbrirSemLogin } from '../modules/protocolo/AbrirSemLogin';
 import { ConsultaProtocolo } from '../modules/protocolo/ConsultaProtocolo';
 import { Carteira } from '../modules/carteira/Carteira';
 import { Artigo } from '../modules/conhecimento/Artigo';
@@ -81,6 +82,16 @@ function Raiz() {
       <Routes>
         <Route path="/protocolo" element={<ConsultaProtocolo />} />
         <Route path="/protocolo/:codigo" element={<ConsultaProtocolo />} />
+      </Routes>
+    );
+  }
+
+  // Abrir chamado sem conta: quem chega aqui é a pessoa da empresa
+  // cliente que não tem — nem precisa ter — login.
+  if (local.pathname.startsWith('/abrir')) {
+    return (
+      <Routes>
+        <Route path="/abrir" element={<AbrirSemLogin />} />
       </Routes>
     );
   }

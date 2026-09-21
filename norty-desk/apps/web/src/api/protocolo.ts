@@ -1,4 +1,9 @@
-import type { ConsultaPublica } from '@norty-desk/shared';
+import type {
+  AberturaPublicaResposta,
+  AbrirPublicoRequest,
+  ConsultaPublica,
+  EmpresaPublica,
+} from '@norty-desk/shared';
 
 /**
  * A consulta pública por protocolo.
@@ -24,8 +29,35 @@ export function urlDoComprovante(codigo: string): string {
 async function mensagemDoErro(resposta: Response): Promise<string> {
   try {
     const problema = (await resposta.json()) as { detail?: string; title?: string };
-    return problema.detail ?? problema.title ?? 'Protocolo não encontrado.';
+    return problema.detail ?? problema.title ?? 'Não foi possível concluir.';
   } catch {
-    return 'Protocolo não encontrado.';
+    return 'Não foi possível concluir.';
   }
+}
+
+// --- Abertura sem login ------------------------------------------------
+
+/**
+ * As empresas parecidas com o que a pessoa digitou.
+ *
+ * Devolve lista vazia — e não erro — quando o termo é curto demais: a
+ * pessoa ainda está digitando, e piscar erro a cada tecla é ruído.
+ */
+export async function buscarEmpresas(termo: string): Promise<EmpresaPublica[]> {
+  const resposta = await fetch(`${BASE}/publico/empresas?q=${encodeURIComponent(termo)}`);
+  if (!resposta.ok) throw new Error(await mensagemDoErro(resposta));
+  return (await resposta.json()) as EmpresaPublica[];
+}
+
+export async function abrirChamadoPublico(
+  dados: AbrirPublicoRequest,
+): Promise<AberturaPublicaResposta> {
+  const resposta = await fetch(`${BASE}/publico/chamados`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dados),
+  });
+
+  if (!resposta.ok) throw new Error(await mensagemDoErro(resposta));
+  return (await resposta.json()) as AberturaPublicaResposta;
 }

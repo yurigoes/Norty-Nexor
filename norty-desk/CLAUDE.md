@@ -61,11 +61,30 @@ Três armadilhas que já custaram caro aqui:
    @@index([busca], type: Gin, map: "articles_busca")
    ```
 
+   Índice com classe de operador também dá para declarar, e vale a
+   pena: sem esta linha o diff derruba o trigrama da busca de empresas.
+
+   ```prisma
+   @@index([buscaNome(ops: raw("gin_trgm_ops"))], type: Gin, map: "clients_busca_nome")
+   ```
+
    O que não dá para declarar (índice por expressão, `CHECK`,
    `GENERATED ALWAYS AS`) o Prisma ignora ou tenta desfazer. Por isso o
    passo obrigatório é o mesmo desde o começo: **leia o SQL gerado antes
-   de aplicar e apague todo `DROP` ou `ALTER` que você não pediu.** O
-   comando:
+   de aplicar e apague todo `DROP` ou `ALTER` que você não pediu.**
+
+   Hoje são **três** colunas geradas, e o diff emite lixo para as três a
+   cada migração. Apague sempre estas linhas:
+
+   ```sql
+   ALTER TABLE "articles" ALTER COLUMN "busca" DROP DEFAULT;
+   ALTER TABLE "clients" ALTER COLUMN "buscaNome" DROP DEFAULT,
+   ALTER COLUMN "buscaNome" SET DATA TYPE text,
+   ALTER COLUMN "documentoDigitos" DROP DEFAULT,
+   ALTER COLUMN "documentoDigitos" SET DATA TYPE text;
+   ```
+
+   O comando:
 
    ```bash
    npx prisma migrate diff \

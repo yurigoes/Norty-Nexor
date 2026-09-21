@@ -248,6 +248,34 @@ export type ConsultaPublica = {
   serviceOrders: OrdemPublica[];
 };
 
+/**
+ * A empresa, como a tela sem login a enxerga.
+ *
+ * Só id e nome. Nem documento, nem contato, nem quantos chamados tem:
+ * quem abre esta tela não provou ser ninguém, e o que sai daqui sai
+ * para qualquer um que digite três letras.
+ */
+export type EmpresaPublica = {
+  id: string;
+  name: string;
+};
+
+export type AbrirPublicoRequest = {
+  clientId: string;
+  /** Quem está abrindo. Nome e ao menos uma forma de retorno. */
+  requesterName: string;
+  requesterEmail?: string;
+  requesterPhone?: string;
+  subject: string;
+  description: string;
+};
+
+/** O que a pessoa leva da tela: o protocolo para acompanhar. */
+export type AberturaPublicaResposta = {
+  protocol: string;
+  number: number;
+};
+
 export type OrdemPublica = {
   number: number;
   concludedAt: string;

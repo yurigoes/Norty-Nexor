@@ -181,11 +181,12 @@ export function Login() {
             {marca.productName} na sua organização.
           </p>
 
-          {/* Quem só quer saber em que pé está o chamado não precisa de
-              conta: tem o protocolo. Mandá-lo para o login seria pedir
-              uma senha para ler o próprio chamado. */}
+          {/* As duas portas sem conta. Quem é da empresa cliente abre e
+              acompanha chamado sem senha nenhuma: exigi-la seria pedir
+              uma conta para relatar que a impressora parou. */}
           <p className="login-ajuda">
-            Tem um protocolo? <a href="/protocolo">Acompanhe seu chamado sem entrar</a>.
+            <a href="/abrir">Abrir chamado sem entrar</a> ·{' '}
+            <a href="/protocolo">Acompanhar por protocolo</a>
           </p>
         </form>
       </main>

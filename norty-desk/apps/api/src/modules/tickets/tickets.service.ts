@@ -519,6 +519,8 @@ export class TicketsService {
   async abrirPorCanal(dados: {
     organizationId: string;
     contactId: string;
+    /** A empresa-cliente de quem é o chamado, quando ela foi identificada. */
+    clientId?: string | null;
     channel: Channel;
     subject: string;
     description: string;
@@ -570,6 +572,7 @@ export class TicketsService {
           impact,
           priority,
           categoryId: categoria?.id,
+          clientId: dados.clientId ?? null,
           originChannel: dados.channel,
           actors: {
             create: [

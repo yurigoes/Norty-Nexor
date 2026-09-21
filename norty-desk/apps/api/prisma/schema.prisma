@@ -187,6 +187,18 @@ model Client {
   notes          String?
   isActive       Boolean @default(true)
 
+  /// O nome reduzido à forma que a busca pública compara: minúsculas,
+  /// sem acento, sem forma societária no fim. Coluna **gerada** — ver a
+  /// migração `identificar_empresa`.
+  ///
+  /// Declarada aqui, e não só na migração, porque o que o Prisma não vê
+  /// ele apaga (CLAUDE.md, armadilha 2). `Unsupported` porque ninguém
+  /// escreve nela: quem a calcula é o banco.
+  buscaNome        Unsupported("text")?
+  /// Só os dígitos do documento. É por ela que o CNPJ é procurado, com
+  /// ou sem pontuação. Também gerada.
+  documentoDigitos Unsupported("text")?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -199,6 +211,12 @@ model Client {
   /// produziriam logins que colidem entre empresas diferentes.
   @@unique([organizationId, emailDomain])
   @@index([organizationId, isActive])
+  /// A busca pública por documento. Declarado aqui, e não só na
+  /// migração, porque o que o Prisma não vê ele apaga.
+  @@index([organizationId, documentoDigitos], map: "clients_documento_digitos")
+  /// O trigrama do nome, que atende o operador `<%`. Mesma razão: sem
+  /// esta linha o `migrate diff` seguinte emite `DROP INDEX`.
+  @@index([buscaNome(ops: raw("gin_trgm_ops"))], type: Gin, map: "clients_busca_nome")
   @@map("clients")
 }
 
@@ -461,21 +479,21 @@ model Ticket {
   form          TicketForm?    @relation(fields: [formId], references: [id])
   pendingReason PendingReason? @relation(fields: [pendingReasonId], references: [id])
 
-  actors       TicketActor[]
-  events       TicketEvent[]
-  commitments  SlaCommitment[]
-  approvals    Approval[]
-  attachments  Attachment[]
+  actors        TicketActor[]
+  events        TicketEvent[]
+  commitments   SlaCommitment[]
+  approvals     Approval[]
+  attachments   Attachment[]
   /// Respostas do formulário dinâmico, chaveadas pelo campo do schema.
-  customFields Json?
-  links        TicketLink[]    @relation("ChamadoOrigem")
-  linkedBy     TicketLink[]    @relation("ChamadoDestino")
-  assets       TicketAsset[]
-  survey       Survey?
-  costs        TicketCost[]
-  projects     ProjectTicket[]
-  agendaEvents AgendaEvent[]
-  appointments Appointment[]
+  customFields  Json?
+  links         TicketLink[]    @relation("ChamadoOrigem")
+  linkedBy      TicketLink[]    @relation("ChamadoDestino")
+  assets        TicketAsset[]
+  survey        Survey?
+  costs         TicketCost[]
+  projects      ProjectTicket[]
+  agendaEvents  AgendaEvent[]
+  appointments  Appointment[]
   serviceOrders ServiceOrder[]
 
   /// O problema que causa este chamado e a mudança que o resolve.
@@ -578,15 +596,15 @@ enum ServiceOrderStatus {
 /// itens que estava na tela naquele momento; deixar editá-la depois
 /// transformaria o documento em declaração de qualquer coisa.
 model ServiceOrder {
-  id             String              @id @default(uuid()) @db.Uuid
-  organizationId String              @db.Uuid
-  ticketId       String              @db.Uuid
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @db.Uuid
+  ticketId       String             @db.Uuid
   /// Sequencial legível por organização, como o número do chamado.
   number         Int
-  status         ServiceOrderStatus  @default(RASCUNHO)
+  status         ServiceOrderStatus @default(RASCUNHO)
   /// A visita que esta ordem executa, quando ela nasceu de um agendamento.
-  appointmentId  String?             @db.Uuid
-  technicianId   String?             @db.Uuid
+  appointmentId  String?            @db.Uuid
+  technicianId   String?            @db.Uuid
   /// O que o técnico encontrou e o que fez, em texto corrido.
   report         String?
 
@@ -594,17 +612,17 @@ model ServiceOrder {
   /// Chave do PNG no armazenamento. Fica no bucket, e não numa coluna
   /// em base64: o traço de um dedo em tela de celular dá dezenas de
   /// kilobytes, e uma listagem de ordens carregaria todos eles.
-  signatureKey   String?
+  signatureKey String?
   /// Quem assinou, como assinou e quando. Guardados no momento da
   /// assinatura, não lidos do cadastro depois: o documento tem de dizer
   /// o que era verdade quando foi assinado.
-  signedByName   String?
-  signedByRole   String?
-  signedAt       DateTime?
+  signedByName String?
+  signedByRole String?
+  signedAt     DateTime?
 
-  createdById    String?             @db.Uuid
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  createdById String?  @db.Uuid
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   ticket       Ticket             @relation(fields: [ticketId], references: [id], onDelete: Cascade)
@@ -620,13 +638,13 @@ model ServiceOrder {
 
 /// Um item a realizar na ordem de serviço.
 model ServiceOrderItem {
-  id          String   @id @default(uuid()) @db.Uuid
-  orderId     String   @db.Uuid
+  id          String    @id @default(uuid()) @db.Uuid
+  orderId     String    @db.Uuid
   /// Ordem de exibição. Inteiro simples: a lista é curta e reordenar
   /// uma dúzia de linhas não justifica chave fracionária.
   position    Int
   description String
-  done        Boolean  @default(false)
+  done        Boolean   @default(false)
   notes       String?
   doneAt      DateTime?
 
@@ -654,29 +672,29 @@ enum AppointmentStatus {
 /// outra, porque "quantas vezes esta visita foi remarcada" é pergunta
 /// que se faz.
 model Appointment {
-  id              String            @id @default(uuid()) @db.Uuid
-  ticketId        String            @db.Uuid
+  id               String            @id @default(uuid()) @db.Uuid
+  ticketId         String            @db.Uuid
   /// Quando o técnico vai. O prazo do chamado espera até aqui.
-  scheduledFor    DateTime
-  durationMinutes Int               @default(60)
+  scheduledFor     DateTime
+  durationMinutes  Int               @default(60)
   /// Quem vai. Nulo quando ainda se marcou só a data.
-  technicianId    String?           @db.Uuid
-  note            String?
-  status          AppointmentStatus @default(AGENDADO)
+  technicianId     String?           @db.Uuid
+  note             String?
+  status           AppointmentStatus @default(AGENDADO)
   /// Quanto este agendamento empurrou o vencimento, em segundos.
   ///
   /// Guardado na linha para que cancelar saiba exatamente o que
   /// devolver — recalcular na hora do cancelamento daria outro número,
   /// porque o calendário e o vencimento já teriam mudado.
-  postponedSeconds Int              @default(0)
+  postponedSeconds Int               @default(0)
   /// O vencimento que cada compromisso tinha antes deste agendamento,
   /// por id de compromisso. Cancelar devolve o instante exato — recuar
   /// a mesma quantidade de segundos úteis não devolveria, porque o fim
   /// da visita pode cair fora do expediente.
-  previousDueAt   Json?
-  createdById     String?           @db.Uuid
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  previousDueAt    Json?
+  createdById      String?           @db.Uuid
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
   ticket        Ticket         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   technician    User?          @relation("TecnicoDoAgendamento", fields: [technicianId], references: [id], onDelete: SetNull)
@@ -843,27 +861,27 @@ model EscalationLevel {
 /// O compromisso de prazo de um chamado. Substitui as 17 colunas de
 /// SLA/OLA de glpi_tickets. Ver docs/02-gap-analysis.md, item 5.
 model SlaCommitment {
-  id              String        @id @default(uuid()) @db.Uuid
-  ticketId        String        @db.Uuid
-  agreementId     String        @db.Uuid
-  kind            AgreementKind
-  target          TargetKind
-  startedAt       DateTime
+  id               String        @id @default(uuid()) @db.Uuid
+  ticketId         String        @db.Uuid
+  agreementId      String        @db.Uuid
+  kind             AgreementKind
+  target           TargetKind
+  startedAt        DateTime
   /// Vencimento já calculado sobre o calendário.
-  dueAt           DateTime
+  dueAt            DateTime
   /// Segundos descontados por pendência.
-  pausedSeconds   Int           @default(0)
+  pausedSeconds    Int           @default(0)
   /// Segundos que atendimentos agendados empurraram o vencimento.
   ///
   /// Contado separado de `pausedSeconds` de propósito: esperar o cliente
   /// responder e esperar a data marcada com ele são coisas diferentes, e
   /// o relatório que as soma numa coluna só não responde "por que este
   /// prazo esticou". Ver `docs/13-carteira-e-campo.md`.
-  postponedSeconds Int          @default(0)
-  achievedAt      DateTime?
-  breachedAt      DateTime?
+  postponedSeconds Int           @default(0)
+  achievedAt       DateTime?
+  breachedAt       DateTime?
   /// Último nível de escalonamento disparado.
-  escalationLevel Int           @default(0)
+  escalationLevel  Int           @default(0)
 
   ticket    Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   agreement Agreement @relation(fields: [agreementId], references: [id])
