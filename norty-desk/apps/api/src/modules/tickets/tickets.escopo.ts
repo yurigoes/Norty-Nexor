@@ -14,6 +14,22 @@ import type { UsuarioAutenticado } from '../../common/decorators/current-user.de
 export function escopoDeLeitura(usuario: UsuarioAutenticado): Prisma.TicketWhereInput {
   const base: Prisma.TicketWhereInput = { organizationId: usuario.organizationId };
 
+  // A pessoa da empresa-cliente não sai do próprio cliente.
+  //
+  // O recorte é por `clientId`, **antes** de olhar quem é ator: mesmo
+  // que por engano alguém a coloque como observadora num chamado de
+  // outro cliente, ele não volta. É o que impede o vazamento entre
+  // empresas da carteira, e por isso está aqui e não numa tela.
+  if (usuario.clientId) {
+    return {
+      ...base,
+      clientId: usuario.clientId,
+      actors: {
+        some: { userId: usuario.userId, role: { in: ['REQUERENTE', 'OBSERVADOR'] } },
+      },
+    };
+  }
+
   switch (ticketReadScope(usuario.role)) {
     case 'TODOS':
       return base;

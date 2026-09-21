@@ -13,6 +13,7 @@
  */
 
 export const ROLES = [
+  'CLIENTE',
   'SOLICITANTE',
   'AGENTE',
   'SUPERVISOR',
@@ -126,6 +127,8 @@ export const PERMISSIONS = [
   // --- Pessoas --------------------------------------------------------
   'pessoa:ler',
   'pessoa:gerenciar',
+  'cliente:ler',
+  'cliente:gerenciar',
   'time:gerenciar',
   'organizacao:gerenciar',
 
@@ -179,6 +182,20 @@ function expandir(permissoes: readonly Permission[]): readonly Permission[] {
  * inteira, e um solicitante nunca vê a de ninguém.
  */
 const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
+  // A pessoa da empresa-cliente. Abre, acompanha e responde os chamados
+  // **do próprio cliente** — o recorte por cliente é do escopo de
+  // leitura, não desta lista. Menos que o solicitante interno: não fecha
+  // chamado (quem fecha é quem atendeu), não decide aprovação, e não vê
+  // painel. Ver `docs/13-carteira-e-campo.md`.
+  CLIENTE: [
+    'chamado:ler:proprios',
+    'chamado:criar',
+    'chamado:responder',
+    'chamado:reabrir',
+    'anexo:enviar',
+    'anexo:baixar',
+  ],
+
   SOLICITANTE: [
     'chamado:ler:proprios',
     'chamado:criar',
@@ -193,6 +210,7 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
   ],
 
   AGENTE: [
+    'cliente:ler',
     'chamado:ler:proprios',
     'chamado:ler:time',
     'chamado:criar',
@@ -253,6 +271,8 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
   ],
 
   SUPERVISOR: [
+    'cliente:ler',
+    'cliente:gerenciar',
     'chamado:ler:proprios',
     'chamado:ler:time',
     'chamado:ler:todos',
@@ -307,6 +327,7 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
 
   /** Lê indicadores e dá aval; não atende chamado. */
   GESTOR: [
+    'cliente:ler',
     'chamado:ler:todos',
     /**
      * Aprovar é justamente o ato de gestor. O solicitante já decide as

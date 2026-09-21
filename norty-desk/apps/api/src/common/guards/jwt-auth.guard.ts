@@ -59,6 +59,7 @@ export class JwtAuthGuard implements CanActivate {
       organizationId: vinculo.organizationId,
       role: vinculo.role,
       teamIds: times.map((t) => t.teamId),
+      clientId: vinculo.clientId,
     };
 
     request.user = usuario;

@@ -715,6 +715,59 @@ export type AssetDetail = AssetView & {
 // Fornecedor, contrato, orçamento e custo
 // ---------------------------------------------------------------------
 
+// ---------------------------------------------------------------------
+// Carteira de clientes
+// ---------------------------------------------------------------------
+
+export type ClienteView = {
+  id: string;
+  name: string;
+  document: string | null;
+  /** Domínio do e-mail: é dele que sai o login das pessoas. */
+  emailDomain: string;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  notes: string | null;
+  isActive: boolean;
+  /** Quantas pessoas desta empresa têm acesso ao portal. */
+  peopleCount: number;
+  /** Chamados abertos agora. É a coluna que diz onde olhar primeiro. */
+  openTickets: number;
+};
+
+export type PessoaDoClienteView = {
+  id: string;
+  name: string;
+  /** O login gerado, que a pessoa usa para entrar. */
+  login: string;
+  contactEmail: string | null;
+  phone: string | null;
+  isActive: boolean;
+  /** Ainda não definiu o PIN: o primeiro acesso está pendente. */
+  pinPendente: boolean;
+};
+
+export type ClienteDetail = ClienteView & {
+  people: PessoaDoClienteView[];
+};
+
+export type EscreverClienteRequest = {
+  name: string;
+  emailDomain: string;
+  document?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  notes?: string | null;
+  isActive?: boolean;
+};
+
+export type EscreverPessoaDoClienteRequest = {
+  name: string;
+  contactEmail?: string | null;
+  phone?: string | null;
+  isActive?: boolean;
+};
+
 export type FornecedorView = {
   id: string;
   name: string;

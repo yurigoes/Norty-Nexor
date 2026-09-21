@@ -34,46 +34,47 @@ model Organization {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  memberships    Membership[]
-  teams          Team[]
-  categories     Category[]
-  tickets        Ticket[]
-  agreements     Agreement[]
-  calendars      Calendar[]
-  pendingReasons PendingReason[]
-  forms          TicketForm[]
-  articles       Article[]
-  channels       ChannelAccount[]
-  suppliers      Supplier[]
-  rules          IntakeRule[]
-  webhooks       OutboundWebhook[]
-  apiKeys        ApiKey[]
-  contacts       Contact[]
-  assets         Asset[]
-  surveys        Survey[]
-  problems       Problem[]
-  changes        Change[]
-  recurrences    RecurringTicket[]
-  templates      Template[]
-  contracts      Contract[]
-  budgets        Budget[]
-  locations      Location[]
-  manufacturers  Manufacturer[]
-  assetModels    AssetModel[]
-  components     AssetComponent[]
-  authSources    AuthSource[]
-  software       Software[]
-  softwareLicenses SoftwareLicense[]
-  consumables    ConsumableItem[]
+  memberships         Membership[]
+  clients             Client[]
+  teams               Team[]
+  categories          Category[]
+  tickets             Ticket[]
+  agreements          Agreement[]
+  calendars           Calendar[]
+  pendingReasons      PendingReason[]
+  forms               TicketForm[]
+  articles            Article[]
+  channels            ChannelAccount[]
+  suppliers           Supplier[]
+  rules               IntakeRule[]
+  webhooks            OutboundWebhook[]
+  apiKeys             ApiKey[]
+  contacts            Contact[]
+  assets              Asset[]
+  surveys             Survey[]
+  problems            Problem[]
+  changes             Change[]
+  recurrences         RecurringTicket[]
+  templates           Template[]
+  contracts           Contract[]
+  budgets             Budget[]
+  locations           Location[]
+  manufacturers       Manufacturer[]
+  assetModels         AssetModel[]
+  components          AssetComponent[]
+  authSources         AuthSource[]
+  software            Software[]
+  softwareLicenses    SoftwareLicense[]
+  consumables         ConsumableItem[]
   consumableMovements ConsumableMovement[]
-  projects       Project[]
-  agendaEvents   AgendaEvent[]
-  vlans          Vlan[]
-  ipNetworks     IpNetwork[]
-  networkPorts   NetworkPort[]
-  ipAddresses    IpAddress[]
-  dcRooms        DcRoom[]
-  racks          Rack[]
+  projects            Project[]
+  agendaEvents        AgendaEvent[]
+  vlans               Vlan[]
+  ipNetworks          IpNetwork[]
+  networkPorts        NetworkPort[]
+  ipAddresses         IpAddress[]
+  dcRooms             DcRoom[]
+  racks               Rack[]
 
   @@map("organizations")
 }
@@ -100,21 +101,21 @@ model User {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  authSource     AuthSource?       @relation(fields: [authSourceId], references: [id], onDelete: SetNull)
-  memberships    Membership[]
-  teamMembers    TeamMember[]
-  actorIn        TicketActor[]
-  authoredEvents TicketEvent[]     @relation("AutorDoEvento")
-  approvals      Approval[]
-  refreshTokens  RefreshToken[]
-  articles       Article[]
-  assets         Asset[]           @relation("AtivoDoUsuario")
-  problems       Problem[]         @relation("ResponsavelPeloProblema")
-  changes        Change[]          @relation("ResponsavelPelaMudanca")
-  recurrences    RecurringTicket[] @relation("RequerenteDaRecorrencia")
-  costs          TicketCost[]      @relation("AutorDoCusto")
-  articleEdits   ArticleRevision[] @relation("EditorDaRevisao")
-  licenses       LicenseAssignment[]
+  authSource          AuthSource?          @relation(fields: [authSourceId], references: [id], onDelete: SetNull)
+  memberships         Membership[]
+  teamMembers         TeamMember[]
+  actorIn             TicketActor[]
+  authoredEvents      TicketEvent[]        @relation("AutorDoEvento")
+  approvals           Approval[]
+  refreshTokens       RefreshToken[]
+  articles            Article[]
+  assets              Asset[]              @relation("AtivoDoUsuario")
+  problems            Problem[]            @relation("ResponsavelPeloProblema")
+  changes             Change[]             @relation("ResponsavelPelaMudanca")
+  recurrences         RecurringTicket[]    @relation("RequerenteDaRecorrencia")
+  costs               TicketCost[]         @relation("AutorDoCusto")
+  articleEdits        ArticleRevision[]    @relation("EditorDaRevisao")
+  licenses            LicenseAssignment[]
   consumablesReceived ConsumableMovement[] @relation("DestinatarioDoConsumivel")
   consumableMovements ConsumableMovement[] @relation("AutorDoMovimento")
   managedProjects     Project[]            @relation("GerenteDoProjeto")
@@ -136,23 +137,85 @@ model Membership {
   /// Yuri, 10/09/2026): dois clientes podem ter o seu `jsilva`. Minúsculas,
   /// sem "@" — ver common/usuario.ts.
   username       String?
+  /// De qual empresa-cliente a pessoa é. Nulo para quem é da Norty.
+  clientId       String?  @db.Uuid
   createdAt      DateTime @default(now())
 
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client       Client?      @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@unique([userId, organizationId])
   @@unique([organizationId, username])
   @@index([organizationId])
+  @@index([clientId])
   @@map("memberships")
 }
 
 enum Role {
+  /// Pessoa da empresa-cliente: abre e acompanha os chamados do próprio
+  /// cliente, e nada mais. Entra pelo portal, com PIN.
+  CLIENTE
   SOLICITANTE
   AGENTE
   SUPERVISOR
   GESTOR
   ADMINISTRADOR
+}
+
+/// Uma empresa da carteira da Norty.
+///
+/// Mora **dentro** da organização, e não é uma organização separada: o
+/// time da Norty atravessa a carteira inteira, e refazer o guard para
+/// isso seria a árvore recursiva de entidades do GLPI que a gap
+/// analysis recusou. Ver `docs/13-carteira-e-campo.md`.
+model Client {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  name           String
+  /// CNPJ ou CPF, como veio. Sem máscara.
+  document       String?
+  /// Domínio do e-mail das pessoas desta empresa: é dele que sai o
+  /// login `yuri.goes@empresadojoao.com.br`.
+  emailDomain    String
+  contactEmail   String?
+  contactPhone   String?
+  notes          String?
+  isActive       Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships  Membership[]
+  tickets      Ticket[]
+
+  @@unique([organizationId, name])
+  /// O domínio é o que gera o login: dois clientes com o mesmo domínio
+  /// produziriam logins que colidem entre empresas diferentes.
+  @@unique([organizationId, emailDomain])
+  @@index([organizationId, isActive])
+  @@map("clients")
+}
+
+/// Tentativas de entrada, para o bloqueio progressivo.
+///
+/// O PIN do portal tem seis dígitos: um milhão de combinações, que uma
+/// máquina percorre numa tarde. O que torna seis dígitos suficiente é
+/// isto — bloquear quem erra, por conta **e** por origem. Sem o bloqueio
+/// por origem, um atacante varre contas diferentes sem nunca disparar o
+/// bloqueio de nenhuma.
+model LoginThrottle {
+  id           String    @id @default(uuid()) @db.Uuid
+  /// `CONTA:<email>` ou `IP:<endereço>`.
+  chave        String    @unique
+  falhas       Int       @default(0)
+  ultimaEm     DateTime  @default(now())
+  /// Até quando está barrado. Nulo = liberado.
+  bloqueadoAte DateTime?
+
+  @@index([bloqueadoAte])
+  @@map("login_throttle")
 }
 
 model RefreshToken {
@@ -234,10 +297,10 @@ model Supplier {
   email          String?
   phone          String?
 
-  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   actorIn      TicketActor[]
   contracts    Contract[]
-  assets       Asset[]       @relation("FornecedorDoAtivo")
+  assets       Asset[]           @relation("FornecedorDoAtivo")
   licenses     SoftwareLicense[] @relation("FornecedorDaLicenca")
 
   @@unique([organizationId, name])
@@ -350,6 +413,8 @@ model Ticket {
 
   categoryId    String? @db.Uuid
   formId        String? @db.Uuid
+  /// De qual empresa-cliente é o chamado. Nulo = interno da Norty.
+  clientId      String? @db.Uuid
   /// Canal em que o chamado nasceu. Define o canal padrão de resposta.
   originChannel Channel @default(WEB)
 
@@ -376,6 +441,7 @@ model Ticket {
 
   organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   category      Category?      @relation(fields: [categoryId], references: [id])
+  client        Client?        @relation(fields: [clientId], references: [id])
   form          TicketForm?    @relation(fields: [formId], references: [id])
   pendingReason PendingReason? @relation(fields: [pendingReasonId], references: [id])
 
@@ -1062,12 +1128,12 @@ model Asset {
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
 
-  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user         User?            @relation("AtivoDoUsuario", fields: [userId], references: [id], onDelete: SetNull)
-  supplier     Supplier?        @relation("FornecedorDoAtivo", fields: [supplierId], references: [id], onDelete: SetNull)
-  manufacturer Manufacturer?    @relation(fields: [manufacturerId], references: [id], onDelete: SetNull)
-  assetModel   AssetModel?      @relation(fields: [assetModelId], references: [id], onDelete: SetNull)
-  location     Location?        @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?                  @relation("AtivoDoUsuario", fields: [userId], references: [id], onDelete: SetNull)
+  supplier     Supplier?              @relation("FornecedorDoAtivo", fields: [supplierId], references: [id], onDelete: SetNull)
+  manufacturer Manufacturer?          @relation(fields: [manufacturerId], references: [id], onDelete: SetNull)
+  assetModel   AssetModel?            @relation(fields: [assetModelId], references: [id], onDelete: SetNull)
+  location     Location?              @relation(fields: [locationId], references: [id], onDelete: SetNull)
   tickets      TicketAsset[]
   contracts    ContractAsset[]
   components   AssetComponent[]
@@ -1667,8 +1733,8 @@ model AssetModel {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  manufacturer Manufacturer? @relation(fields: [manufacturerId], references: [id], onDelete: SetNull)
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  manufacturer Manufacturer?         @relation(fields: [manufacturerId], references: [id], onDelete: SetNull)
   assets       Asset[]
   consumables  ConsumableItemModel[]
 
@@ -2293,4 +2359,3 @@ model RackItem {
   @@index([rackId])
   @@map("rack_items")
 }
-

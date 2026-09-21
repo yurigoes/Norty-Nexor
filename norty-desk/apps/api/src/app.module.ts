@@ -15,6 +15,7 @@ import { PaineisModule } from './modules/paineis/paineis.module';
 import { RegrasModule } from './modules/regras/regras.module';
 import { AprovacoesModule } from './modules/aprovacoes/aprovacoes.module';
 import { AtivosModule } from './modules/ativos/ativos.module';
+import { CarteiraModule } from './modules/carteira/carteira.module';
 import { AuditoriaModule } from './modules/auditoria/auditoria.module';
 import { LoteModule } from './modules/lote/lote.module';
 import { CatalogoDoAtivoModule } from './modules/catalogo-ativo/catalogo-ativo.module';
@@ -84,6 +85,7 @@ import { TranscricaoModule } from './modules/transcricao/transcricao.module';
     RegrasModule,
     WebhooksModule,
     AuditoriaModule,
+    CarteiraModule,
     TranscricaoModule,
     LoteModule,
   ],
