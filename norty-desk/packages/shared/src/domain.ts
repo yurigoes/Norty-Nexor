@@ -1418,6 +1418,102 @@ export function resumoDoHardware(componentes: ComponenteResumivel[]): ResumoDeHa
   return resumo;
 }
 
+// ---------------------------------------------------------------------
+// Carteira de clientes: login gerado e PIN
+// ---------------------------------------------------------------------
+
+/** Partículas que não são sobrenome: "Yuri Souza de Goes" → goes. */
+const PARTICULAS = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'del', 'di', 'du', 'van', 'von']);
+
+/** Sem acento, sem cedilha, sem o que não é letra ou dígito. */
+function semAcento(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * O login da pessoa do cliente, a partir do nome e do domínio da
+ * empresa.
+ *
+ * "Yuri Souza Goes" na empresadojoao.com.br vira
+ * `yuri.goes@empresadojoao.com.br`: primeiro nome e último sobrenome,
+ * que é como a pessoa se apresenta. Partícula não é sobrenome — "Yuri
+ * Souza de Goes" também dá `yuri.goes`, e não `yuri.de`.
+ *
+ * Devolve nulo quando não sobra nome utilizável (só partículas, só
+ * pontuação, vazio): quem chama decide o que fazer, em vez de receber
+ * um `@dominio` solto.
+ */
+export function loginDoCliente(nomeCompleto: string, dominio: string): string | null {
+  const partes = nomeCompleto
+    .trim()
+    .split(/\s+/)
+    .map(semAcento)
+    .filter((p) => p.length > 0);
+
+  const uteis = partes.filter((p) => !PARTICULAS.has(p));
+  if (uteis.length === 0) return null;
+
+  const dom = dominio.trim().toLowerCase().replace(/^@/, '');
+  if (!dom) return null;
+
+  const primeiro = uteis[0];
+  // Com um nome só, o login é ele: "Madonna" não vira "madonna.madonna".
+  const ultimo = uteis.length > 1 ? uteis[uteis.length - 1] : '';
+  const local = ultimo ? `${primeiro}.${ultimo}` : primeiro;
+
+  return `${local}@${dom}`;
+}
+
+/**
+ * O próximo login livre, quando o gerado já existe.
+ *
+ * Duas pessoas com o mesmo nome numa empresa de cem é questão de tempo,
+ * e o segundo cadastro não pode falhar em cima do primeiro. O sufixo
+ * começa em 2 porque "yuri.goes2" só faz sentido se existe um sem
+ * número.
+ */
+export function loginLivre(desejado: string, ocupados: Iterable<string>): string {
+  const usados = new Set([...ocupados].map((e) => e.trim().toLowerCase()));
+  if (!usados.has(desejado.toLowerCase())) return desejado;
+
+  const [local, dominio] = desejado.split('@');
+  for (let n = 2; n < 1000; n += 1) {
+    const tentativa = `${local}${n}@${dominio}`;
+    if (!usados.has(tentativa)) return tentativa;
+  }
+  throw new Error(`Mil logins iguais a "${desejado}": algo está errado no cadastro.`);
+}
+
+/** Dígitos do PIN do portal do cliente. Seis: um milhão de combinações. */
+export const DIGITOS_DO_PIN = 6;
+
+/**
+ * O PIN serve?
+ *
+ * Seis dígitos são um milhão de combinações — cem vezes mais que
+ * quatro, e ainda se decora. O que se recusa aqui é o que anula isso:
+ * sequência (123456), repetição (111111) e data de nascimento no
+ * formato que todo mundo usa (ddmmaa não é sorteio).
+ */
+export function pinFraco(pin: string): string | null {
+  if (!new RegExp(`^\\d{${DIGITOS_DO_PIN}}$`).test(pin)) {
+    return `O PIN tem ${DIGITOS_DO_PIN} dígitos.`;
+  }
+
+  if (new Set(pin).size === 1) return 'Um dígito repetido seis vezes não protege nada.';
+
+  const digitos = [...pin].map(Number);
+  const crescente = digitos.every((d, i) => i === 0 || d === digitos[i - 1] + 1);
+  const decrescente = digitos.every((d, i) => i === 0 || d === digitos[i - 1] - 1);
+  if (crescente || decrescente) return 'Sequência é a primeira coisa que se tenta.';
+
+  return null;
+}
+
 /** `5511999999999@s.whatsapp.net` → `+5511999999999` */
 export function normalizePhone(raw: string): string {
   const digits = raw.split('@')[0].replace(/\D/g, '');
