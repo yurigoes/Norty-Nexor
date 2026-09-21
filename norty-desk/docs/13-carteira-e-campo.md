@@ -105,3 +105,62 @@ A1 (PAdES) fica para quando houver necessidade jurídica — e aí precisa
 do `.pfx`, que nunca entra no repositório, e da senha como segredo.
 Enquanto isso, o carimbo com código de verificação já resolve a
 pergunta "este documento é mesmo da Norty?".
+
+
+---
+
+## 7. O que foi entregue, e o que mudou pelo caminho
+
+Registrado em 21/09/2026, depois dos seis blocos.
+
+### Diferenças entre o planejado e o feito
+
+**Bloqueio depois de 5 erros → depois de 3.** A seção 2 dizia cinco. A
+escada implementada dá **três** erros de folga e tranca a partir do
+quarto, com espera crescente até uma hora. Três porque digitar errado
+duas vezes é comum e cinco tentativas livres contra um PIN de seis
+dígitos ainda é generoso demais; a conta que importa é a de mil
+tentativas custarem mais de um dia.
+
+**O agendamento não é a pausa de pendência.** A seção 4 dizia que a
+visita marcada viraria "uma pausa com data de volta conhecida",
+reusando `pausedSeconds`. Não foi. O prazo de resolução é empurrado até
+o fim da visita e o quanto ele andou fica em `postponedSeconds`, coluna
+própria. Duas razões:
+
+1. Somadas numa coluna só, esperar o cliente responder e esperar a data
+   marcada com ele ficam indistinguíveis — e o relatório perde a
+   resposta para "por que este prazo esticou".
+2. A pausa desconta tempo **corrido em expediente**; a visita marcada é
+   um **instante**. O fim de uma visita pode cair fora do expediente, e
+   aí recuar a mesma quantidade de segundos úteis não devolve o instante
+   de onde se saiu. Por isso o agendamento guarda o vencimento anterior
+   e o cancelamento o restaura.
+
+**Só o TTR anda.** Não estava dito, e precisa estar: o TTO é "a gente
+voltou a falar com você", e marcar visita não é desculpa para não ter
+voltado a falar. Esticar os dois faria o primeiro atendimento parecer no
+prazo num chamado que ficou dois dias mudo.
+
+**O protocolo tem alfabeto próprio.** A seção 5 pedia "código aleatório".
+São oito caracteres de um alfabeto de 23 sem `O`/`0`, `1`/`I`/`L`,
+`5`/`S`, `B`/`8` e sem vogal — o código é ditado ao telefone e copiado
+do papel. Dá 23^8 ≈ 7,8·10^10.
+
+### O que o carimbo precisou para valer
+
+A seção 6 pedia carimbo com código de verificação. Sozinho ele seria
+enfeite: para o código responder "isto é mesmo da Norty?", a consulta
+pública passou a listar as ordens **concluídas** do chamado, com número,
+data e quem assinou. Quem tem o papel na mão digita o protocolo e
+confere.
+
+### O que falta
+
+**A tela de abertura rápida sem login não existe.** A seção 5 fala em
+"na tela de abertura rápida (sem login)"; essa tela nunca foi feita — o
+que existe é `POST /v1/intake/tickets`, que exige chave de aplicação. A
+consulta por protocolo foi entregue em `/protocolo`, com link a partir
+do login. Abrir chamado sem nenhuma credencial é decisão de produto em
+aberto: precisa de resposta para quem é o requerente e para como conter
+abuso, e nenhuma das duas deve ser inventada aqui.
