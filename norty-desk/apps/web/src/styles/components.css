@@ -1121,3 +1121,22 @@
   border-radius: var(--r-md);
   background: var(--superficie-afundada);
 }
+
+/* O anexo e o botão de retirar na mesma linha: o botão pertence ao
+   arquivo, e numa linha própria pareceria pertencer à mensagem. */
+.conversa-anexo-linha { display: flex; align-items: center; gap: var(--e-2); }
+.conversa-anexo-linha .conversa-anexo { flex: 1 1 auto; min-width: 0; }
+
+/* O × que tira alguém do selo. Herda a cor do selo para não virar um
+   segundo tom dentro de uma peça que já tem o seu. */
+.selo-x {
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0 0 0 4px;
+  font-size: 1.05em;
+  line-height: 1;
+}
+
+.selo-x:hover { opacity: .65; }

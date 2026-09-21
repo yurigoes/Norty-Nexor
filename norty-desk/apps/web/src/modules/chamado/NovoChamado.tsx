@@ -8,6 +8,7 @@ import * as api from '../../api/endpoints';
 import { ErroDaApi } from '../../api/cliente';
 import { resolverFormulario } from '../../api/formularios';
 import { CamposDinamicos } from '../formulario/CamposDinamicos';
+import { listarPessoas, type PessoaView } from '../../api/aprovacoes';
 import { useRecurso } from '../../auth/Autenticacao';
 import { MODIFICADOR_PRIORIDADE, ROTULO_PRIORIDADE } from '../../lib/formato';
 
@@ -29,6 +30,7 @@ export function NovoChamado({ noPortal = false }: { noPortal?: boolean }) {
   const [urgencia, setUrgencia] = useState<Scale>(3);
   const [impacto, setImpacto] = useState<Scale>(3);
   const [arquivo, setArquivo] = useState<File | null>(null);
+  const [observadores, setObservadores] = useState<string[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
@@ -88,6 +90,9 @@ export function NovoChamado({ noPortal = false }: { noPortal?: boolean }) {
         ...(categoria ? { categoryId: categoria } : {}),
         ...(noPortal ? {} : { urgency: urgencia, impact: impacto }),
         ...(formulario && Object.keys(respostas).length > 0 ? { customFields: respostas } : {}),
+        ...(observadores.length > 0
+          ? { observers: observadores.map((id) => ({ kind: 'USER' as const, id })) }
+          : {}),
       });
 
       if (arquivo) await api.anexar(chamado.id, arquivo);
@@ -166,9 +171,18 @@ export function NovoChamado({ noPortal = false }: { noPortal?: boolean }) {
             ))}
           </select>
           <span className="campo-ajuda">
-            A categoria define o time que atende e o prazo de resposta.
+            A categoria define quem atende — um time ou uma pessoa — e o prazo de resposta.
           </span>
         </div>
+
+        <Observadores
+          escolhidos={observadores}
+          aoMudar={setObservadores}
+          // No portal, o solicitante escolhe quem acompanha junto entre
+          // as pessoas que ele já enxerga. Se a API não devolver a
+          // lista para o perfil dele, o campo some em vez de aparecer
+          // vazio prometendo o que não entrega.
+        />
 
         {formulario ? (
           <CamposDinamicos
@@ -269,5 +283,85 @@ export function NovoChamado({ noPortal = false }: { noPortal?: boolean }) {
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Quem acompanha junto.
+ *
+ * O papel `OBSERVADOR` já existia no chamado; faltava a porta para
+ * usá-lo na abertura — que é quando a pessoa sabe quem mais precisa
+ * ficar sabendo. Somar observador depois é possível, mas a essa altura
+ * já se perdeu a primeira resposta.
+ *
+ * O campo some quando a lista de pessoas não vem: aparecer vazio
+ * prometeria uma escolha que não existe.
+ */
+function Observadores({
+  escolhidos,
+  aoMudar,
+}: {
+  escolhidos: string[];
+  aoMudar: (ids: string[]) => void;
+}) {
+  const { dado: pessoas } = useRecurso(
+    () => listarPessoas().catch(() => [] as PessoaView[]),
+    [],
+  );
+
+  if (!pessoas || pessoas.length === 0) return null;
+
+  const disponiveis = pessoas.filter((p) => !escolhidos.includes(p.id));
+
+  return (
+    <div className="campo">
+      <label className="campo-rotulo" htmlFor="observador">
+        Quem acompanha junto (opcional)
+      </label>
+
+      {escolhidos.length > 0 ? (
+        <div className="linha" style={{ gap: 'var(--e-2)', flexWrap: 'wrap' }}>
+          {escolhidos.map((id) => {
+            const pessoa = pessoas.find((p) => p.id === id);
+            return (
+              <span key={id} className="selo -contorno">
+                {pessoa?.name ?? 'Pessoa'}
+                <button
+                  type="button"
+                  className="selo-x"
+                  aria-label={`Tirar ${pessoa?.name ?? 'pessoa'} dos observadores`}
+                  onClick={() => aoMudar(escolhidos.filter((e) => e !== id))}
+                >
+                  ×
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
+
+      <select
+        id="observador"
+        className="select"
+        value=""
+        onChange={(e) => {
+          if (e.target.value) aoMudar([...escolhidos, e.target.value]);
+        }}
+        disabled={disponiveis.length === 0}
+      >
+        <option value="">
+          {disponiveis.length === 0 ? 'Todo mundo já está na lista' : 'Somar alguém…'}
+        </option>
+        {disponiveis.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+
+      <span className="campo-ajuda">
+        Quem você somar aqui enxerga o chamado e recebe as respostas.
+      </span>
+    </div>
   );
 }

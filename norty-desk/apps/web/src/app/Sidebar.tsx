@@ -111,6 +111,18 @@ export function Sidebar() {
           <span>Abrir chamado</span>
         </Link>
 
+        {/* A carteira vem logo depois de abrir chamado: é a pergunta
+            "de quem é este chamado", que se faz o tempo todo. */}
+        {can('cliente:ler') ? (
+          <Link
+            to="/clientes"
+            className="nav-item"
+            aria-current={local.pathname.startsWith('/clientes') ? 'page' : undefined}
+          >
+            <span>Clientes</span>
+          </Link>
+        ) : null}
+
         {can('painel:proprio') ? (
           <Link
             to="/painel"

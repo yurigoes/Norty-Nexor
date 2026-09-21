@@ -116,6 +116,8 @@ export const criarCategoria = (dados: {
   name: string;
   parentId?: string | null;
   defaultTeamId?: string | null;
+  /** A pessoa tem precedência sobre o time — a regra é da API. */
+  defaultAssigneeId?: string | null;
   defaultUrgency?: number | null;
   defaultAgreementIds?: string[];
 }) => chamar<{ id: string }>('/categories', { metodo: 'POST', corpo: dados });
@@ -125,6 +127,7 @@ export const editarCategoria = (
   dados: {
     name?: string;
     defaultTeamId?: string | null;
+    defaultAssigneeId?: string | null;
     defaultUrgency?: number | null;
     isActive?: boolean;
     defaultAgreementIds?: string[];

@@ -9,6 +9,8 @@ import {
   type AcordoView,
 } from '../../api/configuracao';
 import { listarCategorias, listarTimes, type CategoriaView, type TimeView } from '../../api/endpoints';
+import { listarPessoas, type PessoaView } from '../../api/aprovacoes';
+import { useRecurso } from '../../auth/Autenticacao';
 import { segundosParaHoras } from './formato';
 
 /**
@@ -75,7 +77,7 @@ export function Categorias() {
               <thead>
                 <tr>
                   <th>Categoria</th>
-                  <th>Time padrão</th>
+                  <th>Vai para</th>
                   <th>Situação</th>
                   <th />
                 </tr>
@@ -84,7 +86,11 @@ export function Categorias() {
                 {ordenadas.map((categoria) => (
                   <tr key={categoria.id}>
                     <td className="tabela-titulo-celula">{categoria.name}</td>
-                    <td>{categoria.defaultTeam?.name ?? '—'}</td>
+                    <td>
+                      {categoria.defaultAssignee?.name ??
+                        categoria.defaultTeam?.name ??
+                        '—'}
+                    </td>
                     <td>
                       <span className={`selo ${categoria.isActive ? '-sucesso' : '-neutro'}`}>
                         {categoria.isActive ? 'Ativa' : 'Inativa'}
@@ -161,6 +167,7 @@ function Formulario({
     name: string;
     parentId?: string | null;
     defaultTeamId?: string | null;
+    defaultAssigneeId?: string | null;
     defaultUrgency?: number | null;
     defaultAgreementIds?: string[];
   }) => Promise<void>;
@@ -168,6 +175,11 @@ function Formulario({
   const [nome, setNome] = useState(categoria?.name ?? '');
   const [pai, setPai] = useState(categoria?.parentId ?? '');
   const [time, setTime] = useState(categoria?.defaultTeam?.id ?? '');
+  const [pessoa, setPessoa] = useState(categoria?.defaultAssignee?.id ?? '');
+  const { dado: pessoas } = useRecurso(
+    () => listarPessoas().catch(() => [] as PessoaView[]),
+    [],
+  );
   const [urgencia, setUrgencia] = useState('');
   const [escolhidos, setEscolhidos] = useState<string[]>([]);
   const [erro, setErro] = useState<string | null>(null);
@@ -199,6 +211,7 @@ function Formulario({
               name: nome,
               ...(categoria ? {} : { parentId: pai || null }),
               defaultTeamId: time || null,
+              defaultAssigneeId: pessoa || null,
               defaultUrgency: urgencia ? Number(urgencia) : null,
               ...(escolhidos.length > 0 ? { defaultAgreementIds: escolhidos } : {}),
             })
@@ -274,6 +287,33 @@ function Formulario({
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div className="campo">
+                <label className="campo-rotulo" htmlFor="pessoa-categoria">
+                  Ou uma pessoa
+                </label>
+                <select
+                  id="pessoa-categoria"
+                  className="select"
+                  value={pessoa}
+                  onChange={(e) => setPessoa(e.target.value)}
+                >
+                  <option value="">Ninguém</option>
+                  {(pessoas ?? []).map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+                {/* A precedência é da API, e a tela a repete em
+                    palavras: quem configura precisa saber que apontar
+                    uma pessoa desliga o time, e não somar aos dois. */}
+                <span className="campo-ajuda">
+                  {pessoa
+                    ? 'A pessoa tem precedência: o chamado vai para ela, não para o time.'
+                    : 'Apontando uma pessoa, o chamado vai direto para ela.'}
+                </span>
               </div>
 
               <div className="campo">

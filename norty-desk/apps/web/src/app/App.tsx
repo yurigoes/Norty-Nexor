@@ -30,6 +30,7 @@ import { Ativo } from '../modules/ativo/Ativo';
 import { Ativos } from '../modules/ativo/Ativos';
 import { Pesquisa } from '../modules/ativo/Pesquisa';
 import { ConsultaProtocolo } from '../modules/protocolo/ConsultaProtocolo';
+import { Carteira } from '../modules/carteira/Carteira';
 import { Artigo } from '../modules/conhecimento/Artigo';
 import { Conhecimento } from '../modules/conhecimento/Conhecimento';
 import { Diagnostico } from '../modules/canais/Diagnostico';
@@ -119,6 +120,7 @@ function Aplicativo() {
           <Routes>
             <Route path="/" element={<Fila />} />
             <Route path="/painel" element={<Painel />} />
+            <Route path="/clientes" element={<Carteira />} />
             <Route path="/ativos" element={<Ativos />} />
             <Route path="/ativos/:id" element={<Ativo />} />
             <Route path="/software" element={<Softwares />} />

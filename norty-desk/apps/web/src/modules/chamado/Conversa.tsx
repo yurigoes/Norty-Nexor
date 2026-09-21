@@ -1,5 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
-import type { TicketDetail, TicketEventView } from '@norty-desk/shared';
+import { podeRemoverAnexo, type TicketDetail, type TicketEventView } from '@norty-desk/shared';
 
 import * as api from '../../api/endpoints';
 import { ErroDaApi } from '../../api/cliente';
@@ -55,7 +55,14 @@ export function Conversa({
       {carregando ? <div className="sk sk-bloco" /> : null}
 
       {(eventos ?? []).map((evento) => (
-        <Evento key={evento.id} evento={evento} />
+        <Evento
+          key={evento.id}
+          evento={evento}
+          // Chamado fechado não perde anexo pela mesma razão que não
+          // recebe: reabra antes. A API recusa, e a tela não oferece.
+          podeMexer={!somenteLeitura && chamado.status !== 'FECHADO'}
+          aoMudar={aoMudar}
+        />
       ))}
 
       {somenteLeitura || chamado.status === 'FECHADO' ? (
@@ -72,10 +79,20 @@ export function Conversa({
   );
 }
 
-function Evento({ evento }: { evento: TicketEventView }) {
+function Evento({
+  evento,
+  podeMexer,
+  aoMudar,
+}: {
+  evento: TicketEventView;
+  podeMexer: boolean;
+  aoMudar: () => void;
+}) {
+  const { perfil } = useAutenticacao();
   const ehSistema = TIPOS_DE_SISTEMA.has(evento.type);
   const ehInterna = evento.visibility === 'INTERNA';
   const autor = evento.author?.name ?? 'Sistema';
+  const [retirando, setRetirando] = useState<string | null>(null);
 
   return (
     <article
@@ -109,19 +126,51 @@ function Evento({ evento }: { evento: TicketEventView }) {
 
       {evento.attachments.length > 0 ? (
         <div className="conversa-anexos">
-          {evento.attachments.map((anexo) => (
-            <a
-              key={anexo.id}
-              className="conversa-anexo"
-              href={api.urlDoAnexo(anexo.id)}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <span aria-hidden="true">📎</span>
-              {anexo.filename}
-              <span className="conversa-anexo-peso">{Math.round(anexo.sizeBytes / 1024)} KB</span>
-            </a>
-          ))}
+          {evento.attachments.map((anexo) => {
+            // A mesma função que a API usa para decidir se aceita o
+            // DELETE. Fossem duas implementações, a divergência
+            // apareceria como botão que não funciona — ou, pior, como
+            // botão ausente numa ação que a API aceitaria.
+            const podeRetirar =
+              podeMexer &&
+              perfil !== null &&
+              podeRemoverAnexo(perfil.role, perfil.user.id, anexo);
+
+            return (
+              <div key={anexo.id} className="conversa-anexo-linha">
+                <a
+                  className="conversa-anexo"
+                  href={api.urlDoAnexo(anexo.id)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <span aria-hidden="true">📎</span>
+                  {anexo.filename}
+                  <span className="conversa-anexo-peso">
+                    {Math.round(anexo.sizeBytes / 1024)} KB
+                  </span>
+                </a>
+
+                {podeRetirar ? (
+                  <button
+                    type="button"
+                    className="btn -fantasma -sm"
+                    disabled={retirando === anexo.id}
+                    aria-label={`Retirar ${anexo.filename}`}
+                    onClick={() => {
+                      setRetirando(anexo.id);
+                      void api
+                        .removerAnexo(anexo.id)
+                        .then(aoMudar)
+                        .finally(() => setRetirando(null));
+                    }}
+                  >
+                    Retirar
+                  </button>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       ) : null}
     </article>

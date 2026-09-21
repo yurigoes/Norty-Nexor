@@ -143,6 +143,7 @@ export type CategoriaView = {
   parentId: string | null;
   isActive: boolean;
   defaultTeam: { id: string; name: string } | null;
+  defaultAssignee: { id: string; name: string } | null;
 };
 
 export type TimeView = {
@@ -201,3 +202,7 @@ export const cancelarOrdem = (id: string) =>
 
 export const urlDaOrdemEmPdf = (id: string) =>
   `${import.meta.env.VITE_API_URL ?? '/v1'}/ordens/${id}/pdf`;
+
+/** Retirar o anexo. Quem pode o quê é `podeRemoverAnexo`, em shared. */
+export const removerAnexo = (id: string) =>
+  chamar<void>(`/anexos/${id}`, { metodo: 'DELETE' });
