@@ -209,3 +209,77 @@ Nada dos seis blocos. Continuam pendentes, fora deles, o arquivo do
 logo do Norty Desk e as duas capturas do LICITA+ — sem elas a marca nos
 PDFs é o texto "norty desk" desenhado, e o alinhamento com o LICITA+ se
 apoia só nos tokens.
+
+---
+
+## 8. Modelos, e como se chega na máquina
+
+Registrado em 21/09/2026.
+
+### Modelo de chamado é o formulário dinâmico, visto do outro lado
+
+Deduzido da categoria, ele é "o formulário que aparece sozinho";
+escolhido pelo nome, é "o botão Impressora que carrega as perguntas
+certas". `TicketForm` ganhou `isModel`, `description`, `position` e
+`isPublic` em vez de nascer um terceiro conceito — duas tabelas para
+isso seriam dois construtores de campo e dois validadores para a mesma
+pergunta.
+
+As marcas são separadas porque respondem a coisas diferentes:
+
+- `isModel` — aparece na lista de quem vai abrir. Um formulário que
+  existe só para herdar numa subcategoria não deve poluí-la.
+- `isPublic` — vale também sem login. Um modelo com campo interno
+  ("custo estimado", "contrato") não pode aparecer para quem só quer
+  dizer que a impressora parou.
+
+`Category.isPublic` segue a mesma lógica e nasce `false`: a taxonomia
+interna tem ramo que não se mostra a estranho, e um padrão que
+publicasse tudo faria de cada categoria nova um vazamento que ninguém
+decidiu.
+
+### Acesso remoto: a decisão que precisa estar escrita
+
+O equipamento passa a guardar Tailscale, dados de VPN e o id **e a
+senha** do acesso remoto. É a informação mais perigosa do sistema: com
+ela, quem a tiver entra na máquina de alguém.
+
+**Decisão:** guardar, cifrado, com três cercas.
+
+1. **Cifrada em repouso** (AES-256-GCM, a mesma dos segredos de canal).
+   Em texto claro, um dump do banco entrega o parque inteiro.
+2. **Fora de toda carga.** Nem listagem, nem detalhe, nem os ativos do
+   chamado, nem a própria rota de acesso remoto — que devolve
+   `temSenha: true` e nada mais. Sai por uma rota que existe só para
+   isso, e que é `POST`: revelar é um ato, não uma leitura, e `GET`
+   deixaria cópia no histórico do navegador e no log do proxy.
+3. **Cada revelação na auditoria**, com quem, qual máquina e quando. O
+   diff registra `temSenha` mudando, nunca o valor — trilha que guarda
+   segredo é um segundo lugar de onde ele vaza, e esse não é cifrado.
+
+`ativo:acesso-remoto` é permissão própria: "que máquina é essa" é
+inventário, "como eu entro nela agora" é chave de casa. Agente,
+supervisor e administrador têm; o gestor que lê indicador e o cliente,
+não.
+
+**O que isto não é.** Não é cofre de senhas. Não há rotação, não há
+compartilhamento com validade, não há segredo por pessoa. É o lugar
+certo para a senha do AnyDesk da máquina do cliente, e o lugar errado
+para a senha do administrador de domínio — essa pede um cofre de
+verdade, e o Desk não é um.
+
+**A chave mora em `CHANNEL_SECRET_KEY`**, que já cifra segredos de
+canal, chaves de licença e fontes de diretório. O nome ficou pequeno
+para o que ela protege hoje; renomeá-la quebraria a instalação que está
+rodando, então fica anotado aqui em vez de ser trocado em silêncio.
+
+### O agente do Norty Endpoint
+
+O pedido mencionava alimentar estes campos pelo agente do endpoint. Os
+campos existem e a API que os grava também (`PATCH
+/assets/:id/acesso-remoto`), então o agente tem onde escrever quando
+existir. O que **não** foi feito, e é decisão de produto em aberto: como
+o agente se autentica para escrever. Chave de aplicação por máquina,
+chave por organização e certificado de cliente resolvem de jeitos
+diferentes, e nenhum deles deve ser escolhido sem saber como o agente
+vai ser distribuído.
