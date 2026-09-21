@@ -155,12 +155,57 @@ pública passou a listar as ordens **concluídas** do chamado, com número,
 data e quem assinou. Quem tem o papel na mão digita o protocolo e
 confere.
 
-### O que falta
+### A abertura sem login — entregue em 21/09/2026
 
-**A tela de abertura rápida sem login não existe.** A seção 5 fala em
-"na tela de abertura rápida (sem login)"; essa tela nunca foi feita — o
-que existe é `POST /v1/intake/tickets`, que exige chave de aplicação. A
-consulta por protocolo foi entregue em `/protocolo`, com link a partir
-do login. Abrir chamado sem nenhuma credencial é decisão de produto em
-aberto: precisa de resposta para quem é o requerente e para como conter
-abuso, e nenhuma das duas deve ser inventada aqui.
+A seção 5 pressupunha "a tela de abertura rápida (sem login)", que não
+existia. Existe agora, em `/abrir`, e as duas perguntas que estavam em
+aberto foram respondidas assim:
+
+**Quem é o requerente.** Um `Contact`, como no e-mail e no WhatsApp —
+não um usuário. Quem abre informa nome e ao menos uma forma de retorno
+(e-mail ou WhatsApp); a segunda abertura da mesma pessoa reaproveita o
+contato. O requerente ser contato e não usuário é o que distingue
+estruturalmente um chamado aberto de fora.
+
+**Como conter abuso.** A mesma escada de bloqueio por IP da consulta
+por protocolo, com uma diferença: a busca que **não acha** conta como
+erro. É a busca que não acha que o varredor repete.
+
+**Como a empresa é identificada.** Nome ou documento, no mesmo campo, e
+o sistema decide qual é pela forma: onze ou quatorze dígitos sem letra
+é documento; o resto é nome.
+
+- *Documento* é exato, sobre uma coluna gerada que guarda só os
+  dígitos — com ou sem pontuação, dos dois lados. Um dígito trocado não
+  acha nada, de propósito.
+- *Nome* é `word_similarity` de trigramas sobre uma coluna gerada
+  normalizada (minúsculas, sem acento, sem forma societária no fim),
+  com limiar de 0,5.
+
+Três decisões que só apareceram medindo:
+
+1. `word_similarity` em vez de `similarity`: a segunda compara com o
+   nome inteiro e afunda consulta curta ("empresa" dá 0,19 contra
+   "Empresa do João Comércio de Materiais LTDA"; a primeira dá 1,0).
+2. Tirar a forma societária dos dois lados: sem isso "xyz ltda" casava
+   0,556 com a carteira inteira.
+3. O limiar precisa de `SET LOCAL` em transação — num CTE ao lado do
+   `SELECT` a ordem de avaliação não é garantida, e vale o padrão 0,6
+   do Postgres. O sintoma é a busca perder a faixa 0,5–0,6 em silêncio.
+
+**A escolha da empresa é sempre da pessoa, nunca do sistema.** A tela
+mostra até cinco nomes parecidos e quem abre aponta o seu. Escolher
+sozinho pelo mais parecido poria o chamado na empresa errada sem
+ninguém perceber — num sistema de chamados, isso é o cliente A lendo o
+problema do cliente B.
+
+**O que sai desta porta é o mínimo:** id e nome. Nem documento, nem
+contato, nem contagem de chamados. Quem digita três letras não provou
+ser ninguém.
+
+### O que ainda falta
+
+Nada dos seis blocos. Continuam pendentes, fora deles, o arquivo do
+logo do Norty Desk e as duas capturas do LICITA+ — sem elas a marca nos
+PDFs é o texto "norty desk" desenhado, e o alinhamento com o LICITA+ se
+apoia só nos tokens.
