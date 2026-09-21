@@ -9,6 +9,7 @@ import type {
   ActorRole,
   AgreementKind,
   AppointmentStatus,
+  ServiceOrderStatus,
   ApprovalStatus,
   ChangeKind,
   ChangeRisk,
@@ -237,6 +238,22 @@ export type ConsultaPublica = {
   /** Data e hora do atendimento marcado, quando há um. */
   scheduledFor: string | null;
   timeline: EventoPublico[];
+  /**
+   * As ordens de serviço já concluídas.
+   *
+   * Aparecem aqui porque é isto que dá sentido ao código de verificação
+   * impresso no carimbo: quem tem o papel na mão digita o protocolo e
+   * confere que o documento existe e bate.
+   */
+  serviceOrders: OrdemPublica[];
+};
+
+export type OrdemPublica = {
+  number: number;
+  concludedAt: string;
+  signedByName: string | null;
+  itemsDone: number;
+  itemsTotal: number;
 };
 
 export type EventoPublico = {
@@ -263,6 +280,57 @@ export type AppointmentView = {
   /** Quanto este agendamento empurrou o prazo do chamado, em segundos. */
   postponedSeconds: number;
   createdAt: string;
+};
+
+// ---------------------------------------------------------------------
+// Ordem de serviço
+// ---------------------------------------------------------------------
+
+export type ServiceOrderItemView = {
+  id: string;
+  position: number;
+  description: string;
+  done: boolean;
+  notes: string | null;
+  doneAt: string | null;
+};
+
+export type ServiceOrderView = {
+  id: string;
+  ticketId: string;
+  number: number;
+  status: ServiceOrderStatus;
+  technician: PartyRef | null;
+  appointmentId: string | null;
+  report: string | null;
+  items: ServiceOrderItemView[];
+  /** Quem assinou, e como. Nulo enquanto não assinada. */
+  signedByName: string | null;
+  signedByRole: string | null;
+  signedAt: string | null;
+  /** Há assinatura desenhada guardada? O traço em si não vem na lista. */
+  hasSignature: boolean;
+  createdAt: string;
+};
+
+export type EscreverOrdemRequest = {
+  appointmentId?: string;
+  technicianId?: string;
+  report?: string;
+};
+
+export type EscreverItemRequest = {
+  description: string;
+  notes?: string;
+  done?: boolean;
+};
+
+export type ConcluirOrdemRequest = {
+  /** PNG em `data:`, vindo do `<canvas>` onde o técnico desenhou. */
+  signature: string;
+  signedByName: string;
+  signedByRole?: string;
+  report?: string;
 };
 
 export type AgendarRequest = {

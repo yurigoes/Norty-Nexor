@@ -1688,3 +1688,80 @@ export function normalizarProtocolo(digitado: string): string | null {
   for (const c of limpo) if (!ALFABETO_DO_PROTOCOLO.includes(c)) return null;
   return limpo;
 }
+
+// ---------------------------------------------------------------------
+// Ordem de serviço
+// ---------------------------------------------------------------------
+
+export const SERVICE_ORDER_STATUSES = [
+  'RASCUNHO',
+  'EXECUTANDO',
+  'CONCLUIDA',
+  'CANCELADA',
+] as const;
+export type ServiceOrderStatus = (typeof SERVICE_ORDER_STATUSES)[number];
+
+export const ROTULO_ORDEM: Record<ServiceOrderStatus, string> = {
+  RASCUNHO: 'Rascunho',
+  EXECUTANDO: 'Em execução',
+  CONCLUIDA: 'Concluída',
+  CANCELADA: 'Cancelada',
+};
+
+/**
+ * Ordem assinada não muda.
+ *
+ * A assinatura atesta a lista de itens que estava na tela naquele
+ * momento. Deixar editá-la depois transformaria o documento numa
+ * declaração de qualquer coisa — e é justamente o documento que o
+ * cliente guarda como prova do atendimento.
+ */
+export function ordemEditavel(status: ServiceOrderStatus): boolean {
+  return status === 'RASCUNHO' || status === 'EXECUTANDO';
+}
+
+/**
+ * O que impede concluir esta ordem, ou `null` se nada impede.
+ *
+ * Um item deixado por fazer não impede: visita em que nem tudo coube é
+ * a regra, não a exceção, e o documento tem de poder dizer isso. O que
+ * ele não pode é sair em branco — ordem sem nenhum item registrado não
+ * atesta atendimento nenhum.
+ */
+export function ordemInconclusivel(
+  status: ServiceOrderStatus,
+  itens: readonly { done: boolean }[],
+): string | null {
+  if (status === 'CONCLUIDA') return 'Esta ordem já foi concluída.';
+  if (status === 'CANCELADA') return 'Esta ordem foi cancelada.';
+  if (itens.length === 0) return 'Inclua ao menos um item antes de concluir.';
+  if (!itens.some((i) => i.done)) {
+    return 'Marque ao menos um item como realizado — ou cancele a ordem.';
+  }
+  return null;
+}
+
+/** Tamanho máximo do PNG da assinatura: um traço, não uma foto. */
+export const TAMANHO_MAXIMO_DA_ASSINATURA = 512 * 1024;
+
+/**
+ * Valida a imagem da assinatura vinda do `<canvas>`.
+ *
+ * Aceita **só** `image/png` em `data:`. O campo recebe o que o
+ * navegador mandar, e um `data:text/html` guardado e servido de volta
+ * seria script na origem da API.
+ */
+export function assinaturaInvalida(dataUrl: string): string | null {
+  const prefixo = 'data:image/png;base64,';
+  if (!dataUrl.startsWith(prefixo)) return 'A assinatura tem de ser uma imagem PNG.';
+
+  const base64 = dataUrl.slice(prefixo.length);
+  if (base64.length === 0) return 'Assine antes de concluir.';
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) return 'A assinatura chegou corrompida.';
+
+  // 3 bytes viram 4 caracteres em base64.
+  if ((base64.length * 3) / 4 > TAMANHO_MAXIMO_DA_ASSINATURA) {
+    return 'A assinatura está grande demais.';
+  }
+  return null;
+}

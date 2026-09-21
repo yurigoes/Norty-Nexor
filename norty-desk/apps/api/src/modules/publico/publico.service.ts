@@ -5,6 +5,7 @@ import {
   normalizarProtocolo,
   type ConsultaPublica,
   type EventoPublico,
+  type OrdemPublica,
 } from '@norty-desk/shared';
 
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -88,7 +89,40 @@ export class PublicoService {
       closedAt: chamado.closedAt?.toISOString() ?? null,
       scheduledFor: agendado?.scheduledFor.toISOString() ?? null,
       timeline: await this.linhaDoTempo(chamado.id),
+      serviceOrders: await this.ordensConcluidas(chamado.id),
     };
+  }
+
+  /**
+   * As ordens de serviço já concluídas.
+   *
+   * É isto que dá sentido ao código de verificação impresso no carimbo:
+   * quem tem o papel na mão digita o protocolo e confere que a ordem
+   * existe, com o mesmo número e a mesma data. Sem esta lista, o
+   * carimbo seria um enfeite.
+   *
+   * Só as concluídas: rascunho é trabalho em andamento, e mostrá-lo ao
+   * cliente antes de o técnico terminar prometeria o que não foi feito.
+   */
+  private async ordensConcluidas(ticketId: string): Promise<OrdemPublica[]> {
+    const ordens = await this.prisma.serviceOrder.findMany({
+      where: { ticketId, status: 'CONCLUIDA' },
+      orderBy: { number: 'asc' },
+      select: {
+        number: true,
+        signedAt: true,
+        signedByName: true,
+        items: { select: { done: true } },
+      },
+    });
+
+    return ordens.map((o) => ({
+      number: o.number,
+      concludedAt: (o.signedAt ?? new Date(0)).toISOString(),
+      signedByName: o.signedByName,
+      itemsDone: o.items.filter((i) => i.done).length,
+      itemsTotal: o.items.length,
+    }));
   }
 
   /**

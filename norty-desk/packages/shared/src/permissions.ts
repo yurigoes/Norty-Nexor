@@ -57,6 +57,12 @@ export const PERMISSIONS = [
    */
   'chamado:agendar',
 
+  // --- Ordem de serviço ------------------------------------------------
+  /** Ver a ordem e baixar o PDF. O cliente também vê a dele. */
+  'ordem:ler',
+  /** Criar, editar itens, concluir e assinar. De quem vai a campo. */
+  'ordem:gerenciar',
+
   // --- Tarefa e tempo -------------------------------------------------
   'tarefa:criar',
   'tarefa:concluir',
@@ -173,6 +179,7 @@ const IMPLICA: Partial<Record<Permission, readonly Permission[]>> = {
   'artigo:publicar': ['artigo:escrever'],
   'artigo:ler:interno': ['artigo:ler'],
   'anexo:remover': ['anexo:remover:proprio'],
+  'ordem:gerenciar': ['ordem:ler'],
   'ativo:gerenciar': ['ativo:ler', 'ativo:catalogo', 'consumivel:movimentar'],
   'ativo:catalogo': ['ativo:ler'],
   'problema:gerenciar': ['problema:ler'],
@@ -214,6 +221,7 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'anexo:enviar',
     'anexo:baixar',
     'anexo:remover:proprio',
+    'ordem:ler',
   ],
 
   SOLICITANTE: [
@@ -228,6 +236,7 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'aprovacao:decidir',
     'artigo:ler',
     'painel:proprio',
+    'ordem:ler',
   ],
 
   AGENTE: [
@@ -246,6 +255,12 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'chamado:fechar',
     'chamado:vincular',
     'chamado:agendar',
+
+  // --- Ordem de serviço ------------------------------------------------
+  /** Ver a ordem e baixar o PDF. O cliente também vê a dele. */
+  'ordem:ler',
+  /** Criar, editar itens, concluir e assinar. De quem vai a campo. */
+  'ordem:gerenciar',
     'tarefa:criar',
     'tarefa:concluir',
     'tarefa:apontar-tempo',
@@ -315,6 +330,12 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'chamado:vincular',
     'chamado:acao-em-lote',
     'chamado:agendar',
+
+  // --- Ordem de serviço ------------------------------------------------
+  /** Ver a ordem e baixar o PDF. O cliente também vê a dele. */
+  'ordem:ler',
+  /** Criar, editar itens, concluir e assinar. De quem vai a campo. */
+  'ordem:gerenciar',
     'tarefa:criar',
     'tarefa:concluir',
     'tarefa:apontar-tempo',
@@ -363,6 +384,7 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
   GESTOR: [
     'cliente:ler',
     'chamado:ler:todos',
+    'ordem:ler',
     /**
      * Aprovar é justamente o ato de gestor. O solicitante já decide as
      * aprovações em que é designado — negá-las a quem responde pelo

@@ -55,6 +55,7 @@ model Organization {
   problems            Problem[]
   changes             Change[]
   recurrences         RecurringTicket[]
+  serviceOrders       ServiceOrder[]
   templates           Template[]
   contracts           Contract[]
   budgets             Budget[]
@@ -107,6 +108,7 @@ model User {
   actorIn             TicketActor[]
   categoriasPadrao    Category[]           @relation("ResponsavelPadraoDaCategoria")
   appointments        Appointment[]        @relation("TecnicoDoAgendamento")
+  serviceOrders       ServiceOrder[]       @relation("TecnicoDaOrdem")
   authoredEvents      TicketEvent[]        @relation("AutorDoEvento")
   approvals           Approval[]
   refreshTokens       RefreshToken[]
@@ -474,6 +476,7 @@ model Ticket {
   projects     ProjectTicket[]
   agendaEvents AgendaEvent[]
   appointments Appointment[]
+  serviceOrders ServiceOrder[]
 
   /// O problema que causa este chamado e a mudança que o resolve.
   /// São os dois vínculos que o ITIL pede e o GLPI resolve com uma
@@ -560,6 +563,79 @@ enum Visibility {
   INTERNA
 }
 
+enum ServiceOrderStatus {
+  RASCUNHO
+  EXECUTANDO
+  CONCLUIDA
+  CANCELADA
+}
+
+/// A ordem de serviço do atendimento em campo.
+///
+/// É o documento que o técnico leva, preenche na frente do cliente e
+/// assina ali mesmo. Por isso a regra que governa o modelo inteiro:
+/// **depois de assinada, não muda**. A assinatura atesta a lista de
+/// itens que estava na tela naquele momento; deixar editá-la depois
+/// transformaria o documento em declaração de qualquer coisa.
+model ServiceOrder {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @db.Uuid
+  ticketId       String              @db.Uuid
+  /// Sequencial legível por organização, como o número do chamado.
+  number         Int
+  status         ServiceOrderStatus  @default(RASCUNHO)
+  /// A visita que esta ordem executa, quando ela nasceu de um agendamento.
+  appointmentId  String?             @db.Uuid
+  technicianId   String?             @db.Uuid
+  /// O que o técnico encontrou e o que fez, em texto corrido.
+  report         String?
+
+  /// --- Assinatura desenhada ---------------------------------------
+  /// Chave do PNG no armazenamento. Fica no bucket, e não numa coluna
+  /// em base64: o traço de um dedo em tela de celular dá dezenas de
+  /// kilobytes, e uma listagem de ordens carregaria todos eles.
+  signatureKey   String?
+  /// Quem assinou, como assinou e quando. Guardados no momento da
+  /// assinatura, não lidos do cadastro depois: o documento tem de dizer
+  /// o que era verdade quando foi assinado.
+  signedByName   String?
+  signedByRole   String?
+  signedAt       DateTime?
+
+  createdById    String?             @db.Uuid
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ticket       Ticket             @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  appointment  Appointment?       @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  technician   User?              @relation("TecnicoDaOrdem", fields: [technicianId], references: [id], onDelete: SetNull)
+  items        ServiceOrderItem[]
+
+  @@unique([organizationId, number])
+  @@index([ticketId])
+  @@index([technicianId, status])
+  @@map("service_orders")
+}
+
+/// Um item a realizar na ordem de serviço.
+model ServiceOrderItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  orderId     String   @db.Uuid
+  /// Ordem de exibição. Inteiro simples: a lista é curta e reordenar
+  /// uma dúzia de linhas não justifica chave fracionária.
+  position    Int
+  description String
+  done        Boolean  @default(false)
+  notes       String?
+  doneAt      DateTime?
+
+  order ServiceOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, position])
+  @@map("service_order_items")
+}
+
 enum AppointmentStatus {
   AGENDADO
   REALIZADO
@@ -602,8 +678,9 @@ model Appointment {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
-  ticket     Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  technician User?  @relation("TecnicoDoAgendamento", fields: [technicianId], references: [id], onDelete: SetNull)
+  ticket        Ticket         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  technician    User?          @relation("TecnicoDoAgendamento", fields: [technicianId], references: [id], onDelete: SetNull)
+  serviceOrders ServiceOrder[]
 
   /// A agenda do técnico: "o que eu tenho marcado esta semana".
   @@index([technicianId, scheduledFor])

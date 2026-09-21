@@ -17,6 +17,7 @@ import { AprovacoesModule } from './modules/aprovacoes/aprovacoes.module';
 import { AtivosModule } from './modules/ativos/ativos.module';
 import { ThrottleModule } from './common/throttle/throttle.module';
 import { AgendamentoModule } from './modules/agendamento/agendamento.module';
+import { OrdemModule } from './modules/ordem/ordem.module';
 import { PublicoModule } from './modules/publico/publico.module';
 import { CarteiraModule } from './modules/carteira/carteira.module';
 import { AuditoriaModule } from './modules/auditoria/auditoria.module';
@@ -91,6 +92,7 @@ import { TranscricaoModule } from './modules/transcricao/transcricao.module';
     ThrottleModule,
     CarteiraModule,
     AgendamentoModule,
+    OrdemModule,
     PublicoModule,
     TranscricaoModule,
     LoteModule,
