@@ -20,6 +20,7 @@ import {
   ALFABETO_DO_PROTOCOLO,
   TAMANHO_DO_PROTOCOLO,
   canTransition,
+  normalizarProtocolo,
 } from '@norty-desk/shared';
 import { Prisma } from '@prisma/client';
 import { randomInt } from 'node:crypto';
@@ -121,7 +122,7 @@ export class TicketsService {
   ): Promise<Paginated<TicketListItem>> {
     const limite = Math.min(filtro.limit ?? 50, 200);
     const where: Prisma.TicketWhereInput = {
-      AND: [escopoDeLeitura(usuario), this.filtros(usuario, filtro)],
+      AND: [escopoDeLeitura(usuario), await this.filtros(usuario, filtro)],
     };
 
     const chamados = await this.prisma.ticket.findMany({
@@ -144,7 +145,10 @@ export class TicketsService {
     };
   }
 
-  private filtros(usuario: UsuarioAutenticado, filtro: FiltroFilaDto): Prisma.TicketWhereInput {
+  private async filtros(
+    usuario: UsuarioAutenticado,
+    filtro: FiltroFilaDto,
+  ): Promise<Prisma.TicketWhereInput> {
     const where: Prisma.TicketWhereInput = {};
 
     if (filtro.status?.length) where.status = { in: filtro.status };
@@ -185,14 +189,67 @@ export class TicketsService {
     if (filtro.q) {
       const texto = filtro.q.trim();
       const numero = Number(texto.replace('#', ''));
+      const protocolo = normalizarProtocolo(texto);
+
       where.OR = [
-        { subject: { contains: texto, mode: 'insensitive' } },
-        { description: { contains: texto, mode: 'insensitive' } },
+        { id: { in: await this.idsPorTexto(usuario.organizationId, texto) } },
         ...(Number.isInteger(numero) && numero > 0 ? [{ number: numero }] : []),
+        // Quem cola um protocolo está procurando aquele chamado, não
+        // texto parecido com ele.
+        ...(protocolo ? [{ protocol: protocolo }] : []),
       ];
     }
 
     return where;
+  }
+
+  /**
+   * Os chamados cujo texto casa, pelo índice.
+   *
+   * Havia um índice GIN em `tickets` desde o começo, e a busca nunca o
+   * usou: `contains` vira `ILIKE '%termo%'`, que nenhum índice de texto
+   * atende. Eram 600 linhas varridas a cada tecla, e seriam 600 mil no
+   * dia em que a Norty tiver 600 mil chamados.
+   *
+   * **A expressão aqui tem de ser idêntica à do índice.** O Postgres só
+   * usa índice por expressão quando a consulta repete a fórmula exata;
+   * um `coalesce` a mais e o plano volta a ser varredura, sem ninguém
+   * perceber — que é justamente o defeito que estamos consertando. Por
+   * isso ela está escrita uma vez só, nesta função.
+   *
+   * Os lexemas viram `OR`: `plainto_tsquery` exigiria **todos** os
+   * termos, e quem digita o assunto inteiro de um chamado não acharia
+   * nada. Eles saem do próprio `to_tsvector` e entram citados, então
+   * nenhum texto do usuário chega cru ao `to_tsquery`.
+   */
+  private async idsPorTexto(organizationId: string, texto: string): Promise<string[]> {
+    // O teto existe porque esta lista vira um `IN` que o Prisma combina
+    // com os outros filtros. Um termo que casa com meio banco não deve
+    // montar uma cláusula de cem mil ids — e ninguém procura texto
+    // esperando mais de mil resultados: procura para achar um.
+    const TETO = 1000;
+
+    const linhas = await this.prisma.$queryRaw<{ id: string }[]>`
+      WITH consulta AS (
+        SELECT to_tsquery(
+                 'portuguese',
+                 nullif(string_agg(quote_literal(lexeme), ' | '), '')
+               ) AS q
+        FROM unnest(to_tsvector('portuguese', ${texto})) AS t(lexeme, positions, weights)
+      )
+      SELECT t."id"
+      FROM "tickets" t, consulta
+      WHERE t."organizationId" = ${organizationId}::uuid
+        AND consulta.q IS NOT NULL
+        AND to_tsvector('portuguese', t."subject" || ' ' || t."description") @@ consulta.q
+      ORDER BY ts_rank(
+                 to_tsvector('portuguese', t."subject" || ' ' || t."description"),
+                 consulta.q
+               ) DESC
+      LIMIT ${TETO}
+    `;
+
+    return linhas.map((l) => l.id);
   }
 
   /** 404, não 403, quando o chamado existe mas está fora do escopo. */
