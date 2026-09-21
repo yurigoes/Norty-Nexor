@@ -14,6 +14,7 @@ import type { LoginResponse, MeResponse } from '@norty-desk/shared';
 import type { Request, Response } from 'express';
 
 import { CurrentUser, type UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
+import { ipDaRequisicao } from '../../common/origem';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AuthService } from './auth.service';
 import { COOKIE_REFRESH, gravarRefresh, limparRefresh } from './cookie';
@@ -36,9 +37,15 @@ export class AuthController {
   @HttpCode(200)
   async login(
     @Body() dto: LoginDto,
+    @Req() requisicao: Request,
     @Res({ passthrough: true }) resposta: Response,
   ): Promise<LoginResponse> {
-    const sessao = await this.auth.login(dto.login ?? dto.email ?? '', dto.password, dto.organization);
+    const sessao = await this.auth.login(
+      dto.login ?? dto.email ?? '',
+      dto.password,
+      dto.organization,
+      ipDaRequisicao(requisicao),
+    );
 
     // A primeira organização da lista é a ativa — no login por usuário é a
     // informada, que o serviço põe na frente. Trocar depois é uma chamada

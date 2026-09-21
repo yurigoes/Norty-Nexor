@@ -180,6 +180,13 @@ export function Login() {
             Esqueceu a senha ou não tem acesso? Fale com quem administra o{' '}
             {marca.productName} na sua organização.
           </p>
+
+          {/* Quem só quer saber em que pé está o chamado não precisa de
+              conta: tem o protocolo. Mandá-lo para o login seria pedir
+              uma senha para ler o próprio chamado. */}
+          <p className="login-ajuda">
+            Tem um protocolo? <a href="/protocolo">Acompanhe seu chamado sem entrar</a>.
+          </p>
         </form>
       </main>
     </div>

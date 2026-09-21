@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import type { AuditEntry, BulkResult, TicketDetail } from '@norty-desk/shared';
 
-import { Cliente, type Api, type Fixtura, limparBanco, prisma, semear, subirApi } from './apoio';
+import { Cliente, type Api, type Fixtura, limparBanco, prisma, semear, subirApi, protocoloDeTeste } from './apoio';
 
 /**
  * Ação em lote e trilha de auditoria.
@@ -149,6 +149,7 @@ describe('ação em lote', () => {
   it('o lote não é porta lateral para chamado fora do escopo', async () => {
     const alheio = await prisma.ticket.create({
       data: {
+        protocol: protocoloDeTeste(),
         organizationId: f.organizacao.id,
         number: 9700,
         subject: 'De outro time',

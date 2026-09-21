@@ -29,6 +29,7 @@ import { Sla } from '../modules/configuracao/Sla';
 import { Ativo } from '../modules/ativo/Ativo';
 import { Ativos } from '../modules/ativo/Ativos';
 import { Pesquisa } from '../modules/ativo/Pesquisa';
+import { ConsultaProtocolo } from '../modules/protocolo/ConsultaProtocolo';
 import { Artigo } from '../modules/conhecimento/Artigo';
 import { Conhecimento } from '../modules/conhecimento/Conhecimento';
 import { Diagnostico } from '../modules/canais/Diagnostico';
@@ -62,14 +63,23 @@ function Raiz() {
   const { carregando, perfil } = useAutenticacao();
   const local = useLocation();
 
-  // A pesquisa de satisfação vem antes de tudo: quem clica no link do
-  // e-mail não tem conta, e mandá-lo para o login é o mesmo que não
-  // receber a nota. Fica fora do portão porque a autorização dela é o
-  // token da URL, não a sessão.
+  // Duas telas vêm antes do portão, pelo mesmo motivo: quem chega nelas
+  // não tem conta, e mandá-lo para o login é o mesmo que não ter a tela.
+  // A autorização de uma é o token do link; a da outra, o protocolo que
+  // a pessoa digita.
   if (local.pathname.startsWith('/pesquisa/')) {
     return (
       <Routes>
         <Route path="/pesquisa/:token" element={<Pesquisa />} />
+      </Routes>
+    );
+  }
+
+  if (local.pathname.startsWith('/protocolo')) {
+    return (
+      <Routes>
+        <Route path="/protocolo" element={<ConsultaProtocolo />} />
+        <Route path="/protocolo/:codigo" element={<ConsultaProtocolo />} />
       </Routes>
     );
   }

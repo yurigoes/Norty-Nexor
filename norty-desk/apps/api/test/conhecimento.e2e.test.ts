@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import type { ArticleDetail, ArticleListItem, ArticleRevisionView, TicketDetail } from '@norty-desk/shared';
 
-import { Cliente, type Api, type Fixtura, limparBanco, prisma, semear, subirApi } from './apoio';
+import { Cliente, type Api, type Fixtura, limparBanco, prisma, semear, subirApi, protocoloDeTeste } from './apoio';
 
 /**
  * Base de conhecimento.
@@ -272,6 +272,7 @@ describe('sugestão a partir do chamado', () => {
   it('chamado fora do meu escopo não sugere nada — nem confirma que existe', async () => {
     const outro = await prisma.ticket.create({
       data: {
+        protocol: protocoloDeTeste(),
         organizationId: f.outra.id,
         number: 9001,
         subject: 'De outra empresa',

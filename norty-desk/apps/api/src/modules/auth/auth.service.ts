@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
   Injectable,
   Logger,
   ServiceUnavailableException,
@@ -13,6 +14,7 @@ import * as argon2 from 'argon2';
 import { createHash, randomBytes } from 'node:crypto';
 
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { ThrottleService } from '../../common/throttle/throttle.service';
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { normalizarUsername } from '../../common/usuario';
 import { DiretorioService } from '../diretorio/diretorio.service';
@@ -58,6 +60,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly diretorio: DiretorioService,
+    private readonly throttle: ThrottleService,
   ) {}
 
   static hashDeRefresh(cru: string): string {
@@ -75,9 +78,35 @@ export class AuthService {
    * caminho do login inexistente também paga o custo de um `verify` —
    * senão o relógio conta o que a mensagem esconde.
    */
-  async login(identificador: string, senha: string, organizacao?: string): Promise<LoginResponse> {
+  /**
+   * @param ip Endereço de quem tenta, para a contagem por origem. Sem
+   *   ele a escada de bloqueio só protege por conta, e mil contas
+   *   sondadas em paralelo nunca barram ninguém.
+   */
+  async login(
+    identificador: string,
+    senha: string,
+    organizacao?: string,
+    ip?: string,
+  ): Promise<LoginResponse> {
     const chave = identificador.toLowerCase().trim();
     const slug = organizacao?.toLowerCase().trim() || undefined;
+
+    const chavesDoLimite = [
+      ThrottleService.chaveDeConta(chave),
+      ...(ip ? [ThrottleService.chaveDeIp(ip)] : []),
+    ];
+
+    // Barrado é barrado antes de qualquer consulta: verificar a senha de
+    // quem já está bloqueado é justamente o trabalho que a escada
+    // existe para não fazer.
+    const faltam = await this.throttle.segundosBarrados(chavesDoLimite);
+    if (faltam > 0) {
+      throw new HttpException(
+        `Muitas tentativas. Tente de novo em ${Math.ceil(faltam / 60)} minuto(s).`,
+        429,
+      );
+    }
 
     // Com "@" o login é o e-mail, que é global. Sem "@" é o nome de
     // usuário, que só é único dentro da organização (decisão do Yuri) —
@@ -115,8 +144,13 @@ export class AuthService {
     }
 
     if (!usuario || !usuario.isActive || usuario.memberships.length === 0) {
+      await this.throttle.registrarFalha(chavesDoLimite);
       throw new UnauthorizedException('Usuário ou senha inválidos.');
     }
+
+    // Acertou: a contagem zera. A escada é sobre erro seguido, não
+    // sobre uso — quem entra todo dia não deve chegar perto dela.
+    await this.throttle.limpar(chavesDoLimite);
 
     // A organização informada vem primeiro: é para ela que o controller
     // emite o token.

@@ -214,6 +214,40 @@ export type AttachmentView = {
 };
 
 // ---------------------------------------------------------------------
+// Consulta pública por protocolo
+// ---------------------------------------------------------------------
+
+/**
+ * O que um estranho com o protocolo enxerga.
+ *
+ * Deliberadamente menos que `TicketDetail`. Quem abre esta tela provou
+ * apenas que tem o código — não que é a pessoa do chamado. Então: nada
+ * de e-mail, telefone, nota interna, anexo para baixar, id de ninguém.
+ * Só o andamento, que é o que o código promete mostrar.
+ */
+export type ConsultaPublica = {
+  protocol: string;
+  subject: string;
+  status: TicketStatus;
+  /** Nome da organização que atende. */
+  organization: string;
+  openedAt: string;
+  solvedAt: string | null;
+  closedAt: string | null;
+  /** Data e hora do atendimento marcado, quando há um. */
+  scheduledFor: string | null;
+  timeline: EventoPublico[];
+};
+
+export type EventoPublico = {
+  at: string;
+  /** Frase pronta. A regra de o que dizer é do servidor, não da tela. */
+  text: string;
+  /** Primeiro nome de quem escreveu, ou `null` para evento do sistema. */
+  by: string | null;
+};
+
+// ---------------------------------------------------------------------
 // Atendimento agendado
 // ---------------------------------------------------------------------
 

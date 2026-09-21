@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it } from 'node:test';
 import type { TicketDetail, TicketEventView } from '@norty-desk/shared';
 
-import { Cliente, type Api, type Fixtura, limparBanco, prisma, semear, subirApi } from './apoio';
+import { Cliente, type Api, type Fixtura, limparBanco, prisma, semear, subirApi, protocoloDeTeste } from './apoio';
 import type { ProcessamentoService } from '../src/modules/channels/processamento.service';
 import type { DespachoJob } from '../src/modules/channels/despacho.job';
 import type { EnvioSimulado } from '../src/modules/channels/transporte';
@@ -530,6 +530,7 @@ describe('whatsapp', () => {
     });
     const segundo = await prisma.ticket.create({
       data: {
+        protocol: protocoloDeTeste(),
         organizationId: f.organizacao.id,
         number: 90001,
         subject: 'Segundo problema aqui',

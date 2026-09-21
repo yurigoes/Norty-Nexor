@@ -425,6 +425,13 @@ model Ticket {
   /// Canal em que o chamado nasceu. Define o canal padrão de resposta.
   originChannel Channel @default(WEB)
 
+  /// O código da consulta pública, sorteado.
+  ///
+  /// Não é o `number`: aquele é sequencial, e quem tivesse um teria
+  /// todos. Oito caracteres de um alfabeto sem letra confundível, o
+  /// que dá 23^8 combinações. Ver `packages/shared/src/domain.ts`.
+  protocol String @unique
+
   /// Motivo da pendência atual, quando status = PENDENTE.
   pendingReasonId      String?   @db.Uuid
   pendingSince         DateTime?

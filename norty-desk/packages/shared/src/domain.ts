@@ -1604,3 +1604,87 @@ export function vencimentoComAtendimento(
   const fim = fimDoAtendimento(quando, duracaoMinutos);
   return fim > vencimento ? fim : null;
 }
+
+// ---------------------------------------------------------------------
+// Bloqueio progressivo
+// ---------------------------------------------------------------------
+
+/**
+ * Quanto tempo uma chave fica barrada depois de `falhas` erros.
+ *
+ * A escada existe por causa do PIN de seis dígitos: um milhão de
+ * combinações cai em minutos contra uma porta que não tranca. Com ela,
+ * mil tentativas levam mais de um dia — e quem erra o PIN duas vezes
+ * seguidas nem percebe que existe uma escada.
+ *
+ * As três primeiras falhas não barram nada de propósito: digitar
+ * errado é o caso comum, e transformar isso em bloqueio produz ligação
+ * para o suporte, não segurança.
+ *
+ * Devolve segundos; zero é "ainda não barra".
+ */
+export function bloqueioProgressivo(falhas: number): number {
+  if (falhas < 4) return 0;
+  if (falhas === 4) return 30;
+  if (falhas === 5) return 60;
+  if (falhas === 6) return 5 * 60;
+  if (falhas <= 8) return 15 * 60;
+  return 60 * 60;
+}
+
+/** Depois deste tempo sem erro, a contagem de falhas recomeça do zero. */
+export const JANELA_DE_FALHAS_SEGUNDOS = 30 * 60;
+
+// ---------------------------------------------------------------------
+// Protocolo público
+// ---------------------------------------------------------------------
+
+/**
+ * O alfabeto do protocolo.
+ *
+ * Sem `0`/`O`, `1`/`I`/`L`, `5`/`S`, `B`/`8` e `U`/`V`: o protocolo é
+ * ditado ao telefone e copiado do papel, e esses pares se confundem nas
+ * duas operações. As vogais saem junto, o que de quebra impede o
+ * sorteio de formar palavra que ninguém quer ver num documento com a
+ * marca da casa.
+ */
+export const ALFABETO_DO_PROTOCOLO = '234679CDFGHJKMNPQRTWXYZ';
+
+/** Dois grupos de quatro. 23^8 ≈ 8·10^10 (37 bits) — enumerar é inviável. */
+export const TAMANHO_DO_PROTOCOLO = 8;
+
+/**
+ * O protocolo é sorteado, e não o número sequencial do chamado.
+ *
+ * Esta é a decisão que faz a consulta pública ser segura: `#124` seria
+ * `#123` mais um, e quem tivesse um protocolo teria todos. Com oito
+ * caracteres sorteados, tentar adivinhar o do vizinho é o mesmo que
+ * tentar adivinhar uma senha — e a escada de bloqueio por IP fecha o
+ * resto.
+ */
+export function formatarProtocolo(cru: string): string {
+  const limpo = cru.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return limpo.length === TAMANHO_DO_PROTOCOLO
+    ? `${limpo.slice(0, 4)}-${limpo.slice(4)}`
+    : limpo;
+}
+
+/**
+ * Normaliza o que a pessoa digitou, ou `null` se aquilo não é um
+ * protocolo.
+ *
+ * Aceita com e sem traço, em qualquer caixa, com espaço sobrando —
+ * recusar `4k7p wz9n` porque veio em minúsculas seria pedir à pessoa
+ * que faça o trabalho da máquina.
+ *
+ * Não tenta adivinhar troca de caractere. A defesa contra `O` e `0`
+ * confundidos é o alfabeto, que não tem nenhum dos dois: quem digitou
+ * um deles não errou a fonte, errou o código.
+ */
+export function normalizarProtocolo(digitado: string): string | null {
+  const limpo = digitado.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+  if (limpo.length !== TAMANHO_DO_PROTOCOLO) return null;
+  for (const c of limpo) if (!ALFABETO_DO_PROTOCOLO.includes(c)) return null;
+  return limpo;
+}

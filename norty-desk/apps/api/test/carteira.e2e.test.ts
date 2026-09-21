@@ -8,7 +8,7 @@ import type {
   TicketListItem,
 } from '@norty-desk/shared';
 
-import { Cliente, type Api, type Fixtura, limparBanco, prisma, semear, subirApi } from './apoio';
+import { Cliente, type Api, type Fixtura, limparBanco, prisma, semear, subirApi, protocoloDeTeste } from './apoio';
 
 /**
  * A carteira de clientes da Norty.
@@ -207,6 +207,7 @@ describe('um cliente não vê o chamado de outro', () => {
     // Um chamado para cada empresa, com a pessoa como requerente.
     const paraA = await prisma.ticket.create({
       data: {
+        protocol: protocoloDeTeste(),
         organizationId: f.organizacao.id, number: 9001, clientId: joao.id,
         subject: 'Segredo da Empresa A', description: 'Não pode aparecer para a Empresa B.',
         actors: { create: [{ role: 'REQUERENTE', userId: pedro.id }] },
@@ -218,6 +219,7 @@ describe('um cliente não vê o chamado de outro', () => {
     // ator devolveria o chamado da concorrente.
     const paraB = await prisma.ticket.create({
       data: {
+        protocol: protocoloDeTeste(),
         organizationId: f.organizacao.id, number: 9002, clientId: maria.id,
         subject: 'Segredo da Empresa B', description: 'Não pode aparecer para a Empresa A.',
         actors: {
@@ -277,12 +279,14 @@ describe('a carteira na listagem', () => {
 
     await prisma.ticket.create({
       data: {
+        protocol: protocoloDeTeste(),
         organizationId: f.organizacao.id, number: 9101, clientId: empresa.id,
         subject: 'Aberto', description: 'Conta.', status: 'NOVO',
       },
     });
     await prisma.ticket.create({
       data: {
+        protocol: protocoloDeTeste(),
         organizationId: f.organizacao.id, number: 9102, clientId: empresa.id,
         subject: 'Fechado', description: 'Não conta.', status: 'FECHADO',
       },

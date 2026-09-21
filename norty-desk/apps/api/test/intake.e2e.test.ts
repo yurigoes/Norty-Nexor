@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 
-import { Cliente, type Api, type Fixtura, limparBanco, prisma, semear, subirApi } from './apoio';
+import { Cliente, type Api, type Fixtura, limparBanco, prisma, semear, subirApi, protocoloDeTeste } from './apoio';
 import type { ProcessamentoService } from '../src/modules/channels/processamento.service';
 
 let api: Api;
@@ -260,6 +260,7 @@ describe('intake público', () => {
   it('não atravessa a fronteira da organização', async () => {
     const alheio = await prisma.ticket.create({
       data: {
+        protocol: protocoloDeTeste(),
         organizationId: f.outra.id,
         number: 555,
         subject: 'Chamado de outra organização',

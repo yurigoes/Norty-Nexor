@@ -17,9 +17,12 @@ import {
   type TicketEventView,
   type TicketListItem,
   type TicketStatus,
+  ALFABETO_DO_PROTOCOLO,
+  TAMANHO_DO_PROTOCOLO,
   canTransition,
 } from '@norty-desk/shared';
 import { Prisma } from '@prisma/client';
+import { randomInt } from 'node:crypto';
 
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { derivarPrioridade } from '../../common/prioridade';
@@ -252,6 +255,35 @@ export class TicketsService {
    * serializa só as aberturas da mesma organização, e some no fim da
    * transação.
    */
+  /**
+   * O protocolo da consulta pública.
+   *
+   * `randomInt` do `node:crypto`, e não `Math.random()`: este código é
+   * a única coisa entre um estranho e a linha do tempo do chamado, e um
+   * gerador previsível o tornaria adivinhável a partir de um protocolo
+   * conhecido.
+   *
+   * Confere antes de usar. Em 23^8 a colisão é remota, mas a alternativa
+   * a conferir é a transação inteira morrer na restrição de unicidade —
+   * e o chamado que a pessoa acabou de escrever se perder junto.
+   */
+  private async gerarProtocolo(tx: Prisma.TransactionClient): Promise<string> {
+    for (let tentativa = 0; tentativa < 5; tentativa += 1) {
+      let codigo = '';
+      for (let i = 0; i < TAMANHO_DO_PROTOCOLO; i += 1) {
+        codigo += ALFABETO_DO_PROTOCOLO[randomInt(ALFABETO_DO_PROTOCOLO.length)];
+      }
+
+      const ocupado = await tx.ticket.findUnique({
+        where: { protocol: codigo },
+        select: { id: true },
+      });
+      if (!ocupado) return codigo;
+    }
+
+    throw new Error('Cinco protocolos sorteados em sequência já existiam. Algo está errado.');
+  }
+
   private async proximoNumero(
     tx: Prisma.TransactionClient,
     organizationId: string,
@@ -349,6 +381,7 @@ export class TicketsService {
 
     const id = await this.prisma.$transaction(async (tx) => {
       const number = await this.proximoNumero(tx, usuario.organizationId);
+      const protocol = await this.gerarProtocolo(tx);
 
       const atores: Prisma.TicketActorUncheckedCreateWithoutTicketInput[] = [];
 
@@ -383,6 +416,7 @@ export class TicketsService {
         data: {
           organizationId: usuario.organizationId,
           number,
+          protocol,
           subject: dto.subject.trim(),
           description: dto.description,
           type: dto.type ?? 'INCIDENTE',
@@ -464,11 +498,13 @@ export class TicketsService {
 
     const chamado = await this.prisma.$transaction(async (tx) => {
       const number = await this.proximoNumero(tx, dados.organizationId);
+      const protocol = await this.gerarProtocolo(tx);
 
       return tx.ticket.create({
         data: {
           organizationId: dados.organizationId,
           number,
+          protocol,
           subject: dados.subject.slice(0, 255),
           description: dados.description,
           type: dados.ticketType ?? 'INCIDENTE',
@@ -550,11 +586,13 @@ export class TicketsService {
 
     const chamado = await this.prisma.$transaction(async (tx) => {
       const number = await this.proximoNumero(tx, dados.organizationId);
+      const protocol = await this.gerarProtocolo(tx);
 
       return tx.ticket.create({
         data: {
           organizationId: dados.organizationId,
           number,
+          protocol,
           subject: dados.subject.slice(0, 255),
           description: dados.description,
           type: dados.ticketType,

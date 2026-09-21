@@ -8,6 +8,7 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { ALFABETO_DO_PROTOCOLO, TAMANHO_DO_PROTOCOLO } from '@norty-desk/shared';
 import { PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
 import cookieParser from 'cookie-parser';
@@ -269,4 +270,29 @@ export class Cliente {
   post = <T = unknown>(caminho: string, corpo?: unknown) => this.chamar<T>('POST', caminho, corpo);
   patch = <T = unknown>(caminho: string, corpo?: unknown) => this.chamar<T>('PATCH', caminho, corpo);
   del = <T = unknown>(caminho: string) => this.chamar<T>('DELETE', caminho);
+}
+
+/**
+ * Um protocolo para chamado criado direto pelo Prisma na suíte.
+ *
+ * A coluna é `NOT NULL` sem valor padrão de propósito: assim qualquer
+ * caminho que esqueça de sortear um falha alto, em vez de gravar um
+ * chamado sem código de consulta. O preço é este auxiliar — e o preço
+ * está certo.
+ *
+ * Sequencial na base do alfabeto, e não sorteado: dois chamados com o
+ * mesmo protocolo fariam a suíte falhar na restrição de unicidade por
+ * um motivo que nada tem a ver com o caso em teste.
+ */
+let sequencialDoProtocolo = 0;
+export function protocoloDeTeste(): string {
+  sequencialDoProtocolo += 1;
+
+  let n = sequencialDoProtocolo;
+  let codigo = '';
+  for (let i = 0; i < TAMANHO_DO_PROTOCOLO; i += 1) {
+    codigo = ALFABETO_DO_PROTOCOLO[n % ALFABETO_DO_PROTOCOLO.length] + codigo;
+    n = Math.floor(n / ALFABETO_DO_PROTOCOLO.length);
+  }
+  return codigo;
 }

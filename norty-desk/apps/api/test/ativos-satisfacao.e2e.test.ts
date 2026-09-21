@@ -7,7 +7,7 @@ import type {
   TicketDetail,
 } from '@norty-desk/shared';
 
-import { Cliente, type Api, type Fixtura, limparBanco, prisma, semear, subirApi } from './apoio';
+import { Cliente, type Api, type Fixtura, limparBanco, prisma, semear, subirApi, protocoloDeTeste } from './apoio';
 import type { DespachoJob } from '../src/modules/channels/despacho.job';
 import type { EnvioSimulado } from '../src/modules/channels/transporte';
 
@@ -179,6 +179,7 @@ describe('ativo no chamado', () => {
     // Um chamado de outro time, ao qual o agente não tem acesso.
     const alheio = await prisma.ticket.create({
       data: {
+        protocol: protocoloDeTeste(),
         organizationId: f.organizacao.id,
         number: 9500,
         subject: 'Chamado de outro time',

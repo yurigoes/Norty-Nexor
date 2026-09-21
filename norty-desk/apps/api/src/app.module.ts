@@ -15,7 +15,9 @@ import { PaineisModule } from './modules/paineis/paineis.module';
 import { RegrasModule } from './modules/regras/regras.module';
 import { AprovacoesModule } from './modules/aprovacoes/aprovacoes.module';
 import { AtivosModule } from './modules/ativos/ativos.module';
+import { ThrottleModule } from './common/throttle/throttle.module';
 import { AgendamentoModule } from './modules/agendamento/agendamento.module';
+import { PublicoModule } from './modules/publico/publico.module';
 import { CarteiraModule } from './modules/carteira/carteira.module';
 import { AuditoriaModule } from './modules/auditoria/auditoria.module';
 import { LoteModule } from './modules/lote/lote.module';
@@ -86,8 +88,10 @@ import { TranscricaoModule } from './modules/transcricao/transcricao.module';
     RegrasModule,
     WebhooksModule,
     AuditoriaModule,
+    ThrottleModule,
     CarteiraModule,
     AgendamentoModule,
+    PublicoModule,
     TranscricaoModule,
     LoteModule,
   ],
