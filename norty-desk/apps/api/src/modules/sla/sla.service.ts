@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { TargetKind } from '@norty-desk/shared';
+import { vencimentoComAtendimento, type TargetKind } from '@norty-desk/shared';
 
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { type Calendario, calcularVencimento, segundosDeExpediente } from './calendario';
@@ -127,5 +127,93 @@ export class SlaService {
     }
 
     return descontoMaximo;
+  }
+
+  /**
+   * Empurra o prazo de resolução até o fim do atendimento marcado.
+   *
+   * Só o TTR anda. O TTO é "a gente voltou a falar com você", e marcar
+   * visita não é desculpa para não ter voltado a falar — ao contrário,
+   * quem marcou já falou. Esticar os dois faria o primeiro atendimento
+   * parecer no prazo num chamado que ficou dois dias sem resposta.
+   *
+   * Compromisso já cumprido não anda: o prazo dele acabou quando o
+   * trabalho foi feito, e mexer nele mudaria um número do passado.
+   *
+   * Devolve o adiamento em segundos de expediente — o número do
+   * relatório — e, junto, o vencimento que cada compromisso tinha antes.
+   * Esse "antes" é guardado no agendamento porque o caminho de volta
+   * não é calculável: o fim da visita pode cair fora do expediente, e aí
+   * recuar a mesma quantidade de segundos úteis não devolve o instante
+   * de onde se saiu.
+   */
+  async adiarPorAtendimento(
+    ticketId: string,
+    quando: Date,
+    duracaoMinutos: number,
+  ): Promise<{ adiadoSegundos: number; vencimentosAnteriores: Record<string, string> }> {
+    const compromissos = await this.prisma.slaCommitment.findMany({
+      where: { ticketId, achievedAt: null, target: 'TTR' },
+      include: { agreement: true },
+    });
+
+    let adiamentoMaximo = 0;
+    const vencimentosAnteriores: Record<string, string> = {};
+
+    for (const compromisso of compromissos) {
+      const novo = vencimentoComAtendimento(compromisso.dueAt, quando, duracaoMinutos);
+      if (!novo) continue;
+
+      const calendario = await this.carregarCalendario(compromisso.agreement.calendarId);
+      const andou = segundosDeExpediente(compromisso.dueAt, novo, calendario);
+      adiamentoMaximo = Math.max(adiamentoMaximo, andou);
+      vencimentosAnteriores[compromisso.id] = compromisso.dueAt.toISOString();
+
+      await this.prisma.slaCommitment.update({
+        where: { id: compromisso.id },
+        data: {
+          dueAt: novo,
+          postponedSeconds: { increment: andou },
+          // O prazo voltou a ser futuro, então o estouro não vale mais.
+          // Deixá-lo marcado faria o chamado aparecer vencido num prazo
+          // que foi esticado de acordo com o cliente.
+          breachedAt: null,
+        },
+      });
+    }
+
+    return { adiadoSegundos: adiamentoMaximo, vencimentosAnteriores };
+  }
+
+  /**
+   * Devolve o prazo que um atendimento cancelado havia esticado.
+   *
+   * Cancelar a visita desfaz a razão do adiamento, então o prazo volta
+   * para o instante exato de onde saiu. Isso pode deixar o chamado
+   * vencido na hora — e está certo que deixe: o que o segurava era uma
+   * data que não existe mais.
+   */
+  async desfazerAdiamento(
+    vencimentosAnteriores: Record<string, string>,
+    adiadoSegundos: number,
+  ): Promise<void> {
+    for (const [commitmentId, iso] of Object.entries(vencimentosAnteriores)) {
+      const compromisso = await this.prisma.slaCommitment.findUnique({
+        where: { id: commitmentId },
+      });
+      // Cumprido entre o agendamento e o cancelamento: o prazo dele já
+      // não corre, e recuá-lo mudaria um número do passado.
+      if (!compromisso || compromisso.achievedAt) continue;
+
+      await this.prisma.slaCommitment.update({
+        where: { id: commitmentId },
+        data: {
+          dueAt: new Date(iso),
+          postponedSeconds: {
+            decrement: Math.min(adiadoSegundos, compromisso.postponedSeconds),
+          },
+        },
+      });
+    }
   }
 }

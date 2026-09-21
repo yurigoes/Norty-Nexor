@@ -14,6 +14,7 @@ const TIPOS_DE_SISTEMA = new Set([
   'PAUSA_SLA',
   'RETOMADA_SLA',
   'ANEXO_REMOVIDO',
+  'AGENDAMENTO',
 ]);
 
 /**
@@ -127,6 +128,18 @@ function Evento({ evento }: { evento: TicketEventView }) {
   );
 }
 
+/**
+ * O adiamento em palavras.
+ *
+ * Zero é o caso comum e o que mais interessa dizer: a visita cabe no
+ * prazo que já existia, e ninguém ganhou folga por tê-la marcado.
+ */
+function textoDoAdiamento(segundos: number): string {
+  if (segundos <= 0) return ' O prazo não mudou.';
+  const horas = Math.round(segundos / 360) / 10;
+  return ` O prazo de resolução andou ${horas} h úteis.`;
+}
+
 function corpoDoEvento(evento: TicketEventView): string {
   // O corpo do evento é o nome do arquivo; sozinho na linha do tempo
   // ele pareceria alguém tendo dito "foto.png".
@@ -139,6 +152,23 @@ function corpoDoEvento(evento: TicketEventView): string {
   }
   if (payload?.type === 'MUDANCA_ATRIBUICAO') return 'Atribuição alterada.';
   if (payload?.type === 'MUDANCA_CLASSIFICACAO') return 'Classificação alterada.';
+  if (payload?.type === 'AGENDAMENTO') {
+    const quando = new Date(payload.scheduledFor).toLocaleString('pt-BR', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    });
+    const verbo = {
+      MARCADO: 'Atendimento marcado para',
+      REMARCADO: 'Atendimento remarcado para',
+      CANCELADO: 'Atendimento cancelado — estava marcado para',
+      REALIZADO: 'Atendimento realizado em',
+    }[payload.action];
+    const prazo =
+      payload.action === 'MARCADO' || payload.action === 'REMARCADO'
+        ? textoDoAdiamento(payload.postponedSeconds)
+        : '';
+    return `${verbo} ${quando}.${prazo}`;
+  }
   if (payload?.type === 'PAUSA_SLA') return 'Chamado em pendência. O SLA foi pausado.';
   if (payload?.type === 'RETOMADA_SLA') {
     return `Pendência encerrada. ${Math.round(payload.pausedSeconds / 60)} minutos descontados do prazo.`;

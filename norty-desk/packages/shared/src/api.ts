@@ -8,6 +8,7 @@
 import type {
   ActorRole,
   AgreementKind,
+  AppointmentStatus,
   ApprovalStatus,
   ChangeKind,
   ChangeRisk,
@@ -210,6 +211,31 @@ export type AttachmentView = {
   /** Nulo quando o anexo entrou por canal sem autor identificado. */
   uploadedById: string | null;
   createdAt: string;
+};
+
+// ---------------------------------------------------------------------
+// Atendimento agendado
+// ---------------------------------------------------------------------
+
+export type AppointmentView = {
+  id: string;
+  ticketId: string;
+  /** ISO 8601 com fuso. A tela formata; o contrato não presume o fuso. */
+  scheduledFor: string;
+  durationMinutes: number;
+  technician: PartyRef | null;
+  note: string | null;
+  status: AppointmentStatus;
+  /** Quanto este agendamento empurrou o prazo do chamado, em segundos. */
+  postponedSeconds: number;
+  createdAt: string;
+};
+
+export type AgendarRequest = {
+  scheduledFor: string;
+  durationMinutes?: number;
+  technicianId?: string;
+  note?: string;
 };
 
 export type TicketEventView = {

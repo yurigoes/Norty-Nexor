@@ -48,6 +48,14 @@ export const PERMISSIONS = [
   'chamado:excluir',
   'chamado:vincular',
   'chamado:acao-em-lote',
+  /**
+   * Marcar, remarcar e cancelar atendimento em campo.
+   *
+   * De quem atende, não de quem pede: a data marcada estica o prazo do
+   * chamado, e um solicitante que pudesse marcá-la sozinho esticaria o
+   * próprio SLA.
+   */
+  'chamado:agendar',
 
   // --- Tarefa e tempo -------------------------------------------------
   'tarefa:criar',
@@ -237,6 +245,7 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'chamado:resolver',
     'chamado:fechar',
     'chamado:vincular',
+    'chamado:agendar',
     'tarefa:criar',
     'tarefa:concluir',
     'tarefa:apontar-tempo',
@@ -305,6 +314,7 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'chamado:excluir',
     'chamado:vincular',
     'chamado:acao-em-lote',
+    'chamado:agendar',
     'tarefa:criar',
     'tarefa:concluir',
     'tarefa:apontar-tempo',

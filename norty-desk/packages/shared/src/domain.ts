@@ -60,6 +60,8 @@ export const EVENT_TYPES = [
    * o que foi juntado e depois retirado faz parte do que aconteceu.
    */
   'ANEXO_REMOVIDO',
+  /** Atendimento marcado, remarcado, cancelado ou realizado. */
+  'AGENDAMENTO',
   'MUDANCA_STATUS',
   /**
    * Mudança de status do **problema**.
@@ -301,8 +303,21 @@ export type ChannelIoPayload = {
   address?: string;
 };
 
+export const APPOINTMENT_STATUSES = ['AGENDADO', 'REALIZADO', 'CANCELADO'] as const;
+export type AppointmentStatus = (typeof APPOINTMENT_STATUSES)[number];
+
+export type AppointmentPayload = {
+  type: 'AGENDAMENTO';
+  action: 'MARCADO' | 'REMARCADO' | 'CANCELADO' | 'REALIZADO';
+  scheduledFor: string;
+  durationMinutes: number;
+  /** Quanto o prazo do chamado andou por causa disto. */
+  postponedSeconds: number;
+};
+
 export type EventPayload =
   | TaskPayload
+  | AppointmentPayload
   | SolutionPayload
   | StatusChangePayload
   | ProblemStatusChangePayload
@@ -1527,4 +1542,65 @@ export function pinFraco(pin: string): string | null {
 export function normalizePhone(raw: string): string {
   const digits = raw.split('@')[0].replace(/\D/g, '');
   return digits ? `+${digits}` : '';
+}
+
+// ---------------------------------------------------------------------
+// Atendimento agendado
+// ---------------------------------------------------------------------
+
+/** Uma visita não dura zero minutos, e nem um mês. */
+export const DURACAO_MINIMA_MINUTOS = 15;
+export const DURACAO_MAXIMA_MINUTOS = 12 * 60;
+
+/** No máximo um ano à frente: data mais distante é dedo escorregando. */
+const HORIZONTE_MS = 365 * 24 * 60 * 60 * 1000;
+
+/**
+ * O que impede este agendamento, ou `null` se nada impede.
+ *
+ * Devolve a frase que a pessoa lê. Marcar para trás não é agendamento —
+ * é acerto de registro, e para isso existe o apontamento de tempo na
+ * tarefa.
+ */
+export function agendamentoInvalido(
+  quando: Date,
+  duracaoMinutos: number,
+  agora: Date = new Date(),
+): string | null {
+  if (Number.isNaN(quando.getTime())) return 'Data inválida.';
+  if (quando <= agora) return 'O atendimento tem de ser marcado para a frente.';
+  if (quando.getTime() - agora.getTime() > HORIZONTE_MS) {
+    return 'O atendimento não pode ser marcado para mais de um ano à frente.';
+  }
+  if (!Number.isInteger(duracaoMinutos)) return 'A duração tem de ser em minutos inteiros.';
+  if (duracaoMinutos < DURACAO_MINIMA_MINUTOS) {
+    return `A duração mínima é de ${DURACAO_MINIMA_MINUTOS} minutos.`;
+  }
+  if (duracaoMinutos > DURACAO_MAXIMA_MINUTOS) {
+    return `A duração máxima é de ${DURACAO_MAXIMA_MINUTOS / 60} horas.`;
+  }
+  return null;
+}
+
+/** O instante em que a visita termina. */
+export function fimDoAtendimento(quando: Date, duracaoMinutos: number): Date {
+  return new Date(quando.getTime() + duracaoMinutos * 60_000);
+}
+
+/**
+ * O vencimento que a visita marcada exige, ou `null` se ela cabe no
+ * prazo que já existe.
+ *
+ * O `null` é a parte que importa: marcar visita para amanhã num chamado
+ * que vence semana que vem não estica prazo nenhum. Adiar assim mesmo
+ * seria dar folga que ninguém pediu — e é exatamente por essa porta que
+ * um indicador de SLA deixa de significar alguma coisa.
+ */
+export function vencimentoComAtendimento(
+  vencimento: Date,
+  quando: Date,
+  duracaoMinutos: number,
+): Date | null {
+  const fim = fimDoAtendimento(quando, duracaoMinutos);
+  return fim > vencimento ? fim : null;
 }

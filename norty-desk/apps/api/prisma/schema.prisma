@@ -106,6 +106,7 @@ model User {
   teamMembers         TeamMember[]
   actorIn             TicketActor[]
   categoriasPadrao    Category[]           @relation("ResponsavelPadraoDaCategoria")
+  appointments        Appointment[]        @relation("TecnicoDoAgendamento")
   authoredEvents      TicketEvent[]        @relation("AutorDoEvento")
   approvals           Approval[]
   refreshTokens       RefreshToken[]
@@ -465,6 +466,7 @@ model Ticket {
   costs        TicketCost[]
   projects     ProjectTicket[]
   agendaEvents AgendaEvent[]
+  appointments Appointment[]
 
   /// O problema que causa este chamado e a mudança que o resolve.
   /// São os dois vínculos que o ITIL pede e o GLPI resolve com uma
@@ -534,6 +536,7 @@ enum EventType {
   APROVACAO
   ANEXO
   ANEXO_REMOVIDO
+  AGENDAMENTO
   MUDANCA_STATUS
   MUDANCA_STATUS_PROBLEMA
   MUDANCA_STATUS_MUDANCA
@@ -548,6 +551,57 @@ enum EventType {
 enum Visibility {
   PUBLICA
   INTERNA
+}
+
+enum AppointmentStatus {
+  AGENDADO
+  REALIZADO
+  CANCELADO
+}
+
+/// Atendimento marcado para uma data e hora.
+///
+/// O GLPI marca a visita no calendário (`glpi_planningrecalls`) sem que
+/// isso toque o prazo do chamado — e aí o chamado estoura o SLA
+/// esperando a data que o próprio cliente escolheu. Aqui a data marcada
+/// empurra o vencimento, e o quanto ela empurrou fica gravado em
+/// `SlaCommitment.postponedSeconds`, separado do tempo de pendência.
+///
+/// A tabela guarda histórico: remarcar fecha a linha anterior e abre
+/// outra, porque "quantas vezes esta visita foi remarcada" é pergunta
+/// que se faz.
+model Appointment {
+  id              String            @id @default(uuid()) @db.Uuid
+  ticketId        String            @db.Uuid
+  /// Quando o técnico vai. O prazo do chamado espera até aqui.
+  scheduledFor    DateTime
+  durationMinutes Int               @default(60)
+  /// Quem vai. Nulo quando ainda se marcou só a data.
+  technicianId    String?           @db.Uuid
+  note            String?
+  status          AppointmentStatus @default(AGENDADO)
+  /// Quanto este agendamento empurrou o vencimento, em segundos.
+  ///
+  /// Guardado na linha para que cancelar saiba exatamente o que
+  /// devolver — recalcular na hora do cancelamento daria outro número,
+  /// porque o calendário e o vencimento já teriam mudado.
+  postponedSeconds Int              @default(0)
+  /// O vencimento que cada compromisso tinha antes deste agendamento,
+  /// por id de compromisso. Cancelar devolve o instante exato — recuar
+  /// a mesma quantidade de segundos úteis não devolveria, porque o fim
+  /// da visita pode cair fora do expediente.
+  previousDueAt   Json?
+  createdById     String?           @db.Uuid
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  ticket     Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  technician User?  @relation("TecnicoDoAgendamento", fields: [technicianId], references: [id], onDelete: SetNull)
+
+  /// A agenda do técnico: "o que eu tenho marcado esta semana".
+  @@index([technicianId, scheduledFor])
+  @@index([ticketId, status])
+  @@map("appointments")
 }
 
 /// A timeline única. Substitui glpi_itilfollowups + glpi_tickettasks +
@@ -715,6 +769,13 @@ model SlaCommitment {
   dueAt           DateTime
   /// Segundos descontados por pendência.
   pausedSeconds   Int           @default(0)
+  /// Segundos que atendimentos agendados empurraram o vencimento.
+  ///
+  /// Contado separado de `pausedSeconds` de propósito: esperar o cliente
+  /// responder e esperar a data marcada com ele são coisas diferentes, e
+  /// o relatório que as soma numa coluna só não responde "por que este
+  /// prazo esticou". Ver `docs/13-carteira-e-campo.md`.
+  postponedSeconds Int          @default(0)
   achievedAt      DateTime?
   breachedAt      DateTime?
   /// Último nível de escalonamento disparado.
