@@ -19,10 +19,40 @@ import type { Prisma } from '@prisma/client';
  * seu, os dois divergiriam na primeira pressa.
  */
 
+/**
+ * O que a fila precisa, e só.
+ *
+ * Antes era `include: true` em quatro relações do ator e no acordo do
+ * compromisso: para cada linha da fila vinham todas as colunas de
+ * usuário, time, fornecedor, contato e acordo — e o serializador usa
+ * três campos de cada. O `agreement` era o caso extremo: carregado em
+ * todo compromisso de todo chamado e **nunca lido**.
+ *
+ * Numa fila de cinquenta chamados isso é payload e trabalho de banco
+ * pagos em toda abertura de tela, que é exatamente onde a lentidão
+ * aparecia primeiro.
+ */
 export const INCLUDE_LISTA = {
-  category: true,
-  actors: { include: { user: true, team: true, supplier: true, contact: true } },
-  commitments: { include: { agreement: true } },
+  category: { select: { id: true, name: true } },
+  actors: {
+    select: {
+      id: true,
+      role: true,
+      user: { select: { id: true, name: true, email: true } },
+      team: { select: { id: true, name: true, email: true } },
+      supplier: { select: { id: true, name: true } },
+      contact: { select: { id: true, name: true, email: true, phone: true } },
+    },
+  },
+  commitments: {
+    select: {
+      kind: true,
+      target: true,
+      dueAt: true,
+      achievedAt: true,
+      breachedAt: true,
+    },
+  },
 } satisfies Prisma.TicketInclude;
 
 export const INCLUDE_DETALHE = {
