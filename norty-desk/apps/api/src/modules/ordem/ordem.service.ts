@@ -140,6 +140,20 @@ export class OrdemService {
       dto,
     );
 
+    // Sem visita informada, vale a que está marcada. A ordem quase
+    // sempre nasce da visita, e sem o vínculo o PDF sai sem a data do
+    // atendimento — justamente o dado que o cliente confere primeiro.
+    const visita =
+      appointmentId ??
+      (
+        await this.prisma.appointment.findFirst({
+          where: { ticketId, status: 'AGENDADO' },
+          orderBy: { scheduledFor: 'asc' },
+          select: { id: true },
+        })
+      )?.id ??
+      null;
+
     const ordem = await this.prisma.$transaction(async (tx) => {
       // Mesmo travamento do número do chamado: sem ele, duas ordens
       // abertas no mesmo instante disputam o mesmo número e uma morre
@@ -158,7 +172,7 @@ export class OrdemService {
           // O técnico do corpo, ou quem está abrindo: o caso comum é o
           // próprio técnico abrir a ordem dele no celular.
           technicianId: technicianId ?? usuario.userId,
-          appointmentId,
+          appointmentId: visita,
           report: dto.report,
           createdById: usuario.userId,
         },

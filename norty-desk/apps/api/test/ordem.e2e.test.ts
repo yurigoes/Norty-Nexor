@@ -139,6 +139,42 @@ describe('ordem de serviço', () => {
     });
     assert.equal(desfeito.corpo.items[0]?.doneAt, null);
   });
+
+  it('sem visita informada, a ordem se liga à que está marcada', async () => {
+    const agente = await entrar('agente@teste.dev');
+    const chamado = await abrirChamado(agente);
+
+    const visita = await agente.post<{ id: string }>(`/tickets/${chamado.id}/agendamentos`, {
+      scheduledFor: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    assert.equal(visita.status, 201, JSON.stringify(visita.corpo));
+
+    // A ordem quase sempre nasce da visita. Sem o vínculo automático, o
+    // PDF sai sem a data do atendimento — o dado que o cliente confere
+    // primeiro — e ninguém se lembra de informá-lo à mão.
+    const ordem = await agente.post<ServiceOrderView>(`/tickets/${chamado.id}/ordens`, {});
+    assert.equal(ordem.corpo.appointmentId, visita.corpo.id);
+  });
+
+  it('visita informada à mão ganha da que está marcada', async () => {
+    const agente = await entrar('agente@teste.dev');
+    const chamado = await abrirChamado(agente);
+
+    const primeira = await agente.post<{ id: string }>(`/tickets/${chamado.id}/agendamentos`, {
+      scheduledFor: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    await agente.post(`/agendamentos/${primeira.corpo.id}/concluir`);
+
+    const segunda = await agente.post<{ id: string }>(`/tickets/${chamado.id}/agendamentos`, {
+      scheduledFor: new Date(Date.now() + 9 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+
+    const ordem = await agente.post<ServiceOrderView>(`/tickets/${chamado.id}/ordens`, {
+      appointmentId: primeira.corpo.id,
+    });
+    assert.equal(ordem.corpo.appointmentId, primeira.corpo.id);
+    assert.notEqual(ordem.corpo.appointmentId, segunda.corpo.id);
+  });
 });
 
 describe('assinar', () => {

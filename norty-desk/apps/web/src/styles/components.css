@@ -1057,3 +1057,67 @@
 @media (max-width: 560px) {
   .campo-grupo { grid-template-columns: 1fr; }
 }
+
+/* ---------- [DESK] Prancheta de assinatura ---------- */
+
+/* `touch-action: none` não é enfeite: sem ele o primeiro movimento do
+   dedo rola a página em vez de desenhar, e a pessoa tenta três vezes
+   antes de desistir. O tracejado diz "escreva aqui" sem precisar de
+   rótulo. */
+.assinatura {
+  width: 100%;
+  display: block;
+  background: var(--superficie-card);
+  border: 1.5px dashed var(--borda-forte);
+  border-radius: var(--r-md);
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.assinatura:focus-visible { outline: 2px solid var(--azul-600); outline-offset: 2px; }
+
+/* ---------- [DESK] Ordem de serviço ---------- */
+
+.ordem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+  padding: var(--e-4);
+  border: 1px solid var(--borda);
+  border-radius: var(--r-md);
+  background: var(--superficie-card);
+}
+
+.ordem-itens { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--e-2); }
+
+.ordem-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  gap: var(--e-2);
+  padding-bottom: var(--e-2);
+  border-bottom: 1px solid var(--borda);
+}
+
+.ordem-item:last-child { border-bottom: 0; padding-bottom: 0; }
+
+/* A nota do item fica sob a descrição, alinhada com ela e não com a
+   caixa — a nota explica o item, não a marca. */
+.ordem-item .campo-ajuda { grid-column: 1; margin-left: 26px; }
+
+.ordem-item-marca { display: flex; align-items: start; gap: var(--e-2); cursor: pointer; }
+.ordem-item-marca input { margin-top: 3px; flex: none; width: 16px; height: 16px; accent-color: var(--verde-600); }
+.ordem-item-marca input:disabled { cursor: default; }
+
+.ordem-relato {
+  font-size: var(--t-corpo-sm);
+  color: var(--texto-suave);
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.ordem-assinar {
+  padding: var(--e-4);
+  border-radius: var(--r-md);
+  background: var(--superficie-afundada);
+}

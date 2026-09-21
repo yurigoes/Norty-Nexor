@@ -1,4 +1,10 @@
 import type {
+  AgendarRequest,
+  AppointmentView,
+  ConcluirOrdemRequest,
+  EscreverItemRequest,
+  EscreverOrdemRequest,
+  ServiceOrderView,
   AttachmentView,
   CreateTicketRequest,
   LoginResponse,
@@ -149,3 +155,49 @@ export type TimeView = {
 
 export const listarCategorias = () => chamar<CategoriaView[]>('/categories');
 export const listarTimes = () => chamar<TimeView[]>('/teams');
+
+// --- Atendimento agendado ---------------------------------------------
+
+export const listarAgendamentos = (ticketId: string) =>
+  chamar<AppointmentView[]>(`/tickets/${ticketId}/agendamentos`);
+
+export const marcarAtendimento = (ticketId: string, corpo: AgendarRequest) =>
+  chamar<AppointmentView>(`/tickets/${ticketId}/agendamentos`, { metodo: 'POST', corpo });
+
+export const cancelarAtendimento = (id: string, reason?: string) =>
+  chamar<AppointmentView>(`/agendamentos/${id}/cancelar`, {
+    metodo: 'POST',
+    corpo: reason ? { reason } : {},
+  });
+
+export const concluirAtendimento = (id: string) =>
+  chamar<AppointmentView>(`/agendamentos/${id}/concluir`, { metodo: 'POST', corpo: {} });
+
+// --- Ordem de serviço --------------------------------------------------
+
+export const listarOrdens = (ticketId: string) =>
+  chamar<ServiceOrderView[]>(`/tickets/${ticketId}/ordens`);
+
+export const abrirOrdem = (ticketId: string, corpo: EscreverOrdemRequest = {}) =>
+  chamar<ServiceOrderView>(`/tickets/${ticketId}/ordens`, { metodo: 'POST', corpo });
+
+export const editarOrdem = (id: string, corpo: EscreverOrdemRequest) =>
+  chamar<ServiceOrderView>(`/ordens/${id}`, { metodo: 'PATCH', corpo });
+
+export const incluirItemDaOrdem = (id: string, corpo: EscreverItemRequest) =>
+  chamar<ServiceOrderView>(`/ordens/${id}/itens`, { metodo: 'POST', corpo });
+
+export const editarItemDaOrdem = (id: string, itemId: string, corpo: EscreverItemRequest) =>
+  chamar<ServiceOrderView>(`/ordens/${id}/itens/${itemId}`, { metodo: 'PATCH', corpo });
+
+export const removerItemDaOrdem = (id: string, itemId: string) =>
+  chamar<ServiceOrderView>(`/ordens/${id}/itens/${itemId}`, { metodo: 'DELETE' });
+
+export const concluirOrdem = (id: string, corpo: ConcluirOrdemRequest) =>
+  chamar<ServiceOrderView>(`/ordens/${id}/concluir`, { metodo: 'POST', corpo });
+
+export const cancelarOrdem = (id: string) =>
+  chamar<ServiceOrderView>(`/ordens/${id}/cancelar`, { metodo: 'POST', corpo: {} });
+
+export const urlDaOrdemEmPdf = (id: string) =>
+  `${import.meta.env.VITE_API_URL ?? '/v1'}/ordens/${id}/pdf`;
