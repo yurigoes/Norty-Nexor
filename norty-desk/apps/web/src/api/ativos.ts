@@ -7,6 +7,9 @@ import type {
   SurveyPublicView,
   SurveyView,
   WriteAssetRequest,
+  AcessoRemotoView,
+  EscreverAcessoRemotoRequest,
+  SenhaRevelada,
 } from '@norty-desk/shared';
 
 import { chamar } from './cliente';
@@ -126,3 +129,24 @@ async function mensagemDoErro(resposta: Response): Promise<string> {
     return 'Não foi possível abrir a pesquisa.';
   }
 }
+
+// --- Como se chega na máquina -----------------------------------------
+
+export const acessoRemoto = (assetId: string) =>
+  chamar<AcessoRemotoView>(`/assets/${assetId}/acesso-remoto`);
+
+export const salvarAcessoRemoto = (assetId: string, dados: EscreverAcessoRemotoRequest) =>
+  chamar<AcessoRemotoView>(`/assets/${assetId}/acesso-remoto`, { metodo: 'PATCH', corpo: dados });
+
+/**
+ * Revela a senha, uma vez.
+ *
+ * `POST` e não `GET`: revelar é um ato, não uma leitura. `GET` entraria
+ * no histórico do navegador e em log de proxy — cada um deles uma cópia
+ * da senha fora daqui. Cada chamada fica na auditoria.
+ */
+export const revelarSenhaRemota = (assetId: string) =>
+  chamar<SenhaRevelada>(`/assets/${assetId}/acesso-remoto/revelar`, {
+    metodo: 'POST',
+    corpo: {},
+  });

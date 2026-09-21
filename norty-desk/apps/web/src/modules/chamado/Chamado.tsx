@@ -20,6 +20,7 @@ import { Aprovacoes } from '../aprovacao/Aprovacoes';
 import { AtivosDoChamado } from '../ativo/AtivosDoChamado';
 import { RespostasDoFormulario } from '../formulario/CamposDinamicos';
 import { EscolherModelo } from '../modelo/EscolherModelo';
+import { AcessoDoEquipamento } from '../ativo/AcessoDoEquipamento';
 import { OrdensDoChamado } from '../ordem/OrdemDeServico';
 import { Agendamento } from './Agendamento';
 import { CustosDoChamado } from '../custo/CustosDoChamado';
@@ -35,6 +36,13 @@ export function Chamado() {
   const [erroDeAcao, setErroDeAcao] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [resolvendo, setResolvendo] = useState(false);
+  /**
+   * Sobe quando alguém vincula ou desvincula equipamento no trilho.
+   *
+   * É o que faz o cartão "Como acessar" — que lê os mesmos ativos, do
+   * outro lado da tela — reler sem esperar a próxima carga da página.
+   */
+  const [versaoDosAtivos, setVersaoDosAtivos] = useState(0);
 
   const { dado: chamado, erro, carregando } = useRecurso(() => api.obterChamado(id), [id]);
   const { dado: times } = useRecurso(() => api.listarTimes().catch(() => []), []);
@@ -101,6 +109,7 @@ export function Chamado() {
           />
           <Sugestoes ticketId={chamado.id} />
           <Tarefas chamado={chamado} aoMudar={revalidar} />
+          <AcessoDoEquipamento ticketId={chamado.id} versao={versaoDosAtivos} />
           <Agendamento chamado={chamado} aoMudar={revalidar} />
           <OrdensDoChamado chamado={chamado} aoMudar={revalidar} />
           <CustosDoChamado chamado={chamado} />
@@ -203,7 +212,10 @@ export function Chamado() {
               </>
             ) : null}
 
-            <AtivosDoChamado ticketId={chamado.id} />
+            <AtivosDoChamado
+                ticketId={chamado.id}
+                aoMudar={() => setVersaoDosAtivos((v) => v + 1)}
+              />
           </div>
 
           <div className="card-rodape pilha-sm">

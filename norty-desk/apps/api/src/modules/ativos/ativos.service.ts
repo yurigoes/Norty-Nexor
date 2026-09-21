@@ -38,6 +38,9 @@ type AtivoComRelacoes = Prisma.AssetGetPayload<{ include: typeof INCLUDE }>;
  * registro simples é o que faz o campo ser preenchido — o inventário
  * completo vira importação na Fase 6 (`docs/10-roadmap.md`).
  */
+/** A forma de um uuid. Serve para decidir se vale procurar por id. */
+const EH_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 @Injectable()
 export class AtivosService {
   constructor(private readonly prisma: PrismaService) {}
@@ -64,6 +67,14 @@ export class AtivosService {
               { assetModel: { name: { contains: termo, mode: 'insensitive' } } },
               { manufacturer: { name: { contains: termo, mode: 'insensitive' } } },
               { location: { name: { contains: termo, mode: 'insensitive' } } },
+              // O id inteiro, quando é o que foi colado. Um `contains`
+              // sobre `uuid` o Postgres recusa — o tipo não é texto —,
+              // então entra como igualdade e só quando a forma bate.
+              ...(EH_UUID.test(termo) ? [{ id: termo }] : []),
+              // O IP do Tailscale: quem tem o IP na mão e quer saber de
+              // que máquina ele é faz exatamente esta pergunta.
+              { tailscaleIp: termo },
+              { remoteAccessId: termo },
             ],
           }
         : {}),

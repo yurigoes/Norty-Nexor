@@ -1896,3 +1896,51 @@ export const SEMELHANCA_MINIMA_DO_NOME = 0.5;
 
 /** Menos que isto não é busca, é a pessoa ainda digitando. */
 export const MINIMO_PARA_BUSCAR_EMPRESA = 3;
+
+
+// ---------------------------------------------------------------------
+// Acesso remoto ao equipamento
+// ---------------------------------------------------------------------
+
+export const REMOTE_ACCESS_KINDS = [
+  'ANYDESK',
+  'RUSTDESK',
+  'TEAMVIEWER',
+  'VNC',
+  'RDP',
+  'OUTRO',
+] as const;
+export type RemoteAccessKind = (typeof REMOTE_ACCESS_KINDS)[number];
+
+export const ROTULO_ACESSO_REMOTO: Record<RemoteAccessKind, string> = {
+  ANYDESK: 'AnyDesk',
+  RUSTDESK: 'RustDesk',
+  TEAMVIEWER: 'TeamViewer',
+  VNC: 'VNC',
+  RDP: 'Área de trabalho remota',
+  OUTRO: 'Outro',
+};
+
+/**
+ * O IP do Tailscale está bem formado?
+ *
+ * A malha usa `100.64.0.0/10` (CGNAT), e conferir isso evita o engano
+ * comum: colar ali o IP da rede local, que não serve para alcançar a
+ * máquina de fora e ainda faz o técnico perder a viagem tentando.
+ *
+ * Devolve a frase que a pessoa lê, ou `null` se está bem formado.
+ */
+export function tailscaleInvalido(ip: string): string | null {
+  const partes = ip.trim().split('.');
+  if (partes.length !== 4) return 'O IP do Tailscale tem quatro partes, como 100.101.102.103.';
+
+  const numeros = partes.map((p) => (/^\d{1,3}$/.test(p) ? Number(p) : -1));
+  if (numeros.some((n) => n < 0 || n > 255)) return 'Cada parte do IP vai de 0 a 255.';
+
+  // 100.64.0.0/10 vai de 100.64.x.x a 100.127.x.x.
+  if (numeros[0] !== 100 || numeros[1]! < 64 || numeros[1]! > 127) {
+    return 'O Tailscale usa a faixa 100.64.x.x–100.127.x.x. Esse parece o IP da rede local.';
+  }
+
+  return null;
+}

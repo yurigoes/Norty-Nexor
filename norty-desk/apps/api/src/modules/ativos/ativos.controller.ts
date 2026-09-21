@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -10,13 +11,21 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import type { AssetDetail, AssetView, ComponenteView } from '@norty-desk/shared';
+import type {
+  AcessoRemotoView,
+  AssetDetail,
+  AssetView,
+  ComponenteView,
+  SenhaRevelada,
+} from '@norty-desk/shared';
 
 import { CurrentUser, type UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { AcessoRemotoService } from './acesso-remoto.service';
 import { AtivosService } from './ativos.service';
+import { EscreverAcessoRemotoDto } from './dto-acesso';
 import {
   BuscarAtivosDto,
   EditarAtivoDto,
@@ -29,7 +38,10 @@ import {
 @Controller()
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class AtivosController {
-  constructor(private readonly ativos: AtivosService) {}
+  constructor(
+    private readonly ativos: AtivosService,
+    private readonly acesso: AcessoRemotoService,
+  ) {}
 
   @Get('assets')
   @RequirePermission('ativo:ler')
@@ -122,6 +134,52 @@ export class AtivosController {
     @Body() dto: EditarAtivoDto,
   ): Promise<AssetView> {
     return this.ativos.editar(usuario, id, dto);
+  }
+
+  // --- Como se chega na máquina ---------------------------------------
+
+  /**
+   * Tailscale, VPN e acesso remoto.
+   *
+   * `ativo:acesso-remoto` e não `ativo:ler`: "que máquina é essa" é
+   * inventário, "como eu entro nela agora" é chave de casa. A senha
+   * **não** vem aqui — só o aviso de que existe uma.
+   */
+  @Get('assets/:id/acesso-remoto')
+  @RequirePermission('ativo:acesso-remoto')
+  acessoRemoto(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<AcessoRemotoView> {
+    return this.acesso.obter(usuario, id);
+  }
+
+  @Patch('assets/:id/acesso-remoto')
+  @RequirePermission('ativo:acesso-remoto')
+  salvarAcessoRemoto(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: EscreverAcessoRemotoDto,
+  ): Promise<AcessoRemotoView> {
+    return this.acesso.salvar(usuario, id, dto);
+  }
+
+  /**
+   * A senha, uma vez.
+   *
+   * `POST` e não `GET` de propósito: revelar é um **ato**, não uma
+   * leitura. `GET` entraria no histórico do navegador, em log de proxy
+   * e num `prefetch` que ninguém pediu — e cada um desses seria uma
+   * cópia da senha fora daqui. Cada chamada fica na auditoria.
+   */
+  @Post('assets/:id/acesso-remoto/revelar')
+  @HttpCode(200)
+  @RequirePermission('ativo:acesso-remoto')
+  revelarSenha(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<SenhaRevelada> {
+    return this.acesso.revelar(usuario, id);
   }
 
   // --- Vínculo com o chamado ------------------------------------------

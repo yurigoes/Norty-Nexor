@@ -114,6 +114,15 @@ export const PERMISSIONS = [
   'ativo:gerenciar',
   /** Localização, fabricante e modelo — o catálogo que o ativo referencia. */
   'ativo:catalogo',
+  /**
+   * Ver como se chega na máquina: Tailscale, VPN e acesso remoto.
+   *
+   * Separada de `ativo:ler` porque são perguntas diferentes. "Que
+   * máquina é essa" é inventário; "como eu entro nela agora" é chave
+   * de casa. Quem lê o inventário para contar equipamento não precisa
+   * da segunda, e o gestor que acompanha indicador muito menos.
+   */
+  'ativo:acesso-remoto',
   /** Registrar a saída de consumível (entregar toner, papel). Entrada e ajuste são de quem gerencia. */
   'consumivel:movimentar',
 
@@ -276,6 +285,12 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'pessoa:ler',
     'ativo:ler',
     /**
+     * Quem atende o chamado é quem acessa a máquina — negar-lhe os
+     * dados de acesso seria mandá-lo procurá-los numa planilha, que é
+     * exatamente de onde eles vieram.
+     */
+    'ativo:acesso-remoto',
+    /**
      * Entregar o toner é gesto de quem atende: sem isso o agente troca o
      * cartucho e o estoque só descobre no inventário. Receber compra e
      * ajustar saldo continuam de quem gerencia ativos.
@@ -366,6 +381,7 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'time:gerenciar',
     'ativo:ler',
     'ativo:gerenciar',
+    'ativo:acesso-remoto',
     'problema:ler',
     'problema:gerenciar',
     'mudanca:ler',

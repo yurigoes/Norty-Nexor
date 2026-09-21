@@ -9,6 +9,7 @@ import type {
   ActorRole,
   AgreementKind,
   AppointmentStatus,
+  RemoteAccessKind,
   ServiceOrderStatus,
   ApprovalStatus,
   ChangeKind,
@@ -886,6 +887,43 @@ export type EscreverComponenteRequest = {
  */
 export type AssetDetail = AssetView & {
   components: ComponenteView[];
+};
+
+/**
+ * Como se chega na máquina.
+ *
+ * Só chega a quem tem `ativo:acesso-remoto`. A **senha não está aqui**
+ * e não está em nenhuma outra carga: ela sai por uma rota própria, uma
+ * vez, e a saída fica na auditoria. Pôr a senha neste tipo faria dela
+ * um campo que vaza junto com qualquer tela que mostre o equipamento.
+ */
+export type AcessoRemotoView = {
+  tailscaleIp: string | null;
+  vpnNotes: string | null;
+  remoteAccessKind: RemoteAccessKind | null;
+  remoteAccessId: string | null;
+  /** Há senha guardada? O valor dela, não. */
+  temSenha: boolean;
+};
+
+export type EscreverAcessoRemotoRequest = {
+  tailscaleIp?: string | null;
+  vpnNotes?: string | null;
+  remoteAccessKind?: RemoteAccessKind | null;
+  remoteAccessId?: string | null;
+  /**
+   * A senha nova. Omitir mantém a que está lá; `null` apaga.
+   *
+   * A diferença importa: uma tela que não mostra a senha também não
+   * pode reenviá-la, e sem o "omitir mantém" toda edição de outro
+   * campo apagaria a senha sem ninguém pedir.
+   */
+  remoteAccessSecret?: string | null;
+};
+
+/** O que a rota de revelar devolve. Uma vez, e auditada. */
+export type SenhaRevelada = {
+  secret: string;
 };
 
 // ---------------------------------------------------------------------

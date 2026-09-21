@@ -1250,6 +1250,16 @@ model Change {
 // Ativos
 // ---------------------------------------------------------------------
 
+/// O programa pelo qual se acessa a máquina de longe.
+enum RemoteAccessKind {
+  ANYDESK
+  RUSTDESK
+  TEAMVIEWER
+  VNC
+  RDP
+  OUTRO
+}
+
 enum AssetKind {
   COMPUTADOR
   MONITOR
@@ -1320,6 +1330,30 @@ model Asset {
   purchasedAt        DateTime?
   warrantyUntil      DateTime?
   notes              String?
+
+  /// --- Como se chega nesta máquina -----------------------------------
+  ///
+  /// O que o técnico precisa ter à mão quando o chamado chega. Sem
+  /// isto, "acessa o notebook do financeiro" começa por procurar o IP
+  /// numa planilha — que é onde essa informação costuma morar, sem
+  /// dono e sem controle de quem a leu.
+  ///
+  /// Estes três campos e o `remoteAccessId` são **dados de acesso**:
+  /// saem só para quem tem `ativo:acesso-remoto`, nunca em listagem, e
+  /// nunca para cliente.
+  tailscaleIp        String?
+  /// Como entrar na VPN desta máquina: qual VPN, usuário, ponta.
+  vpnNotes           String?
+  remoteAccessKind   RemoteAccessKind?
+  /// O identificador que se digita no programa de acesso remoto.
+  remoteAccessId     String?
+  /// A senha, **cifrada** (AES-256-GCM, ver `channels/segredos.ts`).
+  ///
+  /// Nunca sai numa resposta de listagem nem de detalhe: existe uma
+  /// rota só para revelá-la, que exige permissão própria e grava na
+  /// auditoria quem revelou e quando. Em texto claro, um dump do banco
+  /// entregaria o acesso remoto de todo o parque de uma vez.
+  remoteAccessSecret String?
   /// Dados financeiros do ativo — o `glpi_infocoms` do GLPI.
   ///
   /// Lá é tabela à parte porque é polimórfica sobre sessenta tipos de

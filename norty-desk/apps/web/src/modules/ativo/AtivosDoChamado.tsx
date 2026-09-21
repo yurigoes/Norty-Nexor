@@ -17,7 +17,20 @@ import { useAutenticacao } from '../../auth/Autenticacao';
  * chamado. Vincular é `ativo:ler`: quem atende precisa dizer qual
  * equipamento é, mudar o cadastro dele é outra conversa.
  */
-export function AtivosDoChamado({ ticketId }: { ticketId: string }) {
+export function AtivosDoChamado({
+  ticketId,
+  aoMudar,
+}: {
+  ticketId: string;
+  /**
+   * Avisa que a lista mudou.
+   *
+   * O cartão "Como acessar" lê os mesmos ativos, e sem este aviso ele
+   * só descobria o vínculo na próxima carga da página — o técnico
+   * vinculava a máquina e os dados de acesso não apareciam.
+   */
+  aoMudar?: () => void;
+}) {
   const { can } = useAutenticacao();
   const [vinculados, setVinculados] = useState<AssetView[] | null>(null);
   const [buscando, setBuscando] = useState(false);
@@ -80,7 +93,10 @@ export function AtivosDoChamado({ ticketId }: { ticketId: string }) {
             className="btn-icone"
             aria-label={`Desvincular ${ativo.name}`}
             onClick={() => {
-              void desvincularAtivo(ticketId, ativo.id).then(setVinculados);
+              void desvincularAtivo(ticketId, ativo.id).then((lista) => {
+                setVinculados(lista);
+                aoMudar?.();
+              });
             }}
           >
             ×
@@ -93,7 +109,7 @@ export function AtivosDoChamado({ ticketId }: { ticketId: string }) {
           <input
             className="input"
             type="search"
-            placeholder="Patrimônio, série ou nome"
+            placeholder="Nome, patrimônio, série, IP ou id"
             aria-label="Buscar equipamento"
             value={termo}
             onChange={(e) => setTermo(e.target.value)}
@@ -111,6 +127,7 @@ export function AtivosDoChamado({ ticketId }: { ticketId: string }) {
                   void vincularAtivo(ticketId, ativo.id).then((lista) => {
                     setVinculados(lista);
                     setBuscando(false);
+                    aoMudar?.();
                   });
                 }}
               >
