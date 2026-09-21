@@ -58,6 +58,16 @@ export const PERMISSIONS = [
   'anexo:enviar',
   'anexo:baixar',
   'anexo:remover',
+  /**
+   * Retirar **o que a própria pessoa anexou**.
+   *
+   * Separado de `anexo:remover` porque são gestos diferentes: quem abriu
+   * o chamado anexou a foto errada e quer trocar; o supervisor retira o
+   * documento que alguém mandou por engano. Dar o segundo a quem só
+   * precisa do primeiro deixaria o solicitante apagar a evidência que o
+   * técnico juntou.
+   */
+  'anexo:remover:proprio',
 
   // --- Aprovação ------------------------------------------------------
   'aprovacao:solicitar',
@@ -154,6 +164,7 @@ const IMPLICA: Partial<Record<Permission, readonly Permission[]>> = {
   'chamado:atribuir': ['chamado:atribuir:a-mim'],
   'artigo:publicar': ['artigo:escrever'],
   'artigo:ler:interno': ['artigo:ler'],
+  'anexo:remover': ['anexo:remover:proprio'],
   'ativo:gerenciar': ['ativo:ler', 'ativo:catalogo', 'consumivel:movimentar'],
   'ativo:catalogo': ['ativo:ler'],
   'problema:gerenciar': ['problema:ler'],
@@ -194,6 +205,7 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'chamado:reabrir',
     'anexo:enviar',
     'anexo:baixar',
+    'anexo:remover:proprio',
   ],
 
   SOLICITANTE: [
@@ -204,6 +216,7 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'chamado:reabrir',
     'anexo:enviar',
     'anexo:baixar',
+    'anexo:remover:proprio',
     'aprovacao:decidir',
     'artigo:ler',
     'painel:proprio',
@@ -229,6 +242,7 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'tarefa:apontar-tempo',
     'anexo:enviar',
     'anexo:baixar',
+    'anexo:remover:proprio',
     'aprovacao:solicitar',
     'artigo:ler',
     'artigo:ler:interno',
@@ -297,6 +311,16 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'anexo:enviar',
     'anexo:baixar',
     'anexo:remover',
+  /**
+   * Retirar **o que a própria pessoa anexou**.
+   *
+   * Separado de `anexo:remover` porque são gestos diferentes: quem abriu
+   * o chamado anexou a foto errada e quer trocar; o supervisor retira o
+   * documento que alguém mandou por engano. Dar o segundo a quem só
+   * precisa do primeiro deixaria o solicitante apagar a evidência que o
+   * técnico juntou.
+   */
+  'anexo:remover:proprio',
     'aprovacao:solicitar',
     'aprovacao:decidir',
     'artigo:ler',
@@ -386,4 +410,26 @@ export function ticketReadScope(role: Role): TicketReadScope {
   if (can(role, 'chamado:ler:todos')) return 'TODOS';
   if (can(role, 'chamado:ler:time')) return 'TIME';
   return 'PROPRIOS';
+}
+
+/**
+ * Quem pode retirar este anexo.
+ *
+ * Uma função só, lida pelos dois lados: o aplicativo decide se desenha o
+ * botão de retirar e a API decide se aceita o `DELETE`. Fossem duas
+ * implementações, a divergência apareceria como botão que não funciona
+ * — ou, pior, como botão ausente numa ação que a API aceitaria.
+ *
+ * `uploadedById` nulo é anexo que entrou por e-mail ou WhatsApp sem
+ * autor identificado. Ninguém o reivindica como "meu", então só quem
+ * tem `anexo:remover` o retira.
+ */
+export function podeRemoverAnexo(
+  role: Role,
+  usuarioId: string,
+  anexo: { uploadedById: string | null },
+): boolean {
+  if (can(role, 'anexo:remover')) return true;
+  if (!can(role, 'anexo:remover:proprio')) return false;
+  return anexo.uploadedById !== null && anexo.uploadedById === usuarioId;
 }

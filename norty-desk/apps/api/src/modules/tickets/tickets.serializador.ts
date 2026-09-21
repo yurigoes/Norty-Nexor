@@ -213,6 +213,7 @@ function anexo(a: Evento['attachments'][number]): AttachmentView {
     sizeBytes: a.sizeBytes,
     checksum: a.checksum,
     eventId: a.eventId,
+    uploadedById: a.uploadedById,
     createdAt: a.createdAt.toISOString(),
   };
 }

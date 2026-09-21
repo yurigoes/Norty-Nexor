@@ -1,5 +1,11 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import type { AttachmentView } from '@norty-desk/shared';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { podeRemoverAnexo, type AttachmentView } from '@norty-desk/shared';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Readable } from 'node:stream';
 
@@ -148,12 +154,49 @@ export class AttachmentsService {
     };
   }
 
+  /**
+   * Retira o anexo, e deixa dito na linha do tempo que ele saiu.
+   *
+   * Quem tem `anexo:remover` retira qualquer um; quem tem só
+   * `anexo:remover:proprio` retira o que ele mesmo anexou. A decisão é
+   * de `podeRemoverAnexo`, em `packages/shared` — a mesma função que o
+   * aplicativo lê para decidir se desenha o botão.
+   */
   async remover(usuario: UsuarioAutenticado, id: string): Promise<void> {
     const anexo = await this.prisma.attachment.findFirst({
       where: { id, ticket: escopoDeLeitura(usuario) },
+      include: { ticket: { select: { status: true, originChannel: true } } },
     });
 
-    if (!anexo) throw new NotFoundException('Anexo não encontrado.');
+    // O `where` filtra por `ticket`, então a relação existe; o `if` é
+    // para o TypeScript, que só sabe que a coluna é nula em anexo de
+    // problema ou de mudança — e esses esta rota não retira.
+    if (!anexo?.ticket) throw new NotFoundException('Anexo não encontrado.');
+
+    if (!podeRemoverAnexo(usuario.role, usuario.userId, anexo)) {
+      throw new ForbiddenException('Este anexo foi enviado por outra pessoa.');
+    }
+
+    // Mesma regra do envio: chamado fechado não muda. Sem isso, o
+    // anexo poderia sair de um chamado já encerrado — e o registro do
+    // atendimento mudaria depois de dado por terminado.
+    if (anexo.ticket.status === 'FECHADO') {
+      throw new BadRequestException('Chamado fechado. Reabra antes de retirar o anexo.');
+    }
+
+    // O evento nasce antes da exclusão: se o `delete` falhar, sobra um
+    // evento a mais na linha do tempo, que é honesto. Na ordem inversa
+    // sobraria um arquivo apagado sem registro de quem o apagou.
+    await this.prisma.ticketEvent.create({
+      data: {
+        ticketId: anexo.ticketId,
+        type: 'ANEXO_REMOVIDO',
+        visibility: 'PUBLICA',
+        authorId: usuario.userId,
+        channel: anexo.ticket.originChannel,
+        body: anexo.filename,
+      },
+    });
 
     // O registro sai primeiro: um arquivo órfão no bucket é lixo; um
     // registro apontando para arquivo que não existe é erro na tela.
@@ -168,6 +211,7 @@ export class AttachmentsService {
     sizeBytes: number;
     checksum: string;
     eventId: string | null;
+    uploadedById: string | null;
     createdAt: Date;
   }): AttachmentView {
     return {
@@ -177,6 +221,7 @@ export class AttachmentsService {
       sizeBytes: a.sizeBytes,
       checksum: a.checksum,
       eventId: a.eventId,
+      uploadedById: a.uploadedById,
       createdAt: a.createdAt.toISOString(),
     };
   }

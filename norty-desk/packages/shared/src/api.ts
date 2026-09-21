@@ -207,6 +207,8 @@ export type AttachmentView = {
   sizeBytes: number;
   checksum: string;
   eventId: string | null;
+  /** Nulo quando o anexo entrou por canal sem autor identificado. */
+  uploadedById: string | null;
   createdAt: string;
 };
 

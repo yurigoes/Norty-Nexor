@@ -51,6 +51,15 @@ export const EVENT_TYPES = [
   'SOLUCAO',
   'APROVACAO',
   'ANEXO',
+  /**
+   * O anexo foi retirado.
+   *
+   * Tipo próprio, e não a remoção do evento `ANEXO` original: se o
+   * arquivo some sem deixar marca, a linha do tempo mente — passa a
+   * dizer que ele nunca existiu. O chamado é registro de atendimento, e
+   * o que foi juntado e depois retirado faz parte do que aconteceu.
+   */
+  'ANEXO_REMOVIDO',
   'MUDANCA_STATUS',
   /**
    * Mudança de status do **problema**.

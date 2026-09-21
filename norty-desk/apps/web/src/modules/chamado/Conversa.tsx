@@ -13,6 +13,7 @@ const TIPOS_DE_SISTEMA = new Set([
   'MUDANCA_CLASSIFICACAO',
   'PAUSA_SLA',
   'RETOMADA_SLA',
+  'ANEXO_REMOVIDO',
 ]);
 
 /**
@@ -127,6 +128,9 @@ function Evento({ evento }: { evento: TicketEventView }) {
 }
 
 function corpoDoEvento(evento: TicketEventView): string {
+  // O corpo do evento é o nome do arquivo; sozinho na linha do tempo
+  // ele pareceria alguém tendo dito "foto.png".
+  if (evento.type === 'ANEXO_REMOVIDO') return `Anexo retirado: ${evento.body ?? 'arquivo'}.`;
   if (evento.body) return evento.body;
 
   const payload = evento.payload;

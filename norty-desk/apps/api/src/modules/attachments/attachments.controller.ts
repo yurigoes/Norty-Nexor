@@ -74,9 +74,14 @@ export class AttachmentsController {
     leitura.fluxo.pipe(resposta);
   }
 
+  /**
+   * A rota abre para quem retira ao menos o próprio anexo; o serviço
+   * decide se este anexo é dele. Exigir `anexo:remover` aqui fecharia a
+   * porta para o solicitante que só quer trocar a foto errada.
+   */
   @Delete('anexos/:id')
   @HttpCode(204)
-  @RequirePermission('anexo:remover')
+  @RequirePermission('anexo:remover:proprio')
   remover(
     @CurrentUser() usuario: UsuarioAutenticado,
     @Param('id', ParseUUIDPipe) id: string,
