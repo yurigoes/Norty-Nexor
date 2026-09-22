@@ -80,6 +80,14 @@ function donoDaLinha(linha: LinhaComRelacoes): DonoDaAprovacao | null {
  * a interface monta o desfecho por conta própria, e por isso a tela e o
  * relatório às vezes discordam.
  */
+/**
+ * Teto da subida na árvore de categorias.
+ *
+ * O mesmo do `FormulariosService`, e pela mesma razão: ciclo no banco
+ * não pode virar laço infinito aqui.
+ */
+const MAX_NIVEIS_DA_ARVORE = 20;
+
 @Injectable()
 export class AprovacoesService {
   constructor(
@@ -286,6 +294,166 @@ export class AprovacoesService {
     });
 
     return this.listar({ kind: 'CHAMADO', id: ticketId });
+  }
+
+  /**
+   * A aprovação que a categoria exige, pedida na abertura.
+   *
+   * **O chamado abre normalmente.** Não vai para `EM_APROVACAO`, não
+   * espera numa antessala: quem pediu já tem protocolo e a fila já
+   * enxerga o chamado. O que esta marca faz é criar a decisão, para
+   * que ela exista e fique registrada — foi assim que o Yuri pediu.
+   *
+   * **Quem decide** é o gestor cadastrado *naquela empresa* — os
+   * `GESTOR` cujo vínculo aponta para o mesmo cliente do requerente —
+   * mais os administradores, que sempre podem. Quórum 1: o primeiro
+   * que decidir resolve, porque gestor de férias não pode parar um
+   * pedido.
+   *
+   * **O requerente sai da lista.** Gestor que é o único da própria
+   * empresa aprovando o próprio pedido esvazia a alçada; nesse caso
+   * sobra o administrador, que é exatamente o ponto de ele sempre
+   * poder.
+   *
+   * Silenciosa quando não há ninguém a quem pedir: criar aprovação sem
+   * aprovador produziria um chamado travado num pedido que ninguém
+   * pode decidir. Fica a nota na linha do tempo, que é onde alguém
+   * consegue descobrir por que não houve aval.
+   */
+  async pedirDaCategoria(dados: {
+    organizationId: string;
+    ticketId: string;
+    ticketNumber: number;
+    subject: string;
+    /** A empresa do chamado; nulo quando quem pediu é da casa. */
+    clientId: string | null;
+    /** Não se pede aval a quem está pedindo. */
+    requesterUserId: string | null;
+  }): Promise<void> {
+    const aprovadores = await this.aprovadoresDaEmpresa(
+      dados.organizationId,
+      dados.clientId,
+      dados.requesterUserId,
+    );
+
+    if (aprovadores.length === 0) {
+      await this.prisma.ticketEvent.create({
+        data: {
+          ticketId: dados.ticketId,
+          type: 'APROVACAO',
+          visibility: 'INTERNA',
+          channel: 'SISTEMA',
+          body:
+            'Esta categoria exige aprovação, mas não há gestor desta empresa nem ' +
+            'administrador a quem pedir. O chamado segue sem aval registrado.',
+        },
+      });
+      return;
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.approval.createMany({
+        data: aprovadores.map((approverId) => ({
+          ticketId: dados.ticketId,
+          step: 1,
+          quorum: 1,
+          approverId,
+        })),
+        skipDuplicates: true,
+      });
+
+      await tx.ticketEvent.create({
+        data: {
+          ticketId: dados.ticketId,
+          type: 'APROVACAO',
+          visibility: 'INTERNA',
+          channel: 'SISTEMA',
+          body:
+            `Esta categoria exige aprovação. Pedida a ${aprovadores.length} pessoa(s); ` +
+            'basta um "sim". O chamado segue o curso normal enquanto isso.',
+          payload: { type: 'APROVACAO', approvalId: 'etapa-1', decision: 'AGUARDANDO' },
+        },
+      });
+    });
+
+    await this.avisarValidadores(
+      {
+        organizationId: dados.organizationId,
+        etiqueta: ticketTag(dados.ticketNumber),
+        titulo: dados.subject,
+        ticketId: dados.ticketId,
+      },
+      1,
+      aprovadores,
+    );
+
+    await this.webhooks.emitir(dados.organizationId, 'aprovacao.solicitada', {
+      ticketId: dados.ticketId,
+      numero: dados.ticketNumber,
+      etapa: 1,
+      quorum: 1,
+      validadores: aprovadores,
+    });
+  }
+
+  /**
+   * Os gestores daquela empresa, mais os administradores.
+   *
+   * O vínculo (`Membership`) carrega papel **e** empresa na mesma
+   * linha, e é por isso que "gestor daquela empresa" é uma consulta e
+   * não uma estrutura nova: `role: GESTOR` com o `clientId` do
+   * requerente. Sem empresa — quem pediu é da casa — sobram os
+   * administradores.
+   */
+  private async aprovadoresDaEmpresa(
+    organizationId: string,
+    clientId: string | null,
+    requesterUserId: string | null,
+  ): Promise<string[]> {
+    const vinculos = await this.prisma.membership.findMany({
+      where: {
+        organizationId,
+        OR: [
+          { role: 'ADMINISTRADOR' },
+          ...(clientId ? [{ role: 'GESTOR' as const, clientId }] : []),
+        ],
+        user: { isActive: true },
+      },
+      select: { userId: true },
+    });
+
+    const ids = new Set(vinculos.map((v) => v.userId));
+    if (requesterUserId) ids.delete(requesterUserId);
+    return [...ids];
+  }
+
+  /**
+   * Esta categoria exige aval? A resposta sobe a árvore.
+   *
+   * Marcar "Compras" vale para "Compras > Licenças" sem remarcar cada
+   * filha — é a mesma herança do formulário, e pela mesma razão: quem
+   * cria uma subcategoria não deve precisar lembrar de repetir a
+   * política da categoria acima.
+   */
+  async categoriaExigeAprovacao(
+    organizationId: string,
+    categoryId: string | null | undefined,
+  ): Promise<boolean> {
+    let cursor = categoryId ?? null;
+
+    for (let i = 0; i < MAX_NIVEIS_DA_ARVORE && cursor; i += 1) {
+      const categoria: { parentId: string | null; requiresApproval: boolean } | null =
+        await this.prisma.category.findFirst({
+          where: { id: cursor, organizationId },
+          select: { parentId: true, requiresApproval: true },
+        });
+
+      if (!categoria) return false;
+      if (categoria.requiresApproval) return true;
+      cursor = categoria.parentId;
+    }
+
+    return false;
   }
 
   /**

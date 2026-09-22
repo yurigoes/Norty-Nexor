@@ -28,6 +28,17 @@ export class CriarCategoriaDto {
   @IsOptional() @IsUUID() defaultAssigneeId?: string;
   @IsOptional() @IsInt() @Min(1) @Max(5) defaultUrgency?: number;
 
+  /**
+   * Aparece na abertura sem login?
+   *
+   * Opt-in: a taxonomia interna tem ramo que não se mostra a estranho.
+   * Faltava aqui — dava para marcar no banco e não pela tela, o que
+   * deixava a tela sem login sem nenhum tipo para oferecer.
+   */
+  @IsOptional() @IsBoolean() isPublic?: boolean;
+  /** Chamado desta categoria precisa de aval? Herda para as filhas. */
+  @IsOptional() @IsBoolean() requiresApproval?: boolean;
+
   /** Os acordos que um chamado desta categoria recebe ao nascer. */
   @IsOptional() @IsArray() @ArrayMaxSize(8) @IsUUID('4', { each: true })
   defaultAgreementIds?: string[];

@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { FormField, FormSchema, FormularioView } from '@norty-desk/shared';
+import type { FormField, FormSchema, FormularioView, TimeView } from '@norty-desk/shared';
 import { FORM_FIELD_TYPES, ROTULO_CAMPO, validarSchema } from '@norty-desk/shared';
 
 import { ErroDaApi } from '../../api/cliente';
 import { listarCategorias, type CategoriaView } from '../../api/endpoints';
+import { listarPessoas, type PessoaView } from '../../api/aprovacoes';
+import { listarTimes } from '../../api/times';
 import {
   criarFormulario,
   editarFormulario,
@@ -83,6 +85,7 @@ export function Formularios() {
                 <tr>
                   <th>Modelo</th>
                   <th>Onde aparece</th>
+                  <th>Destino</th>
                   <th>Categoria</th>
                   <th className="-num">Campos</th>
                   <th className="-num">Chamados</th>
@@ -117,6 +120,11 @@ export function Formularios() {
                     </td>
                     <td>
                       <OndeAparece formulario={f} />
+                    </td>
+                    <td>
+                      {f.defaultAssignee?.name ?? f.defaultTeam?.name ?? (
+                        <span className="campo-ajuda">pela categoria</span>
+                      )}
                     </td>
                     <td>{f.category?.name ?? '—'}</td>
                     <td className="-num">{f.schema.fields.length}</td>
@@ -199,6 +207,8 @@ function Montador({
     schema: FormSchema;
     categoryId?: string | null;
     isDefault?: boolean;
+    defaultTeamId?: string | null;
+    defaultAssigneeId?: string | null;
     isModel?: boolean;
     isPublic?: boolean;
     description?: string | null;
@@ -215,6 +225,10 @@ function Montador({
   const [position, setPosition] = useState(String(formulario?.position ?? 0));
   const [fields, setFields] = useState<FormField[]>(formulario?.schema.fields ?? []);
   const [categorias, setCategorias] = useState<CategoriaView[]>([]);
+  const [times, setTimes] = useState<TimeView[]>([]);
+  const [pessoas, setPessoas] = useState<PessoaView[]>([]);
+  const [time, setTime] = useState(formulario?.defaultTeam?.id ?? '');
+  const [responsavel, setResponsavel] = useState(formulario?.defaultAssignee?.id ?? '');
   const [previa, setPrevia] = useState<Record<string, unknown>>({});
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -222,6 +236,12 @@ function Montador({
   useEffect(() => {
     void listarCategorias()
       .then(setCategorias)
+      .catch(() => undefined);
+    void listarTimes()
+      .then(setTimes)
+      .catch(() => undefined);
+    void listarPessoas()
+      .then(setPessoas)
       .catch(() => undefined);
   }, []);
 
@@ -267,6 +287,8 @@ function Montador({
               schema,
               categoryId: categoryId || null,
               isDefault,
+              defaultTeamId: time || null,
+              defaultAssigneeId: responsavel || null,
               isModel,
               // Ficha que não é modelo não aparece na abertura, e
               // portanto não pode ficar pública por engano: desmarcar
@@ -338,6 +360,57 @@ function Montador({
             <span className="campo-ajuda">
               Vale quando a categoria — e nenhuma acima dela — tem formulário próprio. Só um por
               organização: marcar este desmarca o outro.
+            </span>
+
+            <div className="divisor-texto">
+              <span>Para onde vai</span>
+            </div>
+
+            <div className="campo-grupo">
+              <div className="campo">
+                <label className="campo-rotulo" htmlFor="time-formulario">
+                  Time
+                </label>
+                <select
+                  id="time-formulario"
+                  className="select"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                >
+                  <option value="">O que a categoria disser</option>
+                  {times.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="campo">
+                <label className="campo-rotulo" htmlFor="responsavel-formulario">
+                  Ou uma pessoa
+                </label>
+                <select
+                  id="responsavel-formulario"
+                  className="select"
+                  value={responsavel}
+                  onChange={(e) => setResponsavel(e.target.value)}
+                >
+                  <option value="">Ninguém</option>
+                  {pessoas.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <span className="campo-ajuda">
+              {responsavel
+                ? 'A pessoa tem precedência: o chamado vai para ela, não para o time.'
+                : time
+                  ? 'Vence o destino da categoria — quem monta o modelo sabia da categoria e decidiu diferente.'
+                  : 'Sem destino aqui, vale o da categoria. É o caso comum.'}
             </span>
 
             <div className="divisor-texto">

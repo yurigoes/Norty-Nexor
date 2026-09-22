@@ -20,6 +20,8 @@ import {
   ALFABETO_DO_PROTOCOLO,
   TAMANHO_DO_PROTOCOLO,
   canTransition,
+  destinoDoChamado,
+  type DestinoDoChamado,
   normalizarProtocolo,
 } from '@norty-desk/shared';
 import { Prisma } from '@prisma/client';
@@ -29,6 +31,7 @@ import type { UsuarioAutenticado } from '../../common/decorators/current-user.de
 import { derivarPrioridade } from '../../common/prioridade';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { SaidaService } from '../channels/saida.service';
+import { AprovacoesService } from '../aprovacoes/aprovacoes.service';
 import { FormulariosService } from '../formularios/formularios.service';
 import { SatisfacaoService } from '../satisfacao/satisfacao.service';
 import type { EventoDeWebhook } from '../webhooks/eventos';
@@ -72,6 +75,7 @@ export class TicketsService {
     @Inject(forwardRef(() => SatisfacaoService)) private readonly satisfacao: SatisfacaoService,
     private readonly webhooks: WebhooksService,
     private readonly formularios: FormulariosService,
+    private readonly aprovacoes: AprovacoesService,
   ) {}
 
   /**
@@ -434,9 +438,18 @@ export class TicketsService {
       usuario.role,
       categoria?.id,
       dto.customFields,
+      dto.formId,
     );
 
-    const id = await this.prisma.$transaction(async (tx) => {
+    // Quem atende: o modelo escolhido vence a categoria, e dentro de
+    // cada um a pessoa vence o time. A regra é pura e mora em
+    // `packages/shared` — ver `destinoDoChamado`.
+    const destino = destinoDoChamado(formulario.destinoDoModelo, {
+      assigneeId: categoria?.defaultAssigneeId ?? null,
+      teamId: categoria?.defaultTeamId ?? null,
+    });
+
+    const { id, number: numero } = await this.prisma.$transaction(async (tx) => {
       const number = await this.proximoNumero(tx, usuario.organizationId);
       const protocol = await this.gerarProtocolo(tx);
 
@@ -457,16 +470,10 @@ export class TicketsService {
         });
       }
 
-      // A categoria carrega quem atende: uma pessoa, um time, ou nada.
-      //
-      // A pessoa tem precedência sobre o time — quem configurou o tipo
-      // apontando para alguém quis aquele alguém, e cair na fila do
-      // time seria ignorar a configuração. Cai na fila certa sem o
-      // agente precisar distribuir na mão.
-      if (categoria?.defaultAssigneeId) {
-        atores.push({ role: 'ATRIBUIDO', userId: categoria.defaultAssigneeId });
-      } else if (categoria?.defaultTeamId) {
-        atores.push({ role: 'ATRIBUIDO', teamId: categoria.defaultTeamId });
+      if (destino.assigneeId) {
+        atores.push({ role: 'ATRIBUIDO', userId: destino.assigneeId });
+      } else if (destino.teamId) {
+        atores.push({ role: 'ATRIBUIDO', teamId: destino.teamId });
       }
 
       const chamado = await tx.ticket.create({
@@ -477,20 +484,25 @@ export class TicketsService {
           subject: dto.subject.trim(),
           description: dto.description,
           type: dto.type ?? 'INCIDENTE',
-          status: categoria?.defaultAssigneeId || categoria?.defaultTeamId ? 'ATRIBUIDO' : 'NOVO',
+          status: destino.assigneeId || destino.teamId ? 'ATRIBUIDO' : 'NOVO',
           urgency,
           impact,
           priority,
           categoryId: categoria?.id,
+          // A empresa de quem abriu. O chamado já nascia sem ela pelo
+          // portal, e é ela que diz de qual empresa é o gestor que
+          // aprova — sem isso, a aprovação por categoria não tem a quem
+          // pedir quando quem abre é pessoa de cliente.
+          clientId: usuario.clientId ?? null,
           formId: formulario.formId,
           originChannel: 'WEB',
           customFields: (formulario.customFields as Prisma.InputJsonValue) ?? undefined,
           actors: { create: atores },
         },
-        select: { id: true },
+        select: { id: true, number: true },
       });
 
-      return chamado.id;
+      return chamado;
     });
 
     // Os acordos vêm da categoria: TTO e TTR (e os internos, quando
@@ -501,6 +513,19 @@ export class TicketsService {
         id,
         categoria.defaultAgreements.map((a) => a.id),
       );
+    }
+
+    // A categoria pode exigir aval. O chamado já está aberto e já tem
+    // protocolo: a aprovação corre ao lado, não à frente.
+    if (await this.aprovacoes.categoriaExigeAprovacao(usuario.organizationId, categoria?.id)) {
+      await this.aprovacoes.pedirDaCategoria({
+        organizationId: usuario.organizationId,
+        ticketId: id,
+        ticketNumber: numero,
+        subject: dto.subject.trim(),
+        clientId: usuario.clientId ?? null,
+        requesterUserId: usuario.userId,
+      });
     }
 
     await this.avisarAssinantes(usuario.organizationId, 'ticket.criado', id);
@@ -536,6 +561,13 @@ export class TicketsService {
     /** O modelo respondido e as respostas dele, já validadas. */
     formId?: string;
     customFields?: Record<string, unknown>;
+    /**
+     * O destino que o modelo escolhido carrega, quando carrega.
+     *
+     * Vem pronto de quem validou o modelo: este método não resolve
+     * formulário, ele recebe o que já foi conferido.
+     */
+    destinoDoModelo?: DestinoDoChamado | null;
     /** Quem acompanha junto, como contato. */
     observerContactIds?: string[];
   }): Promise<{ id: string; number: number }> {
@@ -554,7 +586,16 @@ export class TicketsService {
         })
       : null;
 
-    const timeFinal = dados.teamId ?? categoria?.defaultTeamId ?? null;
+    // A regra de entrada, quando decide explicitamente, vence tudo:
+    // ela olhou a mensagem. Abaixo dela, o modelo escolhido vence a
+    // categoria — a mesma ordem da porta com login.
+    const destino = dados.teamId
+      ? { assigneeId: null, teamId: dados.teamId }
+      : destinoDoChamado(dados.destinoDoModelo ?? null, {
+          assigneeId: categoria?.defaultAssigneeId ?? null,
+          teamId: categoria?.defaultTeamId ?? null,
+        });
+
     const acordos =
       dados.agreementIds?.length
         ? dados.agreementIds
@@ -572,7 +613,7 @@ export class TicketsService {
           subject: dados.subject.slice(0, 255),
           description: dados.description,
           type: dados.ticketType ?? 'INCIDENTE',
-          status: timeFinal ? 'ATRIBUIDO' : 'NOVO',
+          status: destino.assigneeId || destino.teamId ? 'ATRIBUIDO' : 'NOVO',
           urgency,
           impact,
           priority,
@@ -584,7 +625,11 @@ export class TicketsService {
           actors: {
             create: [
               { role: 'REQUERENTE', contactId: dados.contactId },
-              ...(timeFinal ? [{ role: 'ATRIBUIDO' as const, teamId: timeFinal }] : []),
+              ...(destino.assigneeId
+                ? [{ role: 'ATRIBUIDO' as const, userId: destino.assigneeId }]
+                : destino.teamId
+                  ? [{ role: 'ATRIBUIDO' as const, teamId: destino.teamId }]
+                  : []),
               ...(dados.observerContactIds ?? []).map((contactId) => ({
                 role: 'OBSERVADOR' as const,
                 contactId,
@@ -597,6 +642,20 @@ export class TicketsService {
     });
 
     if (acordos.length) await this.sla.aplicarAcordos(chamado.id, acordos);
+
+    // Mesma regra da porta com login: a categoria pode exigir aval, e
+    // quem decide é o gestor daquela empresa. Aqui o requerente é um
+    // contato, não um usuário — não há de quem tirar da lista.
+    if (await this.aprovacoes.categoriaExigeAprovacao(dados.organizationId, categoria?.id)) {
+      await this.aprovacoes.pedirDaCategoria({
+        organizationId: dados.organizationId,
+        ticketId: chamado.id,
+        ticketNumber: chamado.number,
+        subject: dados.subject.slice(0, 255),
+        clientId: dados.clientId ?? null,
+        requesterUserId: null,
+      });
+    }
 
     // Quais regras classificaram fica registrado: sem isso, ninguém
     // consegue explicar por que o chamado caiu naquela fila.

@@ -67,6 +67,9 @@ export class EscreverFormularioDto {
   @IsOptional() @IsBoolean() isPublic?: boolean;
   @IsOptional() @Transform(vazioVirandoNulo) @IsString() @MaxLength(200) description?: string | null;
   @IsOptional() @IsInt() @Min(0) @Max(999) position?: number;
+  /** Para onde vai o chamado aberto com este modelo. Vence a categoria. */
+  @IsOptional() @Transform(vazioVirandoNulo) @IsUUID() defaultTeamId?: string | null;
+  @IsOptional() @Transform(vazioVirandoNulo) @IsUUID() defaultAssigneeId?: string | null;
 }
 
 export class EditarFormularioDto {
@@ -80,4 +83,7 @@ export class EditarFormularioDto {
   @IsOptional() @IsBoolean() isPublic?: boolean;
   @IsOptional() @Transform(vazioVirandoNulo) @IsString() @MaxLength(200) description?: string | null;
   @IsOptional() @IsInt() @Min(0) @Max(999) position?: number;
+  /** Para onde vai o chamado aberto com este modelo. Vence a categoria. */
+  @IsOptional() @Transform(vazioVirandoNulo) @IsUUID() defaultTeamId?: string | null;
+  @IsOptional() @Transform(vazioVirandoNulo) @IsUUID() defaultAssigneeId?: string | null;
 }

@@ -5,6 +5,7 @@ import {
   documentoInvalido,
   nomeDeEmpresaNormalizado,
   schemaSemInternos,
+  type DestinoDoChamado,
   normalizarProtocolo,
   validarRespostas,
   pareceDocumento,
@@ -262,7 +263,7 @@ export class AberturaService {
     //
     // O modelo primeiro, porque é ele quem diz qual categoria a tela
     // tinha direito de copiar para o pedido.
-    const { formId, customFields, formCategoryId } = await this.validarModelo(
+    const { formId, customFields, formCategoryId, destino } = await this.validarModelo(
       cliente.organizationId,
       dto.formId,
       dto.customFields,
@@ -289,6 +290,7 @@ export class AberturaService {
       categoryId: categoria ?? undefined,
       formId: formId ?? undefined,
       customFields,
+      destinoDoModelo: destino,
       observerContactIds: observadores,
     });
 
@@ -403,12 +405,22 @@ export class AberturaService {
     customFields: Record<string, unknown> | undefined;
     /** A categoria que este modelo carrega, para a validação da categoria. */
     formCategoryId: string | null;
+    /** O destino do modelo, que vence o da categoria. */
+    destino: DestinoDoChamado | null;
   }> {
-    if (!formId) return { formId: null, customFields: undefined, formCategoryId: null };
+    if (!formId) {
+      return { formId: null, customFields: undefined, formCategoryId: null, destino: null };
+    }
 
     const modelo = await this.prisma.ticketForm.findFirst({
       where: { id: formId, organizationId, isModel: true, isPublic: true },
-      select: { id: true, schema: true, categoryId: true },
+      select: {
+        id: true,
+        schema: true,
+        categoryId: true,
+        defaultTeamId: true,
+        defaultAssigneeId: true,
+      },
     });
     if (!modelo) throw new BadRequestException('Modelo de chamado não disponível.');
 
@@ -430,6 +442,7 @@ export class AberturaService {
       formId: modelo.id,
       customFields: Object.keys(dadas).length > 0 ? dadas : undefined,
       formCategoryId: modelo.categoryId,
+      destino: { assigneeId: modelo.defaultAssigneeId, teamId: modelo.defaultTeamId },
     };
   }
 

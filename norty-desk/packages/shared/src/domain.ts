@@ -475,6 +475,44 @@ function vazio(valor: unknown): boolean {
 }
 
 /**
+ * Para quem vai o chamado.
+ *
+ * Duas fontes dizem o destino, e elas podem discordar. A **categoria**
+ * classifica ("Hardware vai para a Infra"); o **modelo escolhido** é
+ * uma afirmação mais específica ("Troca de toner vai para o Suporte"),
+ * e por isso vence — inteira, não campo a campo. Se o modelo nomeia um
+ * time e a categoria nomeia uma pessoa, vale o time do modelo: quem
+ * montou o modelo sabia da categoria e decidiu diferente.
+ *
+ * Dentro de cada fonte, a pessoa vence o time: quem nomeia alguém quis
+ * aquele alguém, e cair na fila do time seria ignorar a configuração.
+ *
+ * O modelo só entra aqui quando foi **escolhido**. Formulário que veio
+ * por herança da categoria não redireciona nada — senão o formulário
+ * padrão da organização, que vale onde não há outro, passaria a rotear
+ * todo chamado da casa para um lugar só.
+ *
+ * Função pura porque é regra, e regra se testa sem banco.
+ */
+export type DestinoDoChamado = { assigneeId: string | null; teamId: string | null };
+
+export function destinoDoChamado(
+  doModeloEscolhido: DestinoDoChamado | null,
+  daCategoria: DestinoDoChamado | null,
+): DestinoDoChamado {
+  const fonte = dizAlgo(doModeloEscolhido) ? doModeloEscolhido : daCategoria;
+  if (!dizAlgo(fonte)) return { assigneeId: null, teamId: null };
+
+  return fonte.assigneeId
+    ? { assigneeId: fonte.assigneeId, teamId: null }
+    : { assigneeId: null, teamId: fonte.teamId };
+}
+
+function dizAlgo(d: DestinoDoChamado | null): d is DestinoDoChamado {
+  return d !== null && (d.assigneeId !== null || d.teamId !== null);
+}
+
+/**
  * As respostas cabem no formulário?
  *
  * Mesma função no aplicativo e na API. A tela usa para dizer o que

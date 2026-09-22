@@ -58,11 +58,14 @@ export class CriarChamadoDto {
   @IsOptional() @IsInt() @Min(1) @Max(5) urgency?: number;
   @IsOptional() @IsInt() @Min(1) @Max(5) impact?: number;
   @IsOptional() @IsUUID() categoryId?: string;
-  /*
-   * Não há `formId`: o formulário vem da categoria, resolvido pela API.
-   * Aceitá-lo do cliente seria deixar alguém responder ao schema de um
-   * formulário e gravar o resultado no chamado de outro.
+  /**
+   * O modelo escolhido. Omitido, o formulário vem da categoria.
+   *
+   * Ver `CreateTicketRequest` em packages/shared: a validação das
+   * respostas passou a ser contra o formulário que vai ser gravado, e é
+   * isso que torna seguro aceitar o campo.
    */
+  @IsOptional() @IsUUID() formId?: string;
 
   @IsOptional() @ValidateNested() @Type(() => ParteDto) requester?: ParteDto;
 

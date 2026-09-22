@@ -323,3 +323,66 @@ Fica registrado o limite: o resto do formulário público é visível para
 qualquer pessoa com o endereço. Pergunta cuja *existência* já diz algo
 sobre a empresa tem de ser marcada como interna — é isso que o texto de
 ajuda da tela diz, em vez de prometer sigilo que a porta não tem.
+
+## 10. Destino do modelo e aprovação pela categoria
+
+### Para quem vai o chamado
+
+Duas fontes dizem o destino e podem discordar. A **categoria**
+classifica ("Hardware vai para a Infra"); o **modelo escolhido** é uma
+afirmação mais específica ("Troca de toner vai para o Suporte"), e por
+isso vence — inteira, não campo a campo. Se o modelo nomeia um time e a
+categoria nomeia uma pessoa, vale o time do modelo: quem montou o
+modelo sabia da categoria e decidiu diferente. Dentro de cada fonte, a
+pessoa vence o time.
+
+O modelo só entra nessa conta quando foi **escolhido**. Formulário que
+veio por herança da categoria não redireciona nada — senão o formulário
+padrão da organização, que vale onde não há outro, passaria a rotear
+todo chamado da casa para um lugar só.
+
+A regra é `destinoDoChamado` em `packages/shared`, função pura, testada
+sem banco. As três portas de abertura leem a mesma.
+
+**`formId` passou a ser aceito na abertura com login.** Havia a decisão
+contrária, pelo receio de alguém responder ao schema de um formulário e
+gravar o resultado no chamado de outro. O receio é legítimo e a resposta
+não é recusar o campo: é validar contra o **mesmo** formulário que vai
+ser gravado, que é o que a abertura sem login já fazia. A API ainda
+exige `isModel` — ficha que existe só para herdar não é item de menu.
+
+### Aprovação exigida pela categoria
+
+A marca fica na categoria e **herda pela árvore**: marcar "Compras" vale
+para "Compras > Licenças" sem remarcar cada filha.
+
+O chamado **abre normalmente**. Não vai para `EM_APROVACAO`, não espera
+numa antessala: quem pediu já tem protocolo e a fila já enxerga o
+chamado. O que a marca faz é criar a decisão, para que ela exista e
+fique registrada.
+
+**Quem decide** é o gestor cadastrado *naquela empresa* — os `GESTOR`
+cujo `Membership` aponta para o mesmo cliente do requerente — mais os
+administradores, que sempre podem. Quórum 1: o primeiro que decidir
+resolve, porque gestor de férias não pode parar um pedido.
+
+O `Membership` carrega papel **e** empresa na mesma linha, e é por isso
+que "gestor daquela empresa" é uma consulta e não uma estrutura nova.
+
+**O requerente sai da lista.** Gestor aprovando o próprio pedido esvazia
+a alçada. Quando isso esvazia a lista inteira, o chamado segue sem aval
+e a razão fica escrita na linha do tempo — criar aprovação sem aprovador
+produziria um chamado travado num pedido que ninguém pode decidir.
+
+### Duas lacunas que apareceram no caminho
+
+**`Category.isPublic` não tinha controle na tela.** Dava para marcar no
+banco e não pela configuração, e era por isso que a instalação não tinha
+nenhum tipo público para oferecer na abertura sem login. Entrou junto.
+
+**A suíte ficou verde com o destino sendo descartado.** Os testes de
+roteamento criavam o modelo direto no Prisma, então o contrato e a tela
+tinham `defaultTeamId` e o DTO da API não — configurar pela tela não
+gravava nada, e nenhum teste percebia. O buraco era testar a regra sem
+testar a escrita. Hoje há um caso que passa pela rota (`POST /forms`,
+`PATCH /forms/:id`) e confere que o chamado cai onde a tela prometeu.

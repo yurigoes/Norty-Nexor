@@ -7,6 +7,7 @@ import {
 import {
   type ErroDeCampo,
   type FormSchema,
+  type DestinoDoChamado,
   type FormularioResolvido,
   type FormularioView,
   type ModeloDeChamado,
@@ -25,6 +26,8 @@ import type { EditarFormularioDto, EscreverFormularioDto, SchemaDto } from './dt
 
 const INCLUDE = {
   category: true,
+  defaultTeam: { select: { id: true, name: true } },
+  defaultAssignee: { select: { id: true, name: true } },
   _count: { select: { tickets: true } },
 } satisfies Prisma.TicketFormInclude;
 
@@ -179,8 +182,29 @@ export class FormulariosService {
     role: Role,
     categoryId: string | null | undefined,
     respostas: Record<string, unknown> | undefined,
-  ): Promise<{ formId: string | null; customFields: Record<string, unknown> | null }> {
-    const { form } = await this.resolver(organizationId, categoryId);
+    /**
+     * O modelo escolhido a dedo, quando houve escolha.
+     *
+     * Ele vence a herança da categoria, e é contra **ele** que as
+     * respostas são conferidas: validar contra um formulário e gravar
+     * outro é exatamente o defeito que justificava não aceitar este
+     * campo. Aqui os dois são o mesmo, sempre.
+     */
+    formIdEscolhido?: string | null,
+  ): Promise<{
+    formId: string | null;
+    customFields: Record<string, unknown> | null;
+    /**
+     * O destino que o modelo **escolhido** carrega.
+     *
+     * Nulo quando o formulário veio por herança: ficha herdada não
+     * redireciona — ver `destinoDoChamado` em packages/shared.
+     */
+    destinoDoModelo: DestinoDoChamado | null;
+  }> {
+    const form = formIdEscolhido
+      ? await this.exigirModelo(organizationId, formIdEscolhido)
+      : (await this.resolver(organizationId, categoryId)).form;
     const enviadas = respostas ?? {};
 
     if (!form) {
@@ -191,7 +215,7 @@ export class FormulariosService {
           'Esta categoria não tem formulário: não há onde encaixar estas respostas.',
         );
       }
-      return { formId: null, customFields: null };
+      return { formId: null, customFields: null, destinoDoModelo: null };
     }
 
     const schema = FormulariosService.schemaVisivel(form.schema, role);
@@ -202,7 +226,26 @@ export class FormulariosService {
     return {
       formId: form.id,
       customFields: Object.keys(enviadas).length > 0 ? enviadas : null,
+      destinoDoModelo: formIdEscolhido
+        ? { assigneeId: form.defaultAssignee?.id ?? null, teamId: form.defaultTeam?.id ?? null }
+        : null,
     };
+  }
+
+  /**
+   * O modelo que a pessoa escolheu.
+   *
+   * `isModel` é exigido: ficha que existe só para herdar numa
+   * subcategoria não é item de menu, e aceitá-la aqui deixaria alguém
+   * responder a um formulário que ninguém ofereceu.
+   */
+  private async exigirModelo(organizationId: string, formId: string): Promise<FormularioView> {
+    const modelo = await this.prisma.ticketForm.findFirst({
+      where: { id: formId, organizationId, isModel: true },
+      include: INCLUDE,
+    });
+    if (!modelo) throw new BadRequestException('Modelo de chamado não disponível.');
+    return FormulariosService.paraView(modelo);
   }
 
   /**
@@ -250,6 +293,8 @@ export class FormulariosService {
             isPublic: dto.isPublic ?? false,
             description: dto.description ?? null,
             position: dto.position ?? 0,
+            defaultTeamId: dto.defaultTeamId ?? null,
+            defaultAssigneeId: dto.defaultAssigneeId ?? null,
           },
           include: INCLUDE,
         });
@@ -295,6 +340,10 @@ export class FormulariosService {
             ...(dto.isPublic === undefined ? {} : { isPublic: dto.isPublic }),
             ...(dto.description === undefined ? {} : { description: dto.description }),
             ...(dto.position === undefined ? {} : { position: dto.position }),
+            ...(dto.defaultTeamId === undefined ? {} : { defaultTeamId: dto.defaultTeamId }),
+            ...(dto.defaultAssigneeId === undefined
+              ? {}
+              : { defaultAssigneeId: dto.defaultAssigneeId }),
           },
           include: INCLUDE,
         });
@@ -412,6 +461,10 @@ export class FormulariosService {
       isPublic: f.isPublic,
       description: f.description,
       position: f.position,
+      defaultTeam: f.defaultTeam ? { id: f.defaultTeam.id, name: f.defaultTeam.name } : null,
+      defaultAssignee: f.defaultAssignee
+        ? { id: f.defaultAssignee.id, name: f.defaultAssignee.name }
+        : null,
     };
   }
 }

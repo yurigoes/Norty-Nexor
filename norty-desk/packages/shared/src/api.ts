@@ -466,11 +466,22 @@ export type CreateTicketRequest = {
   urgency?: Scale;
   impact?: Scale;
   categoryId?: string;
-  /*
-   * Não há `formId`: o formulário vem da categoria, resolvido pela API.
-   * Aceitá-lo do cliente seria deixar alguém responder ao schema de um
-   * formulário e gravar no chamado de outro.
+  /**
+   * O modelo escolhido, quando houve escolha.
+   *
+   * Omitido, o formulário continua vindo da categoria — a herança não
+   * mudou. Isto existe para o painel rápido: clicar em "Impressora"
+   * abre com aquele modelo, e não com o que a categoria calhar de ter.
+   *
+   * Aqui havia a decisão contrária, pelo receio de alguém responder ao
+   * schema de um formulário e gravar o resultado no chamado de outro.
+   * O receio é legítimo e a resposta não é recusar o campo: é validar
+   * contra o **mesmo** formulário que vai ser gravado, que é o que a
+   * abertura sem login já faz. A API ainda exige que o modelo seja da
+   * organização e esteja marcado como modelo — ficha que existe só
+   * para herdar não é item de menu.
    */
+  formId?: string;
   requester?: PartyInput;
   observers?: PartyInput[];
   customFields?: Record<string, unknown>;
@@ -1233,6 +1244,15 @@ export type FormularioView = {
   isPublic: boolean;
   description: string | null;
   position: number;
+  /**
+   * Para onde vai o chamado aberto com este modelo.
+   *
+   * Vence o destino da categoria quando o modelo é escolhido a dedo —
+   * ver `destinoDoChamado` em domain.ts. Os dois nulos significam
+   * "não opino": o chamado segue o que a categoria disser.
+   */
+  defaultTeam: { id: string; name: string } | null;
+  defaultAssignee: { id: string; name: string } | null;
 };
 
 /**
@@ -1254,6 +1274,8 @@ export type ModeloDeChamado = {
 };
 
 export type EscreverFormularioRequest = {
+  defaultTeamId?: string | null;
+  defaultAssigneeId?: string | null;
   name: string;
   schema: FormSchema;
   categoryId?: string | null;

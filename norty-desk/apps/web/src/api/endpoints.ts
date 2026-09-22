@@ -145,6 +145,10 @@ export type CategoriaView = {
   isActive: boolean;
   defaultTeam: { id: string; name: string } | null;
   defaultAssignee: { id: string; name: string } | null;
+  /** Aparece na tela de abertura sem login. */
+  isPublic: boolean;
+  /** Exige aval do gestor da empresa. Herda para as filhas. */
+  requiresApproval: boolean;
 };
 
 export const listarCategorias = () => chamar<CategoriaView[]>('/categories');

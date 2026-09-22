@@ -107,6 +107,7 @@ model User {
   teamMembers         TeamMember[]
   actorIn             TicketActor[]
   categoriasPadrao    Category[]           @relation("ResponsavelPadraoDaCategoria")
+  modelosPadrao       TicketForm[]         @relation("ResponsavelPadraoDoModelo")
   appointments        Appointment[]        @relation("TecnicoDoAgendamento")
   serviceOrders       ServiceOrder[]       @relation("TecnicoDaOrdem")
   authoredEvents      TicketEvent[]        @relation("AutorDoEvento")
@@ -270,6 +271,7 @@ model Team {
   members      TeamMember[]
   actorIn      TicketActor[]
   categories   Category[]
+  formularios  TicketForm[]      @relation("TimePadraoDoModelo")
   problems     Problem[]         @relation("TimeDoProblema")
   changes      Change[]          @relation("TimeDaMudanca")
   recurrences  RecurringTicket[] @relation("TimeDaRecorrencia")
@@ -355,6 +357,13 @@ model Category {
   /// publicasse tudo faria de cada categoria nova um vazamento que
   /// ninguém decidiu.
   isPublic          Boolean @default(false)
+  /// Chamado desta categoria precisa de aval?
+  ///
+  /// O chamado abre normalmente — não fica preso numa antessala. O que
+  /// a marca faz é criar o pedido de aprovação junto com ele, para que
+  /// a decisão exista e fique registrada. Herda pela árvore, como o
+  /// formulário: marcar "Compras" vale para as filhas.
+  requiresApproval  Boolean @default(false)
 
   organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   parent            Category?         @relation("Subcategoria", fields: [parentId], references: [id])
@@ -415,9 +424,24 @@ model TicketForm {
   /// aparecer para quem só quer dizer que a impressora parou.
   isPublic    Boolean @default(false)
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  category     Category?    @relation(fields: [categoryId], references: [id])
-  tickets      Ticket[]
+  /// Para onde vai o chamado aberto por este modelo.
+  ///
+  /// A categoria já roteia, e continua valendo: isto tem precedência
+  /// sobre ela. O caso é "Troca de toner" e "Impressora não liga"
+  /// serem a mesma categoria e irem para times diferentes — sem
+  /// destino no modelo, a única saída seria criar categoria só para
+  /// rotear, que é como a taxonomia do GLPI vira uma árvore de
+  /// encaminhamento em vez de uma classificação.
+  defaultTeamId     String? @db.Uuid
+  /// A pessoa, quando o destino não é um time inteiro. Tem precedência
+  /// sobre o time: quem nomeia uma pessoa quis aquela pessoa.
+  defaultAssigneeId String? @db.Uuid
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category        Category?    @relation(fields: [categoryId], references: [id])
+  defaultTeam     Team?        @relation("TimePadraoDoModelo", fields: [defaultTeamId], references: [id], onDelete: SetNull)
+  defaultAssignee User?        @relation("ResponsavelPadraoDoModelo", fields: [defaultAssigneeId], references: [id], onDelete: SetNull)
+  tickets         Ticket[]
 
   @@unique([organizationId, name])
   @@index([organizationId, isModel, position])
@@ -1309,27 +1333,27 @@ enum AssetStatus {
 /// chamado. O inventário completo é a Fase 6 (`docs/10-roadmap.md`) e
 /// vai entrar por importação, não por este modelo.
 model Asset {
-  id                 String      @id @default(uuid()) @db.Uuid
-  organizationId     String      @db.Uuid
-  kind               AssetKind   @default(OUTRO)
-  status             AssetStatus @default(EM_USO)
-  name               String
+  id             String      @id @default(uuid()) @db.Uuid
+  organizationId String      @db.Uuid
+  kind           AssetKind   @default(OUTRO)
+  status         AssetStatus @default(EM_USO)
+  name           String
   /// Etiqueta de patrimônio. É por ela que o suporte procura.
-  tag                String?
-  serialNumber       String?
+  tag            String?
+  serialNumber   String?
   /// Fabricante, modelo e localização vêm do catálogo.
   ///
   /// Eram texto livre, e texto livre é a origem da sujeira de
   /// inventário: "HP", "hp" e "Hewlett-Packard" são três fabricantes
   /// para quem conta, e um só para quem olha.
-  manufacturerId     String?     @db.Uuid
-  assetModelId       String?     @db.Uuid
-  locationId         String?     @db.Uuid
+  manufacturerId String?     @db.Uuid
+  assetModelId   String?     @db.Uuid
+  locationId     String?     @db.Uuid
   /// Quem usa hoje. Nulo quando está em estoque.
-  userId             String?     @db.Uuid
-  purchasedAt        DateTime?
-  warrantyUntil      DateTime?
-  notes              String?
+  userId         String?     @db.Uuid
+  purchasedAt    DateTime?
+  warrantyUntil  DateTime?
+  notes          String?
 
   /// --- Como se chega nesta máquina -----------------------------------
   ///
@@ -1359,13 +1383,13 @@ model Asset {
   /// Lá é tabela à parte porque é polimórfica sobre sessenta tipos de
   /// item. Aqui o ativo é um modelo só, e cinco colunas custam menos
   /// que uma tabela 1-1 que todo `include` teria de lembrar.
-  purchaseValue      Decimal?    @db.Decimal(12, 2)
-  supplierId         String?     @db.Uuid
+  purchaseValue      Decimal?          @db.Decimal(12, 2)
+  supplierId         String?           @db.Uuid
   invoiceNumber      String?
   /// Meses de amortização. Zero ou nulo é bem que não amortiza.
   amortizationMonths Int?
-  createdAt          DateTime    @default(now())
-  updatedAt          DateTime    @updatedAt
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
   organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User?                  @relation("AtivoDoUsuario", fields: [userId], references: [id], onDelete: SetNull)

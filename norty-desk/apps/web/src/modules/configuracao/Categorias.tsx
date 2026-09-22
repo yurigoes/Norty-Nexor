@@ -170,6 +170,8 @@ function Formulario({
     defaultTeamId?: string | null;
     defaultAssigneeId?: string | null;
     defaultUrgency?: number | null;
+    isPublic?: boolean;
+    requiresApproval?: boolean;
     defaultAgreementIds?: string[];
   }) => Promise<void>;
 }) {
@@ -182,6 +184,8 @@ function Formulario({
     [],
   );
   const [urgencia, setUrgencia] = useState('');
+  const [publica, setPublica] = useState(categoria?.isPublic ?? false);
+  const [exigeAval, setExigeAval] = useState(categoria?.requiresApproval ?? false);
   const [escolhidos, setEscolhidos] = useState<string[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -214,6 +218,8 @@ function Formulario({
               defaultTeamId: time || null,
               defaultAssigneeId: pessoa || null,
               defaultUrgency: urgencia ? Number(urgencia) : null,
+              isPublic: publica,
+              requiresApproval: exigeAval,
               ...(escolhidos.length > 0 ? { defaultAgreementIds: escolhidos } : {}),
             })
               .catch((e2: unknown) =>
@@ -336,6 +342,41 @@ function Formulario({
                 </select>
               </div>
             </div>
+
+            <label className="switch">
+              <input
+                type="checkbox"
+                checked={exigeAval}
+                onChange={(e) => setExigeAval(e.target.checked)}
+              />
+              <span className="switch-trilho" aria-hidden="true">
+                <span className="switch-bolinha" />
+              </span>
+              <span>Exige aprovação</span>
+            </label>
+            <span className="campo-ajuda">
+              O chamado abre normalmente — não fica preso esperando. O que muda é que nasce junto
+              um pedido de aval para o gestor cadastrado na empresa de quem pediu, e para os
+              administradores; o primeiro que decidir resolve. Vale também para as subcategorias
+              desta, sem precisar marcar uma a uma.
+            </span>
+
+            <label className="switch">
+              <input
+                type="checkbox"
+                checked={publica}
+                onChange={(e) => setPublica(e.target.checked)}
+              />
+              <span className="switch-trilho" aria-hidden="true">
+                <span className="switch-bolinha" />
+              </span>
+              <span>Oferecer na abertura sem login</span>
+            </label>
+            <span className="campo-ajuda">
+              Quem abre pelo endereço público escolhe entre os tipos marcados aqui. Deixe desmarcado
+              o que não se mostra a estranho — “Jurídico &gt; Rescisão” na lista de tipos conta a
+              quem nunca fez login o que a empresa tem dentro.
+            </span>
 
             <div className="campo">
               <span className="campo-rotulo">Prazos que o chamado ganha ao nascer</span>

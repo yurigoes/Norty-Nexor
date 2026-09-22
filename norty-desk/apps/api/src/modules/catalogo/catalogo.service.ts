@@ -70,6 +70,8 @@ export class CatalogoService {
         defaultTeam: c.defaultTeam,
         defaultAssignee: c.defaultAssignee,
         defaultUrgency: c.defaultUrgency,
+        isPublic: c.isPublic,
+        requiresApproval: c.requiresApproval,
         defaultAgreements: c.defaultAgreements,
       }))
       .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
@@ -145,6 +147,8 @@ export class CatalogoService {
         defaultTeamId: dto.defaultTeamId,
         defaultAssigneeId: dto.defaultAssigneeId,
         defaultUrgency: dto.defaultUrgency,
+        isPublic: dto.isPublic,
+        requiresApproval: dto.requiresApproval,
         ...(dto.defaultAgreementIds
           ? { defaultAgreements: { connect: dto.defaultAgreementIds.map((id) => ({ id })) } }
           : {}),
@@ -176,6 +180,8 @@ export class CatalogoService {
         defaultTeamId: dto.defaultTeamId,
         defaultAssigneeId: dto.defaultAssigneeId,
         defaultUrgency: dto.defaultUrgency,
+        isPublic: dto.isPublic,
+        requiresApproval: dto.requiresApproval,
         isActive: dto.isActive,
         ...(dto.defaultAgreementIds
           ? { defaultAgreements: { set: dto.defaultAgreementIds.map((x) => ({ id: x })) } }
