@@ -72,7 +72,12 @@ titulo "Segredos desta instalação"
 # em "dependency failed to start". Só gera quando falta: trocar o
 # CHANNEL_SECRET_KEY de uma instalação em uso tornaria ilegíveis as
 # senhas de canal que já estão cifradas no banco.
-for par in JWT_SECRET:48 CHANNEL_SECRET_KEY:32; do
+#
+# VAULT_SECRET_KEY entrou depois, com o cofre de senhas, e merece a
+# mesma proteção: trocá-lo torna ilegível toda senha já guardada no
+# cofre. Em branco o cofre fica desligado — a tela diz isso e nada é
+# gravado —, então gerar aqui é o que faz o recurso existir.
+for par in JWT_SECRET:48 CHANNEL_SECRET_KEY:32 VAULT_SECRET_KEY:32; do
   nome="${par%%:*}"; bytes="${par##*:}"
   atual="$(valor apps/api/.env "$nome")"
   if [ "${#atual}" -ge 32 ]; then
@@ -87,6 +92,23 @@ for par in JWT_SECRET:48 CHANNEL_SECRET_KEY:32; do
   fi
   echo "  $nome: gerado (${#novo} caracteres)"
 done
+
+# ---------------------------------------------------------------------
+titulo "Avisos fora da aba (Web Push)"
+# O par VAPID assina o aviso que chega no Windows. Em branco, a seção
+# de avisos simplesmente não aparece no aplicativo — não é erro, é
+# instalação que não usa. Gerar quando falta é o que a liga.
+#
+# Trocar o par depois invalida todas as inscrições que existem: cada
+# aparelho precisa ligar de novo. Por isso, como os outros segredos,
+# só se gera quando não há.
+if [ -n "$(valor apps/api/.env VAPID_PUBLIC_KEY)" ] \
+   && [ -n "$(valor apps/api/.env VAPID_PRIVATE_KEY)" ]; then
+  echo "  par VAPID: mantido"
+else
+  echo "  par VAPID: gerando (precisa da imagem; sai logo depois da build)"
+  GERAR_VAPID=1
+fi
 
 # ---------------------------------------------------------------------
 titulo "A infra compartilhada responde?"
@@ -105,6 +127,34 @@ alcanca "${host_banco:-192.168.15.72}" "${porta_banco:-5432}" "Postgres" || falt
 
 titulo "Construir"
 docker compose -f infra/docker-compose.yml --env-file infra/.env build
+
+# O par VAPID sai de dentro da imagem, onde o `web-push` existe — não
+# dá para gerá-lo com `openssl rand`: são chaves P-256 num formato
+# próprio, não bytes aleatórios.
+if [ "${GERAR_VAPID:-0}" = 1 ]; then
+  titulo "Gerando o par VAPID"
+  par="$(docker compose -f infra/docker-compose.yml --env-file infra/.env \
+    run --rm --no-deps -T desk-api \
+    node -e "const k=require('web-push').generateVAPIDKeys();console.log(k.publicKey+' '+k.privateKey)" \
+    2>/dev/null | tr -d '\r' | tail -1)"
+
+  publica="${par%% *}"; privada="${par##* }"
+
+  if [ -n "$publica" ] && [ "$publica" != "$privada" ]; then
+    for kv in "VAPID_PUBLIC_KEY=$publica" "VAPID_PRIVATE_KEY=$privada" \
+              "VAPID_SUBJECT=mailto:suporte@norty.com.br"; do
+      nome="${kv%%=*}"
+      if grep -qE "^$nome=" apps/api/.env; then
+        sed -i -E "s|^$nome=.*|$kv|" apps/api/.env
+      else
+        printf '%s\n' "$kv" >> apps/api/.env
+      fi
+    done
+    echo "  par VAPID gerado e gravado em apps/api/.env"
+  else
+    aviso "não consegui gerar o par VAPID. Os avisos fora da aba ficam desligados; o resto sobe normal."
+  fi
+fi
 
 # A migração roda ANTES de a API nova subir, num contêiner de uma vez só
 # com a imagem nova. Na ordem antiga — subir e depois migrar —, a API nova
