@@ -26,7 +26,8 @@ import { Agendamento } from './Agendamento';
 import { CustosDoChamado } from '../custo/CustosDoChamado';
 import { Tarefas } from '../tarefa/Tarefas';
 import { ErrosConhecidosDoChamado } from '../problema/ErrosConhecidosDoChamado';
-import { Sugestoes } from '../conhecimento/Sugestoes';
+import { Verificacoes } from '../conhecimento/Verificacoes';
+import { RegistrarResolucao } from '../conhecimento/RegistrarResolucao';
 import { Protocolo } from './Protocolo';
 import { Conversa } from './Conversa';
 
@@ -111,7 +112,8 @@ export function Chamado() {
             problemaVinculado={chamado.problem?.id ?? null}
             aoVincular={revalidar}
           />
-          <Sugestoes ticketId={chamado.id} />
+          <Verificacoes ticketId={chamado.id} />
+          <RegistrarResolucao chamado={chamado} aoRegistrar={revalidar} />
           <Tarefas chamado={chamado} aoMudar={revalidar} />
           <AcessoDoEquipamento ticketId={chamado.id} versao={versaoDosAtivos} />
           <Agendamento chamado={chamado} aoMudar={revalidar} />

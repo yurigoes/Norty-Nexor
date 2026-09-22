@@ -102,31 +102,32 @@ model User {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  authSource          AuthSource?          @relation(fields: [authSourceId], references: [id], onDelete: SetNull)
-  memberships         Membership[]
-  teamMembers         TeamMember[]
-  actorIn             TicketActor[]
-  categoriasPadrao    Category[]           @relation("ResponsavelPadraoDaCategoria")
-  modelosPadrao       TicketForm[]         @relation("ResponsavelPadraoDoModelo")
-  appointments        Appointment[]        @relation("TecnicoDoAgendamento")
-  serviceOrders       ServiceOrder[]       @relation("TecnicoDaOrdem")
-  authoredEvents      TicketEvent[]        @relation("AutorDoEvento")
-  approvals           Approval[]
-  refreshTokens       RefreshToken[]
-  articles            Article[]
-  assets              Asset[]              @relation("AtivoDoUsuario")
-  problems            Problem[]            @relation("ResponsavelPeloProblema")
-  changes             Change[]             @relation("ResponsavelPelaMudanca")
-  recurrences         RecurringTicket[]    @relation("RequerenteDaRecorrencia")
-  costs               TicketCost[]         @relation("AutorDoCusto")
-  articleEdits        ArticleRevision[]    @relation("EditorDaRevisao")
-  licenses            LicenseAssignment[]
-  consumablesReceived ConsumableMovement[] @relation("DestinatarioDoConsumivel")
-  consumableMovements ConsumableMovement[] @relation("AutorDoMovimento")
-  managedProjects     Project[]            @relation("GerenteDoProjeto")
-  projectTasks        ProjectTask[]        @relation("ResponsavelDaTarefaDeProjeto")
-  agendaEvents        AgendaEvent[]        @relation("DonoDoCompromisso")
-  agendaEventsCreated AgendaEvent[]        @relation("QuemMarcouOCompromisso")
+  authSource            AuthSource?          @relation(fields: [authSourceId], references: [id], onDelete: SetNull)
+  memberships           Membership[]
+  teamMembers           TeamMember[]
+  actorIn               TicketActor[]
+  categoriasPadrao      Category[]           @relation("ResponsavelPadraoDaCategoria")
+  modelosPadrao         TicketForm[]         @relation("ResponsavelPadraoDoModelo")
+  resolucoesConfirmadas ArticleResolution[]  @relation("ConfirmouAResolucao")
+  appointments          Appointment[]        @relation("TecnicoDoAgendamento")
+  serviceOrders         ServiceOrder[]       @relation("TecnicoDaOrdem")
+  authoredEvents        TicketEvent[]        @relation("AutorDoEvento")
+  approvals             Approval[]
+  refreshTokens         RefreshToken[]
+  articles              Article[]
+  assets                Asset[]              @relation("AtivoDoUsuario")
+  problems              Problem[]            @relation("ResponsavelPeloProblema")
+  changes               Change[]             @relation("ResponsavelPelaMudanca")
+  recurrences           RecurringTicket[]    @relation("RequerenteDaRecorrencia")
+  costs                 TicketCost[]         @relation("AutorDoCusto")
+  articleEdits          ArticleRevision[]    @relation("EditorDaRevisao")
+  licenses              LicenseAssignment[]
+  consumablesReceived   ConsumableMovement[] @relation("DestinatarioDoConsumivel")
+  consumableMovements   ConsumableMovement[] @relation("AutorDoMovimento")
+  managedProjects       Project[]            @relation("GerenteDoProjeto")
+  projectTasks          ProjectTask[]        @relation("ResponsavelDaTarefaDeProjeto")
+  agendaEvents          AgendaEvent[]        @relation("DonoDoCompromisso")
+  agendaEventsCreated   AgendaEvent[]        @relation("QuemMarcouOCompromisso")
 
   @@unique([authSourceId, externalId])
   @@map("users")
@@ -542,8 +543,8 @@ model Ticket {
   attachments   Attachment[]
   /// Respostas do formulário dinâmico, chaveadas pelo campo do schema.
   customFields  Json?
-  links         TicketLink[]    @relation("ChamadoOrigem")
-  linkedBy      TicketLink[]    @relation("ChamadoDestino")
+  links         TicketLink[]        @relation("ChamadoOrigem")
+  linkedBy      TicketLink[]        @relation("ChamadoDestino")
   assets        TicketAsset[]
   survey        Survey?
   costs         TicketCost[]
@@ -551,6 +552,10 @@ model Ticket {
   agendaEvents  AgendaEvent[]
   appointments  Appointment[]
   serviceOrders ServiceOrder[]
+  /// As resoluções escritas a partir deste chamado.
+  artigosDaqui  Article[]           @relation("ChamadoDeOrigemDoArtigo")
+  /// As resoluções do índice que resolveram este chamado.
+  resolucoes    ArticleResolution[]
 
   /// O problema que causa este chamado e a mudança que o resolve.
   /// São os dois vínculos que o ITIL pede e o GLPI resolve com uma
@@ -1073,8 +1078,16 @@ model Article {
   keywords       String[] @default([])
   authorId       String   @db.Uuid
   views          Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+
+  /// O chamado de onde esta resolução saiu.
+  ///
+  /// É o que deixa a sugestão dizer "já houve isto antes" em vez de
+  /// "existe um artigo parecido" — a primeira é uma verificação
+  /// proposta, a segunda é uma lista que ninguém abre.
+  sourceTicketId String? @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   /// Coluna **gerada** pelo banco a partir de título e corpo, com peso.
   /// A fórmula está na migração `base_de_conhecimento`; aqui ela existe
@@ -1083,10 +1096,12 @@ model Article {
   /// aconteceu uma vez e derrubou a busca de artigos.
   busca Unsupported("tsvector")?
 
-  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  author       User              @relation(fields: [authorId], references: [id])
-  category     Category?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  author       User                @relation(fields: [authorId], references: [id])
+  category     Category?           @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  sourceTicket Ticket?             @relation("ChamadoDeOrigemDoArtigo", fields: [sourceTicketId], references: [id], onDelete: SetNull)
   revisions    ArticleRevision[]
+  resolucoes   ArticleResolution[]
   problems     Problem[]
 
   @@index([organizationId, isPublic, isArchived])
@@ -1095,6 +1110,31 @@ model Article {
   @@index([keywords], type: Gin, map: "articles_keywords")
   @@index([busca], type: Gin, map: "articles_busca")
   @@map("articles")
+}
+
+/// Esta resolução resolveu aquele chamado.
+///
+/// É o que faz o índice **aprender**: quem atende marca "resolveu" na
+/// sugestão, e a resolução que mais resolve sobe na próxima vez. Sem
+/// este registro, a ordem seria só casamento de texto — e texto
+/// parecido não é a mesma coisa que solução que funcionou.
+///
+/// A unicidade mora no banco, e não na aplicação: dois cliques no
+/// mesmo botão não podem contar duas vezes.
+model ArticleResolution {
+  articleId     String   @db.Uuid
+  ticketId      String   @db.Uuid
+  /// Quem confirmou que resolveu. É a assinatura do aprendizado.
+  confirmedById String   @db.Uuid
+  createdAt     DateTime @default(now())
+
+  article     Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  ticket      Ticket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  confirmedBy User    @relation("ConfirmouAResolucao", fields: [confirmedById], references: [id])
+
+  @@id([articleId, ticketId])
+  @@index([ticketId])
+  @@map("article_resolutions")
 }
 
 model ArticleRevision {

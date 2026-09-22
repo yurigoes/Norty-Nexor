@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import type {
   ArticleDetail,
   ArticleListItem,
+  VerificacaoSugerida,
   ArticleRevisionView,
 } from '@norty-desk/shared';
 import { can } from '@norty-desk/shared';
@@ -15,7 +16,8 @@ import type { BuscarArtigosDto, EditarArtigoDto, EscreverArtigoDto } from './dto
 const INCLUDE = {
   author: true,
   category: true,
-  _count: { select: { revisions: true } },
+  sourceTicket: { select: { id: true, number: true } },
+  _count: { select: { revisions: true, resolucoes: true } },
 } satisfies Prisma.ArticleInclude;
 
 type ArtigoComRelacoes = Prisma.ArticleGetPayload<{ include: typeof INCLUDE }>;
@@ -312,6 +314,176 @@ export class ConhecimentoService {
     return this.buscar(usuario, { categoryId: chamado.categoryId, limit: limite });
   }
 
+  /**
+   * A verificação que o sistema propõe neste chamado.
+   *
+   * É `sugerirPara` com duas diferenças, e as duas mudam o que a tela
+   * consegue dizer:
+   *
+   * **Ordena pelo que resolveu**, não só pelo que casa por texto. Uma
+   * resolução que já fechou cinco chamados parecidos vale mais do que
+   * um artigo com as mesmas palavras — texto parecido não é a mesma
+   * coisa que solução que funcionou.
+   *
+   * **Diz o que já foi confirmado aqui**, para a tela não propor de
+   * novo o que quem atende já marcou como a resposta deste chamado.
+   */
+  async verificacoesPara(
+    usuario: UsuarioAutenticado,
+    ticketId: string,
+    limite = 5,
+  ): Promise<VerificacaoSugerida[]> {
+    const achados = await this.sugerirPara(usuario, ticketId, limite);
+
+    const confirmadas = await this.prisma.articleResolution.findMany({
+      where: { ticketId },
+      select: { articleId: true },
+    });
+    const jaConfirmadas = new Set(confirmadas.map((c) => c.articleId));
+
+    return achados
+      .map((a) => ({ ...a, confirmada: jaConfirmadas.has(a.id) }))
+      .sort(
+        (a, b) =>
+          // O que já foi confirmado aqui vem primeiro: é a resposta
+          // deste chamado, e some da lista de "confira isto".
+          Number(b.confirmada) - Number(a.confirmada) ||
+          b.resolvedCount - a.resolvedCount ||
+          b.views - a.views,
+      );
+  }
+
+  /**
+   * A resolução deste chamado, registrada no índice.
+   *
+   * O corpo vem pronto da solução que quem atendeu escreveu — a tela o
+   * traz preenchido de propósito. Página em branco no fim do
+   * atendimento é onde a base de conhecimento morre: ninguém redige
+   * artigo depois de já ter resolvido o problema.
+   *
+   * O artigo guarda de qual chamado saiu, e já nasce confirmado como a
+   * resolução dele: quem escreveu acabou de resolver com aquilo.
+   */
+  async registrarResolucao(
+    usuario: UsuarioAutenticado,
+    ticketId: string,
+    dados: { title: string; body: string; isPublic?: boolean; keywords?: string[] },
+  ): Promise<ArticleDetail> {
+    const chamado = await this.prisma.ticket.findFirst({
+      where: { AND: [escopoDeLeitura(usuario), { id: ticketId }] },
+      select: { id: true, categoryId: true, organizationId: true },
+    });
+    if (!chamado) throw new NotFoundException('Chamado não encontrado.');
+
+    const artigo = await this.prisma.$transaction(async (tx) => {
+      const criado = await tx.article.create({
+        data: {
+          organizationId: usuario.organizationId,
+          title: dados.title.trim(),
+          body: dados.body,
+          isPublic: dados.isPublic ?? false,
+          // A categoria vem do chamado: é o assunto, e foi quem
+          // atendeu que o classificou.
+          categoryId: chamado.categoryId,
+          keywords: dados.keywords ?? [],
+          authorId: usuario.userId,
+          sourceTicketId: chamado.id,
+        },
+        select: { id: true },
+      });
+
+      await tx.articleResolution.create({
+        data: { articleId: criado.id, ticketId: chamado.id, confirmedById: usuario.userId },
+      });
+
+      // Relido **depois** da confirmação: o `_count` do `create` é
+      // tirado antes de ela existir, e a resposta saía dizendo que a
+      // resolução não resolveu nada — na própria tela de quem acabou de
+      // registrá-la.
+      return tx.article.findUniqueOrThrow({ where: { id: criado.id }, include: INCLUDE });
+    });
+
+    // Sem trilha de auditoria própria, como o resto deste módulo: o
+    // registro é a linha do tempo do chamado (CLAUDE.md, regra 8), e a
+    // revisão do artigo guarda o que mudou depois.
+    return {
+      ...ConhecimentoService.paraLista(artigo),
+      body: artigo.body,
+      version: 1,
+      createdAt: artigo.createdAt.toISOString(),
+    };
+  }
+
+  /**
+   * "Isto resolveu." — e é este gesto que faz o índice aprender.
+   *
+   * Sem ele, a ordem das sugestões seria para sempre casamento de
+   * texto. Com ele, o que resolve sobe, e quem atende o próximo chamado
+   * parecido encontra primeiro o que costuma funcionar.
+   *
+   * Repetir não é erro: o `@@id` composto segura a contagem dupla no
+   * banco, que é onde regra que não pode ser burlada mora (CLAUDE.md,
+   * regra 4).
+   */
+  async confirmarResolucao(
+    usuario: UsuarioAutenticado,
+    ticketId: string,
+    articleId: string,
+  ): Promise<VerificacaoSugerida[]> {
+    const chamado = await this.prisma.ticket.findFirst({
+      where: { AND: [escopoDeLeitura(usuario), { id: ticketId }] },
+      select: { id: true },
+    });
+    if (!chamado) throw new NotFoundException('Chamado não encontrado.');
+
+    const artigo = await this.prisma.article.findFirst({
+      where: { id: articleId, organizationId: usuario.organizationId },
+      select: { id: true, title: true },
+    });
+    if (!artigo) throw new NotFoundException('Resolução não encontrada.');
+
+    await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.articleResolution.createMany({
+        data: [{ articleId, ticketId, confirmedById: usuario.userId }],
+        skipDuplicates: true,
+      });
+
+      // Só registra na linha do tempo quando é novidade: confirmar duas
+      // vezes não pode virar dois eventos idênticos na conversa.
+      if (count > 0) {
+        await tx.ticketEvent.create({
+          data: {
+            ticketId,
+            type: 'NOTA_INTERNA',
+            visibility: 'INTERNA',
+            authorId: usuario.userId,
+            channel: 'WEB',
+            body: `Resolvido com a resolução do índice: "${artigo.title}".`,
+          },
+        });
+      }
+    });
+
+    return this.verificacoesPara(usuario, ticketId);
+  }
+
+  /** Desfaz a confirmação: marcar errado tem de ter volta. */
+  async desconfirmarResolucao(
+    usuario: UsuarioAutenticado,
+    ticketId: string,
+    articleId: string,
+  ): Promise<VerificacaoSugerida[]> {
+    await this.prisma.articleResolution.deleteMany({
+      where: {
+        articleId,
+        ticketId,
+        article: { organizationId: usuario.organizationId },
+      },
+    });
+
+    return this.verificacoesPara(usuario, ticketId);
+  }
+
   // -------------------------------------------------------------------
   // Internos
   // -------------------------------------------------------------------
@@ -374,6 +546,10 @@ export class ConhecimentoService {
       },
       views: artigo.views,
       updatedAt: artigo.updatedAt.toISOString(),
+      resolvedCount: artigo._count.resolucoes,
+      fromTicket: artigo.sourceTicket
+        ? { id: artigo.sourceTicket.id, number: artigo.sourceTicket.number }
+        : null,
     };
   }
 

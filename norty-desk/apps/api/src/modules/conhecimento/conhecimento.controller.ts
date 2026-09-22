@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -9,14 +10,24 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import type { ArticleDetail, ArticleListItem, ArticleRevisionView } from '@norty-desk/shared';
+import type {
+  ArticleDetail,
+  ArticleListItem,
+  ArticleRevisionView,
+  VerificacaoSugerida,
+} from '@norty-desk/shared';
 
 import { CurrentUser, type UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { ConhecimentoService } from './conhecimento.service';
-import { BuscarArtigosDto, EditarArtigoDto, EscreverArtigoDto } from './dto';
+import {
+  BuscarArtigosDto,
+  EditarArtigoDto,
+  EscreverArtigoDto,
+  RegistrarResolucaoDto,
+} from './dto';
 
 @Controller()
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -83,5 +94,64 @@ export class ConhecimentoController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<ArticleListItem[]> {
     return this.conhecimento.sugerirPara(usuario, id);
+  }
+
+  /**
+   * As verificações que o sistema propõe neste chamado.
+   *
+   * O mesmo casamento de texto da rota acima, ordenado pelo que já
+   * resolveu e sabendo o que já foi confirmado aqui.
+   */
+  @Get('tickets/:id/verificacoes')
+  @RequirePermission('artigo:ler')
+  verificacoes(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<VerificacaoSugerida[]> {
+    return this.conhecimento.verificacoesPara(usuario, id);
+  }
+
+  /**
+   * A resolução deste chamado, registrada no índice.
+   *
+   * Exige `artigo:escrever`: registrar resolução é escrever na base de
+   * conhecimento, e quem só lê chamado não publica o que a casa vai
+   * passar a recomendar.
+   */
+  @Post('tickets/:id/resolucao')
+  @RequirePermission('artigo:escrever')
+  registrarResolucao(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RegistrarResolucaoDto,
+  ): Promise<ArticleDetail> {
+    return this.conhecimento.registrarResolucao(usuario, id, dto);
+  }
+
+  /**
+   * "Isto resolveu."
+   *
+   * Basta `chamado:responder`: quem atende o chamado é quem sabe se
+   * resolveu, e exigir permissão de escrita na base afastaria
+   * justamente quem tem a informação.
+   */
+  @Post('tickets/:id/verificacoes/:articleId')
+  @RequirePermission('chamado:responder')
+  confirmar(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('articleId', ParseUUIDPipe) articleId: string,
+  ): Promise<VerificacaoSugerida[]> {
+    return this.conhecimento.confirmarResolucao(usuario, id, articleId);
+  }
+
+  @Delete('tickets/:id/verificacoes/:articleId')
+  @RequirePermission('chamado:responder')
+  desconfirmar(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('articleId', ParseUUIDPipe) articleId: string,
+  ): Promise<VerificacaoSugerida[]> {
+    return this.conhecimento.desconfirmarResolucao(usuario, id, articleId);
   }
 }

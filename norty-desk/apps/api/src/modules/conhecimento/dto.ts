@@ -60,3 +60,19 @@ export class BuscarArtigosDto {
 
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit?: number;
 }
+
+/**
+ * A resolução de um chamado, indo para o índice.
+ *
+ * Sem `categoryId`: a categoria vem do chamado, que é quem foi
+ * classificado por quem atendeu. Deixar a tela mandar outra criaria
+ * divergência entre o assunto do chamado e o da resolução dele.
+ */
+export class RegistrarResolucaoDto {
+  @IsString() @MinLength(3) @MaxLength(200) title!: string;
+  @IsString() @MinLength(10) body!: string;
+  @IsOptional() @IsBoolean() isPublic?: boolean;
+
+  @IsOptional() @IsArray() @ArrayMaxSize(12) @IsString({ each: true }) @MaxLength(40, { each: true })
+  keywords?: string[];
+}

@@ -2,6 +2,8 @@ import type {
   ArticleDetail,
   ArticleListItem,
   ArticleRevisionView,
+  RegistrarResolucaoRequest,
+  VerificacaoSugerida,
   WriteArticleRequest,
 } from '@norty-desk/shared';
 
@@ -37,3 +39,22 @@ export const editarArtigo = (id: string, dados: Partial<WriteArticleRequest>) =>
 
 export const artigosSugeridos = (ticketId: string) =>
   chamar<ArticleListItem[]>(`/tickets/${ticketId}/artigos-sugeridos`);
+
+/** As verificações propostas neste chamado, ordenadas pelo que resolve. */
+export const verificacoesDoChamado = (ticketId: string) =>
+  chamar<VerificacaoSugerida[]>(`/tickets/${ticketId}/verificacoes`);
+
+export const confirmarResolucao = (ticketId: string, articleId: string) =>
+  chamar<VerificacaoSugerida[]>(`/tickets/${ticketId}/verificacoes/${articleId}`, {
+    metodo: 'POST',
+    corpo: {},
+  });
+
+export const desconfirmarResolucao = (ticketId: string, articleId: string) =>
+  chamar<VerificacaoSugerida[]>(`/tickets/${ticketId}/verificacoes/${articleId}`, {
+    metodo: 'DELETE',
+  });
+
+/** Registra a resolução deste chamado no índice. */
+export const registrarResolucao = (ticketId: string, dados: RegistrarResolucaoRequest) =>
+  chamar<ArticleDetail>(`/tickets/${ticketId}/resolucao`, { metodo: 'POST', corpo: dados });

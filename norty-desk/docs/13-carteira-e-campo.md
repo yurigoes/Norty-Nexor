@@ -536,3 +536,63 @@ dizendo que não aparece de novo.
 Uma chave por sistema, e não uma para tudo: assim dá para revogar um sem
 derrubar os outros, e a coluna "último uso" diz qual está parado — que é
 a informação que falta na hora de decidir se pode revogar.
+
+## 14. O índice de resoluções
+
+Metade já existia: a base de conhecimento casava assunto e descrição do
+chamado por índice de texto e oferecia artigos — recolhido por padrão,
+"sugestão é oferta, não interrupção". O que faltava eram as duas coisas
+que fazem disso um índice que **aprende**.
+
+### Registrar a partir do chamado fechado
+
+No chamado resolvido, um cartão pergunta "isto vai acontecer de novo?" e
+abre o registro com o corpo **já preenchido** pela solução que quem
+atendeu escreveu.
+
+Página em branco no fim do atendimento é onde a base de conhecimento
+morre: ninguém redige artigo depois de já ter resolvido o problema. O
+texto vem pronto; o que se pede é ajustar o que é específico daquele
+chamado — nome de pessoa, patrimônio.
+
+A categoria vem do chamado, não da tela: foi quem atendeu que o
+classificou, e deixar a tela mandar outra criaria divergência entre o
+assunto do chamado e o da resolução dele.
+
+O artigo guarda de qual chamado saiu (`sourceTicketId`), e é isso que
+deixa a verificação dizer "já houve isto antes" em vez de "existe um
+artigo parecido". A primeira é uma verificação proposta; a segunda é uma
+lista que ninguém abre.
+
+### A verificação, e o gesto que ensina
+
+O componente deixou de listar e passou a afirmar: *isto já aconteceu, e
+isto resolveu*, com quantos chamados aquela resolução fechou e um botão
+— "foi isto" / "✓ resolveu".
+
+**É a confirmação que faz o índice aprender.** `ArticleResolution` liga
+resolução a chamado, e a ordem das verificações passa a ser por quantos
+chamados cada uma resolveu, não só por casamento de texto. Texto
+parecido não é a mesma coisa que solução que funcionou — e é essa
+distinção que faz quem atende encontrar de cara o que costuma
+funcionar.
+
+A unicidade é `@@id([articleId, ticketId])`, no banco: dois cliques no
+mesmo botão não contam duas vezes (CLAUDE.md, regra 4). Desconfirmar
+existe porque marcar errado tem de ter volta.
+
+Permissões diferentes de propósito: registrar resolução pede
+`artigo:escrever` — é publicar o que a casa vai passar a recomendar.
+Confirmar que resolveu pede só `chamado:responder`: quem atende é quem
+sabe se resolveu, e exigir permissão de escrita afastaria justamente
+quem tem a informação.
+
+### Um defeito que o teste pegou
+
+O `_count` era lido na criação do artigo, **antes** de a confirmação ser
+gravada na mesma transação. A resposta saía dizendo que a resolução não
+tinha resolvido nada — na própria tela de quem acabou de registrá-la.
+Hoje o artigo é relido depois.
+
+O `Sugestoes.tsx` foi apagado em vez de ficar ao lado do novo: dois
+componentes fazendo a mesma coisa é como alguém conserta o errado.

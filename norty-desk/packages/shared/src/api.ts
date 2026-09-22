@@ -1451,6 +1451,29 @@ export type ArticleListItem = {
   updatedAt: string;
   /** Trecho com os termos da busca em destaque. Só vem na busca. */
   excerpt?: string;
+  /**
+   * Quantos chamados esta resolução já resolveu, confirmado por quem
+   * atendeu.
+   *
+   * É o que separa "artigo com texto parecido" de "isto costuma ser a
+   * resposta" — e é por ele que a sugestão ordena. Texto parecido não é
+   * a mesma coisa que solução que funcionou.
+   */
+  resolvedCount: number;
+  /** Saiu de um chamado? É o que deixa dizer "já houve isto antes". */
+  fromTicket: { id: string; number: number } | null;
+};
+
+/**
+ * A verificação que o sistema propõe num chamado novo.
+ *
+ * Diferente da sugestão antiga, que listava artigos parecidos: aqui há
+ * uma afirmação — isto já aconteceu, e isto resolveu — e um gesto para
+ * confirmar ou descartar. É a confirmação que alimenta o índice.
+ */
+export type VerificacaoSugerida = ArticleListItem & {
+  /** Já foi confirmada como a resolução **deste** chamado? */
+  confirmada: boolean;
 };
 
 export type ArticleDetail = ArticleListItem & {
@@ -1466,6 +1489,15 @@ export type ArticleRevisionView = {
   note: string | null;
   editor: PartyRef;
   createdAt: string;
+};
+
+/** O que a tela manda ao registrar a resolução de um chamado no índice. */
+export type RegistrarResolucaoRequest = {
+  title: string;
+  body: string;
+  /** Publicar no portal do solicitante, além do atendimento. */
+  isPublic?: boolean;
+  keywords?: string[];
 };
 
 export type WriteArticleRequest = {
