@@ -50,6 +50,7 @@ model Organization {
   webhooks            OutboundWebhook[]
   apiKeys             ApiKey[]
   aiConfig            AiConfig?
+  pushSubscriptions   PushSubscription[]
   contacts            Contact[]
   assets              Asset[]
   surveys             Survey[]
@@ -103,32 +104,34 @@ model User {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  authSource            AuthSource?          @relation(fields: [authSourceId], references: [id], onDelete: SetNull)
-  memberships           Membership[]
-  teamMembers           TeamMember[]
-  actorIn               TicketActor[]
-  categoriasPadrao      Category[]           @relation("ResponsavelPadraoDaCategoria")
-  modelosPadrao         TicketForm[]         @relation("ResponsavelPadraoDoModelo")
-  resolucoesConfirmadas ArticleResolution[]  @relation("ConfirmouAResolucao")
-  appointments          Appointment[]        @relation("TecnicoDoAgendamento")
-  serviceOrders         ServiceOrder[]       @relation("TecnicoDaOrdem")
-  authoredEvents        TicketEvent[]        @relation("AutorDoEvento")
-  approvals             Approval[]
-  refreshTokens         RefreshToken[]
-  articles              Article[]
-  assets                Asset[]              @relation("AtivoDoUsuario")
-  problems              Problem[]            @relation("ResponsavelPeloProblema")
-  changes               Change[]             @relation("ResponsavelPelaMudanca")
-  recurrences           RecurringTicket[]    @relation("RequerenteDaRecorrencia")
-  costs                 TicketCost[]         @relation("AutorDoCusto")
-  articleEdits          ArticleRevision[]    @relation("EditorDaRevisao")
-  licenses              LicenseAssignment[]
-  consumablesReceived   ConsumableMovement[] @relation("DestinatarioDoConsumivel")
-  consumableMovements   ConsumableMovement[] @relation("AutorDoMovimento")
-  managedProjects       Project[]            @relation("GerenteDoProjeto")
-  projectTasks          ProjectTask[]        @relation("ResponsavelDaTarefaDeProjeto")
-  agendaEvents          AgendaEvent[]        @relation("DonoDoCompromisso")
-  agendaEventsCreated   AgendaEvent[]        @relation("QuemMarcouOCompromisso")
+  authSource             AuthSource?             @relation(fields: [authSourceId], references: [id], onDelete: SetNull)
+  memberships            Membership[]
+  teamMembers            TeamMember[]
+  actorIn                TicketActor[]
+  categoriasPadrao       Category[]              @relation("ResponsavelPadraoDaCategoria")
+  modelosPadrao          TicketForm[]            @relation("ResponsavelPadraoDoModelo")
+  resolucoesConfirmadas  ArticleResolution[]     @relation("ConfirmouAResolucao")
+  appointments           Appointment[]           @relation("TecnicoDoAgendamento")
+  serviceOrders          ServiceOrder[]          @relation("TecnicoDaOrdem")
+  authoredEvents         TicketEvent[]           @relation("AutorDoEvento")
+  approvals              Approval[]
+  refreshTokens          RefreshToken[]
+  articles               Article[]
+  assets                 Asset[]                 @relation("AtivoDoUsuario")
+  problems               Problem[]               @relation("ResponsavelPeloProblema")
+  changes                Change[]                @relation("ResponsavelPelaMudanca")
+  recurrences            RecurringTicket[]       @relation("RequerenteDaRecorrencia")
+  costs                  TicketCost[]            @relation("AutorDoCusto")
+  articleEdits           ArticleRevision[]       @relation("EditorDaRevisao")
+  licenses               LicenseAssignment[]
+  consumablesReceived    ConsumableMovement[]    @relation("DestinatarioDoConsumivel")
+  consumableMovements    ConsumableMovement[]    @relation("AutorDoMovimento")
+  managedProjects        Project[]               @relation("GerenteDoProjeto")
+  projectTasks           ProjectTask[]           @relation("ResponsavelDaTarefaDeProjeto")
+  agendaEvents           AgendaEvent[]           @relation("DonoDoCompromisso")
+  agendaEventsCreated    AgendaEvent[]           @relation("QuemMarcouOCompromisso")
+  pushSubscriptions      PushSubscription[]
+  notificationPreference NotificationPreference?
 
   @@unique([authSourceId, externalId])
   @@map("users")
@@ -2715,4 +2718,82 @@ model RackItem {
 
   @@index([rackId])
   @@map("rack_items")
+}
+
+// ---------------------------------------------------------------------
+// Notificações fora da aba
+// ---------------------------------------------------------------------
+
+/// De onde vem a inscrição.
+///
+/// Hoje só `WEB` (Web Push, navegador e Windows). O aplicativo nativo
+/// virá com token de FCM ou APNs, e é para ele que este enum existe
+/// desde já: acrescentar um valor é migração de uma linha; descobrir
+/// depois que a tabela só sabia falar de navegador seria outra história.
+enum PushKind {
+  WEB
+}
+
+/// O que se avisa. Um valor por motivo, não por tela.
+enum NotificationKind {
+  /// O chamado passou a ser seu, ou do seu time.
+  ATRIBUICAO
+  /// O cliente respondeu num chamado que você atende.
+  RESPOSTA_DO_CLIENTE
+  /// O atendimento respondeu num chamado que é seu.
+  RESPOSTA_NO_MEU_CHAMADO
+  /// Nota interna num chamado seu. **Nunca chega a solicitante.**
+  NOTA_INTERNA
+  /// Há um aval esperando por você.
+  APROVACAO
+  /// Prazo estourando ou estourado.
+  SLA
+}
+
+/// Um aparelho inscrito para receber aviso.
+///
+/// Uma linha por aparelho, não por pessoa: quem usa o desktop no
+/// escritório e o celular na rua quer o aviso nos dois, e o navegador
+/// dá uma inscrição diferente para cada um.
+model PushSubscription {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  userId         String    @db.Uuid
+  kind           PushKind  @default(WEB)
+  /// A URL do serviço de push do navegador. É o identificador de
+  /// verdade — o mesmo aparelho reinscrito devolve o mesmo endpoint, e
+  /// é por isso que a unicidade mora aqui e não em (usuário, aparelho).
+  endpoint       String    @unique
+  /// Chave pública do aparelho (P-256), base64url.
+  p256dh         String
+  /// Segredo de autenticação do aparelho, base64url.
+  auth           String
+  /// Para a pessoa reconhecer o aparelho na lista.
+  descricao      String?
+  createdAt      DateTime  @default(now())
+  lastSentAt     DateTime?
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([organizationId])
+  @@map("push_subscriptions")
+}
+
+/// O que a pessoa **não** quer receber.
+///
+/// Guardar o que foi silenciado, e não o que foi ligado, é o que faz um
+/// motivo novo nascer ligado para quem já existe. Na lista do que foi
+/// ligado, todo motivo acrescentado depois nasceria invisível — e
+/// ninguém volta numa tela de preferências para descobrir que apareceu
+/// opção nova.
+model NotificationPreference {
+  userId      String             @id @db.Uuid
+  silenciados NotificationKind[]
+  updatedAt   DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
 }

@@ -32,6 +32,7 @@ import { derivarPrioridade } from '../../common/prioridade';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { SaidaService } from '../channels/saida.service';
 import { AprovacoesService } from '../aprovacoes/aprovacoes.service';
+import { NotificacoesService } from '../notificacoes/notificacoes.service';
 import { FormulariosService } from '../formularios/formularios.service';
 import { SatisfacaoService } from '../satisfacao/satisfacao.service';
 import type { EventoDeWebhook } from '../webhooks/eventos';
@@ -76,6 +77,7 @@ export class TicketsService {
     private readonly webhooks: WebhooksService,
     private readonly formularios: FormulariosService,
     private readonly aprovacoes: AprovacoesService,
+    private readonly notificacoes: NotificacoesService,
   ) {}
 
   /**
@@ -884,6 +886,11 @@ export class TicketsService {
     // e devolve: responder não espera o SMTP.
     await this.saida.enfileirarEventoDoChamado(evento.id);
 
+    // E o aviso fora da aba, para quem tem aparelho inscrito. Quem
+    // decide a plateia é o `NotificacoesService`, que sabe que nota
+    // interna não chega a solicitante.
+    await this.notificacoes.doEventoDoChamado(evento.id);
+
     // A primeira resposta pública de quem atende cumpre o TTO. A do
     // próprio requerente não conta: responder a si mesmo não é
     // atendimento.
@@ -965,6 +972,15 @@ export class TicketsService {
         await tx.ticket.update({ where: { id }, data: { status: 'ATRIBUIDO' } });
       }
     });
+
+    // Fora da transação: aviso que falha não pode desfazer a
+    // atribuição. O chamado passou de mão, e isso é verdade mesmo que
+    // o serviço de push do navegador esteja fora do ar.
+    await this.notificacoes.daAtribuicao(
+      id,
+      { userId: dto.userId, teamId: dto.teamId },
+      usuario.userId,
+    );
 
     return this.obter(usuario, id);
   }

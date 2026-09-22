@@ -5,6 +5,7 @@ import { type EscalationAction, type Scale, ticketTag } from '@norty-desk/shared
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { SaidaService } from '../channels/saida.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
+import { NotificacoesService } from '../notificacoes/notificacoes.service';
 
 /**
  * Os dois relógios do SLA.
@@ -22,6 +23,7 @@ export class SlaJobs {
     private readonly prisma: PrismaService,
     private readonly saida: SaidaService,
     private readonly webhooks: WebhooksService,
+    private readonly notificacoes: NotificacoesService,
   ) {}
 
   // -------------------------------------------------------------------
@@ -211,6 +213,11 @@ export class SlaJobs {
                 corpo: texto,
               });
             }
+
+            // Prazo é a notícia que mais justifica interromper alguém
+            // fora da aba: e-mail de escalonamento chega na caixa que a
+            // pessoa lê de hora em hora, e o prazo vence antes disso.
+            await this.notificacoes.doSla(chamado.id, atrasado);
           }
           break;
         }

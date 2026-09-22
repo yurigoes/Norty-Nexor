@@ -27,6 +27,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { SaidaService } from '../channels/saida.service';
 import { escopoDeLeitura } from '../tickets/tickets.escopo';
 import { WebhooksService } from '../webhooks/webhooks.service';
+import { NotificacoesService } from '../notificacoes/notificacoes.service';
 import type { DecidirAprovacaoDto, SolicitarAprovacaoDto } from './dto';
 
 /** O status para onde o chamado volta quando a aprovação se resolve. */
@@ -94,6 +95,7 @@ export class AprovacoesService {
     private readonly prisma: PrismaService,
     private readonly saida: SaidaService,
     private readonly webhooks: WebhooksService,
+    private readonly notificacoes: NotificacoesService,
   ) {}
 
   // -------------------------------------------------------------------
@@ -829,6 +831,13 @@ export class AprovacoesService {
           `${alvo.titulo} (etapa ${step}).\n\n` +
           'Abra o Norty Desk para aprovar ou recusar.',
       });
+    }
+
+    // E o aviso fora da aba, para quem tem aparelho inscrito. Vale
+    // também para conta de diretório sem e-mail: o aviso não depende de
+    // endereço, e é justamente quem o e-mail não alcança.
+    if (alvo.ticketId) {
+      await this.notificacoes.daAprovacao(alvo.ticketId, approverIds, null);
     }
   }
 

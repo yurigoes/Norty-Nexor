@@ -685,3 +685,95 @@ nunca na tela: é inglês, e no pior caso carrega a chave dentro da URL.
 Ao contrário da transcrição de áudio, o Copilot **não degrada em
 silêncio**. Lá a pessoa não pediu nada e o áudio segue anexado; aqui ela
 clicou num botão e está esperando texto.
+
+## 16. Avisos fora da aba
+
+O pedido era chegar no Windows com o aplicativo em outra aba, ou fechado
+— e valer também para o aplicativo nativo, quando ele existir.
+
+É Web Push: o navegador entrega ao service worker, e o service worker
+desenha o aviso no sistema. No Chrome e no Edge isso funciona com a
+janela fechada, que é o caso que interessa. A carga vai **cifrada de
+ponta a ponta com a chave do próprio aparelho** (RFC 8291): o serviço
+de push do Google encaminha bytes que não consegue ler, e é por isso
+que dá para mandar assunto de chamado por ali.
+
+### Quem recebe — que é onde está o risco
+
+E-mail mal endereçado a pessoa abre e fecha. Aviso mal endereçado
+aparece na barra do Windows de quem estava numa reunião, com o assunto
+do chamado à mostra, e não tem volta. A plateia é decidida por dois
+eixos:
+
+| Evento | Quem escreveu | Quem é avisado |
+|---|---|---|
+| interno | qualquer um | só quem atende (atribuído e time) |
+| público | o cliente | quem atende |
+| público | a casa | o solicitante e os observadores |
+
+**Nota interna nunca chega a quem pediu o chamado** — nem ao
+solicitante, nem a observador. A lista daquela linha é construída só com
+quem atende, e é por isso que `quemAtende` não recebe um parâmetro
+"incluir o solicitante": a cerca tem de ser estrutural, não uma opção
+que alguém pode passar errado um dia.
+
+**Ninguém é avisado do que ele mesmo fez.** Esta regra quase passou sem
+teste: a primeira versão afirmava que o autor não recebia, mas o caso
+usado era uma resposta pública de quem atende — plateia em que o autor
+nunca esteve. A mutação sobreviveu. O caso que prova de verdade é o
+chamado de um time: alguém do time escreve a nota interna, os outros
+recebem e o autor não.
+
+### Quantos, e por quanto tempo
+
+Uma linha por **aparelho**, não por pessoa: quem usa o desktop no
+escritório e o celular na rua quer o aviso nos dois, e o navegador dá
+uma inscrição diferente para cada um. A preferência do que receber,
+essa é por pessoa — quem desligou "nota interna" desligou nos três.
+
+O que a pessoa guarda é o que **silenciou**, e não o que ligou. Na
+lista do que foi ligado, todo motivo acrescentado depois nasceria
+invisível, e ninguém volta a uma tela de preferências para descobrir
+que apareceu opção nova.
+
+Não há fila nem retentativa, e isso é escolha. Aviso é perecível:
+reentregar "o cliente respondeu" vinte minutos depois, quando a pessoa
+já leu e já respondeu, é ruído. A entrega confiável é a do e-mail, que
+tem fila própria. O TTL é de meia hora — cobre o notebook fechado no
+almoço e descarta o resto.
+
+Inscrição que o serviço de push declara morta (404/410) é apagada na
+hora. Sem isso a tabela acumula aparelho de gente que trocou de
+computador, e cada aviso passa a gastar uma requisição inútil por
+aparelho morto, para sempre.
+
+### A permissão só se pede uma vez
+
+O navegador guarda a resposta, e o "não" é definitivo do lado de cá. Por
+isso a permissão é pedida **dentro do clique**, nunca ao carregar a
+tela: site que pergunta na chegada é bloqueado por quem ainda nem sabia
+o que ele faz. Bloqueado, a tela deixa de oferecer o botão e explica
+onde liberar.
+
+Sem par VAPID configurado a seção inteira some — mesma regra do
+Copilot: não oferecer o que não funciona.
+
+### O service worker não faz cache
+
+`sw.js` só trata `push` e `notificationclick`. Não intercepta
+requisição e não guarda nada, de propósito: service worker que serve
+arquivo do cache é a maneira mais rápida de deixar alguém preso numa
+versão velha do aplicativo, e o preço disso é alto demais para um ganho
+que ninguém pediu aqui.
+
+O clique reaproveita a aba já aberta em vez de abrir a décima janela.
+Avisos com a mesma etiqueta (o id do chamado) se substituem: três
+respostas seguidas no mesmo chamado viram um aviso atualizado, não três
+empilhados na barra.
+
+### O aplicativo nativo
+
+`PushKind` já existe com um valor só (`WEB`). O aplicativo virá com
+token de FCM ou APNs, e é para ele que o enum nasceu: acrescentar um
+valor é migração de uma linha; descobrir depois que a tabela só sabia
+falar de navegador seria outra história.

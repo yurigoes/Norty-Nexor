@@ -1276,3 +1276,19 @@
 .acesso-rotulo { font-size: var(--t-corpo-sm); color: var(--texto-suave); }
 .acesso-valor { margin: 0; display: flex; align-items: center; gap: var(--e-2); flex-wrap: wrap; min-width: 0; }
 .acesso-valor .mono { word-break: break-all; }
+
+/* ---------- [DESK] Aparelho inscrito para aviso ----------
+   Lista curta (dois, três aparelhos): linha com nome à esquerda e a
+   ação à direita, como as outras listas de item do sistema. */
+
+.linha-aparelho {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-3);
+  padding: var(--e-3) var(--e-4);
+  border: 1px solid var(--borda);
+  border-radius: var(--r-md);
+  background: var(--superficie-card);
+}
+.linha-aparelho strong { margin-right: var(--e-2); }

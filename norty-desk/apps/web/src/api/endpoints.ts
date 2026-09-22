@@ -2,6 +2,9 @@ import type {
   AgendarRequest,
   AiConfigView,
   AppointmentView,
+  EstadoDasNotificacoes,
+  InscreverPushRequest,
+  SilenciarRequest,
   CopilotIntencao,
   CopilotResposta,
   EscreverAiConfigRequest,
@@ -239,3 +242,26 @@ export const configDoCopilot = () => chamar<AiConfigView | null>('/config/copilo
 
 export const escreverConfigDoCopilot = (corpo: EscreverAiConfigRequest) =>
   chamar<AiConfigView>('/config/copilot', { metodo: 'PUT', corpo });
+
+
+// ---------------------------------------------------------------------
+// Notificações fora da aba
+// ---------------------------------------------------------------------
+
+/** O endpoint deste aparelho diz à API qual da lista é ele. */
+const comEndpoint = (endpoint?: string) =>
+  endpoint ? `?endpoint=${encodeURIComponent(endpoint)}` : '';
+
+export const estadoDasNotificacoes = (endpoint?: string) =>
+  chamar<EstadoDasNotificacoes>(`/notificacoes${comEndpoint(endpoint)}`);
+
+export const inscreverAparelho = (corpo: InscreverPushRequest) =>
+  chamar<EstadoDasNotificacoes>('/notificacoes/aparelhos', { metodo: 'POST', corpo });
+
+export const desinscreverAparelho = (id: string, endpoint?: string) =>
+  chamar<EstadoDasNotificacoes>(`/notificacoes/aparelhos/${id}${comEndpoint(endpoint)}`, {
+    metodo: 'DELETE',
+  });
+
+export const silenciarNotificacoes = (corpo: SilenciarRequest) =>
+  chamar<EstadoDasNotificacoes>('/notificacoes/preferencias', { metodo: 'PUT', corpo });

@@ -5,6 +5,7 @@ import type { Permission } from '@norty-desk/shared';
 import { ErroDaApi } from '../../api/cliente';
 import * as api from '../../api/endpoints';
 import { useAutenticacao } from '../../auth/Autenticacao';
+import { Notificacoes } from './Notificacoes';
 import { TrocarSenha } from './TrocarSenha';
 
 /** Atalhos para as configurações do sistema, filtrados pela permissão de quem vê. */
@@ -200,6 +201,8 @@ export function MinhaConta() {
           <TrocarSenha />
         )}
       </section>
+
+      <Notificacoes />
 
       {atalhos.length > 0 ? (
         <section className="pilha-sm">

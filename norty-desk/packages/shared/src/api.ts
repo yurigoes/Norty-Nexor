@@ -2196,3 +2196,83 @@ export type WriteRackRequest = {
 };
 export type ColocarNoRackRequest = { assetId: string; positionU: number; heightU?: number; face?: RackFace };
 
+
+// ---------------------------------------------------------------------
+// Notificações fora da aba
+// ---------------------------------------------------------------------
+
+export const NOTIFICACOES = [
+  'ATRIBUICAO',
+  'RESPOSTA_DO_CLIENTE',
+  'RESPOSTA_NO_MEU_CHAMADO',
+  'NOTA_INTERNA',
+  'APROVACAO',
+  'SLA',
+] as const;
+
+export type TipoDeNotificacao = (typeof NOTIFICACOES)[number];
+
+/**
+ * O rótulo de cada motivo, como a pessoa o lê na tela de preferências.
+ *
+ * Mora em shared porque o mesmo texto aparece no aplicativo e no corpo
+ * do aviso: o título que chega no Windows precisa dizer a mesma coisa
+ * que a linha que a pessoa marcou.
+ */
+export const ROTULO_DA_NOTIFICACAO: Record<TipoDeNotificacao, string> = {
+  ATRIBUICAO: 'Um chamado passou a ser meu',
+  RESPOSTA_DO_CLIENTE: 'O cliente respondeu num chamado que eu atendo',
+  RESPOSTA_NO_MEU_CHAMADO: 'O atendimento respondeu num chamado meu',
+  NOTA_INTERNA: 'Nota interna num chamado que eu atendo',
+  APROVACAO: 'Há um aval esperando por mim',
+  SLA: 'Prazo estourando ou estourado',
+};
+
+/** Um aparelho inscrito, como a tela o vê. A chave do aparelho não volta. */
+export type AparelhoInscritoView = {
+  id: string;
+  descricao: string | null;
+  /** É o aparelho que está olhando esta tela agora. */
+  esteAparelho: boolean;
+  createdAt: string;
+  lastSentAt: string | null;
+};
+
+export type InscreverPushRequest = {
+  endpoint: string;
+  /** Chave pública do aparelho (P-256), base64url. */
+  p256dh: string;
+  /** Segredo de autenticação do aparelho, base64url. */
+  auth: string;
+  descricao?: string;
+};
+
+/**
+ * O que a tela precisa saber antes de oferecer o botão.
+ *
+ * `chavePublica` nula significa que a instalação não tem par VAPID: o
+ * aviso está desligado, e a tela não deve oferecer o que não funciona.
+ */
+export type EstadoDasNotificacoes = {
+  chavePublica: string | null;
+  aparelhos: AparelhoInscritoView[];
+  silenciados: TipoDeNotificacao[];
+};
+
+export type SilenciarRequest = { silenciados: TipoDeNotificacao[] };
+
+/** O que viaja dentro do aviso, e o que o service worker desenha. */
+export type AvisoPush = {
+  tipo: TipoDeNotificacao;
+  titulo: string;
+  corpo: string;
+  /** Para onde o clique leva, relativo à raiz do aplicativo. */
+  url: string;
+  /**
+   * Avisos com a mesma etiqueta se substituem no sistema.
+   *
+   * É o número do chamado: três respostas seguidas no mesmo chamado
+   * viram um aviso atualizado, não três empilhados na barra.
+   */
+  etiqueta: string;
+};
