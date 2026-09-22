@@ -2420,3 +2420,65 @@ export type SegredoRevelado = { senha: string };
  * um cofre que não guarda — mesma regra do Copilot e do aviso push.
  */
 export type EstadoDoCofre = { disponivel: boolean };
+
+// ---------------------------------------------------------------------
+// Chat ao vivo
+// ---------------------------------------------------------------------
+
+/**
+ * Quantos segundos sem batida antes de a pessoa sumir da presença.
+ *
+ * Mora em shared porque os dois lados dependem dele: o aplicativo bate
+ * o coração a cada `INTERVALO_DA_BATIDA`, e a API considera online quem
+ * bateu dentro de `SEGUNDOS_ONLINE`. Se os dois números viessem de
+ * lugares diferentes, um ajuste num deles deixaria todo mundo offline.
+ */
+export const SEGUNDOS_ONLINE = 45;
+
+/** De quanto em quanto tempo o aplicativo diz "ainda estou aqui". */
+export const INTERVALO_DA_BATIDA = 15;
+
+/** Depois disto, "digitando" some mesmo que a pessoa não tenha parado. */
+export const SEGUNDOS_DIGITANDO = 6;
+
+/** Alguém com o Desk aberto. */
+export type PresencaView = {
+  userId: string;
+  name: string;
+  /** Está com o chat **deste** chamado aberto agora. */
+  naConversa: boolean;
+  /** Está digitando agora, neste chamado. */
+  digitando: boolean;
+};
+
+/**
+ * O estado do chat de um chamado.
+ *
+ * `aberto` é a resposta à pergunta do pedido — "mostra que o chat ao
+ * vivo está aberto": há **outra pessoa** com esta conversa na tela
+ * agora, então vale escrever e esperar resposta na hora.
+ */
+export type EstadoDoChat = {
+  aberto: boolean;
+  /** Quem está nesta conversa, sem contar você. */
+  presentes: PresencaView[];
+};
+
+export type BaterPontoRequest = {
+  /** O chamado com o chat aberto. Nulo = online, sem conversa. */
+  ticketId?: string | null;
+  /** Está digitando agora. */
+  digitando?: boolean;
+};
+
+/**
+ * O que chega pelo fluxo do chat.
+ *
+ * `mensagem` traz o evento inteiro, que é o mesmo `TicketEventView` da
+ * linha do tempo — o chat **é** a conversa do chamado, não um histórico
+ * paralelo (CLAUDE.md, regra 8).
+ */
+export type EventoDoChat =
+  | { tipo: 'mensagem'; evento: TicketEventView }
+  | { tipo: 'presenca'; estado: EstadoDoChat }
+  | { tipo: 'batida' };

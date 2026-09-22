@@ -34,6 +34,17 @@ export class ErroDaApi extends Error {
 let accessToken: string | null = null;
 let aoPerderSessao: (() => void) | null = null;
 
+/**
+ * O token, para quem precisa montar a requisição à mão.
+ *
+ * Só o fluxo do chat usa: ele é lido com `fetch` cru, e não pelo
+ * `chamar`. Continua fora do `localStorage` — é a mesma variável de
+ * módulo, apenas lida de outro arquivo.
+ */
+export function tokenAtual(): string | null {
+  return accessToken;
+}
+
 export function guardarToken(token: string | null): void {
   accessToken = token;
 }

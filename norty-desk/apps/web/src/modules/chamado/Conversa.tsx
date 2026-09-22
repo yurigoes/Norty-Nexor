@@ -12,6 +12,7 @@ import { ErroDaApi } from '../../api/cliente';
 import { useAutenticacao, useRecurso } from '../../auth/Autenticacao';
 import { ROTULO_CANAL, ROTULO_STATUS, dataCurta, iniciais, modificadorCanal } from '../../lib/formato';
 import { EscolherModelo } from '../modelo/EscolherModelo';
+import { useAvisarQueDigita } from './ChatAoVivo';
 
 const TIPOS_DE_SISTEMA = new Set([
   'MUDANCA_STATUS',
@@ -34,14 +35,24 @@ export function Conversa({
   chamado,
   aoMudar,
   somenteLeitura = false,
+  versao = 0,
 }: {
   chamado: TicketDetail;
   aoMudar: () => void;
   somenteLeitura?: boolean;
+  /**
+   * Sobe a cada mensagem que chega pelo chat ao vivo.
+   *
+   * A conversa relê em vez de encaixar a mensagem que veio pelo fluxo:
+   * encaixar exigiria manter duas listas iguais em sincronia — a do
+   * fluxo e a da leitura — e é assim que nasce a mensagem que aparece
+   * duas vezes, ou que some ao recarregar.
+   */
+  versao?: number;
 }) {
   const { dado: eventos, carregando } = useRecurso(
     () => api.eventosDoChamado(chamado.id),
-    [chamado.id],
+    [chamado.id, versao],
   );
 
   return (
@@ -271,6 +282,7 @@ function Responder({ chamado, aoEnviar }: { chamado: TicketDetail; aoEnviar: () 
   const [temCopilot, setTemCopilot] = useState(false);
 
   const podeNotaInterna = can('chamado:nota-interna');
+  const avisarQueDigita = useAvisarQueDigita(chamado.id);
 
   // Pergunta antes de oferecer: botão que não responde é pior que botão
   // nenhum. Falha em silêncio de propósito — sem Copilot a caixa de
@@ -360,6 +372,7 @@ function Responder({ chamado, aoEnviar }: { chamado: TicketDetail; aoEnviar: () 
         onChange={(e) => {
           setCorpo(e.target.value);
           if (!e.target.value.trim()) setPorIa(false);
+          avisarQueDigita();
         }}
       />
 

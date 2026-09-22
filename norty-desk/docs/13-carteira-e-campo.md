@@ -972,3 +972,114 @@ lista.
 O texto cifrado não é legível hoje, mas é metade do trabalho de quem um
 dia tiver a chave mestra, e é uma cópia do segredo fora do cofre. Hoje
 o teste procura os dois **nomes de campo**, não só o valor em claro.
+
+## 19. Chat ao vivo, com presença
+
+O pedido: *"quero que tenha chat ao vivo, as pessoas que estiverem
+online, mostra que o chat ao vivo está aberto"*.
+
+### O chat **é** a conversa do chamado
+
+Cada linha do chat é um `TicketEvent`, o mesmo de uma resposta escrita
+na caixa de texto (CLAUDE.md, regra 8). Uma tabela de mensagens à parte
+criaria duas histórias do mesmo atendimento — a que a tela de chamado
+mostra e a que ficou no chat —, que é exatamente o defeito do GLPI que
+a regra 8 existe para corrigir.
+
+O que o chat muda é a **entrega**, não o registro. Fechada a conversa,
+o que sobra no chamado é a mesma linha do tempo de sempre, e quem abrir
+o chamado daqui a um ano não descobre que parte do atendimento
+aconteceu "no chat".
+
+Do lado da tela, a mesma decisão: a `Conversa` relê quando chega
+mensagem, em vez de encaixar a que veio pelo fluxo. Encaixar exigiria
+manter duas listas iguais em sincronia, e é assim que nasce a mensagem
+que aparece duas vezes — ou que some ao recarregar.
+
+### SSE, e não WebSocket
+
+O Desk não tinha WebSocket, e o que ele precisa aqui é unidirecional: o
+servidor empurra, o cliente já tem `POST` para escrever — com a
+validação, a permissão e a trilha que o `POST` de responder já carrega.
+
+O fluxo é lido com **`fetch` e `ReadableStream`**, não com
+`EventSource`. `EventSource` não carrega cabeçalho `Authorization`, e a
+saída seria pôr o token na URL — onde ele cairia no log do proxy e no
+histórico do navegador. O preço é reimplementar a leitura de SSE em
+vinte linhas; o preço da outra saída é um token em texto claro em dois
+lugares que ninguém limpa.
+
+### A fonte é o banco, não um barramento em memória
+
+A cada volta, o fluxo consulta os eventos do chamado desde a última
+marca. Parece ingênuo, e é a escolha certa aqui: **a API roda em mais
+de um processo**, e uma mensagem gravada pelo processo A precisa chegar
+a quem escuta no processo B. Um barramento em memória não a entregaria,
+e o defeito apareceria só em produção, com mais de um processo no ar.
+
+Uma consulta indexada por chamado, a cada dois segundos, custa pouco em
+dezenas de conversas simultâneas — que é o tamanho deste produto. Se um
+dia forem milhares, é **aqui** que se mexe: `LISTEN/NOTIFY` do Postgres
+ou o Redis que já está na infraestrutura. Ficou escrito no controlador
+para quem chegar nesse dia não precisar descobrir sozinho.
+
+### A presença, e por que ela mora no banco
+
+Mesma razão do `LoginThrottle`: mais de um processo. Uma linha por
+**pessoa**, não por conexão — duas abas abertas são uma pessoa online.
+
+"Está online" é ter batido o coração nos últimos `SEGUNDOS_ONLINE`. O
+número mora em `packages/shared` junto do intervalo da batida: se os
+dois viessem de arquivos diferentes, mexer em um deixaria todo mundo
+offline.
+
+**Sair é a falta da batida.** Não existe "sair do chat" a ser chamado
+no fechamento da aba — `beforeunload` é entregue quando o navegador
+quer, e não chega quando a aba morre de vez. Mas esperar quarenta e
+cinco segundos para o outro lado perceber é ruim, então há dois atalhos
+por cima da rede de segurança:
+
+- a limpeza do efeito, para navegação dentro do aplicativo;
+- `pagehide` + `fetch(..., { keepalive: true })`, para a aba que fecha
+  ou recarrega.
+
+`keepalive` é o detalhe que faz funcionar: um `fetch` comum disparado
+ao sair é **cancelado** pela própria navegação que o causou. E
+`sendBeacon`, que seria o reflexo, não serve — não carrega
+`Authorization`.
+
+### "O chat está aberto" quer dizer que tem gente do outro lado
+
+O selo não acende para quem está sozinho na conversa. Acender ali seria
+prometer resposta imediata de ninguém, e a promessa do selo é
+exatamente essa: vale escrever e esperar agora.
+
+"Digitando" apaga sozinho em seis segundos, e a batida que o liga sai
+no máximo uma vez a cada três — uma por tecla viraria cem requisições
+por parágrafo.
+
+### Quem lê ao vivo não recebe e-mail
+
+Consequência do resto, e um defeito que teria nascido junto sem ela:
+uma conversa de vinte linhas viraria vinte e-mails na caixa de quem já
+as leu na tela.
+
+Antes de enfileirar a saída, a fila pergunta se quem receberia está com
+esta conversa aberta. Se está, não sai — ele já está lendo. Se saiu, a
+mensagem seguinte volta a sair pelo canal dele, sem ninguém precisar
+combinar nada. Vale só para quem tem conta: contato de fora não tem
+presença, e continua recebendo por onde falou.
+
+### Dois tropeços que valem registro
+
+**A cerca do chamado não era a da organização.** O teste barrava um
+usuário de **outra** empresa e passava — mas o que a regra protege é
+outra coisa: o colega da mesma casa, com o mesmo papel, num chamado que
+não é dele nem do time dele. Tirar a regra de ator do serviço não
+derrubava teste nenhum. Hoje derruba.
+
+**Uma asserção que falha com o fluxo aberto trava a suíte.** O teste
+conferia o status e só então fechava o corpo da resposta; quando a
+asserção falhava, a conexão SSE ficava viva e o processo de teste não
+terminava — a falha virava travamento, que é muito pior de
+diagnosticar. Hoje o corpo é fechado antes de conferir.

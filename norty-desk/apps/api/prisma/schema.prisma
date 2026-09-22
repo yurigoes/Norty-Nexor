@@ -52,6 +52,7 @@ model Organization {
   aiConfig            AiConfig?
   pushSubscriptions   PushSubscription[]
   secrets             Secret[]
+  chatPresences       ChatPresence[]
   contacts            Contact[]
   assets              Asset[]
   surveys             Survey[]
@@ -137,6 +138,7 @@ model User {
   segredos               Secret[]                @relation("DonoDoSegredo")
   segredosRecebidos      SecretGrant[]           @relation("QuemRecebeuOSegredo")
   segredosLidos          SecretAccess[]          @relation("QuemLeuOSegredo")
+  chatPresence           ChatPresence?
 
   @@unique([authSourceId, externalId])
   @@map("users")
@@ -555,6 +557,7 @@ model Ticket {
   actors         TicketActor[]
   events         TicketEvent[]
   passwordResets PasswordResetToken[]
+  chatPresences  ChatPresence[]
   commitments    SlaCommitment[]
   approvals      Approval[]
   attachments    Attachment[]
@@ -2958,4 +2961,36 @@ model SecretAccess {
 
   @@index([secretId, readAt])
   @@map("secret_accesses")
+}
+
+// ---------------------------------------------------------------------
+// Chat ao vivo
+// ---------------------------------------------------------------------
+
+/// Quem está com o Desk aberto, e em qual conversa.
+///
+/// Uma linha por pessoa, não por conexão: quem abre o Desk em duas abas
+/// está online uma vez só, e o que interessa saber é se **a pessoa**
+/// está por perto.
+///
+/// Mora no banco, e não em memória, pela mesma razão do `LoginThrottle`:
+/// a API roda em mais de um processo, e presença que só o processo
+/// vizinho enxerga é o mesmo que não ter presença.
+model ChatPresence {
+  userId         String    @id @db.Uuid
+  organizationId String    @db.Uuid
+  /// O chamado com o chat aberto agora. Nulo = online, sem conversa.
+  ticketId       String?   @db.Uuid
+  /// A última batida do coração. "Online" é isto ser recente.
+  lastSeenAt     DateTime  @default(now())
+  /// Está digitando agora? Some sozinho junto com a batida.
+  typingAt       DateTime?
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ticket       Ticket?      @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, lastSeenAt])
+  @@index([ticketId])
+  @@map("chat_presences")
 }

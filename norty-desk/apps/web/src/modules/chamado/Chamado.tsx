@@ -23,6 +23,7 @@ import { EscolherModelo } from '../modelo/EscolherModelo';
 import { AcessoDoEquipamento } from '../ativo/AcessoDoEquipamento';
 import { OrdensDoChamado } from '../ordem/OrdemDeServico';
 import { Agendamento } from './Agendamento';
+import { ChatAoVivo } from './ChatAoVivo';
 import { CustosDoChamado } from '../custo/CustosDoChamado';
 import { Tarefas } from '../tarefa/Tarefas';
 import { ErrosConhecidosDoChamado } from '../problema/ErrosConhecidosDoChamado';
@@ -45,6 +46,9 @@ export function Chamado() {
    * outro lado da tela — reler sem esperar a próxima carga da página.
    */
   const [versaoDosAtivos, setVersaoDosAtivos] = useState(0);
+  // Sobe a cada mensagem que chega pelo fluxo do chat: é o que faz a
+  // conversa reler sem a pessoa recarregar a página.
+  const [versaoDoChat, setVersaoDoChat] = useState(0);
 
   const { dado: chamado, erro, carregando } = useRecurso(() => api.obterChamado(id), [id]);
   const { dado: times } = useRecurso(() => api.listarTimes().catch(() => []), []);
@@ -119,7 +123,8 @@ export function Chamado() {
           <Agendamento chamado={chamado} aoMudar={revalidar} />
           <OrdensDoChamado chamado={chamado} aoMudar={revalidar} />
           <CustosDoChamado chamado={chamado} />
-          <Conversa chamado={chamado} aoMudar={revalidar} />
+          <ChatAoVivo chamado={chamado} aoChegarMensagem={() => setVersaoDoChat((v) => v + 1)} />
+          <Conversa chamado={chamado} aoMudar={revalidar} versao={versaoDoChat} />
         </div>
 
         <aside className="card trilho-fixo" aria-label="Propriedades do chamado">

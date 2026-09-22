@@ -1333,3 +1333,42 @@
 
 .lista-simples { margin: 0; padding-left: var(--e-5); }
 .lista-simples li { margin-bottom: var(--e-1); }
+
+/* ---------- [DESK] Chat ao vivo ----------
+   Uma linha só, acima da conversa. O ponto verde é o sinal: há gente
+   do outro lado agora, vale escrever e esperar resposta na hora. */
+
+.chat-selo {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  padding: var(--e-2) var(--e-4);
+  border-radius: var(--r-md);
+  background: var(--superficie-card);
+  border: 1px solid var(--borda);
+  font-size: var(--t-corpo-sm);
+}
+
+.chat-ponto {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--cinza-300);
+  flex: none;
+}
+.chat-ponto.-aberto {
+  background: var(--sucesso);
+  /* Pulsa devagar: o que interessa é notar que está aceso, não que a
+     tela se mexa. */
+  animation: chat-pulso 2.4s ease-in-out infinite;
+}
+
+@keyframes chat-pulso {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(from var(--sucesso) r g b / .45); }
+  50%      { box-shadow: 0 0 0 5px rgb(from var(--sucesso) r g b / 0); }
+}
+
+/* Quem prefere menos movimento não recebe movimento nenhum. */
+@media (prefers-reduced-motion: reduce) {
+  .chat-ponto.-aberto { animation: none; }
+}

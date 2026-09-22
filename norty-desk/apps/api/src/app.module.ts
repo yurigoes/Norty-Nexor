@@ -18,6 +18,7 @@ import { CopilotModule } from './modules/copilot/copilot.module';
 import { NotificacoesModule } from './modules/notificacoes/notificacoes.module';
 import { AutomacaoModule } from './modules/automacao/automacao.module';
 import { CofreModule } from './modules/cofre/cofre.module';
+import { ChatModule } from './modules/chat/chat.module';
 import { AtivosModule } from './modules/ativos/ativos.module';
 import { ThrottleModule } from './common/throttle/throttle.module';
 import { AgendamentoModule } from './modules/agendamento/agendamento.module';
@@ -70,6 +71,7 @@ import { TranscricaoModule } from './modules/transcricao/transcricao.module';
     NotificacoesModule,
     AutomacaoModule,
     CofreModule,
+    ChatModule,
     AttachmentsModule,
     CatalogoModule,
     ConhecimentoModule,

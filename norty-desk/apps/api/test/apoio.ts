@@ -222,7 +222,7 @@ export async function semear() {
 export type Resposta<T = unknown> = { status: number; corpo: T; cookies: string[] };
 
 export class Cliente {
-  private token = '';
+  private jwt = '';
   private cookie = '';
 
   constructor(private readonly base: string) {}
@@ -233,14 +233,24 @@ export class Cliente {
       password: senha,
     });
     if (r.status === 200) {
-      this.token = r.corpo.accessToken;
+      this.jwt = r.corpo.accessToken;
       this.cookie = r.cookies.map((c) => c.split(';')[0]).join('; ');
     }
     return r;
   }
 
+  /**
+   * O token cru, para quem precisa montar a requisição à mão.
+   *
+   * O fluxo do chat é lido com `fetch` direto (é assim que o navegador
+   * o lê), e aí o cabeçalho tem de ser montado fora do `chamar`.
+   */
+  get token(): string {
+    return this.jwt;
+  }
+
   get autenticado(): boolean {
-    return this.token !== '';
+    return this.jwt !== '';
   }
 
   async chamar<T = unknown>(
@@ -252,7 +262,7 @@ export class Cliente {
       method: metodo,
       headers: {
         ...(corpo ? { 'Content-Type': 'application/json' } : {}),
-        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+        ...(this.jwt ? { Authorization: `Bearer ${this.jwt}` } : {}),
         ...(this.cookie ? { Cookie: this.cookie } : {}),
       },
       ...(corpo ? { body: JSON.stringify(corpo) } : {}),

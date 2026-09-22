@@ -4,6 +4,7 @@ import { type Channel, MARCA_DE_IA, emailSubject, ticketTag } from '@norty-desk/
 import { randomUUID } from 'node:crypto';
 
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { ChatService } from '../chat/chat.service';
 
 /**
  * A fila de saída.
@@ -19,6 +20,7 @@ export class SaidaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly chat: ChatService,
   ) {}
 
   /** O domínio que assina os `Message-ID`. */
@@ -95,6 +97,38 @@ export class SaidaService {
 
     const destinatarios = SaidaService.destinatarios(chamado.actors, canal, evento.authorId);
     if (destinatarios.length === 0) return 0;
+
+    // Quem está lendo no chat ao vivo não recebe a mesma frase por
+    // e-mail: uma conversa de vinte linhas viraria vinte mensagens na
+    // caixa de entrada de quem já as leu na tela.
+    //
+    // Só vale para quem tem conta — contato de fora não tem presença, e
+    // continua recebendo por onde falou.
+    const quemLe = chamado.actors
+      .filter((a) => a.role === 'REQUERENTE' || a.role === 'OBSERVADOR')
+      .map((a) => a.userId)
+      .filter((id): id is string => Boolean(id) && id !== evento.authorId);
+
+    const aoVivo = new Set<string>();
+    for (const userId of quemLe) {
+      if (await this.chat.estaNaConversa(userId, chamado.id)) aoVivo.add(userId);
+    }
+
+    if (aoVivo.size > 0) {
+      const enderecosAoVivo = SaidaService.destinatarios(
+        chamado.actors.filter((a) => a.userId && aoVivo.has(a.userId)),
+        canal,
+        null,
+      );
+
+      const restantes = destinatarios.filter((d) => !enderecosAoVivo.includes(d));
+      if (restantes.length === 0) {
+        this.logger.debug(`Evento ${eventId}: quem receberia está no chat. Nada a enfileirar.`);
+        return 0;
+      }
+      destinatarios.length = 0;
+      destinatarios.push(...restantes);
+    }
 
 
     const corpo = SaidaService.montarCorpo(
