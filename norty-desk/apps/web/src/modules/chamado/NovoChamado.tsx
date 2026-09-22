@@ -1,12 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { FormularioResolvido } from '@norty-desk/shared';
+import type { FormularioResolvido, ModeloDeChamado } from '@norty-desk/shared';
 import { validarRespostas } from '@norty-desk/shared';
 import { DEFAULT_PRIORITY_MATRIX, ROTULO_ESCALA, computePriority, type Scale } from './escala';
 
 import * as api from '../../api/endpoints';
 import { ErroDaApi } from '../../api/cliente';
-import { resolverFormulario } from '../../api/formularios';
+import { modelosDeChamado, resolverFormulario } from '../../api/formularios';
 import { CamposDinamicos } from '../formulario/CamposDinamicos';
 import { listarPessoas, type PessoaView } from '../../api/aprovacoes';
 import { useRecurso } from '../../auth/Autenticacao';
@@ -38,10 +38,28 @@ export function NovoChamado({ noPortal = false }: { noPortal?: boolean }) {
   // herança da categoria acima e o padrão da organização. A tela não
   // reproduz essa regra; ela pergunta.
   const [formulario, setFormulario] = useState<FormularioResolvido['form']>(null);
+  /**
+   * O modelo escolhido no painel rápido.
+   *
+   * Quando há um, ele manda: os campos são os dele e o chamado nasce
+   * com o `formId` dele, o que também traz o destino configurado. Sem
+   * modelo, vale a herança da categoria, como sempre valeu.
+   */
+  const [modelos, setModelos] = useState<ModeloDeChamado[]>([]);
+  const [modelo, setModelo] = useState<ModeloDeChamado | null>(null);
   const [respostas, setRespostas] = useState<Record<string, unknown>>({});
   const [errosDeCampo, setErrosDeCampo] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    void modelosDeChamado()
+      .then(setModelos)
+      .catch(() => setModelos([]));
+  }, []);
+
+  useEffect(() => {
+    // Com modelo escolhido, a categoria não decide mais o formulário.
+    if (modelo) return;
+
     let atual = true;
     void resolverFormulario(categoria || null)
       .then((r) => {
@@ -56,7 +74,31 @@ export function NovoChamado({ noPortal = false }: { noPortal?: boolean }) {
     return () => {
       atual = false;
     };
-  }, [categoria]);
+  }, [categoria, modelo]);
+
+  /**
+   * Clicar no bloco carrega o modelo pronto.
+   *
+   * As respostas antigas vão junto: manter chaves de outro schema
+   * mandaria para a API campos que ela recusa, com uma mensagem sobre
+   * um campo que a pessoa não vê mais.
+   *
+   * Clicar de novo no mesmo bloco desfaz a escolha — é o único jeito de
+   * voltar ao formulário da categoria sem recarregar a tela.
+   */
+  function escolherModelo(escolhido: ModeloDeChamado | null) {
+    setModelo(escolhido);
+    setRespostas({});
+    setErrosDeCampo({});
+    if (escolhido?.category) setCategoria(escolhido.category.id);
+    // O assunto **não** é preenchido com o nome do modelo. Seria
+    // cômodo e deixaria a fila com dez chamados chamados "Impressora",
+    // que é o mesmo que não ter assunto — quem tria precisa distinguir
+    // um do outro pela linha, não abrir os dez.
+  }
+
+  /** Os campos que valem agora: os do modelo, ou os da categoria. */
+  const schemaEmUso = modelo?.schema ?? formulario?.schema ?? null;
 
   // A prioridade é mostrada, não escolhida: o usuário vê o resultado da
   // matriz enquanto mexe em urgência e impacto (CLAUDE.md, regra 7).
@@ -69,10 +111,10 @@ export function NovoChamado({ noPortal = false }: { noPortal?: boolean }) {
 
     // A mesma função pura que a API usa. Aqui ela existe para dizer o
     // que falta antes de enviar; lá, porque é a API que responde por isso.
-    if (formulario) {
+    if (schemaEmUso) {
       const visivel = noPortal
-        ? { fields: formulario.schema.fields.filter((c) => !c.internal) }
-        : formulario.schema;
+        ? { fields: schemaEmUso.fields.filter((c) => !c.internal) }
+        : schemaEmUso;
       const problemas = validarRespostas(visivel, respostas);
 
       if (problemas.length > 0) {
@@ -88,8 +130,11 @@ export function NovoChamado({ noPortal = false }: { noPortal?: boolean }) {
         subject: assunto.trim(),
         description: descricao.trim(),
         ...(categoria ? { categoryId: categoria } : {}),
+        // O modelo escolhido vai junto: é ele que diz quais campos
+        // foram respondidos e para onde o chamado vai.
+        ...(modelo ? { formId: modelo.id } : {}),
         ...(noPortal ? {} : { urgency: urgencia, impact: impacto }),
-        ...(formulario && Object.keys(respostas).length > 0 ? { customFields: respostas } : {}),
+        ...(schemaEmUso && Object.keys(respostas).length > 0 ? { customFields: respostas } : {}),
         ...(observadores.length > 0
           ? { observers: observadores.map((id) => ({ kind: 'USER' as const, id })) }
           : {}),
@@ -123,6 +168,31 @@ export function NovoChamado({ noPortal = false }: { noPortal?: boolean }) {
           </div>
         ) : null}
 
+        {modelos.length > 0 ? (
+          <div className="pilha-sm">
+            <span className="campo-rotulo">O que você precisa?</span>
+            <div className="modelos">
+              {modelos.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  className={`modelo ${modelo?.id === m.id ? '-escolhido' : ''}`}
+                  aria-pressed={modelo?.id === m.id}
+                  onClick={() => escolherModelo(modelo?.id === m.id ? null : m)}
+                >
+                  <strong>{m.name}</strong>
+                  {m.description ? <span className="modelo-frase">{m.description}</span> : null}
+                </button>
+              ))}
+            </div>
+            <span className="campo-ajuda">
+              {modelo
+                ? 'Clique de novo no mesmo bloco para voltar ao formulário da categoria.'
+                : 'Clique num bloco e as perguntas certas aparecem prontas. Ou preencha à mão, abaixo.'}
+            </span>
+          </div>
+        ) : null}
+
         <div className="campo">
           <label className="campo-rotulo" htmlFor="assunto">
             Assunto
@@ -135,7 +205,11 @@ export function NovoChamado({ noPortal = false }: { noPortal?: boolean }) {
             maxLength={255}
             value={assunto}
             onChange={(e) => setAssunto(e.target.value)}
-            placeholder="Impressora do 3º andar não imprime"
+            placeholder={
+              modelo
+                ? `${modelo.name}: o que está acontecendo, em uma linha`
+                : 'Impressora do 3º andar não imprime'
+            }
           />
         </div>
 
@@ -184,9 +258,9 @@ export function NovoChamado({ noPortal = false }: { noPortal?: boolean }) {
           // vazio prometendo o que não entrega.
         />
 
-        {formulario ? (
+        {schemaEmUso ? (
           <CamposDinamicos
-            schema={formulario.schema}
+            schema={schemaEmUso}
             respostas={respostas}
             noPortal={noPortal}
             erros={errosDeCampo}

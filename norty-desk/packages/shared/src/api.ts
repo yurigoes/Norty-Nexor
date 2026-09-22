@@ -1256,6 +1256,28 @@ export type FormularioView = {
 };
 
 /**
+ * A pessoa reconhecida na abertura sem login.
+ *
+ * Devolve **uma** ou nenhuma, e só com casamento exato — o e-mail
+ * inteiro, ou o nome completo. Nunca uma lista, nunca um id.
+ *
+ * A diferença importa: busca por prefixo aqui entregaria o catálogo de
+ * funcionários da empresa a quem só escolheu o nome dela e digitou uma
+ * letra. É a mesma razão pela qual observador se informa digitando o
+ * e-mail, e não escolhendo de uma lista.
+ *
+ * O que sobra: quem já sabe o e-mail exato de alguém descobre o
+ * telefone dele. É o preço de preencher sozinho, e é o dado de contato
+ * da própria empresa — mas está escrito aqui para ninguém descobrir
+ * depois.
+ */
+export type PessoaReconhecida = {
+  name: string;
+  email: string | null;
+  phone: string | null;
+};
+
+/**
  * Um modelo de chamado, como a tela de abertura o enxerga.
  *
  * É o mesmo `TicketForm` visto do outro lado: lá é "o formulário que a

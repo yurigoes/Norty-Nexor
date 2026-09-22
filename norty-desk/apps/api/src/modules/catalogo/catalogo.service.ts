@@ -1,3 +1,4 @@
+import { telefoneBrasileiro } from '@norty-desk/shared';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 
@@ -380,7 +381,7 @@ export class CatalogoService {
       data: {
         email,
         name: dto.name,
-        phone: dto.phone,
+        phone: telefoneBrasileiro(dto.phone),
         passwordHash: await AuthService.hashDeSenha(provisoria),
         mustChangePassword: true,
         memberships: {
@@ -453,7 +454,12 @@ export class CatalogoService {
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id },
-        data: { name: dto.name, phone: dto.phone, isActive: dto.isActive },
+        data: {
+          name: dto.name,
+          // `undefined` é "não mexeu"; string vira E.164 ou `null`.
+          phone: dto.phone === undefined ? undefined : telefoneBrasileiro(dto.phone),
+          isActive: dto.isActive,
+        },
       }),
       ...(dto.role || username !== undefined
         ? [

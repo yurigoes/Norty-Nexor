@@ -1,5 +1,6 @@
 import { BadRequestException, HttpException, Injectable, NotFoundException } from '@nestjs/common';
 import {
+  telefoneBrasileiro,
   MINIMO_PARA_BUSCAR_EMPRESA,
   SEMELHANCA_MINIMA_DO_NOME,
   documentoInvalido,
@@ -16,6 +17,7 @@ import {
   type EmpresaPublica,
   type FormSchema,
   type ModeloDeChamado,
+  type PessoaReconhecida,
 } from '@norty-desk/shared';
 
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -33,6 +35,16 @@ import type { AbrirPublicoDto } from './dto';
  * quem digita três letras não provou ser ninguém.
  */
 const QUANTAS_SUGESTOES = 5;
+
+/**
+ * Piso para tentar reconhecer a pessoa.
+ *
+ * Mais alto que o da busca de empresa, e de propósito: ali o objetivo é
+ * ajudar quem lembra três letras do nome da empresa. Aqui o objetivo é
+ * o contrário — só casa quem digitou o identificador inteiro, e quem
+ * digitou pouco não deve receber resposta nenhuma.
+ */
+const MINIMO_PARA_RECONHECER = 6;
 
 /**
  * Quantos observadores a abertura sem login aceita.
@@ -113,6 +125,68 @@ export class AberturaService {
     if (!cliente) return [];
 
     return this.formularios.modelos(cliente.organizationId, true);
+  }
+
+  /**
+   * Quem é esta pessoa, para a tela preencher o resto.
+   *
+   * **Só casamento exato**, e no máximo uma pessoa. Digitar o e-mail
+   * inteiro traz nome e WhatsApp; digitar o nome completo traz e-mail e
+   * WhatsApp. Prefixo não traz nada.
+   *
+   * A diferença entre exato e prefixo é a diferença entre comodidade e
+   * vazamento: com prefixo, quem escolheu a empresa e digitou "a"
+   * receberia o catálogo de funcionários dela. É a mesma decisão dos
+   * observadores, que se informam digitando o e-mail em vez de escolher
+   * numa lista.
+   *
+   * Escopado ao cliente escolhido: só gente cadastrada *naquela*
+   * empresa. E sob o mesmo acelerador das outras rotas públicas, para
+   * que adivinhar e-mail um a um custe tempo.
+   */
+  async reconhecerPessoa(
+    clientId: string,
+    digitado: string,
+    ip: string,
+  ): Promise<PessoaReconhecida | null> {
+    const termo = digitado.trim();
+    if (termo.length < MINIMO_PARA_RECONHECER) return null;
+
+    const chaves = await this.exigirLiberado(ip, 'reconhecer');
+
+    const cliente = await this.prisma.client.findFirst({
+      where: { id: clientId, isActive: true },
+      select: { organizationId: true },
+    });
+    if (!cliente) return null;
+
+    const porEmail = termo.includes('@');
+
+    const vinculo = await this.prisma.membership.findFirst({
+      where: {
+        organizationId: cliente.organizationId,
+        clientId,
+        user: {
+          isActive: true,
+          ...(porEmail
+            ? { email: { equals: termo, mode: 'insensitive' as const } }
+            : { name: { equals: termo, mode: 'insensitive' as const } }),
+        },
+      },
+      select: { user: { select: { name: true, email: true, phone: true } } },
+    });
+
+    // Acertar não zera o acelerador: aqui, diferente do login, acertar
+    // é justamente o que alguém varrendo e-mails quer fazer muitas
+    // vezes seguidas.
+    void chaves;
+
+    if (!vinculo) return null;
+    return {
+      name: vinculo.user.name,
+      email: vinculo.user.email,
+      phone: vinculo.user.phone,
+    };
   }
 
   private async exigirLiberado(ip: string, prefixo: string): Promise<string[]> {
@@ -242,7 +316,9 @@ export class AberturaService {
     }
 
     const email = dto.requesterEmail?.trim().toLowerCase() || null;
-    const telefone = dto.requesterPhone?.trim() || null;
+    // O `+55` é trabalho do sistema: quem abre chamado digita
+    // `(11) 99999-9999`, e o canal do outro lado quer E.164.
+    const telefone = telefoneBrasileiro(dto.requesterPhone);
 
     // Uma das duas é obrigatória: chamado sem forma de retorno é
     // chamado que ninguém consegue responder.

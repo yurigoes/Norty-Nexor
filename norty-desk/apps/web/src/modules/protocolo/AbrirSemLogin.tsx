@@ -16,11 +16,13 @@ import {
   anexarNoPublico,
   buscarEmpresas,
   modelosPublicos,
+  reconhecerPessoa,
   tiposPublicos,
 } from '../../api/protocolo';
 import { useMarca } from '../../api/marca';
 import { MarcaCompleta } from '../../components/Marca';
 import { CamposDinamicos } from '../formulario/CamposDinamicos';
+import { ajudaDoTelefone, mascaraDeTelefone } from '../../lib/telefone';
 
 /** Os mesmos tetos da API, para a tela não prometer o que ela recusa. */
 const MAXIMO_DE_OBSERVADORES = 3;
@@ -228,6 +230,8 @@ function Descrever({
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
+  const [reconhecendo, setReconhecendo] = useState(false);
+  const [reconhecida, setReconhecida] = useState<string | null>(null);
   const [assunto, setAssunto] = useState('');
   const [descricao, setDescricao] = useState('');
   const [erro, setErro] = useState<string | null>(null);
@@ -258,6 +262,42 @@ function Descrever({
     // O modelo pode trazer a categoria dele; ela vence a escolha
     // manual, porque foi quem montou o modelo que a decidiu.
     if (escolhido?.category) setTipo(escolhido.category.id);
+  }
+
+  /**
+   * Preenche o resto a partir do que a pessoa acabou de digitar.
+   *
+   * Roda ao sair do campo, e não a cada tecla: a API só casa com o
+   * identificador inteiro, então pedir a cada letra seria uma chamada
+   * por tecla para receber `null` em todas menos na última.
+   *
+   * Só preenche o que está vazio. Sobrescrever o que a pessoa escreveu
+   * à mão é o defeito clássico do autopreenchimento — ela corrige o
+   * telefone, sai do campo do nome, e o telefone volta ao antigo.
+   */
+  async function reconhecer(digitado: string) {
+    if (!empresa || reconhecendo) return;
+    const termo = digitado.trim();
+    if (termo.length < 6) return;
+
+    setReconhecendo(true);
+    try {
+      const achada = await reconhecerPessoa(empresa.id, termo);
+      if (!achada) return;
+
+      setNome((atual) => atual.trim() || achada.name);
+      if (achada.email) setEmail((atual) => atual.trim() || achada.email!);
+      if (achada.phone) {
+        setTelefone((atual) => atual.trim() || mascaraDeTelefone(achada.phone!));
+      }
+      setReconhecida(achada.name);
+    } catch {
+      // Reconhecer é conveniência: falhar em silêncio e deixar a pessoa
+      // preencher à mão é melhor que um alerta sobre algo que ela não
+      // pediu.
+    } finally {
+      setReconhecendo(false);
+    }
   }
 
   const temRetorno = email.trim().length > 0 || telefone.trim().length > 0;
@@ -380,8 +420,20 @@ function Descrever({
             className="input"
             value={nome}
             onChange={(e) => setNome(e.target.value)}
+            onBlur={(e) => void reconhecer(e.target.value)}
             maxLength={160}
+            autoComplete="name"
           />
+          {reconhecida ? (
+            <span className="campo-ajuda">
+              Reconhecemos {reconhecida} no cadastro da empresa e preenchemos o que faltava. Se
+              algo estiver desatualizado, é só corrigir.
+            </span>
+          ) : (
+            <span className="campo-ajuda">
+              Nome completo ou e-mail: se você já está no cadastro da empresa, o resto vem sozinho.
+            </span>
+          )}
         </div>
 
         <div className="campo-grupo">
@@ -395,6 +447,8 @@ function Descrever({
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              onBlur={(e) => void reconhecer(e.target.value)}
+              autoComplete="email"
             />
           </div>
 
@@ -405,11 +459,14 @@ function Descrever({
             <input
               id="whats-abertura"
               className="input"
+              type="tel"
+              inputMode="tel"
               value={telefone}
-              onChange={(e) => setTelefone(e.target.value)}
-              placeholder="+55 11 99999-9999"
+              onChange={(e) => setTelefone(mascaraDeTelefone(e.target.value))}
+              placeholder="(11) 99999-9999"
               maxLength={32}
             />
+            <span className="campo-ajuda">{ajudaDoTelefone(telefone)}</span>
           </div>
         </div>
 

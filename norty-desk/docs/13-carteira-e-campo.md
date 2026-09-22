@@ -386,3 +386,66 @@ tinham `defaultTeamId` e o DTO da API não — configurar pela tela não
 gravava nada, e nenhum teste percebia. O buraco era testar a regra sem
 testar a escrita. Hoje há um caso que passa pela rota (`POST /forms`,
 `PATCH /forms/:id`) e confere que o chamado cai onde a tela prometeu.
+
+## 11. Painel rápido, reconhecer a pessoa, e o `+55`
+
+### Painel rápido
+
+Os modelos viram blocos no topo de "Abrir chamado", e não numa tela
+própria: clicar num bloco e continuar preenchendo ali é um passo; clicar
+e navegar para outra tela é dois, pelo mesmo resultado.
+
+Escolher o bloco carrega os campos daquele modelo e manda o `formId`
+junto — o que traz de brinde o destino configurado nele. Clicar de novo
+no mesmo bloco desfaz a escolha e devolve o formulário da categoria; sem
+isso, a única saída seria recarregar a tela.
+
+**O assunto não é pré-preenchido com o nome do modelo.** Seria cômodo de
+escrever e deixaria a fila com dez chamados chamados "Impressora", que é
+o mesmo que não ter assunto — quem tria precisa distinguir um do outro
+pela linha, não abrir os dez. O que o modelo muda é o texto de exemplo
+do campo.
+
+### Reconhecer a pessoa na abertura sem login
+
+Digitar o e-mail inteiro traz nome e WhatsApp; digitar o nome completo
+traz e-mail e WhatsApp. **Só casamento exato, e no máximo uma pessoa.**
+
+Prefixo foi recusado de propósito, e é a decisão que define esta rota:
+com busca incremental, quem escolheu a empresa e digitou uma letra
+receberia o catálogo de funcionários dela. É a mesma razão pela qual
+observador se informa digitando o e-mail em vez de escolher numa lista.
+
+Escopado ao cliente escolhido — gente de outra empresa não é reconhecida
+por esta porta — e sob o mesmo acelerador das outras rotas públicas,
+para que adivinhar e-mail um a um custe tempo.
+
+**O que sobra, e fica escrito:** quem já sabe o e-mail exato de alguém
+descobre o telefone dele. É o preço de preencher sozinho, e é o dado de
+contato da própria empresa. Não é um vazamento em massa; é uma consulta
+de um registro por quem já tem o identificador.
+
+Preenche só o que está vazio. Sobrescrever o que a pessoa digitou à mão
+é o defeito clássico do autopreenchimento: ela corrige o telefone, sai
+do campo do nome, e o telefone volta ao antigo.
+
+### O `+55` é trabalho do sistema
+
+Ninguém escreve `+5511999999999` num formulário. Escreve
+`(11) 99999-9999`, ou cola com o zero de tronco na frente. O canal, do
+outro lado, só fala E.164 — e o número gravado num formato e procurado
+noutro é contato duplicado e resposta que não chega.
+
+`telefoneBrasileiro`, em `packages/shared`, resolve nas duas pontas: a
+API grava normalizado em todas as fronteiras de escrita (carteira,
+pessoas, minha conta, abertura sem login), e a tela mostra a máscara
+enquanto se digita, dizendo embaixo o que vai ser gravado.
+
+A decisão é por **comprimento**, não por prefixo, e é isso que resolve o
+caso que a leitura ingênua erra: o DDD 55 existe — Santa Maria, no Rio
+Grande do Sul. Quem só procura "começa com 55" para decidir se é código
+de país engole o DDD e grava um número mutilado.
+
+Número estrangeiro digitado com `+` volta como veio: quem escreveu
+`+351` sabia o que fazia. Número sem DDD é recusado, em vez de gravado
+quebrado para o WhatsApp rejeitar em silêncio semanas depois.

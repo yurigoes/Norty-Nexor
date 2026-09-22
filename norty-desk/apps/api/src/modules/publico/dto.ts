@@ -14,6 +14,11 @@ export class BuscarEmpresaDto {
   @IsString() @MaxLength(160) q!: string;
 }
 
+export class ReconhecerPessoaDto {
+  /** E-mail inteiro ou nome completo. Pedaço não casa — é de propósito. */
+  @IsString() @MaxLength(160) q!: string;
+}
+
 export class AbrirPublicoDto {
   @IsUUID() clientId!: string;
 

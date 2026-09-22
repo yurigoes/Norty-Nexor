@@ -8,7 +8,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { ROLE_PERMISSIONS, type LoginResponse, type MeResponse } from '@norty-desk/shared';
+import { ROLE_PERMISSIONS, type LoginResponse, type MeResponse, telefoneBrasileiro } from '@norty-desk/shared';
 import { Prisma, type AuthSource } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { createHash, randomBytes } from 'node:crypto';
@@ -300,7 +300,7 @@ export class AuthService {
         data: {
           name: pessoa.nome ?? pessoa.login,
           email: emailLivre ? pessoa.email : null,
-          phone: pessoa.telefone,
+          phone: telefoneBrasileiro(pessoa.telefone),
           // Ninguém conhece esta senha: a conta só abre pelo diretório.
           passwordHash: await AuthService.hashDeSenha(randomBytes(32).toString('base64url')),
           mustChangePassword: false,
@@ -338,7 +338,7 @@ export class AuthService {
         data: {
           ...(pessoa.nome ? { name: pessoa.nome } : {}),
           ...(emailLivre ? { email: pessoa.email } : {}),
-          ...(pessoa.telefone ? { phone: pessoa.telefone } : {}),
+          ...(pessoa.telefone ? { phone: telefoneBrasileiro(pessoa.telefone) } : {}),
           ...(pessoa.externalId ? { externalId: pessoa.externalId } : {}),
         },
       });
@@ -540,7 +540,7 @@ export class AuthService {
         where: { id: usuario.userId },
         data: {
           name: dto.name?.trim(),
-          phone: dto.phone === undefined ? undefined : dto.phone?.trim() || null,
+          phone: dto.phone === undefined ? undefined : telefoneBrasileiro(dto.phone),
           ...(mudaEmail ? { email } : {}),
         },
       }),

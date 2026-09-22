@@ -5,6 +5,7 @@ import type {
   AttachmentView,
   CategoriaPublica,
   ModeloDeChamado,
+  PessoaReconhecida,
 } from '@norty-desk/shared';
 
 import { type Api, type Fixtura, limparBanco, prisma, semear, subirApi } from './apoio';
@@ -339,6 +340,157 @@ describe('modelo de chamado', () => {
     });
 
     const r = await abrir({ formId: interno.id, customFields: { patrimonio: 'x' } });
+    assert.equal(r.status, 400, JSON.stringify(r.corpo));
+  });
+});
+
+describe('reconhecer a pessoa pelo cadastro da empresa', () => {
+  const pessoa = (q: string) =>
+    pegar<PessoaReconhecida | null>(
+      `/publico/empresas/${cliente.id}/pessoa?q=${encodeURIComponent(q)}`,
+    );
+
+  before(async () => {
+    const argon2 = await import('argon2');
+    const hash = await argon2.hash('123456', { type: argon2.argon2id });
+
+    const criar = async (email: string, name: string, phone: string, clientId: string | null) => {
+      const u = await prisma.user.create({
+        data: { email, name, phone, passwordHash: hash, mustChangePassword: false },
+      });
+      await prisma.membership.create({
+        data: { userId: u.id, organizationId: f.organizacao.id, role: 'CLIENTE', clientId },
+      });
+    };
+
+    await criar('ana.souza@aberta.com.br', 'Ana Souza', '+5511977776666', cliente.id);
+
+    // De outra empresa: não pode ser reconhecida por esta porta.
+    const outra = await prisma.client.create({
+      data: {
+        organizationId: f.organizacao.id,
+        name: 'Empresa Fechada',
+        emailDomain: 'fechada.com.br',
+      },
+    });
+    await criar('bruno.lima@fechada.com.br', 'Bruno Lima', '+5511966665555', outra.id);
+  });
+
+  it('o e-mail inteiro traz nome e WhatsApp', async () => {
+    await liberar();
+    const r = await pessoa('ana.souza@aberta.com.br');
+    assert.equal(r.status, 200, JSON.stringify(r.corpo));
+    assert.deepEqual(r.corpo, {
+      name: 'Ana Souza',
+      email: 'ana.souza@aberta.com.br',
+      phone: '+5511977776666',
+    });
+  });
+
+  it('o nome completo traz e-mail e WhatsApp', async () => {
+    await liberar();
+    const r = await pessoa('Ana Souza');
+    assert.equal(r.corpo?.email, 'ana.souza@aberta.com.br');
+    assert.equal(r.corpo?.phone, '+5511977776666');
+  });
+
+  it('não liga para caixa alta nem espaço sobrando', async () => {
+    await liberar();
+    assert.equal((await pessoa('  ANA SOUZA  ')).corpo?.name, 'Ana Souza');
+    assert.equal((await pessoa('Ana.Souza@Aberta.com.br')).corpo?.name, 'Ana Souza');
+  });
+
+  /**
+   * O caso que separa comodidade de vazamento.
+   *
+   * Com busca por prefixo, quem escolheu a empresa e digitou três
+   * letras receberia o catálogo de funcionários dela. É a mesma decisão
+   * dos observadores, que se informam digitando o e-mail em vez de
+   * escolher numa lista.
+   */
+  it('pedaço de nome ou de e-mail NÃO traz ninguém', async () => {
+    await liberar();
+    for (const pedaco of ['Ana', 'Ana S', 'ana.souza', 'ana.souza@', '@aberta.com.br', 'Souza']) {
+      const r = await pessoa(pedaco);
+      assert.equal(r.corpo, null, `"${pedaco}" devolveu alguém`);
+    }
+  });
+
+  it('não reconhece quem é de outra empresa', async () => {
+    await liberar();
+    const r = await pessoa('bruno.lima@fechada.com.br');
+    assert.equal(r.corpo, null, 'a porta desta empresa não enxerga gente de outra');
+  });
+
+  it('quem não existe dá a mesma resposta que pedaço: nada', async () => {
+    await liberar();
+    assert.equal((await pessoa('ninguem@aberta.com.br')).corpo, null);
+  });
+
+  it('pessoa desativada não é reconhecida', async () => {
+    await liberar();
+    await prisma.user.updateMany({
+      where: { email: 'ana.souza@aberta.com.br' },
+      data: { isActive: false },
+    });
+
+    const r = await pessoa('ana.souza@aberta.com.br');
+    assert.equal(r.corpo, null);
+
+    await prisma.user.updateMany({
+      where: { email: 'ana.souza@aberta.com.br' },
+      data: { isActive: true },
+    });
+  });
+});
+
+describe('o +55 é trabalho do sistema', () => {
+  /**
+   * Ninguém digita `+5511999999999` num formulário. O canal, do outro
+   * lado, só fala E.164 — e o número gravado num formato e procurado
+   * noutro vira contato duplicado e resposta que não chega.
+   */
+  it('grava em E.164 o que a pessoa digitou do jeito dela', async () => {
+    await liberar();
+    const r = await abrir({
+      requesterEmail: undefined,
+      requesterPhone: '(11) 98888-7777',
+      subject: 'Chamado aberto só com WhatsApp',
+    });
+    assert.equal(r.status, 201, JSON.stringify(r.corpo));
+
+    const chamado = await prisma.ticket.findFirstOrThrow({
+      where: { protocol: (r.corpo as AberturaPublicaResposta).protocol },
+      include: { actors: { include: { contact: true } } },
+    });
+    const requerente = chamado.actors.find((a) => a.role === 'REQUERENTE');
+    assert.equal(requerente?.contact?.phone, '+5511988887777');
+  });
+
+  it('o mesmo número escrito de outro jeito acha o mesmo contato', async () => {
+    await liberar();
+    const r = await abrir({
+      requesterEmail: undefined,
+      // Com zero de tronco: é a mesma pessoa do caso acima.
+      requesterPhone: '011 98888-7777',
+      subject: 'Segundo chamado, mesmo número escrito diferente',
+    });
+    assert.equal(r.status, 201, JSON.stringify(r.corpo));
+
+    const contatos = await prisma.contact.findMany({
+      where: { organizationId: f.organizacao.id, phone: '+5511988887777' },
+    });
+    assert.equal(contatos.length, 1, 'não duplicou o contato');
+  });
+
+  it('número sem DDD é recusado, em vez de gravado quebrado', async () => {
+    await liberar();
+    const r = await abrir({
+      requesterEmail: undefined,
+      requesterPhone: '98888-7777',
+      subject: 'Chamado com telefone sem DDD',
+    });
+    // Sem e-mail e sem telefone utilizável, não há como responder.
     assert.equal(r.status, 400, JSON.stringify(r.corpo));
   });
 });

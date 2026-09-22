@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
-import type { FormularioView, TicketDetail } from '@norty-desk/shared';
+import type { FormularioView, ModeloDeChamado, TicketDetail } from '@norty-desk/shared';
 
 import { Cliente, type Api, type Fixtura, limparBanco, prisma, semear, subirApi } from './apoio';
 
@@ -157,6 +157,70 @@ describe('destino do modelo escolhido', () => {
     });
 
     assert.equal(r.status, 400, JSON.stringify(r.corpo));
+  });
+});
+
+describe('painel rápido: o modelo escolhido carrega e grava', () => {
+  it('a lista de modelos chega a quem abre chamado, com os campos junto', async () => {
+    const admin = await entrar('admin@teste.dev');
+    const criado = await admin.post<FormularioView>('/forms', {
+      name: 'Impressora do painel',
+      description: 'Não imprime, atola, sai borrado.',
+      schema: {
+        fields: [{ key: 'patrimonio', label: 'Patrimônio', type: 'TEXTO', required: true }],
+      },
+      isModel: true,
+      position: 1,
+    });
+    assert.equal(criado.status, 201, JSON.stringify(criado.corpo));
+
+    // Quem abre chamado é um agente, não quem configura: o painel
+    // precisa aparecer para ele, e é por isso que a rota não exige
+    // `config:formularios`.
+    const agente = await entrar('agente@teste.dev');
+    const r = await agente.get<ModeloDeChamado[]>('/forms/modelos');
+    assert.equal(r.status, 200, JSON.stringify(r.corpo));
+
+    const escolhido = (r.corpo ?? []).find((m) => m.name === 'Impressora do painel');
+    assert.ok(escolhido, 'o modelo aparece no painel');
+    assert.equal(escolhido.description, 'Não imprime, atola, sai borrado.');
+    assert.equal(
+      escolhido.schema.fields[0]?.key,
+      'patrimonio',
+      'os campos vêm junto: clicar e ver é um gesto só',
+    );
+  });
+
+  it('o chamado aberto pelo modelo grava as respostas contra o schema dele', async () => {
+    const agente = await entrar('agente@teste.dev');
+    const modelos = await agente.get<ModeloDeChamado[]>('/forms/modelos');
+    const escolhido = (modelos.corpo ?? []).find((m) => m.name === 'Impressora do painel');
+    assert.ok(escolhido);
+
+    const r = await agente.post<TicketDetail>('/tickets', {
+      subject: 'Impressora do quinto andar não imprime',
+      description: 'Desde hoje de manhã, sem mensagem de erro.',
+      formId: escolhido.id,
+      customFields: { patrimonio: 'PAT-9090' },
+    });
+    assert.equal(r.status, 201, JSON.stringify(r.corpo));
+    assert.equal(r.corpo.form?.id, escolhido.id, 'o chamado guarda qual modelo respondeu');
+    assert.deepEqual(r.corpo.customFields, { patrimonio: 'PAT-9090' });
+  });
+
+  it('campo obrigatório do modelo em branco é recusado', async () => {
+    const agente = await entrar('agente@teste.dev');
+    const modelos = await agente.get<ModeloDeChamado[]>('/forms/modelos');
+    const escolhido = (modelos.corpo ?? []).find((m) => m.name === 'Impressora do painel');
+    assert.ok(escolhido);
+
+    const r = await agente.post('/tickets', {
+      subject: 'Impressora sem o patrimônio',
+      description: 'O obrigatório do modelo ficou em branco.',
+      formId: escolhido.id,
+    });
+    assert.equal(r.status, 400, JSON.stringify(r.corpo));
+    assert.match(JSON.stringify(r.corpo), /Patrimônio/);
   });
 });
 

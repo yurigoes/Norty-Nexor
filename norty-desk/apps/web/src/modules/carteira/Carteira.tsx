@@ -12,6 +12,7 @@ import {
   tirarPessoa,
 } from '../../api/carteira';
 import { useAutenticacao } from '../../auth/Autenticacao';
+import { ajudaDoTelefone, mascaraDeTelefone } from '../../lib/telefone';
 
 /**
  * A carteira de clientes da Norty.
@@ -235,8 +236,10 @@ function FormaDaEmpresa({
               </div>
               <div className="campo">
                 <label className="campo-rotulo" htmlFor="tel-empresa">Telefone</label>
-                <input id="tel-empresa" className="input" value={telefone}
-                  onChange={(e) => setTelefone(e.target.value)} />
+                <input id="tel-empresa" className="input" type="tel" inputMode="tel"
+                  placeholder="(11) 3333-4444"
+                  value={telefone}
+                  onChange={(e) => setTelefone(mascaraDeTelefone(e.target.value))} />
               </div>
             </div>
 
@@ -397,8 +400,11 @@ function Empresa({
                 </div>
                 <div className="campo">
                   <label className="campo-rotulo" htmlFor="tel-pessoa">WhatsApp</label>
-                  <input id="tel-pessoa" className="input"
-                    value={telNovo} onChange={(e) => setTelNovo(e.target.value)} />
+                  <input id="tel-pessoa" className="input" type="tel" inputMode="tel"
+                    placeholder="(11) 99999-9999"
+                    value={telNovo}
+                    onChange={(e) => setTelNovo(mascaraDeTelefone(e.target.value))} />
+                  <span className="campo-ajuda">{ajudaDoTelefone(telNovo)}</span>
                 </div>
               </div>
 

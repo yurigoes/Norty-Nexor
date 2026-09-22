@@ -9,7 +9,7 @@ import type {
   ClienteView,
   PessoaDoClienteView,
 } from '@norty-desk/shared';
-import { loginDoCliente, loginLivre, pinFraco } from '@norty-desk/shared';
+import { loginDoCliente, loginLivre, pinFraco, telefoneBrasileiro } from '@norty-desk/shared';
 import { Prisma } from '@prisma/client';
 
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
@@ -228,7 +228,7 @@ export class CarteiraService {
           // Sem PIN ainda: a pessoa o escolhe no primeiro acesso, e até
           // lá não entra. Hash vazio não casa com nenhum PIN.
           passwordHash: SEM_PIN,
-          phone: dto.phone ?? null,
+          phone: telefoneBrasileiro(dto.phone),
           isActive: dto.isActive ?? true,
           mustChangePassword: true,
         },

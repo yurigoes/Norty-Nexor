@@ -19,12 +19,13 @@ import type {
   ConsultaPublica,
   EmpresaPublica,
   ModeloDeChamado,
+  PessoaReconhecida,
 } from '@norty-desk/shared';
 import type { Request, Response } from 'express';
 
 import { ipDaRequisicao } from '../../common/origem';
 import { AberturaService } from './abertura.service';
-import { AbrirPublicoDto, BuscarEmpresaDto } from './dto';
+import { AbrirPublicoDto, BuscarEmpresaDto, ReconhecerPessoaDto } from './dto';
 import { comprovanteDeProtocolo } from './pdf';
 import { PublicoService } from './publico.service';
 
@@ -67,6 +68,23 @@ export class PublicoController {
   @Get('empresas/:clientId/modelos')
   modelos(@Param('clientId', ParseUUIDPipe) clientId: string): Promise<ModeloDeChamado[]> {
     return this.abertura.modelosPublicos(clientId);
+  }
+
+  /**
+   * Quem é esta pessoa, para a tela preencher o resto.
+   *
+   * Devolve uma pessoa ou `null` — nunca uma lista. Só casa com o
+   * e-mail inteiro ou o nome completo de alguém cadastrado nesta
+   * empresa: com prefixo, esta rota seria o catálogo de funcionários
+   * dela aberto a quem só digitou uma letra.
+   */
+  @Get('empresas/:clientId/pessoa')
+  reconhecer(
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Query() filtro: ReconhecerPessoaDto,
+    @Req() requisicao: Request,
+  ): Promise<PessoaReconhecida | null> {
+    return this.abertura.reconhecerPessoa(clientId, filtro.q, ipDaRequisicao(requisicao));
   }
 
   @Post('chamados')

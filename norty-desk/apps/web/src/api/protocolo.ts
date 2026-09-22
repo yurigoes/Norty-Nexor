@@ -5,6 +5,7 @@ import type {
   ConsultaPublica,
   EmpresaPublica,
   ModeloDeChamado,
+  PessoaReconhecida,
 } from '@norty-desk/shared';
 
 /**
@@ -93,4 +94,23 @@ export async function anexarNoPublico(protocolo: string, arquivo: File): Promise
   });
 
   if (!r.ok) throw new Error(await mensagemDoErro(r));
+}
+
+/**
+ * Quem é esta pessoa, para a tela preencher o resto.
+ *
+ * Devolve uma pessoa ou `null`. Só casa com o e-mail inteiro ou o nome
+ * completo de alguém cadastrado nesta empresa — a API recusa prefixo de
+ * propósito, e a tela não deve pedir mais do que isso.
+ */
+export async function reconhecerPessoa(
+  clientId: string,
+  q: string,
+): Promise<PessoaReconhecida | null> {
+  const r = await fetch(
+    `${BASE}/publico/empresas/${clientId}/pessoa?q=${encodeURIComponent(q)}`,
+  );
+  if (!r.ok) return null;
+  const texto = await r.text();
+  return texto ? (JSON.parse(texto) as PessoaReconhecida | null) : null;
 }

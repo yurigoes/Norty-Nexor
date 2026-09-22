@@ -475,6 +475,52 @@ function vazio(valor: unknown): boolean {
 }
 
 /**
+ * O telefone como a pessoa digita, guardado como o WhatsApp exige.
+ *
+ * Ninguém escreve `+5511999999999` num formulário. Escreve
+ * `(11) 99999-9999`, ou `11 99999 9999`, ou cola com o zero de tronco
+ * na frente. O canal, do outro lado, precisa de E.164 — e o número
+ * gravado num formato e procurado noutro é contato duplicado e resposta
+ * que não chega.
+ *
+ * Então o `+55` é trabalho do sistema, não da pessoa.
+ *
+ * Devolve `null` quando aquilo não dá um número brasileiro utilizável —
+ * faltou o DDD, sobrou dígito. Recusar é melhor que gravar um número
+ * que o WhatsApp vai rejeitar em silêncio semanas depois.
+ *
+ * Número estrangeiro digitado com `+` é devolvido como veio: quem
+ * escreveu `+351` sabia o que estava fazendo, e forçar `+55` nele
+ * seria pior que não tentar.
+ */
+export function telefoneBrasileiro(digitado: string | null | undefined): string | null {
+  const cru = (digitado ?? '').trim();
+  if (cru === '') return null;
+
+  const internacional = cru.startsWith('+');
+  const digitos = cru.replace(/\D/g, '');
+  if (digitos === '') return null;
+
+  // Veio com `+` e não é Brasil: é de outro país, e não é aqui que se
+  // decide o formato de outro país.
+  if (internacional && !digitos.startsWith('55')) return `+${digitos}`;
+
+  // 13 = 55 + DDD + 9 dígitos; 12 = 55 + DDD + 8. A leitura por
+  // comprimento é o que resolve o DDD 55 (Santa Maria): `55999999999`
+  // tem 11 e é lido como DDD, não como país.
+  if (digitos.length === 13 && digitos.startsWith('55')) return `+${digitos}`;
+  if (digitos.length === 12 && digitos.startsWith('55')) return `+${digitos}`;
+
+  // O zero de tronco é de ligação interurbana, não faz parte do número.
+  const semTronco = digitos.startsWith('0') ? digitos.slice(1) : digitos;
+
+  // 11 = DDD + celular de 9; 10 = DDD + fixo de 8.
+  if (semTronco.length === 11 || semTronco.length === 10) return `+55${semTronco}`;
+
+  return null;
+}
+
+/**
  * Para quem vai o chamado.
  *
  * Duas fontes dizem o destino, e elas podem discordar. A **categoria**
