@@ -7,6 +7,15 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 export type AplicacaoAutenticada = {
   apiKeyId: string;
   organizationId: string;
+  /**
+   * A empresa-cliente desta chave, quando ela é de uma.
+   *
+   * Nulo é a chave da casa. Preenchido, é o que amarra o chamado à
+   * empresa e cadastra a pessoa nela — e é a razão de o corpo da
+   * requisição **não** poder dizer de que empresa o chamado é: quem
+   * tem o token diz por si.
+   */
+  clientId: string | null;
   scopes: string[];
 };
 
@@ -34,7 +43,13 @@ export class ApiKeyGuard implements CanActivate {
 
     const chave = await this.prisma.apiKey.findUnique({
       where: { keyHash: hash },
-      select: { id: true, organizationId: true, scopes: true, revokedAt: true },
+      select: {
+        id: true,
+        organizationId: true,
+        clientId: true,
+        scopes: true,
+        revokedAt: true,
+      },
     });
 
     if (!chave || chave.revokedAt) throw new UnauthorizedException('Chave inválida ou revogada.');
@@ -49,6 +64,7 @@ export class ApiKeyGuard implements CanActivate {
     const aplicacao: AplicacaoAutenticada = {
       apiKeyId: chave.id,
       organizationId: chave.organizationId,
+      clientId: chave.clientId,
       scopes: chave.scopes,
     };
 

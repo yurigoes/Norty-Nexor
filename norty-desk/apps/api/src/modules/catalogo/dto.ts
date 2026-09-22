@@ -89,6 +89,14 @@ export class EditarUsuarioDto {
 export class CriarChaveDto {
   @IsString() @MinLength(2) @MaxLength(120) name!: string;
 
+  /**
+   * De qual empresa-cliente é esta chave.
+   *
+   * Omitido, é a chave da casa. Informado, todo chamado que entrar por
+   * ela nasce daquela empresa e a pessoa informada é cadastrada nela.
+   */
+  @IsOptional() @IsUUID() clientId?: string;
+
   @IsArray() @ArrayMaxSize(12) @IsString({ each: true })
   scopes!: string[];
 }

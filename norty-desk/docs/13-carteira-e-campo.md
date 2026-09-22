@@ -482,3 +482,57 @@ busca acha a empresa por nome aproximado, o e-mail exato preenche nome e
 WhatsApp já em E.164, o PIN entra, e o chamado em "Compras" nasce
 `ATRIBUIDO`, com protocolo e com o aval pedido a duas pessoas: a gestora
 da empresa e o administrador.
+
+## 13. Integrador: token por empresa, e a pessoa de verdade
+
+Metade já existia: `ApiKey` com SHA-256, escopos e revogação, e
+`POST /v1/intake/tickets`. Faltavam as duas coisas que o Yuri pediu.
+
+### A chave é da empresa
+
+`ApiKey.clientId`. Nulo é a chave da casa — monitoramento, alerta — e
+segue como era. Preenchido, **todo** chamado que entra por ela nasce
+daquela empresa.
+
+A cerca: o corpo da requisição não diz de que empresa o chamado é. Quem
+tem o token diz por si. Um token vazado abre chamado na empresa dele, e
+em nenhuma outra — com a empresa vindo do corpo, bastaria ler um id para
+abrir chamado em nome de qualquer cliente da carteira.
+
+### A pessoa do sistema de origem
+
+O chamado sai no nome de quem pediu, não de uma "Integração" genérica
+que ninguém consegue responder — e é disso que depende a pessoa enxergar
+o próprio chamado quando entrar aqui.
+
+**A identidade é o login da carteira.** `loginDoCliente(nome, domínio)`
+é a mesma função da tela, e por isso a pessoa cadastrada pelo integrador
+e a incluída à mão na carteira são o **mesmo** registro, não dois. O
+e-mail que o sistema de origem manda serve para reconhecer quem já
+existe; o login, para quem nasce.
+
+**Nasce sem PIN.** Hash vazio não casa com nada, e a pessoa escolhe o
+dela no primeiro acesso. Um integrador que criasse conta com senha
+utilizável seria uma porta de entrada aberta por token — e é por isso
+que `SEM_PIN` saiu de dentro do módulo da carteira para
+`apps/api/common/pin.ts`: com uma constante em cada caminho, bastaria um
+deles ganhar um valor "provisório" utilizável para abrir a porta que o
+outro fechou.
+
+Corrida entre dois chamados da mesma pessoa: o segundo encontra o login
+já tomado e devolve quem o tomou, em vez de estourar.
+
+### A tela que não existia
+
+`ApiKey` não tinha tela nenhuma — só dava para criar chave pela API, o
+que torna a integração inutilizável para quem opera. Agora há
+**Integrações**, em Configuração.
+
+O que ela precisa deixar claro, porque não tem conserto depois: o valor
+da chave aparece **uma vez**. Por isso ele não vai num modal que se
+fecha sem querer, e sim aberto na tela, com botão de copiar e a frase
+dizendo que não aparece de novo.
+
+Uma chave por sistema, e não uma para tudo: assim dá para revogar um sem
+derrubar os outros, e a coluna "último uso" diz qual está parado — que é
+a informação que falta na hora de decidir se pode revogar.

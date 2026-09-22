@@ -206,6 +206,7 @@ model Client {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   memberships  Membership[]
   tickets      Ticket[]
+  apiKeys      ApiKey[]
 
   @@unique([organizationId, name])
   /// O domínio é o que gera o login: dois clientes com o mesmo domínio
@@ -1632,6 +1633,14 @@ model WebhookDelivery {
 model ApiKey {
   id             String    @id @default(uuid()) @db.Uuid
   organizationId String    @db.Uuid
+  /// De qual empresa-cliente é esta chave.
+  ///
+  /// Nulo é a chave da casa: abre chamado sem dono de empresa, como
+  /// era antes. Preenchido, todo chamado que entra por ela nasce
+  /// daquela empresa, e a pessoa que o sistema de origem informa é
+  /// cadastrada **nela** — sem isto, um token vazado abriria chamado
+  /// em nome de qualquer cliente da organização.
+  clientId       String?   @db.Uuid
   name           String
   /// SHA-256 da chave. O valor cru é mostrado uma única vez, na criação.
   keyHash        String    @unique
@@ -1642,8 +1651,10 @@ model ApiKey {
   createdAt      DateTime  @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client       Client?      @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, name])
+  @@index([clientId])
   @@map("api_keys")
 }
 

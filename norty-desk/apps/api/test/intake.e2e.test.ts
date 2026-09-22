@@ -462,3 +462,148 @@ describe('robustez das regras', () => {
     await prisma.intakeRule.delete({ where: { id: corrompida.id } });
   });
 });
+
+// ---------------------------------------------------------------------
+// Chave por empresa, e a pessoa do sistema de origem
+// ---------------------------------------------------------------------
+
+describe('integrador por empresa', () => {
+  let empresa: { id: string };
+  let outraEmpresa: { id: string };
+  let chaveDaEmpresa: string;
+
+  before(async () => {
+    const admin = new Cliente(api.url);
+    await admin.entrar('supervisor@teste.dev');
+
+    empresa = await prisma.client.create({
+      data: {
+        organizationId: f.organizacao.id,
+        name: 'Alfa Comércio LTDA',
+        emailDomain: 'alfa.com.br',
+      },
+      select: { id: true },
+    });
+    outraEmpresa = await prisma.client.create({
+      data: {
+        organizationId: f.organizacao.id,
+        name: 'Beta Serviços LTDA',
+        emailDomain: 'beta.com.br',
+      },
+      select: { id: true },
+    });
+
+    const criada = await admin.post<{ chave: string }>('/api-keys', {
+      name: 'ERP da Alfa',
+      clientId: empresa.id,
+      scopes: ['chamado:criar'],
+    });
+    assert.equal(criada.status, 201, JSON.stringify(criada.corpo));
+    chaveDaEmpresa = criada.corpo.chave;
+  });
+
+  it('o chamado nasce da empresa da chave, e no nome da pessoa informada', async () => {
+    const r = await comChave<{ id: string }>(
+      'POST',
+      '/intake/tickets',
+      {
+        subject: 'Nota fiscal não emite',
+        description: 'O ERP trava ao gerar a nota.',
+        requester: { name: 'Ana Souza', email: 'ana@erp-da-alfa.com' },
+      },
+      {},
+      chaveDaEmpresa,
+    );
+    assert.equal(r.status, 201, JSON.stringify(r.corpo));
+
+    const chamado = await prisma.ticket.findUniqueOrThrow({
+      where: { id: r.corpo.id },
+      include: { actors: { include: { user: true, contact: true } } },
+    });
+
+    assert.equal(chamado.clientId, empresa.id, 'o chamado é da empresa da chave');
+
+    const requerente = chamado.actors.find((a) => a.role === 'REQUERENTE');
+    assert.ok(requerente?.userId, 'o requerente é pessoa de verdade, não contato');
+    assert.equal(requerente.user?.name, 'Ana Souza');
+  });
+
+  /**
+   * O login é o da carteira, e é isso que faz a pessoa cadastrada pelo
+   * integrador e a incluída à mão serem o **mesmo** registro.
+   */
+  it('a pessoa nasce com o login da carteira, e sem PIN utilizável', async () => {
+    const pessoa = await prisma.user.findFirstOrThrow({
+      where: { name: 'Ana Souza' },
+      include: { memberships: true },
+    });
+
+    assert.equal(pessoa.email, 'ana.souza@alfa.com.br', 'o login sai do nome mais o domínio');
+    assert.equal(pessoa.passwordHash, '', 'nasce sem PIN: hash vazio não casa com nada');
+    assert.equal(pessoa.mustChangePassword, true);
+    assert.equal(pessoa.memberships[0]?.clientId, empresa.id);
+    assert.equal(pessoa.memberships[0]?.role, 'CLIENTE');
+  });
+
+  it('o segundo chamado da mesma pessoa não cria uma segunda conta', async () => {
+    const antes = await prisma.user.count({ where: { name: 'Ana Souza' } });
+
+    const r = await comChave<{ id: string }>(
+      'POST',
+      '/intake/tickets',
+      {
+        subject: 'Boleto não imprime',
+        description: 'Segunda chamada da mesma pessoa.',
+        requester: { name: 'Ana Souza', email: 'ana@erp-da-alfa.com' },
+      },
+      {},
+      chaveDaEmpresa,
+    );
+    assert.equal(r.status, 201, JSON.stringify(r.corpo));
+
+    assert.equal(await prisma.user.count({ where: { name: 'Ana Souza' } }), antes);
+  });
+
+  /**
+   * A cerca que justifica a chave ser por empresa: o corpo da
+   * requisição não diz de que empresa o chamado é. Quem tem o token diz
+   * por si — um token vazado abre chamado na empresa dele, e em nenhuma
+   * outra.
+   */
+  it('a chave de uma empresa não abre chamado em nome de outra', async () => {
+    const r = await comChave<{ id: string }>(
+      'POST',
+      '/intake/tickets',
+      {
+        subject: 'Tentando abrir na empresa errada',
+        description: 'O corpo manda outra empresa; a chave manda na Alfa.',
+        clientId: outraEmpresa.id,
+        requester: { name: 'Bruno Lima' },
+      },
+      {},
+      chaveDaEmpresa,
+    );
+
+    // `forbidNonWhitelisted`: `clientId` nem é campo aceito no corpo.
+    assert.equal(r.status, 400, JSON.stringify(r.corpo));
+  });
+
+  it('a chave da casa segue como era: contato, sem empresa', async () => {
+    const r = await comChave<{ id: string }>('POST', '/intake/tickets', {
+      subject: 'Disco cheio no servidor',
+      description: 'Alerta do monitoramento, sem empresa.',
+      requester: { name: 'Monitoramento', email: 'alerta@monitor.local' },
+    });
+    assert.equal(r.status, 201, JSON.stringify(r.corpo));
+
+    const chamado = await prisma.ticket.findUniqueOrThrow({
+      where: { id: r.corpo.id },
+      include: { actors: true },
+    });
+
+    assert.equal(chamado.clientId, null, 'chave sem empresa não amarra o chamado a nenhuma');
+    const requerente = chamado.actors.find((a) => a.role === 'REQUERENTE');
+    assert.ok(requerente?.contactId, 'segue como contato, como era antes');
+    assert.equal(requerente.userId, null);
+  });
+});

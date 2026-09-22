@@ -544,6 +544,15 @@ export class TicketsService {
   async abrirPorCanal(dados: {
     organizationId: string;
     contactId: string;
+    /**
+     * O requerente como **pessoa**, quando ela existe de verdade.
+     *
+     * Vence o `contactId`: contato é quem escreveu de fora e não tem
+     * conta; se o integrador provou que aquela pessoa é a fulana
+     * cadastrada na empresa, o chamado tem de sair no nome dela — é
+     * disso que depende ela enxergar o próprio chamado ao entrar.
+     */
+    requesterUserId?: string | null;
     /** A empresa-cliente de quem é o chamado, quando ela foi identificada. */
     clientId?: string | null;
     channel: Channel;
@@ -624,7 +633,9 @@ export class TicketsService {
           originChannel: dados.channel,
           actors: {
             create: [
-              { role: 'REQUERENTE', contactId: dados.contactId },
+              dados.requesterUserId
+                ? { role: 'REQUERENTE' as const, userId: dados.requesterUserId }
+                : { role: 'REQUERENTE' as const, contactId: dados.contactId },
               ...(destino.assigneeId
                 ? [{ role: 'ATRIBUIDO' as const, userId: destino.assigneeId }]
                 : destino.teamId
@@ -653,7 +664,9 @@ export class TicketsService {
         ticketNumber: chamado.number,
         subject: dados.subject.slice(0, 255),
         clientId: dados.clientId ?? null,
-        requesterUserId: null,
+        // Quando o integrador identificou a pessoa, ela sai da lista de
+        // aprovadores como sairia na porta com login.
+        requesterUserId: dados.requesterUserId ?? null,
       });
     }
 

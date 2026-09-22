@@ -13,6 +13,7 @@ import { loginDoCliente, loginLivre, pinFraco, telefoneBrasileiro } from '@norty
 import { Prisma } from '@prisma/client';
 
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
+import { SEM_PIN } from '../../common/pin';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { AuthService } from '../auth/auth.service';
@@ -22,9 +23,6 @@ import type {
   EscreverClienteDto,
   EscreverPessoaDoClienteDto,
 } from './dto';
-
-/** O PIN nasce indefinido; a pessoa o escolhe no primeiro acesso. */
-const SEM_PIN = '';
 
 /**
  * A carteira de clientes da Norty.

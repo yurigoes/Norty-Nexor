@@ -491,6 +491,7 @@ export class CatalogoService {
     return chaves.map((c) => ({
       id: c.id,
       name: c.name,
+      clientId: c.clientId,
       scopes: c.scopes,
       lastUsedAt: c.lastUsedAt,
       revokedAt: c.revokedAt,
@@ -505,11 +506,24 @@ export class CatalogoService {
    * caminho é revogar e criar outra — não há como recuperá-lo, e é
    * assim que tem de ser.
    */
-  async criarChave(usuario: UsuarioAutenticado, dados: { name: string; scopes: string[] }) {
+  async criarChave(
+    usuario: UsuarioAutenticado,
+    dados: { name: string; scopes: string[]; clientId?: string },
+  ) {
     const existente = await this.prisma.apiKey.findFirst({
       where: { organizationId: usuario.organizationId, name: dados.name },
     });
     if (existente) throw new ConflictException('Já existe uma chave com este nome.');
+
+    // A empresa vem do corpo, então é conferida: sem isto, quem cria
+    // chave amarraria a de um cliente de outra organização.
+    if (dados.clientId) {
+      const cliente = await this.prisma.client.findFirst({
+        where: { id: dados.clientId, organizationId: usuario.organizationId },
+        select: { id: true },
+      });
+      if (!cliente) throw new BadRequestException('Empresa não encontrada nesta organização.');
+    }
 
     const permitidos = new Set<string>([
       'chamado:criar',
@@ -534,10 +548,17 @@ export class CatalogoService {
         name: dados.name,
         keyHash: createHash('sha256').update(cru).digest('hex'),
         scopes: dados.scopes,
+        clientId: dados.clientId ?? null,
       },
     });
 
-    return { id: chave.id, name: chave.name, scopes: chave.scopes, chave: cru };
+    return {
+      id: chave.id,
+      name: chave.name,
+      clientId: chave.clientId,
+      scopes: chave.scopes,
+      chave: cru,
+    };
   }
 
   async revogarChave(usuario: UsuarioAutenticado, id: string): Promise<void> {

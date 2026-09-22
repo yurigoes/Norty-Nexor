@@ -13,6 +13,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Scale, TicketType } from '@norty-desk/shared';
+import { loginDoCliente, telefoneBrasileiro } from '@norty-desk/shared';
 import {
   IsEmail,
   IsEnum,
@@ -27,6 +28,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
+import { SEM_PIN } from '../../common/pin';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { RegrasService } from '../regras/regras.service';
 import { TicketsService } from '../tickets/tickets.service';
@@ -107,6 +109,13 @@ export class IntakeController {
       if (existente) return { ...existente, repetido: true };
     }
 
+    // A chave é de empresa? Então a pessoa que o sistema de origem
+    // informa é cadastrada **nela**, e o chamado sai no nome dela.
+    const pessoa = await this.provisionarPessoa(
+      aplicacao.organizationId,
+      aplicacao.clientId,
+      dto.requester,
+    );
     const contato = await this.resolverContato(aplicacao.organizationId, dto.requester);
     const categoriaId = dto.categoryPath
       ? await this.resolverCategoria(aplicacao.organizationId, dto.categoryPath)
@@ -130,6 +139,8 @@ export class IntakeController {
       const chamado = await this.tickets.abrirPorCanal({
         organizationId: aplicacao.organizationId,
         contactId: contato.id,
+        requesterUserId: pessoa,
+        clientId: aplicacao.clientId,
         channel: 'API',
         subject: dto.subject,
         description: dto.description,
@@ -239,6 +250,89 @@ export class IntakeController {
       channel: 'API',
       body: dto.body,
     });
+  }
+
+  /**
+   * A pessoa do sistema de origem, cadastrada aqui.
+   *
+   * É o pedido do Yuri: o sistema integrado vê quem está logado nele e
+   * o chamado sai no nome daquela pessoa, não de uma "Integração"
+   * genérica que ninguém consegue responder.
+   *
+   * **A identidade é o login da carteira.** `loginDoCliente(nome,
+   * domínio)` é a mesma função da tela, e por isso a pessoa que o
+   * integrador cadastra e a que alguém inclui à mão na carteira são o
+   * **mesmo** registro, não dois. O e-mail que o sistema de origem
+   * manda serve para reconhecer quem já existe; o login, quem nasce.
+   *
+   * Nasce **sem PIN**: hash vazio não casa com nada, e a pessoa escolhe
+   * o dela no primeiro acesso. Um integrador que criasse conta com
+   * senha utilizável seria uma porta de entrada aberta por token.
+   *
+   * Devolve `null` quando a chave não é de empresa ou o sistema de
+   * origem não disse quem é — aí vale o contato, como antes.
+   */
+  private async provisionarPessoa(
+    organizationId: string,
+    clientId: string | null,
+    quem?: RequerenteDto,
+  ): Promise<string | null> {
+    const nome = quem?.name?.trim();
+    if (!clientId || !nome) return null;
+
+    const cliente = await this.prisma.client.findFirst({
+      where: { id: clientId, organizationId, isActive: true },
+      select: { id: true, emailDomain: true },
+    });
+    if (!cliente) return null;
+
+    const email = quem?.email?.toLowerCase().trim();
+
+    // Já cadastrada nesta empresa? Pelo e-mail informado, ou pelo nome
+    // exato — a segunda é o caso do sistema que não manda e-mail.
+    const existente = await this.prisma.membership.findFirst({
+      where: {
+        organizationId,
+        clientId,
+        user: email
+          ? { OR: [{ email }, { name: { equals: nome, mode: 'insensitive' } }] }
+          : { name: { equals: nome, mode: 'insensitive' } },
+      },
+      select: { userId: true },
+    });
+    if (existente) return existente.userId;
+
+    const login = loginDoCliente(nome, cliente.emailDomain);
+    if (!login) return null;
+
+    // Corrida entre dois chamados da mesma pessoa: o segundo encontra o
+    // login já tomado e devolve quem o tomou, em vez de estourar.
+    const jaTemOLogin = await this.prisma.user.findUnique({
+      where: { email: login },
+      select: { id: true },
+    });
+    if (jaTemOLogin) {
+      await this.prisma.membership.upsert({
+        where: { userId_organizationId: { userId: jaTemOLogin.id, organizationId } },
+        update: {},
+        create: { userId: jaTemOLogin.id, organizationId, clientId, role: 'CLIENTE' },
+      });
+      return jaTemOLogin.id;
+    }
+
+    const criada = await this.prisma.user.create({
+      data: {
+        email: login,
+        name: nome,
+        phone: telefoneBrasileiro(quem?.phone),
+        passwordHash: SEM_PIN,
+        mustChangePassword: true,
+        memberships: { create: { organizationId, clientId, role: 'CLIENTE' } },
+      },
+      select: { id: true },
+    });
+
+    return criada.id;
   }
 
   private async resolverContato(organizationId: string, quem?: RequerenteDto) {
