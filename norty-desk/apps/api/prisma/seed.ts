@@ -6,12 +6,24 @@
  * Fora do modo de demonstração as contas nascem com troca de senha
  * obrigatória — aqui também, exceto se DEMO=1.
  */
-import { DEFAULT_BUSINESS_HOURS, DEFAULT_PRIORITY_MATRIX } from '@norty-desk/shared';
+import { DEFAULT_BUSINESS_HOURS, DEFAULT_PRIORITY_MATRIX, loginDoCliente } from '@norty-desk/shared';
 import { PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
 
 const prisma = new PrismaClient();
 const DEMO = process.env.DEMO === '1';
+
+/** O domínio da empresa-cliente de demonstração: é dele que sai o login. */
+const DOMINIO_DA_EMPRESA = 'empresadojoao.com.br';
+
+/**
+ * O PIN das pessoas da empresa-cliente.
+ *
+ * Não é `123456`: `pinFraco` recusa sequência, e é a mesma função que a
+ * tela usa. Um seed que grava o que a aplicação recusaria produziria
+ * uma demonstração que não se consegue repetir pela tela.
+ */
+const PIN_DA_DEMONSTRACAO = '426913';
 
 /** Feriados nacionais fixos. Os móveis entram por importação anual. */
 const FERIADOS_FIXOS: { nome: string; mes: number; dia: number }[] = [
@@ -180,9 +192,171 @@ async function main() {
     }
   }
 
+  // --- Carteira e modelos, só na demonstração -------------------------
+  //
+  // Sem isto, `DEMO=1` produzia uma instalação onde a carteira, a
+  // abertura sem login e a aprovação por categoria não eram
+  // demonstráveis: as três dependem de empresa-cliente, de gente
+  // atrelada a ela e de um gestor daquela empresa, e o seed não criava
+  // nenhum dos três. Só funcionavam em banco onde alguém tinha criado
+  // os dados à mão.
+  if (DEMO) {
+    const pinHash = await argon2.hash(PIN_DA_DEMONSTRACAO, { type: argon2.argon2id });
+
+    const empresa =
+      (await prisma.client.findFirst({
+        where: { organizationId: organizacao.id, emailDomain: DOMINIO_DA_EMPRESA },
+      })) ??
+      (await prisma.client.create({
+        data: {
+          organizationId: organizacao.id,
+          name: 'Empresa do João Comércio de Materiais LTDA',
+          document: '12.345.678/0001-90',
+          emailDomain: DOMINIO_DA_EMPRESA,
+          contactEmail: `contato@${DOMINIO_DA_EMPRESA}`,
+          contactPhone: '+551133334444',
+        },
+      }));
+
+    // O login **não** se digita: sai do nome mais o domínio da empresa,
+    // pela mesma função que a tela da carteira usa.
+    const pessoas: { nome: string; papel: 'CLIENTE' | 'GESTOR'; telefone: string }[] = [
+      { nome: 'Yuri Souza Goes', papel: 'CLIENTE', telefone: '+5511988887777' },
+      { nome: 'Maria da Silva Goes', papel: 'GESTOR', telefone: '+5511977776666' },
+    ];
+
+    for (const pessoa of pessoas) {
+      const login = loginDoCliente(pessoa.nome, empresa.emailDomain);
+      if (!login) continue;
+
+      const usuario = await prisma.user.upsert({
+        where: { email: login },
+        update: {},
+        create: {
+          email: login,
+          name: pessoa.nome,
+          phone: pessoa.telefone,
+          passwordHash: pinHash,
+          // Na demonstração o PIN já vale: obrigar a troca no primeiro
+          // acesso é o certo em produção e só atrapalha aqui.
+          mustChangePassword: false,
+        },
+      });
+
+      await prisma.membership.upsert({
+        where: { userId_organizationId: { userId: usuario.id, organizationId: organizacao.id } },
+        update: { role: pessoa.papel, clientId: empresa.id },
+        create: {
+          userId: usuario.id,
+          organizationId: organizacao.id,
+          clientId: empresa.id,
+          role: pessoa.papel,
+        },
+      });
+    }
+
+    // Uma categoria que exige aval, para a aprovação ter o que mostrar.
+    // A gestora da empresa acima é quem decide.
+    const compras = await prisma.category.findFirst({
+      where: { organizationId: organizacao.id, parentId: null, name: 'Compras' },
+    });
+    if (!compras) {
+      await prisma.category.create({
+        data: {
+          organizationId: organizacao.id,
+          name: 'Compras',
+          defaultTeamId: suporte.id,
+          requiresApproval: true,
+          defaultAgreements: { connect: padrao },
+        },
+      });
+    }
+
+    // E os tipos que a tela sem login oferece. Opt-in: só estes.
+    await prisma.category.updateMany({
+      where: { organizationId: organizacao.id, name: { in: ['Hardware', 'Acesso', 'Rede'] } },
+      data: { isPublic: true },
+    });
+
+    // --- Modelos de chamado -------------------------------------------
+    const modelos = [
+      {
+        name: 'Impressora',
+        description: 'Não imprime, atola ou sai borrado.',
+        position: 1,
+        categoria: 'Hardware',
+        schema: {
+          fields: [
+            { key: 'patrimonio', label: 'Patrimônio da impressora', type: 'TEXTO', required: true },
+            {
+              key: 'andar',
+              label: 'Andar',
+              type: 'SELECAO',
+              required: false,
+              options: [
+                { value: 'terreo', label: 'Térreo' },
+                { value: 'primeiro', label: '1º andar' },
+                { value: 'segundo', label: '2º andar' },
+              ],
+            },
+            { key: 'luz', label: 'Luz piscando?', type: 'BOOLEANO', required: false },
+          ],
+        },
+      },
+      {
+        name: 'Internet lenta',
+        description: 'A conexão cai ou arrasta.',
+        position: 2,
+        categoria: 'Rede',
+        schema: {
+          fields: [
+            { key: 'desde', label: 'Desde quando', type: 'DATA', required: false },
+            { key: 'setor', label: 'Setor', type: 'TEXTO', required: true },
+          ],
+        },
+      },
+      {
+        name: 'Acesso ao sistema',
+        description: 'Senha, bloqueio, permissão.',
+        position: 3,
+        categoria: 'Acesso',
+        schema: {
+          fields: [{ key: 'sistema', label: 'Qual sistema', type: 'TEXTO', required: true }],
+        },
+      },
+    ];
+
+    for (const modelo of modelos) {
+      const categoria = await prisma.category.findFirst({
+        where: { organizationId: organizacao.id, parentId: null, name: modelo.categoria },
+        select: { id: true },
+      });
+
+      await prisma.ticketForm.upsert({
+        where: { organizationId_name: { organizationId: organizacao.id, name: modelo.name } },
+        update: {},
+        create: {
+          organizationId: organizacao.id,
+          name: modelo.name,
+          description: modelo.description,
+          schema: modelo.schema,
+          categoryId: categoria?.id ?? null,
+          isModel: true,
+          isPublic: true,
+          position: modelo.position,
+          defaultTeamId: suporte.id,
+        },
+      });
+    }
+  }
+
   console.log(
     DEMO
-      ? 'Semeado com dados de demonstração. Senha das contas: 123456'
+      ? 'Semeado com dados de demonstração.\n' +
+          '  Contas da Norty: 123456\n' +
+          `  Pessoas da empresa-cliente (PIN): ${PIN_DA_DEMONSTRACAO}\n` +
+          `    yuri.goes@${DOMINIO_DA_EMPRESA} — cliente\n` +
+          `    maria.goes@${DOMINIO_DA_EMPRESA} — gestora, decide as aprovações`
       : 'Estrutura base semeada. As contas nascem com troca de senha obrigatória.',
   );
 }

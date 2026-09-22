@@ -449,3 +449,36 @@ de país engole o DDD e grava um número mutilado.
 Número estrangeiro digitado com `+` volta como veio: quem escreveu
 `+351` sabia o que fazia. Número sem DDD é recusado, em vez de gravado
 quebrado para o WhatsApp rejeitar em silêncio semanas depois.
+
+## 12. A demonstração passa a demonstrar
+
+O `DEMO=1 npm run db:seed` produzia uma instalação onde três coisas
+construídas nesta fase **não eram demonstráveis**: a carteira, a
+abertura sem login e a aprovação por categoria. Todas dependem de
+empresa-cliente, de gente atrelada a ela e de um gestor daquela empresa,
+e o seed não criava nenhum dos três. Só funcionavam em banco onde alguém
+já tinha criado os dados à mão — que era o meu, e não o de quem clona o
+repositório.
+
+Agora a demonstração semeia uma empresa com CNPJ e domínio, duas pessoas
+dela (uma cliente, uma **gestora**, que é quem decide as aprovações),
+uma categoria "Compras" que exige aval, três categorias públicas e três
+modelos de chamado com destino.
+
+**O PIN não é `123456`.** `pinFraco` recusa sequência, e é a mesma
+função que a tela usa: um seed que grava o que a aplicação recusaria
+produziria uma demonstração que não se consegue repetir pela tela. É
+`426913`, e o seed o imprime ao terminar, junto dos dois logins.
+
+Os logins das pessoas da empresa não são escritos no seed: saem de
+`loginDoCliente(nome, dominio)`, a mesma função da tela da carteira.
+Escrevê-los à mão seria a primeira coisa a divergir quando a regra do
+login mudasse.
+
+Conferido do jeito que interessa: banco truncado, `DEMO=1` rodado duas
+vezes (idempotente — um cliente, três modelos, sete usuários nas duas),
+e os três fluxos percorridos no navegador contra esse banco limpo. A
+busca acha a empresa por nome aproximado, o e-mail exato preenche nome e
+WhatsApp já em E.164, o PIN entra, e o chamado em "Compras" nasce
+`ATRIBUIDO`, com protocolo e com o aval pedido a duas pessoas: a gestora
+da empresa e o administrador.
