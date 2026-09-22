@@ -269,6 +269,7 @@ export class Cliente {
   get = <T = unknown>(caminho: string) => this.chamar<T>('GET', caminho);
   post = <T = unknown>(caminho: string, corpo?: unknown) => this.chamar<T>('POST', caminho, corpo);
   patch = <T = unknown>(caminho: string, corpo?: unknown) => this.chamar<T>('PATCH', caminho, corpo);
+  put = <T = unknown>(caminho: string, corpo?: unknown) => this.chamar<T>('PUT', caminho, corpo);
   del = <T = unknown>(caminho: string) => this.chamar<T>('DELETE', caminho);
 }
 

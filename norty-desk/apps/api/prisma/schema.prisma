@@ -49,6 +49,7 @@ model Organization {
   rules               IntakeRule[]
   webhooks            OutboundWebhook[]
   apiKeys             ApiKey[]
+  aiConfig            AiConfig?
   contacts            Contact[]
   assets              Asset[]
   surveys             Survey[]
@@ -794,8 +795,19 @@ model TicketEvent {
   body            String?
   /// Campos específicos do tipo. Tipado em shared como EventPayload.
   payload         Json?
-  createdAt       DateTime   @default(now())
-  editedAt        DateTime?
+
+  /// O texto saiu do Norty Copilot?
+  ///
+  /// Coluna, e não um campo dentro de `payload`: quem lê a conversa
+  /// tem direito de saber que aquilo foi escrito por máquina, e essa
+  /// informação não pode depender de alguém lembrar de olhar um JSON.
+  /// É por ela que o selo aparece na tela **e** que a linha "resposta
+  /// automática" sai no e-mail e no WhatsApp — quem recebe de fora é
+  /// justamente quem não tem como desconfiar.
+  aiGenerated Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  editedAt  DateTime?
 
   ticket         Ticket?         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   problem        Problem?        @relation(fields: [problemId], references: [id], onDelete: Cascade)
@@ -1696,6 +1708,37 @@ model ApiKey {
   @@unique([organizationId, name])
   @@index([clientId])
   @@map("api_keys")
+}
+
+enum AiProvider {
+  GEMINI
+  GROQ
+}
+
+/// A configuração do Norty Copilot, por organização.
+///
+/// Uma linha por organização: o provedor, a chave e o modelo são dela,
+/// e duas organizações no mesmo Desk não compartilham conta de IA.
+///
+/// **A chave é cifrada** com a mesma `CHANNEL_SECRET_KEY` dos segredos
+/// de canal, e nunca sai da API — a tela recebe `temChave: boolean`.
+/// Chave de provedor de IA em texto claro no banco é fatura de outra
+/// pessoa esperando um `SELECT`.
+model AiConfig {
+  organizationId String     @id @db.Uuid
+  provider       AiProvider @default(GEMINI)
+  /// `v1:<iv>:<tag>:<cifrado>` — ver channels/segredos.ts.
+  apiKeyCifrada  String?
+  /// O modelo, como o provedor o chama. Sem padrão embutido em código:
+  /// nome de modelo muda mais rápido que deploy.
+  model          String
+  isActive       Boolean    @default(false)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("ai_configs")
 }
 
 /// Identidade visual da instalação.

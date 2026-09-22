@@ -288,6 +288,16 @@
 .selo.-erro    { background: var(--erro-fundo); color: var(--erro); }
 .selo.-contorno { background: transparent; border: 1px solid var(--borda); color: var(--texto-suave); }
 
+/* O selo de IA. Contorno e não preenchimento: ele declara a origem
+   do texto, não classifica o chamado — e não deve competir com o
+   selo de status que fica ao lado. */
+.selo.-ia {
+  background: var(--azul-50);
+  border: 1px solid var(--azul-100);
+  color: var(--azul-600);
+  letter-spacing: .02em;
+}
+
 /* ---------- [DESK] Prioridade ----------
    Modelado no `.score-pill` do LICITA+: mesma forma, mesma
    regra. Traz número E palavra, então a informação nunca
@@ -576,6 +586,48 @@
 /* Quando a resposta é interna, a caixa inteira muda de cor: o
    aviso chega antes de o dedo alcançar o botão de enviar. */
 .responder.-interna { background: var(--aviso-fundo); border-color: var(--amarelo-100); }
+
+/* ---------- [DESK] Norty Copilot ----------
+   A IA não ganha cor própria: usa o azul técnico, que no sistema
+   já significa "dado, não ação". Inventar um roxo de produto de IA
+   faria a marca do Desk parecer a de outra casa. */
+
+.responder-ia {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  flex-wrap: wrap;
+  margin-top: var(--e-2);
+  padding: var(--e-2) var(--e-3);
+  border-radius: var(--r-md);
+  background: var(--azul-50);
+  border: 1px dashed var(--azul-100);
+  font-size: var(--t-micro);
+  color: var(--texto-suave);
+}
+
+.responder-sugestao {
+  margin-top: var(--e-3);
+  padding: var(--e-3) var(--e-4);
+  border-radius: var(--r-md);
+  background: var(--azul-50);
+  border: 1px solid var(--azul-100);
+}
+.responder-sugestao header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-2);
+  margin-bottom: var(--e-2);
+  font-size: var(--t-micro);
+  color: var(--azul-600);
+}
+.responder-sugestao p {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: var(--t-corpo-sm);
+  color: var(--texto);
+}
 
 /* ---------- [DESK] Cartão de chamado (fila no mobile) ----------
    A tabela de oito colunas não sobrevive a 390px. Abaixo de

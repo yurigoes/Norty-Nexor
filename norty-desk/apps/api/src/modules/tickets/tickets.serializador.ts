@@ -236,6 +236,7 @@ export function paraEvento(evento: Evento): TicketEventView {
     body: evento.body,
     payload: (evento.payload as EventPayload | null) ?? null,
     attachments: evento.attachments.map(anexo),
+    aiGenerated: evento.aiGenerated,
     createdAt: evento.createdAt.toISOString(),
     editedAt: evento.editedAt?.toISOString() ?? null,
   };

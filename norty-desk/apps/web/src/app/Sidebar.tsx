@@ -83,6 +83,7 @@ export function Sidebar() {
       para: '/config/integracoes',
       permissao: 'config:chaves-api' as const,
     },
+    { rotulo: 'Norty Copilot', para: '/config/copilot', permissao: 'config:copilot' as const },
     { rotulo: 'Pessoas', para: '/config/pessoas', permissao: 'pessoa:gerenciar' as const },
     { rotulo: 'Times', para: '/config/times', permissao: 'pessoa:ler' as const },
     { rotulo: 'Autenticação (AD)', para: '/config/autenticacao', permissao: 'config:autenticacao' as const },

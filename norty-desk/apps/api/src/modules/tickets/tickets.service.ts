@@ -871,6 +871,9 @@ export class TicketsService {
         // WhatsApp (`docs/06-canais.md`, seção 3).
         channel: interna ? 'WEB' : (dto.channel ?? chamado.originChannel),
         body: dto.body,
+        // A marca de IA acompanha o evento: é dela que saem o selo na
+        // tela e a linha "resposta automática" no e-mail e no WhatsApp.
+        aiGenerated: dto.aiGenerated ?? false,
       },
       include: INCLUDE_EVENTO,
     });

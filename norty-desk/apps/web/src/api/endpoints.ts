@@ -1,6 +1,10 @@
 import type {
   AgendarRequest,
+  AiConfigView,
   AppointmentView,
+  CopilotIntencao,
+  CopilotResposta,
+  EscreverAiConfigRequest,
   ConcluirOrdemRequest,
   EscreverItemRequest,
   EscreverOrdemRequest,
@@ -92,10 +96,11 @@ export const responder = (
   body: string,
   visibility: 'PUBLICA' | 'INTERNA' = 'PUBLICA',
   channel?: string,
+  aiGenerated = false,
 ) =>
   chamar<TicketEventView>(`/tickets/${id}/responder`, {
     metodo: 'POST',
-    corpo: { body, visibility, ...(channel ? { channel } : {}) },
+    corpo: { body, visibility, ...(channel ? { channel } : {}), ...(aiGenerated ? { aiGenerated: true } : {}) },
   });
 
 export const atribuir = (id: string, alvo: { teamId?: string; userId?: string }) =>
@@ -203,3 +208,34 @@ export const urlDaOrdemEmPdf = (id: string) =>
 /** Retirar o anexo. Quem pode o quê é `podeRemoverAnexo`, em shared. */
 export const removerAnexo = (id: string) =>
   chamar<void>(`/anexos/${id}`, { metodo: 'DELETE' });
+
+
+// ---------------------------------------------------------------------
+// Norty Copilot
+// ---------------------------------------------------------------------
+
+/**
+ * O Copilot está ligado nesta organização?
+ *
+ * A tela pergunta antes de mostrar o botão: um botão que não responde é
+ * pior que botão nenhum.
+ */
+export const copilotDisponivel = () =>
+  chamar<{ disponivel: boolean }>('/copilot/disponivel');
+
+/**
+ * Um rascunho, ou o que verificar.
+ *
+ * **Não escreve no chamado.** Devolve texto para a pessoa ler e
+ * decidir — e é no envio que a resposta ganha a marca de IA.
+ */
+export const pedirAoCopilot = (id: string, intencao: CopilotIntencao) =>
+  chamar<CopilotResposta>(`/tickets/${id}/copilot`, {
+    metodo: 'POST',
+    corpo: { intencao },
+  });
+
+export const configDoCopilot = () => chamar<AiConfigView | null>('/config/copilot');
+
+export const escreverConfigDoCopilot = (corpo: EscreverAiConfigRequest) =>
+  chamar<AiConfigView>('/config/copilot', { metodo: 'PUT', corpo });

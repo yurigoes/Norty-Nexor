@@ -1,5 +1,11 @@
-import { useRef, useState, type FormEvent } from 'react';
-import { podeRemoverAnexo, type TicketDetail, type TicketEventView } from '@norty-desk/shared';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import {
+  NOME_DA_IA,
+  podeRemoverAnexo,
+  type CopilotIntencao,
+  type TicketDetail,
+  type TicketEventView,
+} from '@norty-desk/shared';
 
 import * as api from '../../api/endpoints';
 import { ErroDaApi } from '../../api/cliente';
@@ -119,6 +125,15 @@ function Evento({
           <span className="selo -info">Tarefa</span>
         ) : ehInterna ? (
           <span className="selo -aviso">Nota interna</span>
+        ) : null}
+        {/* O selo vem do banco (`TicketEvent.aiGenerated`), não de uma
+            chave no payload: a declaração de que o texto é de IA não
+            pode depender de alguém lembrar de gravá-la. A mesma verdade
+            sai por e-mail e WhatsApp — ver `MARCA_DE_IA`. */}
+        {evento.aiGenerated ? (
+          <span className="selo -ia" title={`Redigido pelo ${NOME_DA_IA} e enviado por ${autor}.`}>
+            <span aria-hidden="true">🤖</span> IA
+          </span>
         ) : null}
       </header>
 
@@ -242,7 +257,56 @@ function Responder({ chamado, aoEnviar }: { chamado: TicketDetail; aoEnviar: () 
   const [erro, setErro] = useState<string | null>(null);
   const campoArquivo = useRef<HTMLInputElement>(null);
 
+  /**
+   * O texto no campo veio do Copilot.
+   *
+   * Liga quando o rascunho entra e só desliga quando o campo fica
+   * vazio — editar não apaga a marca. Tentar medir "o quanto ainda é
+   * da IA" seria adivinhação, e o erro seguro aqui é declarar demais:
+   * quem recebe de fora é quem não tem como desconfiar.
+   */
+  const [porIa, setPorIa] = useState(false);
+  const [pensando, setPensando] = useState<CopilotIntencao | null>(null);
+  const [sugestao, setSugestao] = useState<string | null>(null);
+  const [temCopilot, setTemCopilot] = useState(false);
+
   const podeNotaInterna = can('chamado:nota-interna');
+
+  // Pergunta antes de oferecer: botão que não responde é pior que botão
+  // nenhum. Falha em silêncio de propósito — sem Copilot a caixa de
+  // resposta continua sendo a caixa de resposta.
+  useEffect(() => {
+    let vivo = true;
+    void api
+      .copilotDisponivel()
+      .then((r) => {
+        if (vivo) setTemCopilot(r.disponivel);
+      })
+      .catch(() => undefined);
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  async function pedir(intencao: CopilotIntencao) {
+    setPensando(intencao);
+    setErro(null);
+    try {
+      const resposta = await api.pedirAoCopilot(chamado.id, intencao);
+      if (intencao === 'SUGERIR') {
+        // Sugestão é para o técnico ler, não para o cliente receber.
+        // Vai para um painel ao lado do campo, nunca para dentro dele.
+        setSugestao(resposta.texto);
+      } else {
+        setCorpo((atual) => (atual.trim() ? `${atual.trimEnd()}\n\n${resposta.texto}` : resposta.texto));
+        setPorIa(true);
+      }
+    } catch (e) {
+      setErro(e instanceof ErroDaApi ? e.message : `O ${NOME_DA_IA} não respondeu.`);
+    } finally {
+      setPensando(null);
+    }
+  }
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
@@ -258,11 +322,14 @@ function Responder({ chamado, aoEnviar }: { chamado: TicketDetail; aoEnviar: () 
           corpo.trim(),
           interna ? 'INTERNA' : 'PUBLICA',
           interna ? undefined : canal || undefined,
+          porIa,
         );
       }
       if (arquivo) await api.anexar(chamado.id, arquivo);
 
       setCorpo('');
+      setPorIa(false);
+      setSugestao(null);
       setArquivo(null);
       if (campoArquivo.current) campoArquivo.current.value = '';
       aoEnviar();
@@ -290,8 +357,38 @@ function Responder({ chamado, aoEnviar }: { chamado: TicketDetail; aoEnviar: () 
         className="textarea"
         placeholder={interna ? 'Nota visível só para a equipe…' : 'Escreva a resposta…'}
         value={corpo}
-        onChange={(e) => setCorpo(e.target.value)}
+        onChange={(e) => {
+          setCorpo(e.target.value);
+          if (!e.target.value.trim()) setPorIa(false);
+        }}
       />
+
+      {porIa ? (
+        <p className="responder-ia">
+          <span aria-hidden="true">🤖</span> Rascunho do {NOME_DA_IA}. Revise antes de enviar — a
+          resposta vai marcada como IA para quem receber.{' '}
+          <button type="button" className="btn -fantasma -sm" onClick={() => setPorIa(false)}>
+            Reescrevi do zero
+          </button>
+        </p>
+      ) : null}
+
+      {sugestao ? (
+        <aside className="responder-sugestao">
+          <header>
+            <strong>
+              <span aria-hidden="true">🤖</span> {NOME_DA_IA} sugere verificar
+            </strong>
+            <button type="button" className="btn -fantasma -sm" onClick={() => setSugestao(null)}>
+              Fechar
+            </button>
+          </header>
+          {/* Só o técnico lê. Não entra no campo e não vai para o
+              cliente — se fosse para dentro do campo, uma lista de
+              hipóteses viraria resposta com um clique distraído. */}
+          <p>{sugestao}</p>
+        </aside>
+      ) : null}
 
       <div className="responder-acoes">
         <EscolherModelo
@@ -305,6 +402,29 @@ function Responder({ chamado, aoEnviar }: { chamado: TicketDetail; aoEnviar: () 
             if (podeNotaInterna) setInterna(modelo.isInternal);
           }}
         />
+
+        {temCopilot ? (
+          <>
+            <button
+              type="button"
+              className={`btn -secundario -sm ${pensando === 'REDIGIR' ? '-carregando' : ''}`}
+              disabled={pensando !== null}
+              title={`O ${NOME_DA_IA} escreve um rascunho a partir do chamado. Você revisa e envia.`}
+              onClick={() => void pedir('REDIGIR')}
+            >
+              <span aria-hidden="true">🤖</span> Redigir
+            </button>
+            <button
+              type="button"
+              className={`btn -fantasma -sm ${pensando === 'SUGERIR' ? '-carregando' : ''}`}
+              disabled={pensando !== null}
+              title="O que verificar primeiro. Só você lê."
+              onClick={() => void pedir('SUGERIR')}
+            >
+              <span aria-hidden="true">🤖</span> Sugerir
+            </button>
+          </>
+        ) : null}
 
         {podeNotaInterna ? (
           <>

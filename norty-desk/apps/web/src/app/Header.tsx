@@ -25,6 +25,7 @@ const TITULOS: { prefixo: string; titulo: string }[] = [
   { prefixo: '/config/marca', titulo: 'Marca' },
   { prefixo: '/config/webhooks', titulo: 'Webhooks' },
   { prefixo: '/config/integracoes', titulo: 'Integrações' },
+  { prefixo: '/config/copilot', titulo: 'Norty Copilot' },
   { prefixo: '/config/auditoria', titulo: 'Auditoria' },
   { prefixo: '/config/autenticacao', titulo: 'Autenticação' },
   { prefixo: '/config/pessoas', titulo: 'Pessoas' },

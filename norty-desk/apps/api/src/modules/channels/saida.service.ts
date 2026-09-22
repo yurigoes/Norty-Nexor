@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { type Channel, emailSubject, ticketTag } from '@norty-desk/shared';
+import { type Channel, MARCA_DE_IA, emailSubject, ticketTag } from '@norty-desk/shared';
 import { randomUUID } from 'node:crypto';
 
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -97,7 +97,13 @@ export class SaidaService {
     if (destinatarios.length === 0) return 0;
 
 
-    const corpo = SaidaService.montarCorpo(canal, chamado.number, evento.body, evento.author?.name);
+    const corpo = SaidaService.montarCorpo(
+      canal,
+      chamado.number,
+      evento.body,
+      evento.author?.name,
+      evento.aiGenerated,
+    );
 
     let enfileirados = 0;
 
@@ -127,17 +133,29 @@ export class SaidaService {
    * assunto para se orientar — é o único marcador de qual chamado é.
    * No e-mail o número já vai no assunto, e o corpo leva a assinatura de
    * quem respondeu.
+   *
+   * **Resposta do Copilot é declarada aqui também**, e não só na tela.
+   * Quem recebe por e-mail ou WhatsApp é justamente quem não tem como
+   * desconfiar: não vê selo, não vê interface, e um texto bem escrito
+   * passa por pessoa. A linha vai no fim, junto da assinatura, que é
+   * onde se lê quem falou.
    */
   private static montarCorpo(
     canal: Channel,
     numero: number,
     corpo: string | null,
     autor?: string,
+    porIa = false,
   ): string {
     const texto = (corpo ?? '').trim();
+    const marca = porIa ? `${MARCA_DE_IA}` : '';
 
-    if (canal === 'WHATSAPP') return `${ticketTag(numero)} ${texto}`.trim();
-    return autor ? `${texto}\n\n—\n${autor}` : texto;
+    if (canal === 'WHATSAPP') {
+      return `${ticketTag(numero)} ${texto}${marca ? `\n\n${marca}` : ''}`.trim();
+    }
+
+    const rodape = [autor, marca].filter(Boolean).join('\n');
+    return rodape ? `${texto}\n\n—\n${rodape}` : texto;
   }
 
   /**

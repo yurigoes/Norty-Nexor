@@ -94,6 +94,9 @@ export class ResponderDto {
 
   /** Omitido, responde pelo canal em que o solicitante falou. */
   @IsOptional() @IsEnum(CANAIS) channel?: (typeof CANAIS)[number];
+
+  /** O texto veio do Norty Copilot. Ver `ReplyRequest` em shared. */
+  @IsOptional() @IsBoolean() aiGenerated?: boolean;
 }
 
 export class AtribuirDto {

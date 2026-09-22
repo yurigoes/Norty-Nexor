@@ -596,3 +596,92 @@ Hoje o artigo é relido depois.
 
 O `Sugestoes.tsx` foi apagado em vez de ficar ao lado do novo: dois
 componentes fazendo a mesma coisa é como alguém conserta o errado.
+
+## 15. Norty Copilot
+
+A IA responde com pontuação e concordância certas, mas isso é o menor
+dos problemas. Os dois que importam são: **o que sai da casa** e **quem
+fica sabendo que foi IA**.
+
+### O Copilot nunca responde sozinho
+
+Duas intenções, e só estas duas: `REDIGIR` devolve um rascunho de
+resposta; `SUGERIR` devolve o que verificar primeiro, para o técnico
+ler. Nenhuma das duas escreve no chamado.
+
+Não existe caminho em que uma resposta chegue ao cliente sem alguém ter
+lido. É a diferença entre uma ferramenta que ajuda a escrever e uma que
+fala pela empresa — e a segunda, mais cedo ou mais tarde, promete um
+prazo que ninguém combinou.
+
+A sugestão vai para um painel ao lado do campo, nunca para dentro dele.
+Se caísse no campo, uma lista de hipóteses viraria resposta ao cliente
+com um clique distraído.
+
+### A cerca é uma consulta, não um filtro
+
+Gemini e Groq são terceiros. Vai para lá o assunto, a descrição e as
+**mensagens públicas** — o que o cliente já escreveu e o que a empresa
+já respondeu a ele. Não vai:
+
+- nota interna, que é conversa da equipe sobre o chamado;
+- campo interno do formulário;
+- dado de acesso: senha, IP de VPN, id de acesso remoto;
+- identificador nenhum — de chamado, de pessoa ou de empresa.
+
+O que não pode sair **não é carregado**: o `where` da consulta já exclui
+o interno. Filtrar em memória deixaria o dado passar pelo processo, e um
+`console.log` no lugar errado já o teria mandado para o log.
+
+São duas barras, e cada uma vale sozinha. A visibilidade barra a
+mensagem interna; o tipo barra o que é público mas não é fala de
+ninguém — o nome de um anexo retirado, por exemplo, que é público e
+conta o que o arquivo era (`demissoes-2026.pdf`). O teste prova as duas
+separadamente, e foi preciso: a primeira versão dele gravava a nota pela
+tela, que nasce `NOTA_INTERNA`, e por isso passava mesmo com o filtro de
+visibilidade removido. Provava o filtro de tipo achando que provava o de
+visibilidade.
+
+### Quem recebe de fora é quem não tem como desconfiar
+
+`TicketEvent.aiGenerated` é **coluna**, não chave no `payload`. O selo de
+IA não pode depender de alguém lembrar de ler um JSON.
+
+Da coluna saem as três declarações, da mesma verdade:
+
+| Onde | O que aparece |
+|---|---|
+| Tela | selo `🤖 IA` ao lado do autor |
+| E-mail | linha no rodapé, junto da assinatura |
+| WhatsApp | linha no fim da mensagem |
+
+O texto é um só, `MARCA_DE_IA` em `packages/shared/src/domain.ts`: *"🤖
+Resposta gerada por IA (Norty Copilot) e enviada pelo atendimento."*
+Duas redações seria a mesma promessa dita de dois jeitos, e uma delas
+envelheceria.
+
+Na caixa de resposta, a marca liga quando o rascunho entra e só desliga
+quando o campo fica vazio — ou quando a pessoa clica em "reescrevi do
+zero". Editar não apaga a marca. Medir "o quanto ainda é da IA" seria
+adivinhação, e o erro seguro aqui é declarar demais.
+
+### A chave, e o erro que o provedor devolve
+
+Uma configuração por organização: provedor, modelo e chave. A chave é
+cifrada com o mesmo AES-256-GCM dos segredos de canal
+(`channels/segredos.ts`) e **nunca volta** para a tela — volta
+`temChave: boolean`. Omitir a chave ao salvar mantém a guardada, para
+que trocar de modelo não obrigue a redigitá-la; string vazia apaga.
+Ligar sem chave é 400: botão que não responde é pior que botão nenhum,
+e por isso a tela também pergunta antes de desenhar os botões.
+
+O erro do provedor é classificado, não repassado. O Gemini devolve
+**400** para chave inválida, não 401 — classificar pelo código HTTP
+deixava "O Copilot devolveu erro 400" na tela, verdadeiro e inútil.
+Hoje a razão é lida do corpo e vira frase em português: chave recusada,
+modelo que não existe, limite de uso. O texto do provedor fica no log,
+nunca na tela: é inglês, e no pior caso carrega a chave dentro da URL.
+
+Ao contrário da transcrição de áudio, o Copilot **não degrada em
+silêncio**. Lá a pessoa não pediu nada e o áudio segue anexado; aqui ela
+clicou num botão e está esperando texto.

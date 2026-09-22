@@ -521,6 +521,17 @@ export function telefoneBrasileiro(digitado: string | null | undefined): string 
 }
 
 /**
+ * O nome do assistente, e a linha que declara a resposta automática.
+ *
+ * Mora aqui porque três pontas a escrevem: o selo na tela, o e-mail e o
+ * WhatsApp. Com o texto em cada uma, bastaria mudar um e as outras
+ * passariam a dizer outra coisa sobre a mesma resposta.
+ */
+export const NOME_DA_IA = 'Norty Copilot';
+
+export const MARCA_DE_IA = `🤖 Resposta gerada por IA (${NOME_DA_IA}) e enviada pelo atendimento.`;
+
+/**
  * Para quem vai o chamado.
  *
  * Duas fontes dizem o destino, e elas podem discordar. A **categoria**

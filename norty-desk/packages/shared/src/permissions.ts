@@ -154,6 +154,8 @@ export const PERMISSIONS = [
   'config:canais',
   'config:webhooks',
   'config:chaves-api',
+  /** Provedor, chave e modelo do Norty Copilot. */
+  'config:copilot',
   /** Fontes de autenticação (LDAP/AD) da organização. */
   'config:autenticacao',
 

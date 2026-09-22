@@ -448,6 +448,15 @@ export type TicketEventView = {
   body: string | null;
   payload: EventPayload | null;
   attachments: AttachmentView[];
+  /**
+   * O texto foi redigido pelo Norty Copilot.
+   *
+   * Campo próprio, e não uma chave no `payload`, porque o selo de IA
+   * não pode depender de alguém lembrar de ler um JSON. Ver
+   * `MARCA_DE_IA` em `domain.ts`: a mesma verdade sai na tela, no
+   * e-mail e no WhatsApp.
+   */
+  aiGenerated: boolean;
   createdAt: string;
   editedAt: string | null;
 };
@@ -492,6 +501,18 @@ export type ReplyRequest = {
   visibility?: Visibility;
   /** Omitido, responde pelo canal de origem do chamado. */
   channel?: Channel;
+  /**
+   * O texto veio do Norty Copilot?
+   *
+   * Quem envia é sempre a pessoa, mas quem **lê** tem direito de saber
+   * que o texto foi escrito por máquina. A marca acompanha o evento e
+   * vale na tela, no e-mail e no WhatsApp.
+   *
+   * A tela marca sozinha quando o rascunho veio do Copilot, e a pessoa
+   * pode desmarcar se reescreveu por conta — a marca diz quem escreveu,
+   * e mentir nela nos dois sentidos é pior que não tê-la.
+   */
+  aiGenerated?: boolean;
 };
 
 export type AssignRequest = { teamId?: string; userId?: string };
@@ -1498,6 +1519,52 @@ export type RegistrarResolucaoRequest = {
   /** Publicar no portal do solicitante, além do atendimento. */
   isPublic?: boolean;
   keywords?: string[];
+};
+
+// ---------------------------------------------------------------------
+// Norty Copilot
+// ---------------------------------------------------------------------
+
+export const COPILOT_INTENCOES = ['REDIGIR', 'SUGERIR'] as const;
+export type CopilotIntencao = (typeof COPILOT_INTENCOES)[number];
+
+export const AI_PROVIDERS = ['GEMINI', 'GROQ'] as const;
+export type AiProviderNome = (typeof AI_PROVIDERS)[number];
+
+/**
+ * O que o Copilot devolve.
+ *
+ * Texto, e nada além: **o Copilot nunca responde sozinho**. Quem envia
+ * é a pessoa, e é ao enviar que a resposta ganha a marca de IA.
+ *
+ * O provedor e o modelo voltam junto porque a tela os mostra: quem lê
+ * um rascunho de máquina tem direito de saber qual máquina o escreveu.
+ */
+export type CopilotResposta = {
+  texto: string;
+  provider: AiProviderNome;
+  model: string;
+};
+
+/**
+ * A configuração do Copilot, como a tela a vê.
+ *
+ * `temChave` e nunca a chave: ela é cifrada no banco e não sai da API,
+ * pela mesma razão que a senha de canal não sai.
+ */
+export type AiConfigView = {
+  provider: AiProviderNome;
+  model: string;
+  isActive: boolean;
+  temChave: boolean;
+};
+
+export type EscreverAiConfigRequest = {
+  provider: AiProviderNome;
+  model: string;
+  isActive?: boolean;
+  /** Omitido, mantém a que está lá. String vazia apaga. */
+  apiKey?: string;
 };
 
 export type WriteArticleRequest = {
