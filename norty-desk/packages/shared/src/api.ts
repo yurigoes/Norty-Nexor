@@ -1274,6 +1274,8 @@ export type FormularioView = {
    */
   defaultTeam: { id: string; name: string } | null;
   defaultAssignee: { id: string; name: string } | null;
+  /** O que o sistema faz sozinho ao abrir por este modelo. */
+  acaoAutomatica: AcaoAutomatica | null;
 };
 
 /**
@@ -1329,6 +1331,8 @@ export type EscreverFormularioRequest = {
   isPublic?: boolean;
   description?: string | null;
   position?: number;
+  /** Nulo desliga. Ver `ACOES_AUTOMATICAS`. */
+  acaoAutomatica?: AcaoAutomatica | null;
 };
 
 /** O formulário que vale para uma categoria, já resolvido pela API. */
@@ -2276,3 +2280,43 @@ export type AvisoPush = {
    */
   etiqueta: string;
 };
+
+
+// ---------------------------------------------------------------------
+// Ações automáticas
+// ---------------------------------------------------------------------
+
+export const ACOES_AUTOMATICAS = ['RESET_DE_SENHA'] as const;
+export type AcaoAutomatica = (typeof ACOES_AUTOMATICAS)[number];
+
+/**
+ * O nome e o aviso de cada ação, como a tela de configuração os mostra.
+ *
+ * O aviso não é enfeite: quem liga a ação precisa saber, antes de
+ * salvar, que o chamado vai se resolver sem passar por ninguém. Deixar
+ * isso só na documentação é como não dizer.
+ */
+export const ACAO_AUTOMATICA: Record<
+  AcaoAutomatica,
+  { rotulo: string; descricao: string }
+> = {
+  RESET_DE_SENHA: {
+    rotulo: 'Trocar a própria senha',
+    descricao:
+      'O sistema envia à pessoa um link de troca de senha por e-mail e WhatsApp, e resolve o ' +
+      'chamado. Só vale para quem abriu logado ou pelo integrador, e só para a senha de quem ' +
+      'pediu — nunca a de outro. Conta de diretório (AD) não entra: a senha é de lá.',
+  },
+};
+
+/**
+ * O que a tela de troca de senha sabe antes de pedir a senha nova.
+ *
+ * `valido: false` cobre expirado, já usado e inexistente — sem dizer
+ * qual dos três. Distinguir "não existe" de "já foi usado" conta a
+ * quem tem o link o que aconteceu com ele, e quem tem o link pode não
+ * ser o dono.
+ */
+export type ConviteDeSenha = { valido: boolean; nome: string | null };
+
+export type DefinirSenhaRequest = { token: string; nova: string };

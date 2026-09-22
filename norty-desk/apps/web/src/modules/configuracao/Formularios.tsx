@@ -1,6 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { FormField, FormSchema, FormularioView, TimeView } from '@norty-desk/shared';
-import { FORM_FIELD_TYPES, ROTULO_CAMPO, validarSchema } from '@norty-desk/shared';
+import type {
+  AcaoAutomatica,
+  FormField,
+  FormSchema,
+  FormularioView,
+  TimeView,
+} from '@norty-desk/shared';
+import {
+  ACAO_AUTOMATICA,
+  ACOES_AUTOMATICAS,
+  FORM_FIELD_TYPES,
+  ROTULO_CAMPO,
+  validarSchema,
+} from '@norty-desk/shared';
 
 import { ErroDaApi } from '../../api/cliente';
 import { listarCategorias, type CategoriaView } from '../../api/endpoints';
@@ -213,6 +225,7 @@ function Montador({
     isPublic?: boolean;
     description?: string | null;
     position?: number;
+    acaoAutomatica?: AcaoAutomatica | null;
   }) => Promise<void>;
   aoRemover?: () => Promise<void>;
 }) {
@@ -223,6 +236,7 @@ function Montador({
   const [isPublic, setIsPublic] = useState(formulario?.isPublic ?? false);
   const [description, setDescription] = useState(formulario?.description ?? '');
   const [position, setPosition] = useState(String(formulario?.position ?? 0));
+  const [acao, setAcao] = useState<AcaoAutomatica | ''>(formulario?.acaoAutomatica ?? '');
   const [fields, setFields] = useState<FormField[]>(formulario?.schema.fields ?? []);
   const [categorias, setCategorias] = useState<CategoriaView[]>([]);
   const [times, setTimes] = useState<TimeView[]>([]);
@@ -296,6 +310,9 @@ function Montador({
               isPublic: isModel && isPublic,
               description: description.trim() || null,
               position: Number(position) || 0,
+              // Mesma regra do "sem login": ficha que não é modelo não
+              // aparece na abertura, então não pode carregar ação.
+              acaoAutomatica: isModel ? acao || null : null,
             })
               .catch((e2: unknown) =>
                 setErro(e2 instanceof ErroDaApi ? e2.message : 'Não foi possível salvar.'),
@@ -490,6 +507,43 @@ function Montador({
                   para qualquer pessoa com o endereço: pergunta cuja existência já diz algo sobre a
                   empresa deve ser marcada como interna.
                 </span>
+
+                <div className="campo">
+                  <label className="campo-rotulo" htmlFor="modelo-acao">
+                    Ação automática
+                  </label>
+                  <select
+                    id="modelo-acao"
+                    className="input"
+                    value={acao}
+                    onChange={(e) => setAcao(e.target.value as AcaoAutomatica | '')}
+                  >
+                    <option value="">Nenhuma — o chamado vai para a fila</option>
+                    {ACOES_AUTOMATICAS.map((a) => (
+                      <option key={a} value={a}>
+                        {ACAO_AUTOMATICA[a].rotulo}
+                      </option>
+                    ))}
+                  </select>
+                  {/* O aviso não é enfeite: quem liga isto precisa saber,
+                      antes de salvar, que o chamado se resolve sem passar
+                      por ninguém. Deixar só na documentação é como não
+                      dizer. */}
+                  <span className="campo-ajuda">
+                    {acao
+                      ? ACAO_AUTOMATICA[acao].descricao
+                      : 'O chamado aberto por este modelo é atendido por uma pessoa, como qualquer outro.'}
+                  </span>
+                  {acao ? (
+                    <div className="alerta-bloco -aviso" style={{ marginTop: 'var(--e-2)' }}>
+                      <span aria-hidden="true">!</span>
+                      <span>
+                        O chamado se resolve sozinho, sem passar por ninguém. Se a categoria
+                        escolhida exigir aprovação, a ação espera o aval — e só corre depois dele.
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
               </>
             ) : null}
 

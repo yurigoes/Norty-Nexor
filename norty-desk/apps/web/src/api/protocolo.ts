@@ -3,6 +3,7 @@ import type {
   AbrirPublicoRequest,
   CategoriaPublica,
   ConsultaPublica,
+  ConviteDeSenha,
   EmpresaPublica,
   ModeloDeChamado,
   PessoaReconhecida,
@@ -113,4 +114,30 @@ export async function reconhecerPessoa(
   if (!r.ok) return null;
   const texto = await r.text();
   return texto ? (JSON.parse(texto) as PessoaReconhecida | null) : null;
+}
+
+// ---------------------------------------------------------------------
+// Troca de senha pelo link
+// ---------------------------------------------------------------------
+
+/**
+ * O convite ainda vale?
+ *
+ * A tela pergunta antes de pedir a senha: digitar duas vezes uma senha e
+ * só então descobrir que o link expirou é a forma mais irritante
+ * possível de dar essa notícia.
+ */
+export async function conviteDeSenha(token: string): Promise<ConviteDeSenha> {
+  const resposta = await fetch(`${BASE}/publico/definir-senha/${encodeURIComponent(token)}`);
+  if (!resposta.ok) return { valido: false, nome: null };
+  return (await resposta.json()) as ConviteDeSenha;
+}
+
+export async function definirSenha(token: string, nova: string): Promise<void> {
+  const resposta = await fetch(`${BASE}/publico/definir-senha`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, nova }),
+  });
+  if (!resposta.ok) throw new Error(await mensagemDoErro(resposta));
 }

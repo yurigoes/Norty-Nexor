@@ -132,6 +132,7 @@ model User {
   agendaEventsCreated    AgendaEvent[]           @relation("QuemMarcouOCompromisso")
   pushSubscriptions      PushSubscription[]
   notificationPreference NotificationPreference?
+  passwordResets         PasswordResetToken[]
 
   @@unique([authSourceId, externalId])
   @@map("users")
@@ -443,6 +444,13 @@ model TicketForm {
   /// sobre o time: quem nomeia uma pessoa quis aquela pessoa.
   defaultAssigneeId String? @db.Uuid
 
+  /// O que o sistema faz sozinho quando o chamado abre por este modelo.
+  ///
+  /// Nulo é o normal: chamado é trabalho de gente. A ação só entra em
+  /// modelo cuja resposta é sempre a mesma e não depende de julgamento
+  /// — e mesmo aí ela tem cercas próprias (ver `AutomacaoService`).
+  acaoAutomatica AcaoAutomatica?
+
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   category        Category?    @relation(fields: [categoryId], references: [id])
   defaultTeam     Team?        @relation("TimePadraoDoModelo", fields: [defaultTeamId], references: [id], onDelete: SetNull)
@@ -540,26 +548,27 @@ model Ticket {
   form          TicketForm?    @relation(fields: [formId], references: [id])
   pendingReason PendingReason? @relation(fields: [pendingReasonId], references: [id])
 
-  actors        TicketActor[]
-  events        TicketEvent[]
-  commitments   SlaCommitment[]
-  approvals     Approval[]
-  attachments   Attachment[]
+  actors         TicketActor[]
+  events         TicketEvent[]
+  passwordResets PasswordResetToken[]
+  commitments    SlaCommitment[]
+  approvals      Approval[]
+  attachments    Attachment[]
   /// Respostas do formulário dinâmico, chaveadas pelo campo do schema.
-  customFields  Json?
-  links         TicketLink[]        @relation("ChamadoOrigem")
-  linkedBy      TicketLink[]        @relation("ChamadoDestino")
-  assets        TicketAsset[]
-  survey        Survey?
-  costs         TicketCost[]
-  projects      ProjectTicket[]
-  agendaEvents  AgendaEvent[]
-  appointments  Appointment[]
-  serviceOrders ServiceOrder[]
+  customFields   Json?
+  links          TicketLink[]         @relation("ChamadoOrigem")
+  linkedBy       TicketLink[]         @relation("ChamadoDestino")
+  assets         TicketAsset[]
+  survey         Survey?
+  costs          TicketCost[]
+  projects       ProjectTicket[]
+  agendaEvents   AgendaEvent[]
+  appointments   Appointment[]
+  serviceOrders  ServiceOrder[]
   /// As resoluções escritas a partir deste chamado.
-  artigosDaqui  Article[]           @relation("ChamadoDeOrigemDoArtigo")
+  artigosDaqui   Article[]            @relation("ChamadoDeOrigemDoArtigo")
   /// As resoluções do índice que resolveram este chamado.
-  resolucoes    ArticleResolution[]
+  resolucoes     ArticleResolution[]
 
   /// O problema que causa este chamado e a mudança que o resolve.
   /// São os dois vínculos que o ITIL pede e o GLPI resolve com uma
@@ -2796,4 +2805,45 @@ model NotificationPreference {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notification_preferences")
+}
+
+// ---------------------------------------------------------------------
+// Ações automáticas
+// ---------------------------------------------------------------------
+
+/// O que o sistema sabe resolver sozinho.
+///
+/// Uma por vez, e cada uma com as próprias cercas. A lista é curta de
+/// propósito: automação que erra no escuro custa mais que o tempo que
+/// economiza.
+enum AcaoAutomatica {
+  RESET_DE_SENHA
+}
+
+/// O link de troca de senha: uso único, vida curta.
+///
+/// **Não guarda senha, e nunca existiu uma para guardar.** O sistema não
+/// sorteia senha nem a manda por e-mail ou WhatsApp: manda um link que
+/// deixa a pessoa escolher a dela. Mensagem é lida no aparelho
+/// destravado de quem estiver por perto, fica no histórico e é
+/// encaminhada — senha dentro dela continua valendo depois de tudo isso;
+/// este link, não.
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  /// SHA-256 do token. O valor cru só existe no link que foi enviado —
+  /// mesma regra do refresh token.
+  tokenHash String    @unique
+  /// De qual chamado saiu, quando saiu de um. A trilha liga o link ao
+  /// pedido que o originou.
+  ticketId  String?   @db.Uuid
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticket Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }

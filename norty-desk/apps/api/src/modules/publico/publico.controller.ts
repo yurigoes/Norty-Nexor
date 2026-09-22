@@ -17,6 +17,7 @@ import type {
   AttachmentView,
   CategoriaPublica,
   ConsultaPublica,
+  ConviteDeSenha,
   EmpresaPublica,
   ModeloDeChamado,
   PessoaReconhecida,
@@ -24,6 +25,8 @@ import type {
 import type { Request, Response } from 'express';
 
 import { ipDaRequisicao } from '../../common/origem';
+import { DefinirSenhaDto } from '../automacao/dto';
+import { SenhaService } from '../automacao/senha.service';
 import { AberturaService } from './abertura.service';
 import { AbrirPublicoDto, BuscarEmpresaDto, ReconhecerPessoaDto } from './dto';
 import { comprovanteDeProtocolo } from './pdf';
@@ -42,6 +45,7 @@ export class PublicoController {
   constructor(
     private readonly publico: PublicoService,
     private readonly abertura: AberturaService,
+    private readonly senha: SenhaService,
   ) {}
 
   /**
@@ -140,5 +144,26 @@ export class PublicoController {
     // mostraria o de ontem na próxima consulta.
     resposta.setHeader('Cache-Control', 'no-store');
     resposta.end(arquivo);
+  }
+
+  /**
+   * O convite de troca de senha ainda vale?
+   *
+   * A tela pergunta antes de pedir a senha nova: digitar duas vezes uma
+   * senha e só então descobrir que o link expirou é a forma mais
+   * irritante possível de dar essa notícia.
+   */
+  @Get('definir-senha/:token')
+  convite(@Param('token') token: string, @Req() requisicao: Request): Promise<ConviteDeSenha> {
+    return this.senha.convite(token, ipDaRequisicao(requisicao));
+  }
+
+  @Post('definir-senha')
+  async definirSenha(
+    @Body() dto: DefinirSenhaDto,
+    @Req() requisicao: Request,
+  ): Promise<{ ok: true }> {
+    await this.senha.definir(dto.token, dto.nova, ipDaRequisicao(requisicao));
+    return { ok: true };
   }
 }

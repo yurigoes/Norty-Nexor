@@ -28,6 +28,7 @@ import { SaidaService } from '../channels/saida.service';
 import { escopoDeLeitura } from '../tickets/tickets.escopo';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { NotificacoesService } from '../notificacoes/notificacoes.service';
+import { AutomacaoService } from '../automacao/automacao.service';
 import type { DecidirAprovacaoDto, SolicitarAprovacaoDto } from './dto';
 
 /** O status para onde o chamado volta quando a aprovação se resolve. */
@@ -96,6 +97,7 @@ export class AprovacoesService {
     private readonly saida: SaidaService,
     private readonly webhooks: WebhooksService,
     private readonly notificacoes: NotificacoesService,
+    private readonly automacao: AutomacaoService,
   ) {}
 
   // -------------------------------------------------------------------
@@ -621,6 +623,17 @@ export class AprovacoesService {
     if (depois.estado !== 'AGUARDANDO') {
       if (dono.kind === 'CHAMADO') await this.encerrar(dono.id, depois.estado, usuario);
       else await this.encerrarMudanca(dono.id, depois.estado, usuario);
+
+      // O aval passou: a ação automática que estava segurada corre
+      // agora. Aqui, e não dentro de `encerrar`: o aval exigido pela
+      // categoria **não** leva o chamado a `EM_APROVACAO` — ele segue o
+      // curso normal enquanto espera (`docs/13`, seção 10) —, e
+      // `encerrar` desiste logo no começo quando o status é outro.
+      // Recusado, não corre: o chamado fica com quem decidir o que
+      // fazer com ele.
+      if (dono.kind === 'CHAMADO' && depois.estado === 'APROVADA') {
+        await this.automacao.executarSeHouver(dono.id);
+      }
     }
 
     await this.webhooks.emitir(usuario.organizationId, 'aprovacao.decidida', {
@@ -734,6 +747,7 @@ export class AprovacoesService {
         },
       }),
     ]);
+
   }
 
   /**

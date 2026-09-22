@@ -201,6 +201,16 @@ export class FormulariosService {
      * redireciona — ver `destinoDoChamado` em packages/shared.
      */
     destinoDoModelo: DestinoDoChamado | null;
+    /**
+     * A categoria que o modelo **escolhido** traz consigo.
+     *
+     * Nula quando o formulário veio por herança, pela mesma razão do
+     * destino: ficha herdada não reclassifica o chamado. Quem escolheu
+     * "Trocar minha senha" escolheu junto a categoria dele — e é dessa
+     * categoria que saem o roteamento, os acordos de SLA e a exigência
+     * de aval.
+     */
+    categoriaDoModelo: string | null;
   }> {
     const form = formIdEscolhido
       ? await this.exigirModelo(organizationId, formIdEscolhido)
@@ -215,7 +225,7 @@ export class FormulariosService {
           'Esta categoria não tem formulário: não há onde encaixar estas respostas.',
         );
       }
-      return { formId: null, customFields: null, destinoDoModelo: null };
+      return { formId: null, customFields: null, destinoDoModelo: null, categoriaDoModelo: null };
     }
 
     const schema = FormulariosService.schemaVisivel(form.schema, role);
@@ -229,6 +239,7 @@ export class FormulariosService {
       destinoDoModelo: formIdEscolhido
         ? { assigneeId: form.defaultAssignee?.id ?? null, teamId: form.defaultTeam?.id ?? null }
         : null,
+      categoriaDoModelo: formIdEscolhido ? (form.category?.id ?? null) : null,
     };
   }
 
@@ -295,6 +306,7 @@ export class FormulariosService {
             position: dto.position ?? 0,
             defaultTeamId: dto.defaultTeamId ?? null,
             defaultAssigneeId: dto.defaultAssigneeId ?? null,
+            acaoAutomatica: dto.acaoAutomatica ?? null,
           },
           include: INCLUDE,
         });
@@ -344,6 +356,7 @@ export class FormulariosService {
             ...(dto.defaultAssigneeId === undefined
               ? {}
               : { defaultAssigneeId: dto.defaultAssigneeId }),
+            ...(dto.acaoAutomatica === undefined ? {} : { acaoAutomatica: dto.acaoAutomatica }),
           },
           include: INCLUDE,
         });
@@ -465,6 +478,7 @@ export class FormulariosService {
       defaultAssignee: f.defaultAssignee
         ? { id: f.defaultAssignee.id, name: f.defaultAssignee.name }
         : null,
+      acaoAutomatica: f.acaoAutomatica,
     };
   }
 }

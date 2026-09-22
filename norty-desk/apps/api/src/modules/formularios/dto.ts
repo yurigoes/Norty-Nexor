@@ -14,7 +14,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { FORM_FIELD_TYPES, type FormFieldType } from '@norty-desk/shared';
+import { ACOES_AUTOMATICAS, FORM_FIELD_TYPES, type FormFieldType } from '@norty-desk/shared';
 
 const vazioVirandoNulo = ({ value }: { value: unknown }) =>
   typeof value === 'string' && value.trim() === '' ? null : value;
@@ -70,6 +70,10 @@ export class EscreverFormularioDto {
   /** Para onde vai o chamado aberto com este modelo. Vence a categoria. */
   @IsOptional() @Transform(vazioVirandoNulo) @IsUUID() defaultTeamId?: string | null;
   @IsOptional() @Transform(vazioVirandoNulo) @IsUUID() defaultAssigneeId?: string | null;
+
+  /** O que o sistema faz sozinho ao abrir por este modelo. Nulo desliga. */
+  @IsOptional() @Transform(vazioVirandoNulo) @IsIn(ACOES_AUTOMATICAS)
+  acaoAutomatica?: (typeof ACOES_AUTOMATICAS)[number] | null;
 }
 
 export class EditarFormularioDto {
@@ -86,4 +90,8 @@ export class EditarFormularioDto {
   /** Para onde vai o chamado aberto com este modelo. Vence a categoria. */
   @IsOptional() @Transform(vazioVirandoNulo) @IsUUID() defaultTeamId?: string | null;
   @IsOptional() @Transform(vazioVirandoNulo) @IsUUID() defaultAssigneeId?: string | null;
+
+  /** O que o sistema faz sozinho ao abrir por este modelo. Nulo desliga. */
+  @IsOptional() @Transform(vazioVirandoNulo) @IsIn(ACOES_AUTOMATICAS)
+  acaoAutomatica?: (typeof ACOES_AUTOMATICAS)[number] | null;
 }

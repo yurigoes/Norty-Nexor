@@ -34,6 +34,7 @@ import { Ativos } from '../modules/ativo/Ativos';
 import { Pesquisa } from '../modules/ativo/Pesquisa';
 import { AbrirSemLogin } from '../modules/protocolo/AbrirSemLogin';
 import { ConsultaProtocolo } from '../modules/protocolo/ConsultaProtocolo';
+import { DefinirSenha } from '../modules/protocolo/DefinirSenha';
 import { Carteira } from '../modules/carteira/Carteira';
 import { Artigo } from '../modules/conhecimento/Artigo';
 import { Conhecimento } from '../modules/conhecimento/Conhecimento';
@@ -85,6 +86,17 @@ function Raiz() {
       <Routes>
         <Route path="/protocolo" element={<ConsultaProtocolo />} />
         <Route path="/protocolo/:codigo" element={<ConsultaProtocolo />} />
+      </Routes>
+    );
+  }
+
+  // Escolher a senha pelo link que chegou por e-mail e WhatsApp. Antes
+  // do bloco de sessão de propósito: quem chega aqui não consegue
+  // entrar, e mandá-lo para o login seria o mesmo que não ter o link.
+  if (local.pathname.startsWith('/definir-senha')) {
+    return (
+      <Routes>
+        <Route path="/definir-senha/:token" element={<DefinirSenha />} />
       </Routes>
     );
   }

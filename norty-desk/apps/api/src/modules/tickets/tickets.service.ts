@@ -33,6 +33,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { SaidaService } from '../channels/saida.service';
 import { AprovacoesService } from '../aprovacoes/aprovacoes.service';
 import { NotificacoesService } from '../notificacoes/notificacoes.service';
+import { AutomacaoService } from '../automacao/automacao.service';
 import { FormulariosService } from '../formularios/formularios.service';
 import { SatisfacaoService } from '../satisfacao/satisfacao.service';
 import type { EventoDeWebhook } from '../webhooks/eventos';
@@ -78,6 +79,7 @@ export class TicketsService {
     private readonly formularios: FormulariosService,
     private readonly aprovacoes: AprovacoesService,
     private readonly notificacoes: NotificacoesService,
+    private readonly automacao: AutomacaoService,
   ) {}
 
   /**
@@ -421,7 +423,9 @@ export class TicketsService {
     const impact = (dto.impact ?? 3) as Scale;
     const priority = await this.derivarPrioridade(usuario.organizationId, urgency, impact);
 
-    const categoria = dto.categoryId
+    // `let` porque o modelo escolhido pode trazer a categoria dele logo
+    // abaixo, quando quem abriu não escolheu uma.
+    let categoria = dto.categoryId
       ? await this.prisma.category.findFirst({
           where: { id: dto.categoryId, organizationId: usuario.organizationId },
           include: { defaultAgreements: { where: { isActive: true }, select: { id: true } } },
@@ -442,6 +446,19 @@ export class TicketsService {
       dto.customFields,
       dto.formId,
     );
+
+    // O modelo escolhido traz a categoria dele quando quem abriu não
+    // escolheu uma. Sem isto, escolher "Trocar minha senha" abria um
+    // chamado **sem categoria** — e sem categoria não há acordo de SLA,
+    // não há roteamento e, pior, não há a exigência de aval que a
+    // categoria carrega. A tela sem login já fazia isto; a logada
+    // dependia de o cliente mandar o `categoryId` junto.
+    if (!categoria && formulario.categoriaDoModelo) {
+      categoria = await this.prisma.category.findFirst({
+        where: { id: formulario.categoriaDoModelo, organizationId: usuario.organizationId },
+        include: { defaultAgreements: { where: { isActive: true }, select: { id: true } } },
+      });
+    }
 
     // Quem atende: o modelo escolhido vence a categoria, e dentro de
     // cada um a pessoa vence o time. A regra é pura e mora em
@@ -531,6 +548,11 @@ export class TicketsService {
     }
 
     await this.avisarAssinantes(usuario.organizationId, 'ticket.criado', id);
+
+    // Por último: a ação automática do modelo, se houver. Depois do
+    // aval de propósito — com aprovação pendente ela segura, e corre
+    // quando a aprovação passa.
+    await this.automacao.executarSeHouver(id);
 
     return this.obter(usuario, id);
   }
@@ -685,6 +707,13 @@ export class TicketsService {
         },
       });
     }
+
+    // A ação automática também é tentada aqui, e quase sempre vai
+    // recusar: e-mail e WhatsApp não provam quem pediu. Tentar mesmo
+    // assim é o que faz a recusa **aparecer na linha do tempo** — sem
+    // isto, quem fosse atender veria um chamado do modelo automático
+    // parado, sem nenhuma pista de por que ele não se resolveu.
+    await this.automacao.executarSeHouver(chamado.id);
 
     return chamado;
   }

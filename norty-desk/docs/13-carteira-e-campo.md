@@ -777,3 +777,98 @@ empilhados na barra.
 token de FCM ou APNs, e é para ele que o enum nasceu: acrescentar um
 valor é migração de uma linha; descobrir depois que a tabela só sabia
 falar de navegador seria outra história.
+
+## 17. Ações automáticas: trocar a própria senha
+
+O pedido: *"ele pode fazer algumas ações de forma automática, exemplo,
+reset de senha… o sistema deve realizar de forma autônoma e enviar para
+e-mail e WhatsApp dele"*. Feito — com duas adaptações que valem mais
+que o código, e que ficam registradas aqui para não serem desfeitas por
+engano.
+
+### 1. O sistema não manda senha; manda um convite para escolher uma
+
+O link vai pelo e-mail **e** pelo WhatsApp, como foi pedido. A senha,
+não — e nunca chegou a existir: o Desk não sorteia senha nenhuma.
+
+A razão é o canal. Mensagem é lida no aparelho destravado de quem
+estiver por perto, fica no histórico do aplicativo, é encaminhada e vai
+parar no backup da nuvem de alguém. Uma senha dentro dela **continua
+valendo** depois de tudo isso. O link vale quinze minutos, abre uma vez
+só, e depois disso é um texto inútil.
+
+De quebra, o sistema nunca conhece a senha da pessoa — o que já era
+verdade no resto do produto e passaria a não ser se ele a sorteasse.
+
+### 2. A ação exige identidade provada, e e-mail não prova
+
+Quem abre chamado por e-mail provou apenas que uma mensagem chegou com
+aquele remetente, o que é falsificável. Na tela sem login provou menos:
+digitou um nome.
+
+Então a ação só corre quando o chamado nasceu **logado** (canal `WEB`)
+ou **pelo integrador** (canal `API`, com o token da empresa, que já viu
+a pessoa autenticada no sistema de origem — seção 13). Nos outros
+canais o chamado abre normalmente e espera uma pessoa. É mais lento, e
+é o certo.
+
+### As outras cercas
+
+- **Só a senha de quem pediu.** Não há caminho para trocar a de outro.
+- **Conta de diretório não entra**: a senha é do AD, e trocá-la aqui
+  daria a impressão de ter funcionado sem mudar nada onde a pessoa de
+  fato entra.
+- **Três links por pessoa por hora.** Sem isso, abrir o mesmo chamado
+  dez vezes vira dez mensagens no telefone de alguém — incômodo
+  dirigido, e feito pelo próprio sistema.
+- **Aval pendente segura a ação**, e o aval a solta. Quem exige
+  aprovação na categoria continua aprovando primeiro.
+
+**Recusa nunca é silenciosa.** Cada cerca que barra escreve o motivo na
+linha do tempo, em português e como nota **interna**: quem for atender
+precisa saber por que o chamado caiu na mão dele, e o solicitante não
+precisa aprender qual cerca teria de contornar.
+
+### O que o link consegue, e o que não
+
+O token é 32 bytes sorteados; o banco guarda o **SHA-256**, como o
+refresh token. Quinze minutos, uso único, e pedir outro queima o
+anterior — link velho esquecido numa caixa de e-mail não continua
+valendo.
+
+Trocar a senha **derruba todas as sessões abertas**. Se a troca
+aconteceu porque alguém entrou na conta, deixar a sessão dele viva
+anularia a troca.
+
+O link não aparece na linha do tempo nem na lista de eventos: quem
+atende lê aquilo, e o link troca a senha de quem pediu. O que a
+timeline diz é que o envio aconteceu, por onde, e que a senha é
+escolhida pela pessoa.
+
+A tela confere o convite **antes** de pedir a senha. Digitar duas vezes
+uma senha e só então descobrir que o link expirou é a forma mais
+irritante possível de dar essa notícia. E a resposta é uma só —
+expirado, usado e inexistente dizem "não vale mais", sem distinção:
+quem tem o link pode não ser o dono.
+
+A escada de bloqueio por IP conta **só o token desconhecido**. Contando
+também o expirado, a pessoa certa que clica duas vezes num link velho e
+pede outro ficaria bloqueada pelo próprio sistema.
+
+### Um defeito que este trabalho descobriu
+
+Modelo de chamado com categoria, aberto **logado** sem `categoryId`,
+produzia um chamado **sem categoria nenhuma**. A tela sem login já
+herdava a categoria do modelo; a logada dependia de o cliente mandar o
+`categoryId` junto.
+
+Sem categoria não há acordo de SLA, não há roteamento e — o que fez o
+defeito aparecer — não há a exigência de aval que a categoria carrega.
+Um modelo com ação automática e categoria "exige aprovação" se
+resolveria sozinho, pulando o gestor. Hoje o modelo escolhido traz a
+categoria dele quando quem abriu não escolheu uma, dos dois lados.
+
+E a espera pelo aval pergunta pela **aprovação em aberto**, não pelo
+status do chamado: o aval exigido por categoria não leva o chamado a
+`EM_APROVACAO` (seção 10) — ele segue o curso normal enquanto espera.
+Olhar só o status deixaria passar direto justamente o caso do pedido.

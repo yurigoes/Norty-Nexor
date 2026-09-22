@@ -16,6 +16,7 @@ import { RegrasModule } from './modules/regras/regras.module';
 import { AprovacoesModule } from './modules/aprovacoes/aprovacoes.module';
 import { CopilotModule } from './modules/copilot/copilot.module';
 import { NotificacoesModule } from './modules/notificacoes/notificacoes.module';
+import { AutomacaoModule } from './modules/automacao/automacao.module';
 import { AtivosModule } from './modules/ativos/ativos.module';
 import { ThrottleModule } from './common/throttle/throttle.module';
 import { AgendamentoModule } from './modules/agendamento/agendamento.module';
@@ -66,6 +67,7 @@ import { TranscricaoModule } from './modules/transcricao/transcricao.module';
     AprovacoesModule,
     CopilotModule,
     NotificacoesModule,
+    AutomacaoModule,
     AttachmentsModule,
     CatalogoModule,
     ConhecimentoModule,
