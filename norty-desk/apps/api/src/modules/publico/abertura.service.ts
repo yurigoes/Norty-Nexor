@@ -256,14 +256,21 @@ export class AberturaService {
     });
 
     // Categoria e modelo vêm do corpo, então não se confia neles: têm
-    // de ser da organização do cliente **e** estar marcados como
-    // públicos. Sem isso, quem soubesse um id usaria a tela sem login
-    // para abrir chamado numa categoria interna.
-    const categoria = await this.validarCategoria(cliente.organizationId, dto.categoryId);
-    const { formId, customFields } = await this.validarModelo(
+    // de ser da organização do cliente **e** alcançáveis desta porta.
+    // Sem isso, quem soubesse um id usaria a tela sem login para abrir
+    // chamado numa categoria interna.
+    //
+    // O modelo primeiro, porque é ele quem diz qual categoria a tela
+    // tinha direito de copiar para o pedido.
+    const { formId, customFields, formCategoryId } = await this.validarModelo(
       cliente.organizationId,
       dto.formId,
       dto.customFields,
+    );
+    const categoria = await this.validarCategoria(
+      cliente.organizationId,
+      dto.categoryId,
+      formCategoryId,
     );
 
     const observadores = await this.resolverObservadores(
@@ -341,15 +348,38 @@ export class AberturaService {
     return this.anexos.guardar(chamado, arquivo, null, undefined, TAMANHO_MAXIMO_PUBLICO);
   }
 
-  /** A categoria tem de ser da organização e estar marcada como pública. */
+  /**
+   * A categoria tem de ser da organização e alcançável desta porta.
+   *
+   * "Alcançável" é marcada como pública **ou** ser a categoria do
+   * modelo escolhido. O segundo caso existe porque a tela copia a
+   * categoria do modelo para o pedido — e quem marcou o modelo como
+   * público já decidiu que este tipo de chamado entra por aqui; a
+   * classificação é atributo daquela decisão, não uma segunda porta.
+   *
+   * Sem esta ressalva, todo modelo público com categoria recusava a
+   * abertura com "Tipo de chamado não disponível", e a saída para quem
+   * operava era marcar a categoria como pública — publicando na tela de
+   * tipos um ramo que ninguém quis publicar.
+   *
+   * O `formCategoryId` vem do modelo já validado, nunca do corpo:
+   * aceitar qualquer categoria na presença de um `formId` deixaria
+   * arquivar o chamado sob um ramo privado escolhido a dedo.
+   */
   private async validarCategoria(
     organizationId: string,
     categoryId: string | undefined,
+    formCategoryId: string | null,
   ): Promise<string | null> {
     if (!categoryId) return null;
 
     const categoria = await this.prisma.category.findFirst({
-      where: { id: categoryId, organizationId, isActive: true, isPublic: true },
+      where: {
+        id: categoryId,
+        organizationId,
+        isActive: true,
+        ...(categoryId === formCategoryId ? {} : { isPublic: true }),
+      },
       select: { id: true },
     });
     if (!categoria) throw new BadRequestException('Tipo de chamado não disponível.');
@@ -368,12 +398,17 @@ export class AberturaService {
     organizationId: string,
     formId: string | undefined,
     respostas: Record<string, unknown> | undefined,
-  ): Promise<{ formId: string | null; customFields: Record<string, unknown> | undefined }> {
-    if (!formId) return { formId: null, customFields: undefined };
+  ): Promise<{
+    formId: string | null;
+    customFields: Record<string, unknown> | undefined;
+    /** A categoria que este modelo carrega, para a validação da categoria. */
+    formCategoryId: string | null;
+  }> {
+    if (!formId) return { formId: null, customFields: undefined, formCategoryId: null };
 
     const modelo = await this.prisma.ticketForm.findFirst({
       where: { id: formId, organizationId, isModel: true, isPublic: true },
-      select: { id: true, schema: true },
+      select: { id: true, schema: true, categoryId: true },
     });
     if (!modelo) throw new BadRequestException('Modelo de chamado não disponível.');
 
@@ -394,6 +429,7 @@ export class AberturaService {
     return {
       formId: modelo.id,
       customFields: Object.keys(dadas).length > 0 ? dadas : undefined,
+      formCategoryId: modelo.categoryId,
     };
   }
 

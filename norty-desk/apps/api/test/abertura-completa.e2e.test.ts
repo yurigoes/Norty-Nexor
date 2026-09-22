@@ -265,6 +265,73 @@ describe('modelo de chamado', () => {
     assert.equal(r.status, 400, JSON.stringify(r.corpo));
   });
 
+  /**
+   * O defeito que isto pega, achado em produção: a tela copia a
+   * categoria do modelo escolhido para o pedido, e a API só aceitava
+   * categoria marcada como pública. Todo modelo público **com**
+   * categoria recusava a abertura com "Tipo de chamado não
+   * disponível" — e a saída de quem operava seria publicar um ramo da
+   * taxonomia que ninguém quis publicar.
+   */
+  it('aceita a categoria do próprio modelo, mesmo que ela não seja pública', async () => {
+    await liberar();
+    const privada = await prisma.category.findFirstOrThrow({
+      where: { organizationId: f.organizacao.id, name: 'Jurídico', isPublic: false },
+    });
+    const modelo = await prisma.ticketForm.findFirstOrThrow({
+      where: { organizationId: f.organizacao.id, name: 'Impressora' },
+    });
+    await prisma.ticketForm.update({
+      where: { id: modelo.id },
+      data: { categoryId: privada.id },
+    });
+
+    const r = await abrir({
+      categoryId: privada.id,
+      formId: modelo.id,
+      customFields: { patrimonio: 'PAT-77' },
+    });
+    assert.equal(r.status, 201, JSON.stringify(r.corpo));
+
+    const chamado = await prisma.ticket.findFirstOrThrow({
+      where: { protocol: (r.corpo as AberturaPublicaResposta).protocol },
+    });
+    assert.equal(chamado.categoryId, privada.id, 'o chamado ficou na categoria do modelo');
+
+    await prisma.ticketForm.update({ where: { id: modelo.id }, data: { categoryId: null } });
+  });
+
+  it('mas não deixa arquivar num ramo privado que não é o do modelo', async () => {
+    await liberar();
+    const doModelo = await prisma.category.findFirstOrThrow({
+      where: { organizationId: f.organizacao.id, name: 'Jurídico', isPublic: false },
+    });
+    // Uma **segunda** categoria privada: o caso perigoso é o modelo ter
+    // a sua e alguém mandar outra no corpo. Com um modelo sem categoria
+    // este teste passaria mesmo se o `formId` virasse salvo-conduto
+    // para qualquer categoria — e não provaria nada.
+    const outra = await prisma.category.create({
+      data: { organizationId: f.organizacao.id, name: 'Folha de pagamento', isPublic: false },
+    });
+    const modelo = await prisma.ticketForm.findFirstOrThrow({
+      where: { organizationId: f.organizacao.id, name: 'Impressora' },
+    });
+    await prisma.ticketForm.update({
+      where: { id: modelo.id },
+      data: { categoryId: doModelo.id },
+    });
+
+    const r = await abrir({
+      categoryId: outra.id,
+      formId: modelo.id,
+      customFields: { patrimonio: 'PAT-78' },
+    });
+    assert.equal(r.status, 400, JSON.stringify(r.corpo));
+
+    await prisma.ticketForm.update({ where: { id: modelo.id }, data: { categoryId: null } });
+    await prisma.category.delete({ where: { id: outra.id } });
+  });
+
   it('recusa modelo interno, mesmo sabendo o id', async () => {
     await liberar();
     const interno = await prisma.ticketForm.findFirstOrThrow({

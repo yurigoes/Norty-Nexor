@@ -134,6 +134,18 @@ export type CommitmentView = {
 export type TicketListItem = {
   id: string;
   number: number;
+  /**
+   * O código que o solicitante cita, e o único que serve fora daqui.
+   *
+   * `number` é o handle de quem atende: curto, sequencial, bom para
+   * falar em reunião — e por isso mesmo adivinhável. O protocolo é o
+   * que vai no e-mail, no WhatsApp e na consulta pública, porque quem
+   * tivesse um `number` teria todos os outros.
+   *
+   * Os dois convivem: a fila mostra o número, a tela do chamado mostra
+   * os dois, e quem liga perguntando "meu chamado" tem o que ditar.
+   */
+  protocol: string;
   subject: string;
   type: TicketType;
   status: TicketStatus;
@@ -148,6 +160,45 @@ export type TicketListItem = {
   commitments: CommitmentView[];
   createdAt: string;
   updatedAt: string;
+};
+
+// ---------------------------------------------------------------------
+// Times
+// ---------------------------------------------------------------------
+
+/**
+ * Um time e quem está nele.
+ *
+ * Os membros vêm junto, e não numa segunda chamada: a tela de times
+ * existe justamente para responder "quem está no time?", e uma lista
+ * de nomes sem pessoas dentro não responde nada.
+ *
+ * `isManager` é o gestor **do time** — quem aprova e para quem o
+ * escalonamento sobe. Não é o papel GESTOR da matriz RBAC: aquele diz
+ * o que a pessoa pode fazer no sistema, este diz de quem ela responde.
+ */
+export type TimeView = {
+  id: string;
+  name: string;
+  description: string | null;
+  /** E-mail da fila do time, usado como remetente das respostas. */
+  email: string | null;
+  isActive: boolean;
+  members: TimeMembroView[];
+};
+
+export type TimeMembroView = {
+  id: string;
+  name: string;
+  email: string | null;
+  isManager: boolean;
+};
+
+export type EscreverTimeRequest = {
+  name: string;
+  description?: string | null;
+  email?: string | null;
+  isActive?: boolean;
 };
 
 export type TicketActorView = {

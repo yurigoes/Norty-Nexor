@@ -76,6 +76,29 @@ describe('protocolo', () => {
       'o protocolo não é o número',
     );
   });
+
+  /**
+   * O defeito que isto pega: o protocolo existia no banco e nunca saía
+   * para o aplicativo. Quem atendia via `#2`, quem ligava tinha
+   * `4K7P-WZ9N`, e não havia onde cruzar um com o outro.
+   */
+  it('sai na abertura, no detalhe e na fila — não só no banco', async () => {
+    const agente = await entrar('agente@teste.dev');
+    const aberto = await abrir(agente, 'Chamado que precisa ditar o código');
+    const gravado = (await protocoloDe(aberto.id)).protocol;
+
+    assert.equal(aberto.protocol, gravado, 'a resposta da abertura traz o protocolo');
+
+    const detalhe = await agente.get<TicketDetail>(`/tickets/${aberto.id}`);
+    assert.equal(detalhe.status, 200, JSON.stringify(detalhe.corpo));
+    assert.equal(detalhe.corpo.protocol, gravado, 'o detalhe traz o protocolo');
+
+    const fila = await agente.get<{ data: TicketDetail[] }>('/tickets?limit=50');
+    assert.equal(fila.status, 200, JSON.stringify(fila.corpo));
+    const naFila = (fila.corpo.data ?? []).find((t) => t.id === aberto.id);
+    assert.ok(naFila, 'o chamado aberto está na fila');
+    assert.equal(naFila.protocol, gravado, 'a fila traz o protocolo');
+  });
 });
 
 describe('consulta pública', () => {

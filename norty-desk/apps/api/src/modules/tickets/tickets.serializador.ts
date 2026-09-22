@@ -150,6 +150,7 @@ export function paraLista(chamado: ChamadoLista): TicketListItem {
   return {
     id: chamado.id,
     number: chamado.number,
+    protocol: chamado.protocol,
     subject: chamado.subject,
     type: chamado.type,
     status: chamado.status,

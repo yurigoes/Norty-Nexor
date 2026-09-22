@@ -8,7 +8,8 @@ import {
   removerCategoria,
   type AcordoView,
 } from '../../api/configuracao';
-import { listarCategorias, listarTimes, type CategoriaView, type TimeView } from '../../api/endpoints';
+import type { TimeView } from '@norty-desk/shared';
+import { listarCategorias, listarTimes, type CategoriaView } from '../../api/endpoints';
 import { listarPessoas, type PessoaView } from '../../api/aprovacoes';
 import { useRecurso } from '../../auth/Autenticacao';
 import { segundosParaHoras } from './formato';

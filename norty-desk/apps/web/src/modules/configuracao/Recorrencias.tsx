@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { EscreverRecorrenciaRequest, Recorrencia, RecorrenciaView } from '@norty-desk/shared';
+import type { TimeView, EscreverRecorrenciaRequest, Recorrencia, RecorrenciaView } from '@norty-desk/shared';
 import {
   ROTULO_PRIORIDADE,
   ROTULO_TIPO,
@@ -10,7 +10,7 @@ import {
 
 import { listarPessoas, type PessoaView } from '../../api/aprovacoes';
 import { ErroDaApi } from '../../api/cliente';
-import { listarCategorias, listarTimes, type CategoriaView, type TimeView } from '../../api/endpoints';
+import { listarCategorias, listarTimes, type CategoriaView } from '../../api/endpoints';
 import {
   chamadosDaRecorrencia,
   criarRecorrencia,

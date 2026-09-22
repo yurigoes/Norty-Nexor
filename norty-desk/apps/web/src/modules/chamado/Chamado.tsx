@@ -27,6 +27,7 @@ import { CustosDoChamado } from '../custo/CustosDoChamado';
 import { Tarefas } from '../tarefa/Tarefas';
 import { ErrosConhecidosDoChamado } from '../problema/ErrosConhecidosDoChamado';
 import { Sugestoes } from '../conhecimento/Sugestoes';
+import { Protocolo } from './Protocolo';
 import { Conversa } from './Conversa';
 
 export function Chamado() {
@@ -87,7 +88,10 @@ export function Chamado() {
         <button type="button" className="btn -fantasma -sm" onClick={() => navegar('/')}>
           ← Voltar para a fila
         </button>
-        <span className="mono">#{chamado.number}</span>
+        <span className="linha" style={{ gap: 'var(--e-4)', flexWrap: 'wrap' }}>
+          <Protocolo protocolo={chamado.protocol} />
+          <span className="mono">#{chamado.number}</span>
+        </span>
       </div>
 
       <h2 style={{ fontSize: 'var(--t-h3)' }}>{chamado.subject}</h2>

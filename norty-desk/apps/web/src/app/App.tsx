@@ -21,6 +21,7 @@ import { Datacenter } from '../modules/datacenter/Datacenter';
 import { Rack } from '../modules/datacenter/Rack';
 import { Diretorios } from '../modules/configuracao/Diretorios';
 import { Formularios } from '../modules/configuracao/Formularios';
+import { Times } from '../modules/configuracao/Times';
 import { CatalogoDoAtivo } from '../modules/configuracao/CatalogoDoAtivo';
 import { Contratos } from '../modules/configuracao/Contratos';
 import { Modelos } from '../modules/configuracao/Modelos';
@@ -162,6 +163,7 @@ function Aplicativo() {
             <Route path="/config/autenticacao" element={<Diretorios />} />
             <Route path="/config/sla" element={<Sla />} />
             <Route path="/config/recorrencias" element={<Recorrencias />} />
+            <Route path="/config/times" element={<Times />} />
             <Route path="/config/modelos-de-chamado" element={<Formularios />} />
             {/* O endereço antigo continua funcionando: a tela mudou de
                 nome, mas quem já a tinha nos favoritos não mudou. */}

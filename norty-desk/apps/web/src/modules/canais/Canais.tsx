@@ -11,7 +11,8 @@ import {
   type CanalView,
   type TipoDeCanal,
 } from '../../api/canais';
-import { listarTimes, type TimeView } from '../../api/endpoints';
+import type { TimeView } from '@norty-desk/shared';
+import { listarTimes } from '../../api/endpoints';
 import { dataCurta } from '../../lib/formato';
 import { CAMPOS, DESCRICAO_TIPO, ROTULO_TIPO, padroesDe, type Campo } from './campos';
 

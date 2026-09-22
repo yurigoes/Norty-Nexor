@@ -14,6 +14,7 @@ import type {
   TicketEventView,
   TicketListItem,
   TicketQuery,
+  TimeView,
 } from '@norty-desk/shared';
 
 import { chamar } from './cliente';
@@ -144,14 +145,6 @@ export type CategoriaView = {
   isActive: boolean;
   defaultTeam: { id: string; name: string } | null;
   defaultAssignee: { id: string; name: string } | null;
-};
-
-export type TimeView = {
-  id: string;
-  name: string;
-  email: string | null;
-  isActive: boolean;
-  members: { id: string; name: string; email: string; isManager: boolean }[];
 };
 
 export const listarCategorias = () => chamar<CategoriaView[]>('/categories');

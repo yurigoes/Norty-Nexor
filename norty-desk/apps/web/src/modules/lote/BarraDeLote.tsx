@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import type { BulkAction, BulkResult } from '@norty-desk/shared';
+import type { TimeView, BulkAction, BulkResult } from '@norty-desk/shared';
 import { ROTULO_STATUS, TICKET_STATUSES } from '@norty-desk/shared';
 
 import { acaoEmLote } from '../../api/lote';
 import { ErroDaApi } from '../../api/cliente';
-import { listarTimes, type TimeView } from '../../api/endpoints';
+import { listarTimes } from '../../api/endpoints';
 import { useRecurso } from '../../auth/Autenticacao';
 
 /**
