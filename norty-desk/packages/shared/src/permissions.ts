@@ -156,6 +156,24 @@ export const PERMISSIONS = [
   'config:chaves-api',
   /** Provedor, chave e modelo do Norty Copilot. */
   'config:copilot',
+  /**
+   * Guardar senha no cofre, e abrir as que são suas ou foram
+   * compartilhadas com você.
+   *
+   * Não dá acesso a senha de ninguém: quem decide quem abre o quê é o
+   * dono de cada segredo, não esta permissão.
+   */
+  'cofre:usar',
+  /**
+   * Ver que segredos existem na organização e **assumir** um deles.
+   *
+   * Não é ler: a senha continua fechada. O que isto resolve é a saída
+   * de quem foi embora com o cofre dele — o administrador assume o
+   * segredo, e o ato fica na trilha e à vista do dono anterior. Poder
+   * ler em silêncio anularia o cofre; não poder recuperar nada
+   * trancaria a empresa para fora do que é dela.
+   */
+  'cofre:administrar',
   /** Fontes de autenticação (LDAP/AD) da organização. */
   'config:autenticacao',
 
@@ -293,6 +311,12 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
      */
     'ativo:acesso-remoto',
     /**
+     * Guardar a senha do cliente onde ela tem dono e registro de
+     * leitura, em vez de na planilha compartilhada de onde ela sempre
+     * veio. Quem atende é quem tem essas senhas na mão.
+     */
+    'cofre:usar',
+    /**
      * Entregar o toner é gesto de quem atende: sem isso o agente troca o
      * cartucho e o estoque só descobre no inventário. Receber compra e
      * ajustar saldo continuam de quem gerencia ativos.
@@ -384,6 +408,7 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'ativo:ler',
     'ativo:gerenciar',
     'ativo:acesso-remoto',
+    'cofre:usar',
     'problema:ler',
     'problema:gerenciar',
     'mudanca:ler',

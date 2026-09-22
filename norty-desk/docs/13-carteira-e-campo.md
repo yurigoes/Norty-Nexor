@@ -262,11 +262,15 @@ inventário, "como eu entro nela agora" é chave de casa. Agente,
 supervisor e administrador têm; o gestor que lê indicador e o cliente,
 não.
 
-**O que isto não é.** Não é cofre de senhas. Não há rotação, não há
-compartilhamento com validade, não há segredo por pessoa. É o lugar
-certo para a senha do AnyDesk da máquina do cliente, e o lugar errado
-para a senha do administrador de domínio — essa pede um cofre de
-verdade, e o Desk não é um.
+**O que isto não é.** Não é cofre de senhas: não há compartilhamento
+com validade nem registro de quem leu. É o lugar certo para a senha do
+AnyDesk da máquina do cliente.
+
+> **Atualizado (seção 18).** A frase original terminava em "essa pede um
+> cofre de verdade, e o Desk não é um". Deixou de ser verdade: o cofre
+> existe, com chave própria, concessão com prazo e registro de cada
+> leitura. Os campos de acesso remoto **continuam** como estão — são a
+> resposta rápida na tela do equipamento, e não o cofre.
 
 **A chave mora em `CHANNEL_SECRET_KEY`**, que já cifra segredos de
 canal, chaves de licença e fontes de diretório. O nome ficou pequeno
@@ -872,3 +876,99 @@ E a espera pelo aval pergunta pela **aprovação em aberto**, não pelo
 status do chamado: o aval exigido por categoria não leva o chamado a
 `EM_APROVACAO` (seção 10) — ele segue o curso normal enquanto espera.
 Olhar só o status deixaria passar direto justamente o caso do pedido.
+
+## 18. Cofre de senhas
+
+A seção 8 dizia, sobre os campos de acesso remoto do equipamento: *"não
+é cofre de senhas… essa pede um cofre de verdade, e o Desk não é um"*.
+Esta seção desfaz aquela frase, e é justo dizer por quê: não porque o
+nome mudou, mas porque as **três coisas que faltavam** passaram a
+existir.
+
+| O que faltava | O que existe agora |
+|---|---|
+| Chave própria | `VAULT_SECRET_KEY`, derivada por segredo |
+| Compartilhar com validade | `SecretGrant` com prazo, que vence sozinho |
+| Saber quem leu | `SecretAccess`, visível para o **dono** |
+
+Os campos de acesso remoto continuam onde estão. São a resposta rápida
+na tela do equipamento — "como eu entro nesta máquina agora" — e não
+viraram cofre nem devem virar.
+
+### O que se guarda
+
+Login, senha e o que identifica o acesso, que muda com o tipo: **site**
+pede o endereço, **computador** pede o equipamento do inventário,
+**sistema** pede o nome dele. Um campo livre para os três produziria a
+mesma planilha de onde estas senhas vêm, com outro nome.
+
+### A cifragem, em três camadas
+
+**Chave própria.** `VAULT_SECRET_KEY` é separada da
+`CHANNEL_SECRET_KEY` de propósito. Aquela protege o que o servidor usa
+o tempo todo (IMAP, Evolution); esta guarda senha de cliente. Juntas,
+um vazamento de uma seria o vazamento das duas, e trocar uma obrigaria
+a rodar as duas.
+
+**Chave derivada por segredo.** Cada linha tem um sal aleatório, e a
+chave que a cifra sai de `HKDF(mestra, sal)`. A mestra nunca cifra nada
+diretamente.
+
+**Texto cifrado amarrado à linha.** O id do segredo e o da organização
+entram como dado autenticado (AAD) do GCM. Um `UPDATE` que copie o
+`senhaCifrada` da linha do chefe para a sua não abre: a etiqueta não
+confere. Sem isso, cifrar em repouso protegeria contra o dump do banco
+e não contra quem escreve nele — e quem escreve no banco é uma pessoa
+a mais do que quem o lê.
+
+### Quem abre o quê
+
+O dono, e quem ele deixou. O **administrador não lê** — vê que o
+segredo existe e pode **assumi-lo**, que é outra coisa: um ato
+registrado na trilha, que aparece na tela do dono anterior, e que não
+tira o acesso dele.
+
+Vale ser honesto sobre o que essa escolha compra. Ela **não** torna a
+leitura impossível para um administrador determinado: ele assume e
+depois abre. O que ela torna impossível é fazer isso **em silêncio**. É
+accountability, não impossibilidade — e a alternativa, em que ninguém
+recupera nada, tranca a empresa para fora do que é dela no primeiro
+pedido de demissão.
+
+Quem recebeu um segredo **não o reparte**. Se repartisse, uma concessão
+de um dia viraria acesso permanente pelas costas de quem a deu.
+
+### Compartilhar por tempo, ou até revogar
+
+Foi o que o pedido descreveu: *"ele pode compartilhar por tempo, ou pra
+sempre"*. "Para sempre" na tela se chama **"até você revogar"**, porque
+é o que é — e "para sempre" faz parecer que não dá para tirar.
+
+A concessão com prazo vence sozinha: ninguém precisa lembrar de
+revogar, e é isso que a torna a opção certa para quem só precisa entrar
+hoje. Compartilhar de novo com a mesma pessoa **estende o prazo** em
+vez de criar uma segunda linha — duas linhas para a mesma pessoa é como
+uma revogação deixa de revogar.
+
+### A senha na tela
+
+Sai por uma rota só, `POST /cofre/:id/revelar` — `POST` e não `GET`
+pela mesma razão do acesso remoto: revelar é um **ato**. `GET` entraria
+no histórico do navegador, em log de proxy e num `prefetch` que ninguém
+pediu, e cada um seria uma cópia da senha fora do cofre.
+
+Na tela ela some sozinha em trinta segundos. Isso não protege contra
+quem quer copiá-la — quem quer, copia. Protege contra o que de fato
+acontece: a senha do cliente aberta no monitor quando alguém chega para
+falar com você, ou quando a reunião começa a compartilhar a tela.
+
+### Um teste que não provava o que dizia
+
+O teste afirmava "a senha não volta em nenhuma carga" e procurava, na
+resposta, a senha em claro. Passava — e continuou passando quando o
+`senhaCifrada` e o `sal` foram adicionados de propósito à vista da
+lista.
+
+O texto cifrado não é legível hoje, mas é metade do trabalho de quem um
+dia tiver a chave mestra, e é uma cópia do segredo fora do cofre. Hoje
+o teste procura os dois **nomes de campo**, não só o valor em claro.

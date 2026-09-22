@@ -2320,3 +2320,103 @@ export const ACAO_AUTOMATICA: Record<
 export type ConviteDeSenha = { valido: boolean; nome: string | null };
 
 export type DefinirSenhaRequest = { token: string; nova: string };
+
+// ---------------------------------------------------------------------
+// Cofre de senhas
+// ---------------------------------------------------------------------
+
+export const TIPOS_DE_SEGREDO = ['SITE', 'COMPUTADOR', 'SISTEMA'] as const;
+export type TipoDeSegredo = (typeof TIPOS_DE_SEGREDO)[number];
+
+export const ROTULO_DO_SEGREDO: Record<TipoDeSegredo, string> = {
+  SITE: 'Site',
+  COMPUTADOR: 'Computador',
+  SISTEMA: 'Sistema',
+};
+
+/**
+ * Um segredo, como a lista o vê. **Sem a senha**, sempre.
+ *
+ * A senha sai por uma rota só, que existe para isso e registra cada
+ * chamada. Se ela viesse aqui, bastaria abrir a lista para copiar o
+ * cofre inteiro — e ninguém saberia que foi copiado.
+ */
+export type SegredoView = {
+  id: string;
+  kind: TipoDeSegredo;
+  name: string;
+  login: string;
+  url: string | null;
+  sistema: string | null;
+  asset: { id: string; name: string } | null;
+  notas: string | null;
+  owner: { id: string; name: string };
+  /** Quem está olhando é o dono? Só ele compartilha, edita e revoga. */
+  souDono: boolean;
+  /**
+   * Por que esta linha está à vista desta pessoa.
+   *
+   * `DONO` e `COMPARTILHADO` dizem que ela **abre** o segredo.
+   * `ADMINISTRACAO` diz o contrário: ela só sabe que ele existe, porque
+   * administra o cofre. Sem o terceiro valor, a lista da organização
+   * inteira chamaria de "compartilhada" toda senha que o administrador
+   * nunca recebeu — e dizer isso seria mentir na tela.
+   */
+  via: 'DONO' | 'COMPARTILHADO' | 'ADMINISTRACAO';
+  /** Quando o meu acesso acaba. Nulo é sem prazo. */
+  meuAcessoAte: string | null;
+  /** Com quantas pessoas está compartilhado agora. Só o dono vê. */
+  compartilhadoCom: number | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Uma concessão, na tela do dono. */
+export type ConcessaoView = {
+  id: string;
+  user: { id: string; name: string; email: string | null };
+  /** Nulo = sem prazo. */
+  expiresAt: string | null;
+  /** Já passou do prazo, mas a linha ainda está lá. */
+  vencida: boolean;
+  createdAt: string;
+};
+
+/** Quem abriu a senha, e quando. O dono vê; os demais, não. */
+export type LeituraDoSegredoView = {
+  id: string;
+  user: { id: string; name: string };
+  readAt: string;
+};
+
+export type EscreverSegredoRequest = {
+  kind: TipoDeSegredo;
+  name: string;
+  login: string;
+  /** Omitida na edição, mantém a guardada. Nunca volta em leitura. */
+  senha?: string;
+  url?: string | null;
+  assetId?: string | null;
+  sistema?: string | null;
+  notas?: string | null;
+};
+
+export type CompartilharSegredoRequest = {
+  userId: string;
+  /**
+   * Até quando. Omitido ou nulo é "para sempre" — que na prática é
+   * "até alguém revogar", e a tela diz isso com todas as letras.
+   */
+  expiresAt?: string | null;
+};
+
+/** A senha, uma vez. Cada chamada que a devolve fica registrada. */
+export type SegredoRevelado = { senha: string };
+
+/**
+ * O cofre está ligado nesta instalação?
+ *
+ * Sem `VAULT_SECRET_KEY` não há como cifrar, e a tela não deve oferecer
+ * um cofre que não guarda — mesma regra do Copilot e do aviso push.
+ */
+export type EstadoDoCofre = { disponivel: boolean };

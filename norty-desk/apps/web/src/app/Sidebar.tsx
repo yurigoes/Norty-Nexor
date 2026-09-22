@@ -160,6 +160,16 @@ export function Sidebar() {
           </Link>
         ) : null}
 
+        {can('cofre:usar') ? (
+          <Link
+            to="/cofre"
+            className="nav-item"
+            aria-current={local.pathname.startsWith('/cofre') ? 'page' : undefined}
+          >
+            <span>Cofre de senhas</span>
+          </Link>
+        ) : null}
+
         {can('ativo:ler') ? (
           <Link
             to="/software"

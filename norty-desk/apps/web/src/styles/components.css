@@ -1292,3 +1292,44 @@
   background: var(--superficie-card);
 }
 .linha-aparelho strong { margin-right: var(--e-2); }
+
+/* ---------- [DESK] Cofre de senhas ----------
+   Cartão por segredo. A senha revelada aparece numa faixa própria,
+   monoespaçada e com a contagem à vista: o que interessa é a pessoa
+   perceber que aquilo está na tela agora e não vai ficar. */
+
+.segredo {
+  padding: var(--e-4);
+  border: 1px solid var(--borda);
+  border-radius: var(--r-lg);
+  background: var(--superficie-card);
+}
+.segredo-topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--e-3);
+  flex-wrap: wrap;
+}
+.segredo-topo .selo { margin-left: var(--e-1); }
+
+.segredo-revelada {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  flex-wrap: wrap;
+  margin-top: var(--e-3);
+  padding: var(--e-3) var(--e-4);
+  border-radius: var(--r-md);
+  background: var(--azul-50);
+  border: 1px solid var(--azul-100);
+}
+.segredo-revelada code {
+  font-size: var(--t-corpo);
+  letter-spacing: .04em;
+  user-select: all;
+  word-break: break-all;
+}
+
+.lista-simples { margin: 0; padding-left: var(--e-5); }
+.lista-simples li { margin-bottom: var(--e-1); }

@@ -30,6 +30,7 @@ const TITULOS: { prefixo: string; titulo: string }[] = [
   { prefixo: '/config/autenticacao', titulo: 'Autenticação' },
   { prefixo: '/config/pessoas', titulo: 'Pessoas' },
   { prefixo: '/config/times', titulo: 'Times' },
+  { prefixo: '/cofre', titulo: 'Cofre de senhas' },
   { prefixo: '/conta', titulo: 'Minha conta' },
   { prefixo: '/painel', titulo: 'Painel' },
   { prefixo: '/datacenter/racks/', titulo: 'Rack' },

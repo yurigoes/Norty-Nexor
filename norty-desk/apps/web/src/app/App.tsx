@@ -35,6 +35,7 @@ import { Pesquisa } from '../modules/ativo/Pesquisa';
 import { AbrirSemLogin } from '../modules/protocolo/AbrirSemLogin';
 import { ConsultaProtocolo } from '../modules/protocolo/ConsultaProtocolo';
 import { DefinirSenha } from '../modules/protocolo/DefinirSenha';
+import { Cofre } from '../modules/cofre/Cofre';
 import { Carteira } from '../modules/carteira/Carteira';
 import { Artigo } from '../modules/conhecimento/Artigo';
 import { Conhecimento } from '../modules/conhecimento/Conhecimento';
@@ -194,6 +195,7 @@ function Aplicativo() {
             <Route path="/config/canais/diagnostico" element={<Diagnostico />} />
             <Route path="/config/webhooks" element={<Webhooks />} />
             <Route path="/config/auditoria" element={<Auditoria />} />
+            <Route path="/cofre" element={<Cofre />} />
             <Route path="/conta" element={<MinhaConta />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

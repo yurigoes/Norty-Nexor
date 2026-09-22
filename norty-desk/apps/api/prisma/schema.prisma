@@ -51,6 +51,7 @@ model Organization {
   apiKeys             ApiKey[]
   aiConfig            AiConfig?
   pushSubscriptions   PushSubscription[]
+  secrets             Secret[]
   contacts            Contact[]
   assets              Asset[]
   surveys             Survey[]
@@ -133,6 +134,9 @@ model User {
   pushSubscriptions      PushSubscription[]
   notificationPreference NotificationPreference?
   passwordResets         PasswordResetToken[]
+  segredos               Secret[]                @relation("DonoDoSegredo")
+  segredosRecebidos      SecretGrant[]           @relation("QuemRecebeuOSegredo")
+  segredosLidos          SecretAccess[]          @relation("QuemLeuOSegredo")
 
   @@unique([authSourceId, externalId])
   @@map("users")
@@ -1471,6 +1475,7 @@ model Asset {
   networkPorts NetworkPort[]
   ipAddresses  IpAddress[]
   rackItem     RackItem?
+  secrets      Secret[]
 
   /// Patrimônio e série não se repetem na organização: dois registros do
   /// mesmo equipamento são a origem de metade da sujeira de inventário.
@@ -2846,4 +2851,111 @@ model PasswordResetToken {
 
   @@index([userId])
   @@map("password_reset_tokens")
+}
+
+// ---------------------------------------------------------------------
+// Cofre de senhas
+// ---------------------------------------------------------------------
+
+/// A que a senha dá acesso.
+///
+/// Muda o que se pergunta junto: site quer endereço, computador quer o
+/// equipamento do inventário, sistema quer o nome dele. Um campo
+/// "observação" livre para os três deixaria cada pessoa inventar o
+/// próprio formato, e ninguém acharia nada depois.
+enum SecretKind {
+  SITE
+  COMPUTADOR
+  SISTEMA
+}
+
+/// Uma senha guardada.
+///
+/// Isto é um cofre de verdade, e não os campos de acesso remoto do
+/// equipamento (`docs/13`, seção 8). A diferença está nas três coisas
+/// que o acesso remoto não tem e que aqui não são opcionais: **chave
+/// própria**, **concessão com validade** e **registro de cada leitura**.
+model Secret {
+  id             String     @id @default(uuid()) @db.Uuid
+  organizationId String     @db.Uuid
+  /// Quem responde por esta senha. Só ele compartilha e revoga.
+  ownerId        String     @db.Uuid
+  kind           SecretKind
+  name           String
+  login          String
+
+  /// `v1:<iv>:<tag>:<cifrado>` — ver `cofre/cofre.cripto.ts`.
+  ///
+  /// A chave **não** é a `VAULT_SECRET_KEY` direta: ela é derivada por
+  /// segredo (HKDF, com o `sal` abaixo) e a cifragem é amarrada ao id e
+  /// à organização. Quem tiver escrita no banco não consegue mover um
+  /// texto cifrado de uma linha para outra e lê-lo.
+  senhaCifrada String
+  /// Sal aleatório por segredo, base64url. Sem valor sozinho.
+  sal          String
+
+  /// Só para `SITE`.
+  url     String?
+  /// Só para `COMPUTADOR`: o equipamento do inventário.
+  assetId String? @db.Uuid
+  /// Só para `SISTEMA`: qual é.
+  sistema String?
+
+  notas     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner        User           @relation("DonoDoSegredo", fields: [ownerId], references: [id])
+  asset        Asset?         @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  grants       SecretGrant[]
+  accesses     SecretAccess[]
+
+  @@index([organizationId])
+  @@index([ownerId])
+  @@map("secrets")
+}
+
+/// Quem mais pode abrir esta senha, e até quando.
+///
+/// `expiresAt` nulo é "para sempre" — que na prática significa "até
+/// alguém revogar". Foi o que o pedido descreveu, e é o caso comum de
+/// quem divide a senha com o colega da mesma equipe.
+model SecretGrant {
+  id        String    @id @default(uuid()) @db.Uuid
+  secretId  String    @db.Uuid
+  userId    String    @db.Uuid
+  grantedBy String    @db.Uuid
+  /// Nulo = sem prazo.
+  expiresAt DateTime?
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  secret Secret @relation(fields: [secretId], references: [id], onDelete: Cascade)
+  user   User   @relation("QuemRecebeuOSegredo", fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Uma concessão por pessoa por segredo: compartilhar de novo estende
+  /// o prazo em vez de criar uma segunda linha que ninguém revogaria.
+  @@unique([secretId, userId])
+  @@index([userId])
+  @@map("secret_grants")
+}
+
+/// Cada vez que alguém abriu a senha.
+///
+/// Tabela própria, além da trilha de auditoria: o **dono** precisa ver
+/// quem abriu a senha dele, e a auditoria é de administrador. Sem isto,
+/// "quem viu esta senha?" só teria resposta para quem já pode ver tudo.
+model SecretAccess {
+  id       String   @id @default(uuid()) @db.Uuid
+  secretId String   @db.Uuid
+  userId   String   @db.Uuid
+  ip       String?
+  readAt   DateTime @default(now())
+
+  secret Secret @relation(fields: [secretId], references: [id], onDelete: Cascade)
+  user   User   @relation("QuemLeuOSegredo", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([secretId, readAt])
+  @@map("secret_accesses")
 }
