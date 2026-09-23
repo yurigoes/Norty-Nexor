@@ -381,3 +381,190 @@ describe('cobrança de pendência', () => {
     assert.equal(atual.pendingRemindersSent, 0, 'motivo sem intervalo não cobra');
   });
 });
+
+// ---------------------------------------------------------------------
+
+/**
+ * O relógio para enquanto o chamado espera decisão.
+ *
+ * O que se prova aqui e em nenhum outro lugar: quem demora na aprovação
+ * é o gestor, e o prazo queimado nesse intervalo não pode aparecer no
+ * relatório da equipe de atendimento — que não tinha o que fazer a
+ * respeito.
+ *
+ * Todos os chamados deste bloco nascem numa categoria de plantão. Um
+ * calendário **sem faixas** é 24x7 (ver `calendario.test.ts`); sem isso
+ * o desconto daria zero sempre que a suíte rodasse de madrugada ou num
+ * sábado, e o teste passaria a provar o relógio da máquina em vez da
+ * regra.
+ */
+describe('o relógio do SLA na aprovação', () => {
+  let categoriaId: string;
+
+  before(async () => {
+    const plantao = await prisma.calendar.create({
+      data: { organizationId: f.organizacao.id, name: 'Plantão', timezone: 'America/Sao_Paulo' },
+    });
+
+    const acordo = await prisma.agreement.create({
+      data: {
+        organizationId: f.organizacao.id,
+        name: 'Resolução em plantão',
+        kind: 'SLA',
+        target: 'TTR',
+        durationSeconds: 4 * 3600,
+        calendarId: plantao.id,
+      },
+    });
+
+    const categoria = await prisma.category.create({
+      data: {
+        organizationId: f.organizacao.id,
+        name: 'Compra com aval',
+        defaultTeamId: f.time.id,
+        defaultAgreements: { connect: [{ id: acordo.id }] },
+      },
+    });
+
+    categoriaId = categoria.id;
+  });
+
+  async function abrirParaAval(assunto: string) {
+    const agente = await entrar('agente@teste.dev');
+    const r = await agente.post<TicketDetail>('/tickets', {
+      subject: assunto,
+      description: 'x',
+      categoryId: categoriaId,
+    });
+    assert.equal(r.status, 201, JSON.stringify(r.corpo));
+    return { chamado: r.corpo, agente };
+  }
+
+  /**
+   * Faz o chamado parecer parado há três horas.
+   *
+   * Confere a marca antes de mexer nela: escrever `clockStoppedAt` num
+   * chamado que nunca parou faria o teste passar mesmo com a entrada da
+   * aprovação quebrada — provaria o desconto, e não a regra.
+   */
+  async function pararHaTresHoras(ticketId: string): Promise<Date> {
+    const chamado = await prisma.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    assert.ok(chamado.clockStoppedAt, 'o relógio já deveria estar parado neste ponto');
+
+    const quando = new Date(Date.now() - 3 * 3600 * 1000);
+    await prisma.ticket.update({ where: { id: ticketId }, data: { clockStoppedAt: quando } });
+    return quando;
+  }
+
+  const ttrDe = (ticketId: string) =>
+    prisma.slaCommitment.findFirstOrThrow({ where: { ticketId, target: 'TTR' } });
+
+  it('esperar o aval não queima o prazo de quem atende', async () => {
+    const { chamado, agente } = await abrirParaAval('Compra de licença');
+    const antes = await ttrDe(chamado.id);
+    assert.equal(antes.pausedSeconds, 0);
+
+    const pedido = await agente.post<{ id: string }[]>(`/tickets/${chamado.id}/aprovacoes`, {
+      approverIds: [f.gestor.id],
+      quorum: 1,
+    });
+    assert.equal(pedido.status, 201, JSON.stringify(pedido.corpo));
+
+    const parado = await prisma.ticket.findUniqueOrThrow({ where: { id: chamado.id } });
+    assert.equal(parado.status, 'EM_APROVACAO');
+    assert.ok(parado.clockStoppedAt, 'entrar em aprovação tem de parar o relógio');
+
+    // Três horas até o gestor olhar.
+    await pararHaTresHoras(chamado.id);
+
+    const gestor = await entrar('gestor@teste.dev');
+    const decisao = await gestor.post(`/aprovacoes/${pedido.corpo[0]!.id}/decidir`, {
+      decision: 'APROVADO',
+    });
+    assert.equal(decisao.status, 201, JSON.stringify(decisao.corpo));
+
+    const depois = await ttrDe(chamado.id);
+    assert.ok(
+      Math.abs(depois.pausedSeconds - 3 * 3600) <= 60,
+      `o tempo do aval deveria sair do prazo; veio ${depois.pausedSeconds}s`,
+    );
+    assert.ok(
+      Math.abs(depois.dueAt.getTime() - antes.dueAt.getTime() - 3 * 3600 * 1000) <= 60_000,
+      'o vencimento deveria andar para frente pelas mesmas três horas',
+    );
+
+    const voltou = await prisma.ticket.findUniqueOrThrow({ where: { id: chamado.id } });
+    assert.equal(voltou.status, 'ATRIBUIDO');
+    assert.equal(voltou.clockStoppedAt, null, 'o relógio volta a correr ao sair da aprovação');
+
+    // O cliente tem direito de ver que o prazo andou, e por quanto.
+    const retomada = await prisma.ticketEvent.findFirst({
+      where: { ticketId: chamado.id, type: 'RETOMADA_SLA' },
+    });
+    assert.ok(retomada, 'a retomada precisa aparecer na conversa');
+    assert.equal(retomada.visibility, 'PUBLICA');
+  });
+
+  it('a recusa devolve o relógio igual à aprovação', async () => {
+    const { chamado, agente } = await abrirParaAval('Compra recusada');
+
+    const pedido = await agente.post<{ id: string }[]>(`/tickets/${chamado.id}/aprovacoes`, {
+      approverIds: [f.gestor.id],
+      quorum: 1,
+    });
+    assert.equal(pedido.status, 201, JSON.stringify(pedido.corpo));
+
+    await pararHaTresHoras(chamado.id);
+
+    const gestor = await entrar('gestor@teste.dev');
+    assert.equal(
+      (await gestor.post(`/aprovacoes/${pedido.corpo[0]!.id}/decidir`, { decision: 'RECUSADO' }))
+        .status,
+      201,
+    );
+
+    const depois = await ttrDe(chamado.id);
+    assert.ok(
+      Math.abs(depois.pausedSeconds - 3 * 3600) <= 60,
+      'um "não" demorado custa o mesmo tempo que um "sim" demorado',
+    );
+
+    const voltou = await prisma.ticket.findUniqueOrThrow({ where: { id: chamado.id } });
+    assert.equal(voltou.clockStoppedAt, null);
+  });
+
+  it('da aprovação para a pendência o relógio não reinicia', async () => {
+    const { chamado, agente } = await abrirParaAval('Aval e depois o cliente');
+
+    const pedido = await agente.post<{ id: string }[]>(`/tickets/${chamado.id}/aprovacoes`, {
+      approverIds: [f.gestor.id],
+      quorum: 1,
+    });
+    assert.equal(pedido.status, 201, JSON.stringify(pedido.corpo));
+
+    const desde = await pararHaTresHoras(chamado.id);
+
+    // Os dois status param o relógio. Marcar de novo aqui apagaria as
+    // três horas já paradas, e elas voltariam a contar como atendimento.
+    assert.equal(
+      (await agente.post(`/tickets/${chamado.id}/pausar`, { pendingReasonId: f.motivo.id })).status,
+      201,
+    );
+
+    const pendente = await prisma.ticket.findUniqueOrThrow({ where: { id: chamado.id } });
+    assert.equal(pendente.status, 'PENDENTE');
+    assert.equal(
+      pendente.clockStoppedAt?.getTime(),
+      desde.getTime(),
+      'a marca da primeira parada tem de sobreviver à segunda',
+    );
+
+    assert.equal((await agente.post(`/tickets/${chamado.id}/retomar`, {})).status, 201);
+
+    const depois = await ttrDe(chamado.id);
+    assert.ok(
+      Math.abs(depois.pausedSeconds - 3 * 3600) <= 60,
+      `as três horas inteiras deveriam ser descontadas; veio ${depois.pausedSeconds}s`,
+    );
+  });
+});

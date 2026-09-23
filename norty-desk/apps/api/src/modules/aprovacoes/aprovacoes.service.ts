@@ -29,6 +29,7 @@ import { escopoDeLeitura } from '../tickets/tickets.escopo';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { NotificacoesService } from '../notificacoes/notificacoes.service';
 import { AutomacaoService } from '../automacao/automacao.service';
+import { SlaService } from '../sla/sla.service';
 import type { DecidirAprovacaoDto, SolicitarAprovacaoDto } from './dto';
 
 /** O status para onde o chamado volta quando a aprovação se resolve. */
@@ -98,6 +99,7 @@ export class AprovacoesService {
     private readonly webhooks: WebhooksService,
     private readonly notificacoes: NotificacoesService,
     private readonly automacao: AutomacaoService,
+    private readonly sla: SlaService,
   ) {}
 
   // -------------------------------------------------------------------
@@ -277,6 +279,19 @@ export class AprovacoesService {
         },
       });
     });
+
+    // O relógio para aqui. Quem demora para aprovar é o gestor, e até
+    // esta linha existir o SLA queimado aparecia no relatório da equipe
+    // de atendimento — que não tinha o que fazer a respeito.
+    //
+    // Fora da transação de propósito: o `SlaService` usa a conexão
+    // comum, e a transação acima acabou de travar esta linha de
+    // `tickets`. Chamado lá dentro, o serviço ficaria esperando um
+    // cadeado que só a própria transação — parada esperando por ele —
+    // poderia soltar, e a solicitação inteira morreria no tempo limite.
+    if (vaiParaAprovacao) {
+      await this.sla.aoMudarStatus(ticketId, origem, 'EM_APROVACAO');
+    }
 
     await this.avisarValidadores(
       {
@@ -779,6 +794,9 @@ export class AprovacoesService {
     const destino =
       anterior && canTransition('EM_APROVACAO', anterior) ? anterior : RETORNO_PADRAO;
 
+    // O relógio volta a correr, descontando o tempo que o aval levou.
+    const descontado = await this.sla.aoMudarStatus(ticketId, 'EM_APROVACAO', destino);
+
     await this.prisma.$transaction([
       this.prisma.ticket.update({ where: { id: ticketId }, data: { status: destino } }),
       this.prisma.ticketEvent.create({
@@ -791,6 +809,22 @@ export class AprovacoesService {
           payload: { type: 'MUDANCA_STATUS', from: 'EM_APROVACAO', to: destino },
         },
       }),
+      // A retomada é evento público: o cliente tem direito de ver que o
+      // prazo andou para frente, e por quanto.
+      ...(descontado > 0
+        ? [
+            this.prisma.ticketEvent.create({
+              data: {
+                ticketId,
+                type: 'RETOMADA_SLA' as const,
+                visibility: 'PUBLICA' as const,
+                authorId: usuario.userId,
+                channel: 'SISTEMA' as const,
+                payload: { type: 'RETOMADA_SLA', pausedSeconds: descontado },
+              },
+            }),
+          ]
+        : []),
       this.prisma.ticketEvent.create({
         data: {
           ticketId,

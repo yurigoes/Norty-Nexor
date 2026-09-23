@@ -1093,6 +1093,38 @@ export function canTransition(from: TicketStatus, to: TicketStatus): boolean {
 }
 
 /**
+ * Os status em que o relógio do SLA **não corre**.
+ *
+ * ## Por que é uma lista, e não um `if`
+ *
+ * Era `if (status === 'PENDENTE')`, espalhado por três lugares. O efeito
+ * disso apareceu com a aprovação: um chamado esperando o aval do gestor
+ * queimava SLA, e a culpa saía no relatório da equipe, que não tinha o
+ * que fazer. Quem demora é quem aprova.
+ *
+ * Como lista, incluir um status novo é uma linha aqui — e não uma
+ * caçada por todos os `if` que alguém esqueceu de atualizar. É o desenho
+ * do OcoMon (`status.stat_time_freeze`), que acertou nisto: congelar é
+ * propriedade do status, não regra escondida no código.
+ *
+ * **`PENDENTE` e `EM_APROVACAO` param por razões diferentes.** No
+ * primeiro a bola está com o cliente; no segundo, com o gestor. Nos dois
+ * o tempo não é da equipe de atendimento, que é o que o SLA mede.
+ *
+ * `SOLUCIONADO` e `FECHADO` não entram: ali o compromisso já foi
+ * cumprido ou perdido, e o relógio parou por outro motivo.
+ */
+export const STATUS_QUE_PARAM_O_RELOGIO: readonly TicketStatus[] = [
+  'PENDENTE',
+  'EM_APROVACAO',
+];
+
+/** O relógio do SLA para neste status? */
+export function paraORelogio(status: TicketStatus): boolean {
+  return STATUS_QUE_PARAM_O_RELOGIO.includes(status);
+}
+
+/**
  * Para onde um problema pode ir.
  *
  * Investigar volta a ser possível de qualquer estado, inclusive depois

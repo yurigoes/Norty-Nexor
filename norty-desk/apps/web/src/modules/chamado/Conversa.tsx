@@ -251,7 +251,10 @@ function corpoDoEvento(evento: TicketEventView): string {
   }
   if (payload?.type === 'PAUSA_SLA') return 'Chamado em pendência. O SLA foi pausado.';
   if (payload?.type === 'RETOMADA_SLA') {
-    return `Pendência encerrada. ${Math.round(payload.pausedSeconds / 60)} minutos descontados do prazo.`;
+    // Sem dizer "pendência": o mesmo evento nasce ao sair da aprovação,
+    // onde quem demorou foi o gestor e não o cliente. Chamar aquilo de
+    // pendência encerrada seria dizer ao cliente que ele atrasou.
+    return `O prazo voltou a correr. ${Math.round(payload.pausedSeconds / 60)} minutos descontados.`;
   }
   return '—';
 }

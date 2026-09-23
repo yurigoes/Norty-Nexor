@@ -59,28 +59,60 @@ Detalhes que importam:
   comportamento certo para plantão.
 - **Sem calendário.** `Agreement.calendarId` nulo também significa 24×7.
 
-## 4. Pausa por pendência
+## 4. Quando o relógio para
 
-Quando o chamado vai para `PENDENTE`, o relógio para. Quando volta, o
-tempo parado é descontado.
+Dois status param o relógio, e a lista deles é dado, não `if`:
+`STATUS_QUE_PARAM_O_RELOGIO`, em `packages/shared/src/domain.ts`.
+
+| Status | Quem está segurando | Cobra o cliente? |
+|---|---|---|
+| `PENDENTE` | o cliente, que deve retorno | sim |
+| `EM_APROVACAO` | o gestor, que deve a decisão | não |
+
+`SOLUCIONADO` e `FECHADO` ficam de fora de propósito: ali o compromisso
+já foi cumprido ou já foi perdido, e não há prazo correndo para parar.
+
+Isso veio do OCOMON, que tem a mesma ideia como coluna
+(`status.stat_time_freeze`): o estado diz se o relógio anda. A alternativa
+— espalhar `if (status === 'PENDENTE')` pelo código — foi o que tínhamos,
+e custou caro: quando a aprovação nasceu, ninguém lembrou de incluí-la, e
+um chamado esperando o aval do gestor queimava SLA que aparecia no
+relatório da equipe de atendimento, que não tinha o que fazer a respeito.
+
+### Os dois campos, e por que não é um só
+
+- `ticket.pendingSince` — "estou esperando **o cliente**". Só a pendência
+  o escreve, e é dele que sai a cobrança automática da seção 5.
+- `ticket.clockStoppedAt` — "o relógio não corre". Vale nos dois status,
+  e é dele que sai o desconto.
+
+Num chamado pendente os dois coincidem. Na aprovação só o segundo existe
+— cobrar o cliente porque o gestor da nossa casa não decidiu seria
+absurdo.
+
+### O ponto único
+
+Toda mudança de status passa por `SlaService.aoMudarStatus(de, para)`:
 
 ```
-ao pausar (status -> PENDENTE):
-  ticket.pendingSince = agora
-  registra evento PAUSA_SLA com o motivo
-
-ao retomar (status sai de PENDENTE):
-  parado = segundosDeExpediente(pendingSince .. agora, calendario)
-  para cada compromisso em aberto:
-    compromisso.pausedSeconds += parado
-    compromisso.dueAt = calcularVencimento(compromisso.dueAt, parado, cal)
-  ticket.pendingSince = null
-  registra evento RETOMADA_SLA
+corre -> para:  ticket.clockStoppedAt = agora   (só se ainda for nulo)
+para  -> corre: parado = segundosDeExpediente(clockStoppedAt .. agora, cal)
+                para cada compromisso em aberto:
+                  compromisso.pausedSeconds += parado
+                  compromisso.dueAt = calcularVencimento(dueAt, parado, cal)
+                ticket.clockStoppedAt = null
+                registra evento RETOMADA_SLA
+para  -> para:  nada. PENDENTE -> EM_APROVACAO não reinicia a contagem,
+                senão o tempo já parado voltaria a contar como atendimento
+corre -> corre: nada
 ```
 
-O tempo parado também é medido em expediente. Um chamado pendente da
-sexta à noite até a segunda de manhã não ganha 60 horas de folga — ganha
-zero.
+O `só se ainda for nulo` e o `para -> para: nada` são a mesma defesa
+escrita duas vezes, e as duas valem: uma segunda parada sem retomada
+entre elas perderia a primeira.
+
+O tempo parado também é medido em expediente. Um chamado parado da sexta
+à noite até a segunda de manhã não ganha 60 horas de folga — ganha zero.
 
 Isso corresponde a `sla_waiting_duration` / `ola_waiting_duration` /
 `begin_waiting_date` do GLPI, com a diferença de estarem numa linha por

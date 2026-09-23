@@ -449,9 +449,15 @@ describe('ciclo de vida', () => {
     // prazo não se movia. Uma semana contém pelo menos um dia útil
     // inteiro em qualquer instante do ano — inclusive rodando de
     // madrugada, que é quando a integração contínua roda.
+    //
+    // São dois campos porque são dois fatos: `pendingSince` é "estou
+    // esperando o cliente", e é dele que sai a cobrança de pendência;
+    // `clockStoppedAt` é "o relógio não corre", que também vale na
+    // aprovação. Aqui eles coincidem, e o desconto sai do segundo.
+    const desde = new Date(Date.now() - 7 * 24 * 3600 * 1000);
     await prisma.ticket.update({
       where: { id: chamado.id },
-      data: { pendingSince: new Date(Date.now() - 7 * 24 * 3600 * 1000) },
+      data: { pendingSince: desde, clockStoppedAt: desde },
     });
 
     const retomado = await supervisor.post<TicketDetail>(`/tickets/${chamado.id}/retomar`);

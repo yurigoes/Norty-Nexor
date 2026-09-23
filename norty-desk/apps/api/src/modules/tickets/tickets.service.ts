@@ -825,8 +825,8 @@ export class TicketsService {
     });
 
     if (chamado.status === 'SOLUCIONADO' || chamado.status === 'PENDENTE') {
-      if (chamado.status === 'PENDENTE' && chamado.pendingSince) {
-        await this.sla.retomarAposPendencia(dados.ticketId, chamado.pendingSince);
+      if (chamado.status === 'PENDENTE') {
+        await this.sla.aoMudarStatus(dados.ticketId, 'PENDENTE', 'ATRIBUIDO');
       }
 
       await this.prisma.$transaction([
@@ -1196,6 +1196,7 @@ export class TicketsService {
     if (!motivo) throw new BadRequestException('Motivo de pendência não encontrado.');
 
     const agora = new Date();
+    await this.sla.aoMudarStatus(id, chamado.status as TicketStatus, 'PENDENTE', agora);
 
     await this.prisma.$transaction([
       this.prisma.ticket.update({
@@ -1232,7 +1233,7 @@ export class TicketsService {
     }
 
     const agora = new Date();
-    const descontado = await this.sla.retomarAposPendencia(id, chamado.pendingSince, agora);
+    const descontado = await this.sla.aoMudarStatus(id, 'PENDENTE', 'ATRIBUIDO', agora);
 
     await this.prisma.$transaction([
       this.prisma.ticket.update({

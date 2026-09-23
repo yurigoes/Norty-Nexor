@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { vencimentoComAtendimento, type TargetKind } from '@norty-desk/shared';
+import {
+  paraORelogio,
+  vencimentoComAtendimento,
+  type TargetKind,
+  type TicketStatus,
+} from '@norty-desk/shared';
 
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { type Calendario, calcularVencimento, segundosDeExpediente } from './calendario';
@@ -96,13 +101,87 @@ export class SlaService {
   }
 
   /**
-   * Desconta o tempo de pendência dos compromissos em aberto.
+   * O relógio do SLA reage à mudança de status. Ponto único.
    *
-   * O tempo parado é medido em expediente: um chamado pendente da sexta
+   * ## Por que existe
+   *
+   * Antes a pausa era um `if (status === 'PENDENTE')` em três lugares, e
+   * o `EM_APROVACAO` ficou de fora. Um chamado esperando o aval do
+   * gestor queimava SLA, e a culpa aparecia no relatório da equipe de
+   * atendimento — que não tinha o que fazer a respeito. Quem demorava
+   * era quem aprovava.
+   *
+   * Quais status param está em `STATUS_QUE_PARAM_O_RELOGIO`, no domínio
+   * compartilhado. Incluir um novo é uma linha lá, e não uma caçada aos
+   * `if` que alguém esqueceu de atualizar.
+   *
+   * ## O que ela faz
+   *
+   * | De | Para | O quê |
+   * |---|---|---|
+   * | corre | para | marca `clockStoppedAt` |
+   * | para | corre | desconta o tempo parado e limpa a marca |
+   * | para | para | nada — `PENDENTE → EM_APROVACAO` não reinicia |
+   * | corre | corre | nada |
+   *
+   * Devolve quantos segundos foram descontados, que é o que a linha do
+   * tempo registra.
+   */
+  async aoMudarStatus(
+    ticketId: string,
+    de: TicketStatus,
+    para: TicketStatus,
+    agora = new Date(),
+  ): Promise<number> {
+    const paravaAntes = paraORelogio(de);
+    const paraAgora = paraORelogio(para);
+
+    if (paravaAntes === paraAgora) return 0;
+
+    if (paraAgora) {
+      // `clockStoppedAt` só é escrito quando ainda não há um: uma
+      // segunda parada sem retomada entre elas perderia a primeira, e o
+      // tempo parado viraria tempo de atendimento.
+      await this.prisma.ticket.updateMany({
+        where: { id: ticketId, clockStoppedAt: null },
+        data: { clockStoppedAt: agora },
+      });
+      return 0;
+    }
+
+    const chamado = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: { clockStoppedAt: true },
+    });
+
+    // Sem marca não há o que descontar. Acontece com chamado que já
+    // estava pendente antes desta coluna existir, e num retomar
+    // repetido — os dois devem ser silenciosos, não erro.
+    if (!chamado?.clockStoppedAt) return 0;
+
+    const descontado = await this.descontarParada(ticketId, chamado.clockStoppedAt, agora);
+
+    await this.prisma.ticket.update({
+      where: { id: ticketId },
+      data: { clockStoppedAt: null },
+    });
+
+    return descontado;
+  }
+
+  /**
+   * Desconta dos compromissos em aberto o tempo em que o relógio ficou
+   * parado.
+   *
+   * O tempo parado é medido em expediente: um chamado parado da sexta
    * à noite até a segunda de manhã ganha zero, não sessenta horas
    * (`docs/05-sla.md`, seção 4).
    */
-  async retomarAposPendencia(ticketId: string, pendingSince: Date, agora = new Date()): Promise<number> {
+  private async descontarParada(
+    ticketId: string,
+    paradoDesde: Date,
+    agora = new Date(),
+  ): Promise<number> {
     const compromissos = await this.prisma.slaCommitment.findMany({
       where: { ticketId, achievedAt: null },
       include: { agreement: true },
@@ -112,7 +191,7 @@ export class SlaService {
 
     for (const compromisso of compromissos) {
       const calendario = await this.carregarCalendario(compromisso.agreement.calendarId);
-      const parado = segundosDeExpediente(pendingSince, agora, calendario);
+      const parado = segundosDeExpediente(paradoDesde, agora, calendario);
       if (parado <= 0) continue;
 
       descontoMaximo = Math.max(descontoMaximo, parado);

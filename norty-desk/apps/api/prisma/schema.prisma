@@ -534,6 +534,18 @@ model Ticket {
   /// Quantas cobranças automáticas já saíram nesta pendência.
   pendingRemindersSent Int       @default(0)
 
+  /// Desde quando o relógio do SLA está parado.
+  ///
+  /// Separado de `pendingSince` porque são dois fatos diferentes que só
+  /// coincidem num caso. `pendingSince` é "estou esperando **o
+  /// cliente**", e é dele que sai a cobrança de pendência; este é "o
+  /// relógio não corre", que também vale na aprovação — onde quem
+  /// demora é o gestor, e cobrar o cliente seria absurdo.
+  ///
+  /// Quais status param está em `STATUS_QUE_PARAM_O_RELOGIO`, no
+  /// domínio compartilhado.
+  clockStoppedAt DateTime?
+
   firstResponseAt DateTime?
   solvedAt        DateTime?
   closedAt        DateTime?
