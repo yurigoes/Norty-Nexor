@@ -2,6 +2,7 @@ import type {
   AgendarRequest,
   AiConfigView,
   AppointmentView,
+  AutomacaoView,
   EstadoDasNotificacoes,
   InscreverPushRequest,
   SilenciarRequest,
@@ -239,6 +240,9 @@ export const pedirAoCopilot = (id: string, intencao: CopilotIntencao, rascunho?:
   });
 
 export const configDoCopilot = () => chamar<AiConfigView | null>('/config/copilot');
+
+/** O que o sistema resolve sozinho, para a tela de administração. */
+export const listarAutomacoes = () => chamar<AutomacaoView[]>('/automacoes');
 
 export const escreverConfigDoCopilot = (corpo: EscreverAiConfigRequest) =>
   chamar<AiConfigView>('/config/copilot', { metodo: 'PUT', corpo });

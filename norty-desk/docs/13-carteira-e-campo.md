@@ -917,6 +917,48 @@ status do chamado: o aval exigido por categoria não leva o chamado a
 `EM_APROVACAO` (seção 10) — ele segue o curso normal enquanto espera.
 Olhar só o status deixaria passar direto justamente o caso do pedido.
 
+### A vitrine: o que se resolve sozinho
+
+*(acrescentado depois)*
+
+Duas telas nasceram do mesmo problema: a ação automática é ligada num
+campo escondido dentro da edição de **um** modelo, e ninguém consegue
+enumerar o que o sistema faz sem passar por gente.
+
+**Para quem abre chamado** (`/app/chamados/novo`): os modelos vêm em
+dois grupos, e o primeiro é **"Resolve na hora, sem fila"**. Misturados
+no meio dos outros, eles não se distinguem de um pedido comum — e a
+pessoa espera na fila por algo que teria chegado no e-mail dela em dez
+segundos. O selo fica no bloco, e não só no título do grupo: quem chega
+pelo teclado ou pelo leitor de tela lê o bloco, não o cabeçalho três
+elementos acima.
+
+**O selo não aparece na abertura sem login.** A ação exige identidade
+provada, e quem abre pelo protocolo digitou um nome — não provou nada.
+Anunciar "resolve na hora" ali é prometer um e-mail que nunca vai
+chegar. O corte é na API (`modelos()` devolve `acaoAutomatica: null`
+quando `somentePublicos`), e não na tela: é este JSON que o navegador
+de quem não fez login recebe.
+
+**Para quem administra** (`Configurações → Resolve sozinho`): a lista
+de todas as ações, usadas ou não. Uma lista que só mostra o que está
+ligado não responde "o que dá para automatizar?", que é metade da
+pergunta de quem abre a tela.
+
+Ela é **só leitura**. Ligar e desligar continua na edição do modelo,
+onde está o aviso de que o chamado vai se resolver sem passar por
+ninguém; um segundo lugar para ligar seria um segundo lugar para
+esquecer o aviso. O que ela acrescenta são os três avisos que explicam
+por que uma automação "não funciona":
+
+- o formulário não está marcado como modelo — a ação está ligada e morta;
+- o modelo também vale sem login, e **ali a ação não corre**;
+- a categoria exige aprovação, então a ação espera o aval.
+
+A lista de ações continua curta de propósito: automação que erra no
+escuro custa mais que o tempo que economiza, e cada ação nova traz o
+próprio conjunto de cercas.
+
 ## 18. Cofre de senhas
 
 A seção 8 dizia, sobre os campos de acesso remoto do equipamento: *"não

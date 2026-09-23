@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it } from 'node:test';
-import type { ConviteDeSenha, FormularioView, TicketDetail, TicketEventView } from '@norty-desk/shared';
+import {
+  ACOES_AUTOMATICAS,
+  type AutomacaoView,
+  type ConviteDeSenha,
+  type FormularioView,
+  type ModeloDeChamado,
+  type TicketDetail,
+  type TicketEventView,
+} from '@norty-desk/shared';
 
 import { Cliente, type Api, type Fixtura, limparBanco, prisma, semear, subirApi } from './apoio';
 
@@ -499,5 +507,85 @@ describe('a porta sem sessão', () => {
     );
 
     await prisma.passwordResetToken.deleteMany({ where: { userId: f.solicitante.id } });
+  });
+});
+
+// ---------------------------------------------------------------------
+
+/**
+ * A vitrine: o que se resolve sozinho, e para quem isso aparece.
+ *
+ * Duas promessas, e a segunda é a que importa:
+ *
+ * 1. Quem administra consegue **enumerar** o que o sistema faz sem
+ *    passar por ninguém. Automação que ninguém consegue listar é
+ *    automação que ninguém controla.
+ * 2. O selo "resolve na hora" **não** aparece na abertura sem login —
+ *    onde a ação não corre. Prometer ali seria a pessoa esperar um
+ *    e-mail que nunca vem.
+ */
+describe('a vitrine do que se resolve sozinho', () => {
+  it('quem faz login vê qual modelo resolve na hora', async () => {
+    const r = await solicitante.get<ModeloDeChamado[]>('/forms/modelos');
+    assert.equal(r.status, 200, JSON.stringify(r.corpo));
+
+    const escolhido = r.corpo.find((m) => m.id === modelo.id);
+    assert.ok(escolhido, 'o modelo não apareceu na lista');
+    assert.equal(escolhido.acaoAutomatica, 'RESET_DE_SENHA');
+  });
+
+  it('na abertura sem login o selo não aparece — ali a ação não corre', async () => {
+    const empresa = await prisma.client.create({
+      data: {
+        organizationId: f.organizacao.id,
+        name: 'Empresa da Vitrine',
+        emailDomain: 'empresadavitrine.com.br',
+      },
+    });
+
+    // O mesmo modelo, agora também oferecido sem login.
+    await admin.patch(`/forms/${modelo.id}`, { isPublic: true });
+
+    const resposta = await fetch(`${api.url}/publico/empresas/${empresa.id}/modelos`);
+    assert.equal(resposta.status, 200);
+    const publicos = (await resposta.json()) as ModeloDeChamado[];
+
+    const mesmo = publicos.find((m) => m.id === modelo.id);
+    assert.ok(mesmo, 'o modelo público não apareceu');
+
+    // Este é o ponto. A ação exige identidade provada, e quem abre pelo
+    // protocolo digitou um nome — não provou nada. Anunciar "resolve na
+    // hora" ali é prometer o que não vai acontecer.
+    assert.equal(
+      mesmo.acaoAutomatica ?? null,
+      null,
+      'o selo de ação automática vazou para a abertura sem login',
+    );
+
+    await admin.patch(`/forms/${modelo.id}`, { isPublic: false });
+    await prisma.client.delete({ where: { id: empresa.id } });
+  });
+
+  it('a lista de automações enumera as ações, inclusive as não usadas', async () => {
+    const r = await admin.get<AutomacaoView[]>('/automacoes');
+    assert.equal(r.status, 200, JSON.stringify(r.corpo));
+
+    // Toda ação do domínio aparece, usada ou não: uma lista que só
+    // mostra o que está ligado não responde "o que dá para automatizar?"
+    assert.equal(r.corpo.length, ACOES_AUTOMATICAS.length);
+
+    const reset = r.corpo.find((a) => a.acao === 'RESET_DE_SENHA');
+    assert.ok(reset);
+    assert.ok(
+      reset.modelos.some((m) => m.id === modelo.id),
+      'o modelo que dispara a ação não apareceu na lista',
+    );
+  });
+
+  it('quem não configura formulário não enxerga a lista', async () => {
+    // Não é segredo de Estado, mas é o mapa do que o sistema faz sem
+    // supervisão — e o guard é a proteção, não o menu escondido.
+    const r = await solicitante.get('/automacoes');
+    assert.equal(r.status, 403, JSON.stringify(r.corpo));
   });
 });

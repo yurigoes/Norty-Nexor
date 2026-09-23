@@ -94,6 +94,10 @@ export class FormulariosService {
         ? schemaSemInternos(f.schema as unknown as FormSchema)
         : (f.schema as unknown as FormSchema),
       category: f.category ? { id: f.category.id, name: f.category.name } : null,
+      // Só para quem fez login. A ação automática exige identidade
+      // provada e não corre na abertura pelo protocolo; anunciá-la ali
+      // seria prometer um e-mail que não vai chegar.
+      acaoAutomatica: somentePublicos ? null : f.acaoAutomatica,
     }));
   }
 

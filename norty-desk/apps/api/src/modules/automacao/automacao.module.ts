@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 
 import { ChannelsModule } from '../channels/channels.module';
+import { AutomacaoController } from './automacao.controller';
 import { AutomacaoService } from './automacao.service';
 import { SenhaService } from './senha.service';
 
@@ -12,6 +13,7 @@ import { SenhaService } from './senha.service';
 @Global()
 @Module({
   imports: [ChannelsModule],
+  controllers: [AutomacaoController],
   providers: [AutomacaoService, SenhaService],
   exports: [AutomacaoService, SenhaService],
 })

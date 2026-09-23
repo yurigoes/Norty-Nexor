@@ -1316,6 +1316,15 @@ export type ModeloDeChamado = {
   schema: FormSchema;
   /** A categoria que o modelo já traz, quando ele tem uma. */
   category: CategoryRef | null;
+  /**
+   * O que o sistema resolve sozinho ao abrir por este modelo.
+   *
+   * **Só vem preenchido para quem fez login.** A ação exige identidade
+   * provada e não corre na abertura pelo protocolo (`docs/13`, seção
+   * 17), então mostrar "resolve na hora" ali seria uma promessa que a
+   * tela não pode cumprir — e a pessoa esperaria o e-mail que não vem.
+   */
+  acaoAutomatica?: AcaoAutomatica | null;
 };
 
 export type EscreverFormularioRequest = {
@@ -2406,6 +2415,26 @@ export type AvisoPush = {
 // ---------------------------------------------------------------------
 // Ações automáticas
 // ---------------------------------------------------------------------
+
+/**
+ * Uma ação automática, como a tela de administração a enxerga.
+ *
+ * Toda ação aparece na lista, inclusive a que ninguém ligou: uma lista
+ * que só mostra o que está ligado não responde "o que dá para
+ * automatizar?", que é metade da pergunta de quem abre a tela.
+ */
+export type AutomacaoView = {
+  acao: AcaoAutomatica;
+  modelos: {
+    id: string;
+    nome: string;
+    /** O modelo aparece para alguém escolher? Se não, a ação está ligada e morta. */
+    ofereceNaTela: boolean;
+    /** O modelo também vale na abertura sem login — onde a ação **não** corre. */
+    tambemSemLogin: boolean;
+    categoria: { id: string; nome: string; exigeAprovacao: boolean } | null;
+  }[];
+};
 
 export const ACOES_AUTOMATICAS = ['RESET_DE_SENHA'] as const;
 export type AcaoAutomatica = (typeof ACOES_AUTOMATICAS)[number];

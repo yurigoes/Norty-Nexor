@@ -22,6 +22,7 @@ import { Rack } from '../modules/datacenter/Rack';
 import { Diretorios } from '../modules/configuracao/Diretorios';
 import { Formularios } from '../modules/configuracao/Formularios';
 import { Times } from '../modules/configuracao/Times';
+import { Automacoes } from '../modules/configuracao/Automacoes';
 import { Copilot } from '../modules/configuracao/Copilot';
 import { Integracoes } from '../modules/configuracao/Integracoes';
 import { CatalogoDoAtivo } from '../modules/configuracao/CatalogoDoAtivo';
@@ -181,6 +182,7 @@ function Aplicativo() {
             <Route path="/config/times" element={<Times />} />
             <Route path="/config/integracoes" element={<Integracoes />} />
             <Route path="/config/copilot" element={<Copilot />} />
+            <Route path="/config/automacoes" element={<Automacoes />} />
             <Route path="/config/modelos-de-chamado" element={<Formularios />} />
             {/* O endereço antigo continua funcionando: a tela mudou de
                 nome, mas quem já a tinha nos favoritos não mudou. */}

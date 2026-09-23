@@ -1256,6 +1256,21 @@
 
 .modelo-frase { font-size: var(--t-micro); color: var(--texto-suave); font-weight: var(--p-regular); }
 
+/* O modelo que o sistema resolve sozinho.
+   Verde, e não amarelo: o amarelo desta paleta rende 1.4:1 sobre
+   branco e nunca carrega texto (CLAUDE.md, regra 6). O verde já é o
+   papel de "deu certo" no sistema, que é o que este bloco promete. */
+.modelo.-automatico { border-color: var(--verde-600); }
+.modelo.-automatico:hover { border-color: var(--verde-600); background: var(--verde-50); }
+
+.modelo-selo {
+  margin-top: var(--e-2);
+  align-self: flex-start;
+  font-size: var(--t-micro);
+  font-weight: var(--p-medio);
+  color: var(--verde-700);
+}
+
 /* ---------- [DESK] Como acessar a máquina ---------- */
 
 .maquina {

@@ -1,6 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { FormularioResolvido, ModeloDeChamado } from '@norty-desk/shared';
+import { ACAO_AUTOMATICA, type FormularioResolvido, type ModeloDeChamado } from '@norty-desk/shared';
 import { validarRespostas } from '@norty-desk/shared';
 import { DEFAULT_PRIORITY_MATRIX, ROTULO_ESCALA, computePriority, type Scale } from './escala';
 
@@ -86,6 +86,22 @@ export function NovoChamado({ noPortal = false }: { noPortal?: boolean }) {
    * Clicar de novo no mesmo bloco desfaz a escolha — é o único jeito de
    * voltar ao formulário da categoria sem recarregar a tela.
    */
+  /**
+   * Os modelos em dois grupos: o que o sistema resolve e o que a
+   * equipe atende.
+   *
+   * `useMemo` com `dataVersion` é a regra 7 do CLAUDE.md, mas aqui a
+   * fonte é o próprio `modelos` no estado — que já foi carregado por um
+   * efeito. Depender de `modelos` basta e é o mais honesto.
+   */
+  const [automaticos, comFila] = useMemo(
+    () => [
+      modelos.filter((m) => m.acaoAutomatica),
+      modelos.filter((m) => !m.acaoAutomatica),
+    ],
+    [modelos],
+  );
+
   function escolherModelo(escolhido: ModeloDeChamado | null) {
     setModelo(escolhido);
     setRespostas({});
@@ -170,21 +186,44 @@ export function NovoChamado({ noPortal = false }: { noPortal?: boolean }) {
 
         {modelos.length > 0 ? (
           <div className="pilha-sm">
-            <span className="campo-rotulo">O que você precisa?</span>
-            <div className="modelos">
-              {modelos.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  className={`modelo ${modelo?.id === m.id ? '-escolhido' : ''}`}
-                  aria-pressed={modelo?.id === m.id}
-                  onClick={() => escolherModelo(modelo?.id === m.id ? null : m)}
-                >
-                  <strong>{m.name}</strong>
-                  {m.description ? <span className="modelo-frase">{m.description}</span> : null}
-                </button>
-              ))}
-            </div>
+            {/* Os que se resolvem sozinhos vêm primeiro, e separados.
+                Misturados no meio dos outros eles não se distinguem de
+                um pedido comum — e a pessoa espera na fila por algo que
+                teria chegado no e-mail dela em dez segundos. */}
+            {automaticos.length > 0 ? (
+              <>
+                <span className="campo-rotulo">Resolve na hora, sem fila</span>
+                <div className="modelos">
+                  {automaticos.map((m) => (
+                    <BlocoDeModelo
+                      key={m.id}
+                      modelo={m}
+                      escolhido={modelo?.id === m.id}
+                      aoEscolher={() => escolherModelo(modelo?.id === m.id ? null : m)}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : null}
+
+            {comFila.length > 0 ? (
+              <>
+                <span className="campo-rotulo">
+                  {automaticos.length > 0 ? 'A equipe atende' : 'O que você precisa?'}
+                </span>
+                <div className="modelos">
+                  {comFila.map((m) => (
+                    <BlocoDeModelo
+                      key={m.id}
+                      modelo={m}
+                      escolhido={modelo?.id === m.id}
+                      aoEscolher={() => escolherModelo(modelo?.id === m.id ? null : m)}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : null}
+
             <span className="campo-ajuda">
               {modelo
                 ? 'Clique de novo no mesmo bloco para voltar ao formulário da categoria.'
@@ -437,5 +476,41 @@ function Observadores({
         Quem você somar aqui enxerga o chamado e recebe as respostas.
       </span>
     </div>
+  );
+}
+
+/**
+ * Um modelo, como bloco clicável.
+ *
+ * O selo de "resolve na hora" fica **no bloco**, e não só no título do
+ * grupo: quem chega pelo teclado ou pelo leitor de tela lê o bloco, não
+ * o cabeçalho três elementos acima.
+ */
+function BlocoDeModelo({
+  modelo,
+  escolhido,
+  aoEscolher,
+}: {
+  modelo: ModeloDeChamado;
+  escolhido: boolean;
+  aoEscolher: () => void;
+}) {
+  const acao = modelo.acaoAutomatica ? ACAO_AUTOMATICA[modelo.acaoAutomatica] : null;
+
+  return (
+    <button
+      type="button"
+      className={`modelo ${escolhido ? '-escolhido' : ''} ${acao ? '-automatico' : ''}`}
+      aria-pressed={escolhido}
+      onClick={aoEscolher}
+    >
+      <strong>{modelo.name}</strong>
+      {modelo.description ? <span className="modelo-frase">{modelo.description}</span> : null}
+      {acao ? (
+        <span className="modelo-selo">
+          <span aria-hidden="true">⚡</span> Resolve na hora
+        </span>
+      ) : null}
+    </button>
   );
 }
