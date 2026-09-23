@@ -623,3 +623,112 @@ describe('whatsapp', () => {
     assert.equal(depois.status, 'ATRIBUIDO', 'quem ainda tem o que dizer não estava resolvido');
   });
 });
+
+// ---------------------------------------------------------------------
+
+/**
+ * O arquivo do técnico chega ao cliente pelo canal da conversa.
+ *
+ * Antes não chegava: anexar criava o evento na linha do tempo e parava
+ * ali. O cliente no WhatsApp via "o chamado foi atualizado" e mais
+ * nada, e o arquivo ficava esperando ele entrar no portal — que é
+ * justamente o que ele não fez ao escolher o WhatsApp.
+ */
+describe('anexo sai pelo canal', () => {
+  /** `fetch` com multipart, que o cliente da suíte não cobre. */
+  async function anexar(
+    token: string,
+    ticketId: string,
+    nome: string,
+    conteudo: string,
+    tipo = 'application/pdf',
+  ) {
+    const form = new FormData();
+    form.append('file', new Blob([conteudo], { type: tipo }), nome);
+
+    const resposta = await fetch(`${api.url}/tickets/${ticketId}/anexos`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+
+    const texto = await resposta.text();
+    assert.equal(resposta.status, 201, texto);
+    return JSON.parse(texto) as { id: string };
+  }
+
+  it('o binário vai junto, e não só o nome do arquivo', async () => {
+    await chegaWhatsapp('wa-anexo-1', '5511999990055', 'O boleto não chegou');
+    await processarTudo();
+    await despacharTudo();
+    simulado.enviados.length = 0;
+
+    const chamado = await prisma.ticket.findFirstOrThrow({
+      where: { subject: 'O boleto não chegou' },
+    });
+
+    const agente = new Cliente(api.url);
+    const entrada = await agente.entrar('agente@teste.dev');
+    const token = (entrada.corpo as { accessToken: string }).accessToken;
+
+    await anexar(token, chamado.id, 'segunda-via.pdf', 'CONTEUDO-DO-BOLETO-4471');
+    await despacharTudo();
+
+    const saida = simulado.enviados.find((e) => e.para === '+5511999990055');
+    assert.ok(saida, 'o anexo não saiu pelo canal do cliente');
+
+    // 1. O arquivo mesmo, com os bytes.
+    assert.equal(saida.anexos?.length, 1, JSON.stringify(saida.anexos?.length));
+    assert.equal(saida.anexos?.[0]?.filename, 'segunda-via.pdf');
+    assert.equal(saida.anexos?.[0]?.bytes.toString('utf8'), 'CONTEUDO-DO-BOLETO-4471');
+
+    // 2. E o texto continua legível sozinho — é o que sai quando o
+    //    arquivo não puder ir, e é o que fica no diagnóstico. Uma
+    //    mensagem que só existe como binário não se lê no banco.
+    assert.ok(saida.corpo.includes('segunda-via.pdf'), saida.corpo);
+    assert.ok(saida.corpo.includes(`#${chamado.number}`), saida.corpo);
+  });
+
+  it('nota interna com anexo não sai — a cerca vale igual aqui', async () => {
+    await chegaWhatsapp('wa-anexo-2', '5511999990056', 'A impressora está falhando');
+    await processarTudo();
+    await despacharTudo();
+    simulado.enviados.length = 0;
+
+    const chamado = await prisma.ticket.findFirstOrThrow({
+      where: { subject: 'A impressora está falhando' },
+    });
+
+    const agente = new Cliente(api.url);
+    const entrada = await agente.entrar('agente@teste.dev');
+    const token = (entrada.corpo as { accessToken: string }).accessToken;
+
+    // Uma nota interna com o arquivo junto: o evento é interno, e o
+    // anexo pendurado nele não pode viajar. É o pior erro possível
+    // deste produto, e o caminho novo do anexo é um caminho novo por
+    // onde ele poderia acontecer.
+    const nota = await agente.post<{ id: string }>(`/tickets/${chamado.id}/responder`, {
+      body: 'Laudo do fornecedor, não mostrar ao cliente.',
+      visibility: 'INTERNA',
+    });
+    assert.equal(nota.status, 201, JSON.stringify(nota.corpo));
+
+    const form = new FormData();
+    form.append('file', new Blob(['LAUDO-CONFIDENCIAL-9912'], { type: 'application/pdf' }), 'laudo.pdf');
+    const resposta = await fetch(
+      `${api.url}/tickets/${chamado.id}/anexos?eventId=${nota.corpo.id}`,
+      { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form },
+    );
+    assert.equal(resposta.status, 201, await resposta.text());
+
+    await despacharTudo();
+
+    const vazou = simulado.enviados.find(
+      (e) =>
+        e.para === '+5511999990056' &&
+        (e.corpo.includes('laudo.pdf') ||
+          e.anexos?.some((a) => a.bytes.toString('utf8').includes('LAUDO-CONFIDENCIAL'))),
+    );
+    assert.equal(vazou, undefined, 'o anexo de uma nota interna saiu pelo canal externo');
+  });
+});

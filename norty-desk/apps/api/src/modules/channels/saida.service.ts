@@ -69,6 +69,9 @@ export class SaidaService {
           },
         },
         author: { select: { name: true } },
+        attachments: {
+          select: { id: true, filename: true, contentType: true, sizeBytes: true },
+        },
       },
     });
 
@@ -132,10 +135,26 @@ export class SaidaService {
     }
 
 
+    // O arquivo vai junto, e não só o nome dele.
+    //
+    // Antes o cliente recebia "orcamento.pdf" e mais nada: o nome de um
+    // arquivo que ele não tinha como abrir. Pior que não avisar, porque
+    // parece que algo chegou. Agora o binário viaja pelo mesmo canal da
+    // conversa.
+    const anexos =
+      evento.type === 'ANEXO' || evento.attachments.length > 0
+        ? evento.attachments.map((a) => ({
+            id: a.id,
+            filename: a.filename,
+            contentType: a.contentType,
+            sizeBytes: a.sizeBytes,
+          }))
+        : [];
+
     const corpo = SaidaService.montarCorpo(
       canal,
       chamado.number,
-      evento.body,
+      evento.type === 'ANEXO' ? SaidaService.fraseDoAnexo(anexos) : evento.body,
       evento.author?.name,
       evento.aiGenerated,
     );
@@ -152,6 +171,10 @@ export class SaidaService {
           toAddress: para,
           subject: canal === 'EMAIL' ? emailSubject(chamado.number, chamado.subject) : null,
           body: corpo,
+          // `body` continua legível sozinho: é o que sai se o arquivo
+          // não puder ir (limite do canal, armazenamento fora do ar), e
+          // é o que fica no diagnóstico.
+          payload: anexos.length > 0 ? { tipo: 'ANEXOS', anexos } : undefined,
           externalId: canal === 'EMAIL' ? this.novoMessageId(chamado.id) : null,
         },
       });
@@ -159,6 +182,19 @@ export class SaidaService {
     }
 
     return enfileirados;
+  }
+
+  /**
+   * A frase que acompanha o arquivo.
+   *
+   * O evento de anexo guarda o nome do arquivo em `body`, e mandá-lo
+   * cru deixava a pessoa com "IMG-20260923-WA0007.jpg" solto na
+   * conversa, sem saber se era para ela, se era resposta, ou o quê.
+   */
+  private static fraseDoAnexo(anexos: { filename: string }[]): string {
+    if (anexos.length === 0) return 'Um arquivo foi anexado ao chamado.';
+    if (anexos.length === 1) return `Segue o arquivo: ${anexos[0]!.filename}`;
+    return `Seguem ${anexos.length} arquivos.`;
   }
 
   /**

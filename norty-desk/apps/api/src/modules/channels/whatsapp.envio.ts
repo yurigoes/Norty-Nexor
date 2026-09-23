@@ -119,8 +119,57 @@ export class EnvioDeWhatsapp implements PortaDeEnvio {
       return { externalId: resposta.id };
     }
 
+    if (despacho.anexos?.length) {
+      // A legenda vai no **primeiro** arquivo, e não em todos: repetida,
+      // a mesma frase aparece embaixo de cada foto, e três fotos viram
+      // três vezes "Segue o arquivo".
+      let ultimo: string | undefined;
+
+      for (const [i, anexo] of despacho.anexos.entries()) {
+        const mediaId = await this.meta.subirMidia(daMeta, {
+          bytes: anexo.bytes,
+          mimeType: anexo.contentType,
+          filename: anexo.filename,
+        });
+
+        const resposta = await this.meta.enviarMidia(daMeta, despacho.para, {
+          tipo: EnvioDeWhatsapp.tipoDaMidia(anexo.contentType),
+          mediaId,
+          legenda: i === 0 ? despacho.corpo : undefined,
+          filename: anexo.filename,
+        });
+
+        ultimo = resposta.id ?? ultimo;
+      }
+
+      return { externalId: ultimo };
+    }
+
     const resposta = await this.meta.enviarTexto(daMeta, despacho.para, despacho.corpo);
     return { externalId: resposta.id };
+  }
+
+  /**
+   * O tipo de mídia que a Meta espera, a partir do `Content-Type`.
+   *
+   * `document` é o destino de tudo que não é foto, vídeo ou áudio — e é
+   * o certo: mandar um `.xlsx` como `image` faz a Meta recusar a
+   * mensagem inteira.
+   *
+   * Áudio gravado no navegador chega como `audio/webm`, que a Meta
+   * **não** aceita como `audio`. Vai como documento: chega tocável no
+   * aparelho, em vez de não chegar.
+   */
+  private static tipoDaMidia(contentType: string): 'image' | 'document' | 'audio' | 'video' {
+    const tipo = contentType.split(';')[0]!.trim().toLowerCase();
+
+    if (tipo.startsWith('image/')) return 'image';
+    if (tipo.startsWith('video/')) return 'video';
+    if (tipo === 'audio/ogg' || tipo === 'audio/mpeg' || tipo === 'audio/mp4' || tipo === 'audio/amr') {
+      return 'audio';
+    }
+
+    return 'document';
   }
 
   private async pelaEvolution(
@@ -140,6 +189,26 @@ export class EnvioDeWhatsapp implements PortaDeEnvio {
         daConta.instance || this.config.get<string>('EVOLUTION_INSTANCE') || 'norty-desk',
       apiKey: daConta.apiKey || this.config.get<string>('EVOLUTION_API_KEY') || '',
     };
+
+    if (despacho.anexos?.length) {
+      let ultimo: string | undefined;
+
+      for (const [i, anexo] of despacho.anexos.entries()) {
+        const resposta = await this.evolution.enviarMidia(config, despacho.para, {
+          // A Evolution usa outro vocabulário de tipos, e não conhece
+          // `video` separado de `document` em todas as versões. O
+          // mapeamento é o mesmo da Meta, traduzido.
+          mediatype: EnvioDeWhatsapp.tipoDaMidia(anexo.contentType),
+          fileName: anexo.filename,
+          media: anexo.bytes.toString('base64'),
+          ...(i === 0 ? { caption: despacho.corpo } : {}),
+        });
+
+        ultimo = resposta.key?.id ?? ultimo;
+      }
+
+      return { externalId: ultimo };
+    }
 
     // A Evolution não desenha lista de toque. O `corpo` já é a mesma
     // coisa escrita — por isso toda lista nasce com a versão em texto,

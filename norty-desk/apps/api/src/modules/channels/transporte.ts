@@ -37,6 +37,22 @@ export type Despacho = {
    * fica legível no diagnóstico.
    */
   lista?: ListaInterativa;
+  /**
+   * Os arquivos que vão junto da mensagem.
+   *
+   * `corpo` continua legível sozinho: é o que sai quando o arquivo não
+   * pode ir — acima do limite do canal, armazenamento fora do ar — e é
+   * o que fica no diagnóstico. Uma mensagem que só existe como binário
+   * não se lê no banco.
+   */
+  anexos?: AnexoParaEnviar[];
+};
+
+/** Um arquivo já lido do armazenamento, pronto para sair. */
+export type AnexoParaEnviar = {
+  filename: string;
+  contentType: string;
+  bytes: Buffer;
 };
 
 export interface PortaDeEnvio {
@@ -86,6 +102,18 @@ export class EnvioPorEmail implements PortaDeEnvio {
       to: despacho.para,
       subject: despacho.assunto,
       text: despacho.corpo,
+      // O arquivo vai anexado, e não como link: link de anexo de
+      // chamado exige sessão, e quem recebe por e-mail pode não ter uma
+      // — era clicar, cair no login e desistir.
+      ...(despacho.anexos?.length
+        ? {
+            attachments: despacho.anexos.map((a) => ({
+              filename: a.filename,
+              content: a.bytes,
+              contentType: a.contentType,
+            })),
+          }
+        : {}),
       // O `Message-ID` é nosso e determinístico: é a âncora do
       // threading. `In-Reply-To` e `References` fazem o cliente de
       // e-mail agrupar, e fazem a resposta voltar identificada.

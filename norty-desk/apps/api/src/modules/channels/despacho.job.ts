@@ -1,9 +1,11 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
+import { PORTA_DE_ARMAZENAMENTO, type PortaDeArmazenamento } from '../attachments/armazenamento';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { PORTAS_DE_ENVIO, type PortasDeEnvio } from './canais.tokens';
 import type { ListaInterativa } from './meta.mensagem';
+import type { AnexoParaEnviar } from './transporte';
 
 /**
  * Backoff da retentativa: 1 min, 5 min, 15 min, 1 h.
@@ -14,6 +16,16 @@ import type { ListaInterativa } from './meta.mensagem';
  */
 const ESPERA_MINUTOS = [1, 5, 15, 60];
 
+/**
+ * O maior arquivo que sai por canal externo.
+ *
+ * O WhatsApp aceita 16 MB para mídia e 100 MB para documento; o e-mail
+ * de quem recebe costuma cortar em 25 MB. Dezesseis é o menor teto
+ * comum, e mandar o que vai ser recusado do outro lado é gastar
+ * quatro tentativas para nada.
+ */
+const LIMITE_DE_ANEXO = 16 * 1024 * 1024;
+
 @Injectable()
 export class DespachoJob {
   private readonly logger = new Logger(DespachoJob.name);
@@ -21,6 +33,7 @@ export class DespachoJob {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(PORTAS_DE_ENVIO) private readonly portas: PortasDeEnvio,
+    @Inject(PORTA_DE_ARMAZENAMENTO) private readonly armazenamento: PortaDeArmazenamento,
   ) {}
 
   @Cron(CronExpression.EVERY_30_SECONDS)
@@ -88,6 +101,7 @@ export class DespachoJob {
         // A lista de toque viaja em `payload`; `body` é a mesma coisa
         // escrita, para o transporte que não desenha lista.
         lista: DespachoJob.listaDoPayload(mensagem.payload),
+        anexos: await this.anexosDoPayload(mensagem.payload),
       });
 
       await this.prisma.outboundMessage.update({
@@ -119,6 +133,62 @@ export class DespachoJob {
         this.logger.error(`Mensagem ${id} falhou nas ${tentativas} tentativas. Desisti.`);
       }
     }
+  }
+
+  /**
+   * Lê do armazenamento os arquivos que a mensagem carrega.
+   *
+   * **Aqui, e não no enfileiramento.** Guardar o binário na fila
+   * transformaria a tabela de saída num segundo armazenamento — com
+   * cópia do arquivo por destinatário, e ela fica no banco para sempre.
+   * A fila guarda o id; o byte é buscado na hora de sair.
+   *
+   * Arquivo que não abre não derruba a mensagem: o texto (`corpo`) já
+   * diz o que era, e a pessoa pede de novo. Derrubar faria a fila
+   * tentar quatro vezes um arquivo que continua não abrindo.
+   */
+  private async anexosDoPayload(payload: unknown): Promise<AnexoParaEnviar[] | undefined> {
+    if (!payload || typeof payload !== 'object') return undefined;
+
+    const bruto = payload as { tipo?: string; anexos?: { id?: string; filename?: string }[] };
+    if (bruto.tipo !== 'ANEXOS' || !Array.isArray(bruto.anexos)) return undefined;
+
+    const prontos: AnexoParaEnviar[] = [];
+
+    for (const referencia of bruto.anexos) {
+      if (!referencia?.id) continue;
+
+      const anexo = await this.prisma.attachment.findUnique({
+        where: { id: referencia.id },
+        select: { filename: true, contentType: true, sizeBytes: true, storageKey: true },
+      });
+
+      if (!anexo) continue;
+
+      if (anexo.sizeBytes > LIMITE_DE_ANEXO) {
+        this.logger.warn(
+          `Anexo ${referencia.id} tem ${anexo.sizeBytes} bytes e não cabe no canal; ` +
+            'a mensagem sai só com o texto.',
+        );
+        continue;
+      }
+
+      try {
+        const fluxo = await this.armazenamento.ler(anexo.storageKey);
+        const pedacos: Buffer[] = [];
+        for await (const pedaco of fluxo) pedacos.push(Buffer.from(pedaco as Buffer));
+
+        prontos.push({
+          filename: anexo.filename,
+          contentType: anexo.contentType,
+          bytes: Buffer.concat(pedacos),
+        });
+      } catch (erro) {
+        this.logger.warn(`Não consegui ler o anexo ${referencia.id}: ${String(erro)}`);
+      }
+    }
+
+    return prontos.length > 0 ? prontos : undefined;
   }
 
   /**

@@ -1179,8 +1179,27 @@
 
 /* O anexo e o botão de retirar na mesma linha: o botão pertence ao
    arquivo, e numa linha própria pareceria pertencer à mensagem. */
+.conversa-anexo-item { display: flex; flex-direction: column; gap: var(--e-1); }
 .conversa-anexo-linha { display: flex; align-items: center; gap: var(--e-2); }
 .conversa-anexo-linha .conversa-anexo { flex: 1 1 auto; min-width: 0; }
+
+/* [DESK] Prévia de foto e áudio na conversa.
+   A largura máxima é a da coluna de leitura, não a da tela: uma foto de
+   celular em tamanho cheio empurra a conversa para fora do enquadramento
+   e a pessoa perde o fio. */
+.conversa-previa {
+  display: block;
+  max-width: min(320px, 100%);
+  max-height: 240px;
+  width: auto;
+  height: auto;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--borda);
+  object-fit: cover;
+  background: var(--superficie-hover);
+}
+
+.conversa-audio { width: min(320px, 100%); height: 36px; }
 
 /* O × que tira alguém do selo. Herda a cor do selo para não virar um
    segundo tom dentro de uma peça que já tem o seu. */

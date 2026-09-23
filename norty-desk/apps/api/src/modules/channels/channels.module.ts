@@ -55,7 +55,9 @@ function criarPortas(
    */
   imports: [
     ConfigModule,
-    AttachmentsModule,
+    // `forwardRef` dos dois lados aqui também: anexar precisa mandar
+    // pelo canal, e o canal precisa anexar o que recebeu.
+    forwardRef(() => AttachmentsModule),
     RegrasModule,
     AuthModule,
     forwardRef(() => TicketsModule),

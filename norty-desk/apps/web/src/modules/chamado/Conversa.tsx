@@ -2,13 +2,14 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   NOME_DA_IA,
   podeRemoverAnexo,
+  type AttachmentView,
   type CopilotIntencao,
   type TicketDetail,
   type TicketEventView,
 } from '@norty-desk/shared';
 
 import * as api from '../../api/endpoints';
-import { ErroDaApi } from '../../api/cliente';
+import { ErroDaApi, buscarComoBlob } from '../../api/cliente';
 import { useAutenticacao, useRecurso } from '../../auth/Autenticacao';
 import { ROTULO_CANAL, ROTULO_STATUS, dataCurta, iniciais, modificadorCanal } from '../../lib/formato';
 import { EscolherModelo } from '../modelo/EscolherModelo';
@@ -163,37 +164,41 @@ function Evento({
               podeRemoverAnexo(perfil.role, perfil.user.id, anexo);
 
             return (
-              <div key={anexo.id} className="conversa-anexo-linha">
-                <a
-                  className="conversa-anexo"
-                  href={api.urlDoAnexo(anexo.id)}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <span aria-hidden="true">📎</span>
-                  {anexo.filename}
-                  <span className="conversa-anexo-peso">
-                    {Math.round(anexo.sizeBytes / 1024)} KB
-                  </span>
-                </a>
+              <div key={anexo.id} className="conversa-anexo-item">
+                <Previa anexo={anexo} />
 
-                {podeRetirar ? (
-                  <button
-                    type="button"
-                    className="btn -fantasma -sm"
-                    disabled={retirando === anexo.id}
-                    aria-label={`Retirar ${anexo.filename}`}
-                    onClick={() => {
-                      setRetirando(anexo.id);
-                      void api
-                        .removerAnexo(anexo.id)
-                        .then(aoMudar)
-                        .finally(() => setRetirando(null));
-                    }}
+                <div className="conversa-anexo-linha">
+                  <a
+                    className="conversa-anexo"
+                    href={api.urlDoAnexo(anexo.id)}
+                    target="_blank"
+                    rel="noreferrer"
                   >
-                    Retirar
-                  </button>
-                ) : null}
+                    <span aria-hidden="true">📎</span>
+                    {anexo.filename}
+                    <span className="conversa-anexo-peso">
+                      {Math.round(anexo.sizeBytes / 1024)} KB
+                    </span>
+                  </a>
+
+                  {podeRetirar ? (
+                    <button
+                      type="button"
+                      className="btn -fantasma -sm"
+                      disabled={retirando === anexo.id}
+                      aria-label={`Retirar ${anexo.filename}`}
+                      onClick={() => {
+                        setRetirando(anexo.id);
+                        void api
+                          .removerAnexo(anexo.id)
+                          .then(aoMudar)
+                          .finally(() => setRetirando(null));
+                      }}
+                    >
+                      Retirar
+                    </button>
+                  ) : null}
+                </div>
               </div>
             );
           })}
@@ -532,6 +537,8 @@ function Responder({ chamado, aoEnviar }: { chamado: TicketDetail; aoEnviar: () 
           {arquivo ? arquivo.name.slice(0, 24) : 'Anexar'}
         </label>
 
+        <GravarAudio aoGravar={setArquivo} desabilitado={enviando} />
+
         <button
           type="submit"
           className={`btn -primario responder-enviar ${enviando ? '-carregando' : ''}`}
@@ -541,5 +548,230 @@ function Responder({ chamado, aoEnviar }: { chamado: TicketDetail; aoEnviar: () 
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * A prévia de um anexo, quando é seguro desenhá-lo.
+ *
+ * ## Por que só foto e áudio
+ *
+ * A rota de anexo manda `Content-Disposition: attachment` e `nosniff`
+ * de propósito: um HTML anexado por terceiro, servido inline na origem
+ * da API, executaria script com a sessão ao alcance. Aqui o arquivo
+ * vira `blob:` **desta** aba, então a mesma pergunta volta — e a
+ * resposta é desenhar só o que não executa: imagem e áudio. Todo o
+ * resto continua sendo um link para baixar.
+ *
+ * O tipo passado ao `Blob` é o que **nós** decidimos a partir de uma
+ * lista fechada, não o que o servidor mandou: aceitar o do servidor
+ * devolveria a decisão a quem subiu o arquivo.
+ *
+ * ## Por que buscar em vez de apontar
+ *
+ * A rota pede `Authorization`, e o navegador não manda o `Bearer` num
+ * `<img src>`. Abrir a rota para resolver isso seria trocar uma prévia
+ * por um vazamento.
+ */
+function Previa({ anexo }: { anexo: AttachmentView }) {
+  const [endereco, setEndereco] = useState<string | null>(null);
+  const tipo = tipoSeguro(anexo.contentType);
+
+  useEffect(() => {
+    if (!tipo) return undefined;
+
+    let vivo = true;
+    let criado: string | null = null;
+
+    void buscarComoBlob(`/anexos/${anexo.id}`, tipo.mime)
+      .then((url) => {
+        criado = url;
+        // Desmontado antes de chegar: solta agora, senão o blob fica na
+        // memória da aba até ela fechar.
+        if (vivo) setEndereco(url);
+        else URL.revokeObjectURL(url);
+      })
+      // Falha em silêncio: o link de baixar continua logo abaixo, e um
+      // erro vermelho por uma prévia que não carregou é barulho.
+      .catch(() => undefined);
+
+    return () => {
+      vivo = false;
+      if (criado) URL.revokeObjectURL(criado);
+    };
+  }, [anexo.id, tipo]);
+
+  if (!tipo || !endereco) return null;
+
+  if (tipo.familia === 'imagem') {
+    return (
+      <a href={api.urlDoAnexo(anexo.id)} target="_blank" rel="noreferrer">
+        <img className="conversa-previa" src={endereco} alt={anexo.filename} loading="lazy" />
+      </a>
+    );
+  }
+
+  // Sem `<track>`: áudio de conversa não tem legenda a oferecer. O que
+  // há é o texto do evento ao lado — e, no WhatsApp, a transcrição
+  // entra como corpo da mensagem.
+  return <audio className="conversa-audio" controls preload="none" src={endereco} />;
+}
+
+/**
+ * Os tipos que dá para desenhar, numa lista fechada.
+ *
+ * Fechada, e não "começa com image/": `image/svg+xml` é XML, e XML com
+ * `<script>` dentro executa quando o navegador o desenha. Um SVG
+ * anexado por terceiro numa aba nossa é a mesma falha que o HTML.
+ */
+function tipoSeguro(contentType: string): { familia: 'imagem' | 'audio'; mime: string } | null {
+  const tipo = contentType.split(';')[0]!.trim().toLowerCase();
+
+  const imagens = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif'];
+  if (imagens.includes(tipo)) return { familia: 'imagem', mime: tipo };
+
+  const audios = ['audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/webm', 'audio/wav', 'audio/aac'];
+  if (audios.includes(tipo)) return { familia: 'audio', mime: tipo };
+
+  return null;
+}
+
+/** Extensão e tipo do que o navegador consegue gravar, na ordem da preferência. */
+const FORMATOS_DE_AUDIO = [
+  // Ogg/Opus é o que o WhatsApp toca nativamente, e o Firefox grava.
+  { mime: 'audio/ogg;codecs=opus', extensao: 'ogg' },
+  // O Chrome só grava webm. A Meta não aceita webm como `audio`, então
+  // ele sai como documento — chega tocável no aparelho, em vez de não
+  // chegar. É o compromisso, e está escrito para ninguém descobrir
+  // depois.
+  { mime: 'audio/webm;codecs=opus', extensao: 'webm' },
+  { mime: 'audio/webm', extensao: 'webm' },
+  { mime: 'audio/mp4', extensao: 'm4a' },
+];
+
+/**
+ * Gravar um recado de voz na própria caixa de resposta.
+ *
+ * Quem atende em campo, com o celular na mão, digita mal e devagar —
+ * e o cliente do outro lado está no WhatsApp, onde o áudio é a moeda
+ * corrente. Uma resposta de voz de vinte segundos sai mais rápida e
+ * mais clara que dois parágrafos digitados no ônibus.
+ *
+ * O áudio entra como **anexo comum**: mesma linha do tempo, mesmo
+ * armazenamento, mesma regra de retirada. Não há "mensagem de voz" no
+ * modelo — teria virado uma segunda história do mesmo atendimento, que
+ * é o defeito que a regra 8 existe para corrigir.
+ *
+ * O botão só aparece onde dá para gravar. `MediaRecorder` não existe em
+ * navegador antigo, e `getUserMedia` exige HTTPS — em `http://` sem
+ * TLS ele simplesmente não está lá. Mostrar um botão que abre um erro
+ * é pior que não mostrar.
+ */
+function GravarAudio({
+  aoGravar,
+  desabilitado,
+}: {
+  aoGravar: (arquivo: File) => void;
+  desabilitado: boolean;
+}) {
+  const [gravando, setGravando] = useState(false);
+  const [segundos, setSegundos] = useState(0);
+  const [erro, setErro] = useState<string | null>(null);
+  const gravador = useRef<MediaRecorder | null>(null);
+
+  const disponivel =
+    typeof window !== 'undefined' &&
+    typeof MediaRecorder !== 'undefined' &&
+    Boolean(navigator.mediaDevices?.getUserMedia);
+
+  // O relógio da gravação. Sem ele a pessoa não sabe se está gravando
+  // há cinco segundos ou há cinco minutos — e manda um áudio de cinco
+  // minutos.
+  useEffect(() => {
+    if (!gravando) return undefined;
+    const relogio = setInterval(() => setSegundos((s) => s + 1), 1000);
+    return () => clearInterval(relogio);
+  }, [gravando]);
+
+  // Soltar o microfone ao sair da tela. Sem isto a luz da câmera/mic
+  // fica acesa depois que a pessoa navegou para outro chamado — e ela
+  // com razão acha que está sendo ouvida.
+  useEffect(() => {
+    return () => {
+      gravador.current?.stream.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  if (!disponivel) return null;
+
+  async function comecar() {
+    setErro(null);
+    try {
+      const fluxo = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const formato =
+        FORMATOS_DE_AUDIO.find((f) => MediaRecorder.isTypeSupported(f.mime)) ?? null;
+
+      const rec = new MediaRecorder(fluxo, formato ? { mimeType: formato.mime } : undefined);
+      const pedacos: Blob[] = [];
+
+      rec.ondataavailable = (e) => {
+        if (e.data.size > 0) pedacos.push(e.data);
+      };
+
+      rec.onstop = () => {
+        // O microfone solta **aqui**, e não no clique de parar: parar o
+        // gravador é assíncrono, e soltar antes corta o último pedaço.
+        fluxo.getTracks().forEach((t) => t.stop());
+
+        const tipo = formato?.mime.split(';')[0] ?? 'audio/webm';
+        const blob = new Blob(pedacos, { type: tipo });
+
+        // Menos de um segundo é toque sem querer, não recado.
+        if (blob.size < 1000) return;
+
+        const carimbo = new Date().toISOString().slice(11, 19).replace(/:/g, '');
+        aoGravar(
+          new File([blob], `recado-${carimbo}.${formato?.extensao ?? 'webm'}`, { type: tipo }),
+        );
+      };
+
+      rec.start();
+      gravador.current = rec;
+      setSegundos(0);
+      setGravando(true);
+    } catch {
+      // Permissão negada, sem microfone, ou `http://` sem TLS. Uma
+      // frase, e a caixa de resposta continua a caixa de resposta.
+      setErro('Não consegui usar o microfone. Verifique a permissão do navegador.');
+    }
+  }
+
+  function parar() {
+    gravador.current?.stop();
+    gravador.current = null;
+    setGravando(false);
+  }
+
+  if (erro) {
+    return (
+      <span className="campo-ajuda" role="status">
+        {erro}
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className={`btn -sm ${gravando ? '-perigo' : '-secundario'}`}
+      disabled={desabilitado}
+      aria-pressed={gravando}
+      onClick={() => (gravando ? parar() : void comecar())}
+    >
+      <span aria-hidden="true">{gravando ? '⏹' : '🎙'}</span>{' '}
+      {gravando
+        ? `Parar (${String(Math.floor(segundos / 60)).padStart(2, '0')}:${String(segundos % 60).padStart(2, '0')})`
+        : 'Gravar áudio'}
+    </button>
   );
 }

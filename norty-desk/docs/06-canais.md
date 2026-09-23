@@ -527,6 +527,84 @@ cliente por não ter mandado.
 
 ---
 
+## 3B. Mídia na conversa, nos dois sentidos
+
+*(acrescentado depois)*
+
+### 3B.1 O arquivo do técnico sai pelo canal
+
+Antes não saía. Anexar criava o evento na linha do tempo e parava ali:
+o cliente no WhatsApp via "o chamado foi atualizado" e mais nada, e o
+arquivo ficava esperando ele entrar no portal — que é justamente o que
+ele não fez ao escolher o WhatsApp.
+
+Agora o binário viaja pelo mesmo canal da conversa: pela Meta (subindo
+para o armazenamento dela e mandando por `media_id`), pela Evolution
+(em base64) e pelo e-mail (anexado, e não como link — link de anexo
+pede sessão, e quem recebe por e-mail pode não ter uma).
+
+Três decisões:
+
+**O texto continua legível sozinho.** `body` traz "Segue o arquivo:
+segunda-via.pdf" e o número do chamado. É o que sai quando o arquivo
+não pode ir — acima de 16 MB, armazenamento fora do ar — e é o que fica
+no diagnóstico. Uma mensagem que só existe como binário não se lê no
+banco.
+
+**O byte é lido na hora de sair, não no enfileiramento.** Guardá-lo na
+fila transformaria a tabela de saída num segundo armazenamento, com uma
+cópia por destinatário, e ela fica no banco para sempre. A fila guarda
+o id.
+
+**A cerca da nota interna vale igual.** O caminho novo do anexo é um
+caminho novo por onde o pior erro deste produto poderia acontecer, e
+por isso ele tem teste próprio: um anexo pendurado numa nota interna
+não viaja.
+
+O limite é 16 MB — o WhatsApp aceita 16 para mídia, o e-mail de quem
+recebe costuma cortar em 25, e mandar o que vai ser recusado do outro
+lado é gastar quatro tentativas para nada.
+
+### 3B.2 Recado de voz na caixa de resposta
+
+Quem atende em campo, com o celular na mão, digita mal e devagar — e o
+cliente está no WhatsApp, onde o áudio é a moeda corrente. Um recado de
+vinte segundos sai mais rápido e mais claro que dois parágrafos
+digitados no ônibus.
+
+O áudio entra como **anexo comum**: mesma linha do tempo, mesmo
+armazenamento, mesma regra de retirada. Não existe "mensagem de voz" no
+modelo — teria virado uma segunda história do mesmo atendimento, que é
+o defeito que a regra 8 do CLAUDE.md existe para corrigir.
+
+O botão só aparece onde dá para gravar: `MediaRecorder` não existe em
+navegador antigo, e `getUserMedia` exige HTTPS. Mostrar um botão que
+abre um erro é pior que não mostrar.
+
+Um detalhe que vale saber antes de estranhar: o Chrome só grava
+**webm**, e a Meta não aceita webm como `audio`. Ele sai como
+documento — chega tocável no aparelho, em vez de não chegar. O Firefox
+grava Ogg/Opus, que é o formato nativo do WhatsApp.
+
+### 3B.3 Foto e áudio aparecem na própria conversa
+
+A prévia é só para **foto e áudio**, e a lista de tipos é fechada.
+
+A rota de anexo manda `Content-Disposition: attachment` e `nosniff` de
+propósito: um HTML anexado por terceiro, servido inline na origem da
+API, executaria script com a sessão ao alcance. Na tela o arquivo vira
+`blob:` **daquela aba**, então a mesma pergunta volta — e a resposta é
+desenhar só o que não executa.
+
+Fechada, e não "começa com `image/`": `image/svg+xml` é XML, e XML com
+`<script>` dentro executa quando o navegador o desenha.
+
+O arquivo é **buscado com o token** e vira blob local, porque o
+navegador não manda o `Bearer` num `<img src>`. Abrir a rota para
+resolver isso seria trocar uma prévia por um vazamento.
+
+---
+
 ## 4. API pública de entrada
 
 Para sistemas da Norty abrirem chamado sem usuário humano.

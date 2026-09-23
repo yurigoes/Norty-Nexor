@@ -4,6 +4,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import { podeRemoverAnexo, type AttachmentView, type Channel } from '@norty-desk/shared';
 import { createHash, randomUUID } from 'node:crypto';
@@ -11,6 +12,7 @@ import type { Readable } from 'node:stream';
 
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { SaidaService } from '../channels/saida.service';
 import { escopoDeLeitura } from '../tickets/tickets.escopo';
 import { PORTA_DE_ARMAZENAMENTO, type PortaDeArmazenamento } from './armazenamento';
 
@@ -25,6 +27,12 @@ export class AttachmentsService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(PORTA_DE_ARMAZENAMENTO) private readonly armazenamento: PortaDeArmazenamento,
+    // `forwardRef` porque o ciclo é real e é do domínio: anexar precisa
+    // mandar pelo canal, e o canal precisa anexar o que recebeu.
+    // Resolvê-lo movendo código criaria um terceiro módulo que não
+    // corresponde a nada — a mesma razão do ciclo entre chamados e
+    // canais.
+    @Inject(forwardRef(() => SaidaService)) private readonly saida: SaidaService,
   ) {}
 
   /**
@@ -103,10 +111,9 @@ export class AttachmentsService {
     // Anexar é um evento na timeline: sem isso o arquivo apareceria no
     // chamado sem que a conversa registrasse quando e por quem
     // (`docs/02-gap-analysis.md`, item 16).
-    const evento =
-      eventId ??
-      (
-        await this.prisma.ticketEvent.create({
+    const eventoNovo = eventId
+      ? null
+      : await this.prisma.ticketEvent.create({
           data: {
             ticketId,
             type: 'ANEXO',
@@ -116,8 +123,9 @@ export class AttachmentsService {
             body: nome,
           },
           select: { id: true },
-        })
-      ).id;
+        });
+
+    const evento = eventId ?? eventoNovo!.id;
 
     const anexo = await this.prisma.attachment.create({
       data: {
@@ -131,6 +139,21 @@ export class AttachmentsService {
         uploadedById,
       },
     });
+
+    // O arquivo sai pelo canal da conversa.
+    //
+    // Antes não saía: o cliente no WhatsApp via "o chamado foi
+    // atualizado" e mais nada, e o arquivo ficava esperando ele entrar
+    // no portal — que é justamente o que ele não fez ao escolher o
+    // WhatsApp.
+    //
+    // **Só quando o evento nasce aqui.** Com `eventId` recebido, o
+    // evento é de outra coisa (uma resposta com anexo, uma mídia que
+    // veio do próprio cliente) e quem o criou já cuidou do envio;
+    // enfileirar de novo mandaria a foto do cliente de volta para ele.
+    if (eventoNovo) {
+      await this.saida.enfileirarEventoDoChamado(eventoNovo.id);
+    }
 
     return this.paraVista(anexo);
   }

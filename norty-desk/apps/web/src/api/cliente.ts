@@ -181,6 +181,42 @@ export async function baixar(caminho: string, nomeDoArquivo: string): Promise<vo
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Busca um arquivo da API e devolve um endereço local para ele.
+ *
+ * Existe porque a rota de anexo pede `Authorization`, e o navegador não
+ * manda o `Bearer` num `<img src>`. Sem isto, prévia de foto na conversa
+ * seria impossível sem abrir a rota — que é o que não se quer.
+ *
+ * **Só para o que é seguro desenhar.** Quem chama decide, pelo
+ * `Content-Type`, se é imagem ou áudio; um HTML anexado por terceiro
+ * virando `blob:` numa aba nossa executaria script com a sessão ao
+ * alcance. A rota continua mandando `Content-Disposition: attachment` e
+ * `nosniff` para o caminho de baixar, e isso não muda.
+ *
+ * Quem chamar precisa devolver o endereço com `URL.revokeObjectURL`:
+ * blob que ninguém solta fica na memória da aba até ela fechar.
+ */
+export async function buscarComoBlob(caminho: string, tipo: string): Promise<string> {
+  const resposta = await fetch(`${BASE}${caminho}`, {
+    credentials: 'include',
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  });
+
+  if (!resposta.ok) {
+    throw new ErroDaApi(resposta.status, {
+      type: 'sobre:em-branco',
+      title: 'Não foi possível carregar o arquivo.',
+      status: resposta.status,
+    });
+  }
+
+  // O tipo é o que **nós** decidimos, não o que o servidor mandou: é
+  // ele que diz ao navegador como tratar os bytes, e aceitar o do
+  // servidor devolveria a decisão a quem subiu o arquivo.
+  return URL.createObjectURL(new Blob([await resposta.arrayBuffer()], { type: tipo }));
+}
+
 /** Tenta recuperar a sessão pelo cookie, na subida do aplicativo. */
 export async function recuperarSessao(): Promise<boolean> {
   return renovar();
