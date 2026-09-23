@@ -236,7 +236,7 @@ describe('catálogo', () => {
 
     const guardado = await prisma.user.findUniqueOrThrow({ where: { email: 'nova@teste.dev' } });
     assert.equal(guardado.mustChangePassword, true);
-    assert.ok(guardado.passwordHash.startsWith('$argon2id$'));
+    assert.ok(guardado.passwordHash?.startsWith('$argon2id$'));
   });
 
   it('nunca devolve o hash da senha', async () => {

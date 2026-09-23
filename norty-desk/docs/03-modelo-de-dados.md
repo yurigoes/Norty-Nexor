@@ -13,7 +13,7 @@ substitui no GLPI.
 | Desk | Substitui no GLPI | Mudança |
 |---|---|---|
 | `Organization` | `glpi_entities` | plana, sem herança recursiva |
-| `User` | `glpi_users` | senha Argon2id, hash nunca serializado |
+| `User` | `glpi_users` | senha Argon2id, hash nunca serializado; **nulo = cadastro de uso**, que existe no inventário e não entra |
 | `Membership` | `glpi_profiles_users` | sem `is_recursive` |
 | `Team` | `glpi_groups` | grupo de atendimento; sem árvore |
 | `TeamMember` | `glpi_groups_users` | igual |

@@ -179,6 +179,7 @@ describe('o PIN', () => {
     await supervisor.post(`/clients/${empresa.id}/people/${pessoa.id}/pin`, { pin: '481570' });
 
     const naBase = await prisma.user.findUniqueOrThrow({ where: { id: pessoa.id } });
+    assert.ok(naBase.passwordHash, 'definir o PIN tem de gravar um hash');
     assert.ok(!naBase.passwordHash.includes('481570'), 'o PIN está em claro no banco');
     assert.match(naBase.passwordHash, /^\$argon2id\$/);
   });

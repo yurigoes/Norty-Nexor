@@ -345,7 +345,9 @@ export class CatalogoService {
     ) {
       throw new ConflictException('Este nome de usuário já está em uso nesta organização.');
     }
-    const provisoria = randomBytes(9).toString('base64url');
+    // Cadastro de uso não ganha senha provisória: sem `semAcesso` nada
+    // muda, com ele não há credencial nenhuma para mostrar ou vazar.
+    const provisoria = dto.semAcesso ? null : randomBytes(9).toString('base64url');
 
     const existente = email ? await this.prisma.user.findUnique({ where: { email } }) : null;
 
@@ -382,8 +384,10 @@ export class CatalogoService {
         email,
         name: dto.name,
         phone: telefoneBrasileiro(dto.phone),
-        passwordHash: await AuthService.hashDeSenha(provisoria),
-        mustChangePassword: true,
+        passwordHash: provisoria === null ? null : await AuthService.hashDeSenha(provisoria),
+        // Sem senha não há o que trocar no primeiro acesso, que aliás
+        // não vai existir.
+        mustChangePassword: provisoria !== null,
         memberships: {
           create: { organizationId: usuario.organizationId, role: dto.role, username },
         },

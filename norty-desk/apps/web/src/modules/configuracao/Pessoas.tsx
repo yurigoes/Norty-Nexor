@@ -29,6 +29,8 @@ type Edicao = {
   username: string;
   role: Role;
   isActive: boolean;
+  /** Cadastro de uso: existe no inventário, não entra na central. */
+  semAcesso: boolean;
   /** Como estava ao abrir: perfil e situação só vão no pedido se mudarem. */
   original: { role: Role; isActive: boolean } | null;
 };
@@ -41,6 +43,7 @@ const NOVA: Edicao = {
   username: '',
   role: 'SOLICITANTE',
   isActive: true,
+  semAcesso: false,
   original: null,
 };
 
@@ -60,6 +63,11 @@ export function Pessoas() {
   const [busca, setBusca] = useState('');
   const [edicao, setEdicao] = useState<Edicao | null>(null);
   const [criada, setCriada] = useState<PessoaCriada | null>(null);
+  // Por que uma bandeira à parte: sem senha provisória a resposta é a
+  // mesma para dois casos bem diferentes — a pessoa que já tinha conta
+  // noutra organização e o cadastro de uso. Dizer o texto errado aqui
+  // faria alguém procurar uma senha que nunca foi criada.
+  const [criadaSemAcesso, setCriadaSemAcesso] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
@@ -84,6 +92,7 @@ export function Pessoas() {
             username: pessoa.username ?? '',
             role: pessoa.role,
             isActive: pessoa.isActive,
+            semAcesso: false,
             original: { role: pessoa.role, isActive: pessoa.isActive },
           }
         : NOVA,
@@ -106,6 +115,7 @@ export function Pessoas() {
           ...(edicao.isActive !== edicao.original.isActive ? { isActive: edicao.isActive } : {}),
         });
       } else {
+        setCriadaSemAcesso(edicao.semAcesso);
         setCriada(
           await criarPessoa({
             ...(edicao.email.trim() ? { email: edicao.email.trim() } : {}),
@@ -113,6 +123,7 @@ export function Pessoas() {
             role: edicao.role,
             ...(edicao.phone.trim() ? { phone: edicao.phone.trim() } : {}),
             ...(edicao.username.trim() ? { username: edicao.username.trim() } : {}),
+            ...(edicao.semAcesso ? { semAcesso: true } : {}),
           }),
         );
       }
@@ -154,6 +165,12 @@ export function Pessoas() {
                 {criada.name} foi criado(a). Senha provisória:{' '}
                 <code style={{ userSelect: 'all' }}>{criada.senhaProvisoria}</code> — ela aparece só
                 agora, e a troca é exigida no primeiro acesso.
+              </>
+            ) : criadaSemAcesso ? (
+              <>
+                {criada.name} foi criado(a) como cadastro de uso: aparece no inventário e assina
+                termo, mas não entra na central. Não há senha — para dar acesso depois, use a
+                recuperação de senha.
               </>
             ) : (
               <>{criada.name} já tinha conta noutra organização e foi vinculado(a) sem mudar a senha.</>
@@ -245,6 +262,23 @@ export function Pessoas() {
               </span>
             ) : null}
           </div>
+          {edicao.id ? null : (
+            <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+              <input
+                type="checkbox"
+                checked={edicao.semAcesso}
+                onChange={(e) => setEdicao({ ...edicao, semAcesso: e.target.checked })}
+              />
+              <span>
+                Cadastro de uso — não entra na central
+                <span className="campo-ajuda">
+                  Para quem assina o termo de um equipamento e aparece no inventário sem precisar
+                  abrir chamado. Nasce sem senha, e nenhuma é gerada.
+                </span>
+              </span>
+            </label>
+          )}
+
           {edicao.id && !editandoASiMesmo ? (
             <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input

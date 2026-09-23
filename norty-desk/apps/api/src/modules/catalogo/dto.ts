@@ -74,6 +74,16 @@ export class CriarUsuarioDto {
   @IsEnum(PAPEIS) role!: (typeof PAPEIS)[number];
   @IsOptional() @IsString() @MaxLength(32) phone?: string;
   @IsOptional() @IsString() @Matches(USERNAME_REGEX, { message: MSG_USERNAME }) username?: string;
+
+  /**
+   * Cadastro de uso: a pessoa existe, mas não entra.
+   *
+   * É quem assina o termo de um equipamento e aparece no inventário sem
+   * precisar da central de chamados. Nasce sem senha, e nenhuma senha
+   * provisória é gerada — inventar uma seria criar credencial para quem
+   * não pediu, que é conta a mais para vazar.
+   */
+  @IsOptional() @IsBoolean() semAcesso?: boolean;
 }
 
 export class EditarUsuarioDto {

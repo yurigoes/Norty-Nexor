@@ -24,6 +24,8 @@ export type NovaPessoa = {
   role: Role;
   phone?: string;
   username?: string;
+  /** Cadastro de uso: existe no inventário, não entra na central. */
+  semAcesso?: boolean;
 };
 
 /** A senha provisória aparece só aqui, uma vez. `null` quando a pessoa já existia noutra organização. */

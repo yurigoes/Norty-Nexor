@@ -28,7 +28,6 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-import { SEM_PIN } from '../../common/pin';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { RegrasService } from '../regras/regras.service';
 import { TicketsService } from '../tickets/tickets.service';
@@ -325,7 +324,7 @@ export class IntakeController {
         email: login,
         name: nome,
         phone: telefoneBrasileiro(quem?.phone),
-        passwordHash: SEM_PIN,
+        passwordHash: null,
         mustChangePassword: true,
         memberships: { create: { organizationId, clientId, role: 'CLIENTE' } },
       },

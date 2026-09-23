@@ -79,6 +79,7 @@ export class AutomacaoService {
                 email: true,
                 phone: true,
                 isActive: true,
+                passwordHash: true,
                 authSourceId: true,
                 authSource: { select: { name: true } },
               },
@@ -131,6 +132,7 @@ export class AutomacaoService {
         email: string | null;
         phone: string | null;
         isActive: boolean;
+        passwordHash: string | null;
         authSourceId: string | null;
         authSource: { name: string } | null;
       } | null;
@@ -161,6 +163,19 @@ export class AutomacaoService {
       return this.recusar(
         chamado,
         `A conta de ${pessoa.name} está inativa. Reative antes de trocar a senha.`,
+      );
+    }
+
+    // Cadastro de uso: a pessoa existe para o inventário e não tem senha
+    // porque alguém decidiu que ela não entra. Mandar o link daria
+    // acesso justamente a quem a organização escolheu não dar — e sem
+    // ninguém decidir de novo. O pedido vira chamado de gente, que é
+    // onde a decisão cabe.
+    if (pessoa.passwordHash === null) {
+      return this.recusar(
+        chamado,
+        `${pessoa.name} tem cadastro de uso e não acessa a central. Dar acesso é decisão de ` +
+          'quem administra, não da automação — o cadastro existe por causa do inventário.',
       );
     }
 

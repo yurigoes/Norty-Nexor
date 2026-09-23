@@ -539,7 +539,7 @@ describe('integrador por empresa', () => {
     });
 
     assert.equal(pessoa.email, 'ana.souza@alfa.com.br', 'o login sai do nome mais o domínio');
-    assert.equal(pessoa.passwordHash, '', 'nasce sem PIN: hash vazio não casa com nada');
+    assert.equal(pessoa.passwordHash, null, 'nasce sem PIN: sem hash, não entra');
     assert.equal(pessoa.mustChangePassword, true);
     assert.equal(pessoa.memberships[0]?.clientId, empresa.id);
     assert.equal(pessoa.memberships[0]?.role, 'CLIENTE');

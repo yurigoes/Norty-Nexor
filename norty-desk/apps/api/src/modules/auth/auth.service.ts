@@ -131,7 +131,18 @@ export class AuthService {
       // aleatória e não abre esta conta.
       usuario = await this.entrarPeloDiretorio(usuario, senha);
     } else if (usuario) {
-      if (!(await argon2.verify(usuario.passwordHash, senha).catch(() => false))) usuario = null;
+      // Hash nulo é o cadastro de uso: a pessoa existe porque assina o
+      // termo de um equipamento, e não para entrar aqui.
+      //
+      // O fantasma entra no lugar dele para que a conta do Argon2 seja
+      // paga do mesmo jeito. Recusar na hora seria responder rápido só
+      // para essas contas, e essa diferença de tempo diz a quem medisse
+      // quais delas não têm senha — meio caminho para escolher em qual
+      // insistir. E a recusa não depende do `verify`: sem hash, não
+      // entra, ainda que o fantasma casasse por acidente.
+      const hash = usuario.passwordHash;
+      const confere = await argon2.verify(hash ?? HASH_FANTASMA, senha).catch(() => false);
+      if (!hash || !confere) usuario = null;
     } else {
       // Ninguém com esse login aqui. Com usuário + empresa, pode ser o
       // primeiro acesso de alguém do AD dela: o GLPI cria na hora.
@@ -517,7 +528,10 @@ export class AuthService {
       throw new BadRequestException('Mantenha ao menos um jeito de entrar: e-mail ou nome de usuário.');
     }
     if (mudaEmail || mudaUsername) {
-      const confere = dto.senhaAtual ? await argon2.verify(atual.passwordHash, dto.senhaAtual) : false;
+      const confere =
+        dto.senhaAtual && atual.passwordHash
+          ? await argon2.verify(atual.passwordHash, dto.senhaAtual)
+          : false;
       if (!confere) {
         throw new BadRequestException('Confirme com a sua senha atual para trocar o e-mail ou o usuário.');
       }
@@ -566,6 +580,16 @@ export class AuthService {
 
     if (usuario.authSourceId) {
       throw new BadRequestException('A senha desta conta é a do diretório (AD) — troque por lá.');
+    }
+
+    // Cadastro de uso não troca senha, porque não tem uma. Quem chega
+    // aqui já passou pelo login, então o caso é raro — uma sessão viva
+    // de quem teve a senha removida —, e dizer o que aconteceu é melhor
+    // que estourar num `verify` com `null`.
+    if (usuario.passwordHash === null) {
+      throw new BadRequestException(
+        'Esta conta é cadastro de uso e não tem senha. Peça acesso a quem administra.',
+      );
     }
 
     // 400 e não 401: o aplicativo trata 401 como sessão vencida — renova,

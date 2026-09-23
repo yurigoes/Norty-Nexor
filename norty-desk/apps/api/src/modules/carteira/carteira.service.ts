@@ -13,7 +13,6 @@ import { loginDoCliente, loginLivre, pinFraco, telefoneBrasileiro } from '@norty
 import { Prisma } from '@prisma/client';
 
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
-import { SEM_PIN } from '../../common/pin';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { AuthService } from '../auth/auth.service';
@@ -223,9 +222,9 @@ export class CarteiraService {
         data: {
           email: login,
           name: dto.name.trim(),
-          // Sem PIN ainda: a pessoa o escolhe no primeiro acesso, e até
-          // lá não entra. Hash vazio não casa com nenhum PIN.
-          passwordHash: SEM_PIN,
+          // Sem PIN ainda: quem opera a carteira define o dela, e até lá
+          // não entra. Nulo e não string vazia — ver `User.passwordHash`.
+          passwordHash: null,
           phone: telefoneBrasileiro(dto.phone),
           isActive: dto.isActive ?? true,
           mustChangePassword: true,
@@ -377,7 +376,14 @@ export class CarteiraService {
   }
 
   private static pessoaParaView(v: {
-    user: { id: string; name: string; email: string | null; phone: string | null; isActive: boolean; passwordHash: string };
+    user: {
+      id: string;
+      name: string;
+      email: string | null;
+      phone: string | null;
+      isActive: boolean;
+      passwordHash: string | null;
+    };
   }): PessoaDoClienteView {
     return {
       id: v.user.id,
@@ -386,7 +392,7 @@ export class CarteiraService {
       contactEmail: v.user.email,
       phone: v.user.phone,
       isActive: v.user.isActive,
-      pinPendente: v.user.passwordHash === SEM_PIN,
+      pinPendente: v.user.passwordHash === null,
     };
   }
 }

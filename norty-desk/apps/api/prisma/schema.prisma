@@ -91,7 +91,19 @@ model User {
   email              String?  @unique
   name               String
   /// Argon2id. A API nunca devolve este campo.
-  passwordHash       String
+  ///
+  /// Nulo é o **cadastro de uso**: a pessoa existe no sistema porque
+  /// assina o termo de um equipamento, aparece no inventário e é quem
+  /// se procura quando o notebook some — mas não entra na central de
+  /// chamados. Obrigá-la a ter senha criaria credencial para quem não
+  /// precisa dela, que é conta a mais para vazar.
+  ///
+  /// Antes disto o lugar do "sem senha" era a string vazia. Vazio não é
+  /// nulo: ele passa por `NOT NULL`, entra em `argon2.verify` e falha
+  /// **rápido**, enquanto uma senha errada de verdade custa a conta
+  /// inteira do Argon2 — e essa diferença de tempo dizia a quem
+  /// medisse quais contas não têm senha.
+  passwordHash       String?
   phone              String?
   avatarUrl          String?
   isActive           Boolean  @default(true)
