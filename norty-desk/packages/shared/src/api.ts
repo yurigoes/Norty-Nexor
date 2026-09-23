@@ -1642,6 +1642,104 @@ export type EvolutionWebhookRequest = {
   };
 };
 
+/**
+ * O corpo do webhook da Meta (WhatsApp Cloud API).
+ *
+ * A forma é aninhada de um jeito que não ajuda ninguém —
+ * `entry[].changes[].value.messages[]` —, e é assim que ela chega. O
+ * parser está em `apps/api/src/modules/channels/meta.mensagem.ts`, e a
+ * primeira coisa que ele faz é achatar isto.
+ *
+ * Uma entrega pode trazer **várias** mensagens, e pode trazer só
+ * `statuses` (recibo de entrega) sem mensagem nenhuma.
+ */
+export type MetaWebhookRequest = {
+  object?: string;
+  entry?: {
+    id?: string;
+    changes?: {
+      field?: string;
+      value?: {
+        messaging_product?: string;
+        metadata?: { display_phone_number?: string; phone_number_id?: string };
+        /** O nome do perfil, que é a única fonte de nome de quem nunca se cadastrou. */
+        contacts?: { profile?: { name?: string }; wa_id?: string }[];
+        messages?: MetaMensagemRecebida[];
+        /** Recibo de entrega e de leitura. Não vira chamado. */
+        statuses?: { id?: string; status?: string; recipient_id?: string }[];
+      };
+    }[];
+  }[];
+};
+
+/** Uma mensagem como a Meta a entrega. */
+export type MetaMensagemRecebida = {
+  from?: string;
+  id?: string;
+  /** Epoch em **segundos**, como string. */
+  timestamp?: string;
+  type?: string;
+  text?: { body?: string };
+  image?: { id?: string; mime_type?: string; caption?: string };
+  video?: { id?: string; mime_type?: string; caption?: string };
+  audio?: { id?: string; mime_type?: string; voice?: boolean };
+  document?: { id?: string; mime_type?: string; caption?: string; filename?: string };
+  sticker?: { id?: string; mime_type?: string };
+  /** A resposta a uma lista ou a um botão que **nós** mandamos. */
+  interactive?: {
+    type?: string;
+    list_reply?: { id?: string; title?: string; description?: string };
+    button_reply?: { id?: string; title?: string };
+  };
+  /** Localização e contato existem; viram texto, não anexo. */
+  location?: { latitude?: number; longitude?: number; name?: string; address?: string };
+  /** A mensagem citada, quando a pessoa responde a uma anterior. */
+  context?: { id?: string; from?: string };
+};
+
+/**
+ * Os ids das linhas que o bot manda na lista.
+ *
+ * São **nossos**: a Meta devolve exatamente o `id` da linha que a
+ * pessoa tocou, então a escolha volta identificada e o bot não precisa
+ * lembrar do que perguntou. É por isso que o menu não tem estado no
+ * banco e a escolha de empresa tem: a primeira se resolve no próprio
+ * toque, a segunda precisa durar até a mensagem seguinte.
+ */
+export const TOQUE_NOVO = 'menu:novo';
+export const TOQUE_STATUS = 'menu:status';
+export const TOQUE_ATENDENTE = 'menu:atendente';
+/** `empresa:<clientId>` — a escolha de empresa carrega qual. */
+export const TOQUE_EMPRESA = 'empresa:';
+/** `chamado:<numero>` — a escolha de chamado na desambiguação. */
+export const TOQUE_CHAMADO = 'chamado:';
+
+/**
+ * Limites da lista interativa da Meta, que ela recusa em silêncio.
+ *
+ * Passar de qualquer um deles devolve 400 com uma mensagem que não diz
+ * qual campo passou. Cortar aqui é mais barato que descobrir lá.
+ */
+export const LISTA_META = {
+  /** Linhas por mensagem, somando todas as seções. */
+  maxLinhas: 10,
+  tituloDaLinha: 24,
+  descricaoDaLinha: 72,
+  tituloDaSecao: 24,
+  textoDoBotao: 20,
+  corpo: 1024,
+  cabecalho: 60,
+} as const;
+
+/** Corta sem cortar palavra no meio quando dá, e marca o corte. */
+export function cortarPara(texto: string, limite: number): string {
+  const limpo = texto.trim();
+  if (limpo.length <= limite) return limpo;
+  const cortado = limpo.slice(0, limite - 1);
+  const espaco = cortado.lastIndexOf(' ');
+  return `${(espaco > limite * 0.6 ? cortado.slice(0, espaco) : cortado).trimEnd()}…`;
+}
+
 export type InboundAcceptedResponse = {
   /** `ACEITO` enfileirou; `DUPLICADO` já tinha sido visto; `DESCARTADO` casou com regra. */
   resultado: 'ACEITO' | 'DUPLICADO' | 'DESCARTADO';

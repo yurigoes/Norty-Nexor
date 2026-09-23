@@ -22,6 +22,7 @@ export const ROTULO_TIPO: Record<TipoDeCanal, string> = {
   EMAIL_SMTP: 'E-mail (envio SMTP)',
   EMAIL_WEBHOOK: 'E-mail (webhook)',
   WHATSAPP_EVOLUTION: 'WhatsApp (Evolution)',
+  WHATSAPP_META: 'WhatsApp (oficial, Meta)',
 };
 
 export const DESCRICAO_TIPO: Record<TipoDeCanal, string> = {
@@ -29,6 +30,9 @@ export const DESCRICAO_TIPO: Record<TipoDeCanal, string> = {
   EMAIL_SMTP: 'Só saída: por onde a resposta do agente chega ao solicitante.',
   EMAIL_WEBHOOK: 'O provedor entrega a mensagem na hora, por HTTP. Preferido quando existe.',
   WHATSAPP_EVOLUTION: 'Recebe pelo webhook da Evolution e responde pela mesma instância.',
+  WHATSAPP_META:
+    'A porta da frente: número verificado, menu de toque e sem risco de bloqueio. ' +
+    'Em troca, só responde dentro de 24 h da última mensagem da pessoa.',
 };
 
 const IMAP: Campo[] = [
@@ -88,11 +92,70 @@ const EVOLUTION: Campo[] = [
   },
 ];
 
+/**
+ * WhatsApp oficial.
+ *
+ * Quatro campos, todos copiados do painel da Meta — e a ordem aqui é a
+ * ordem em que eles aparecem lá, para quem está configurando não ficar
+ * procurando.
+ *
+ * O que **não** é campo: a URL do webhook. Ela é montada pela tela a
+ * partir do id da conta, porque é a única coisa que vai no sentido
+ * contrário — daqui para o painel da Meta.
+ */
+const META: Campo[] = [
+  {
+    chave: 'phoneNumberId',
+    rotulo: 'Id do número (Phone number ID)',
+    tipo: 'texto',
+    obrigatorio: true,
+    ajuda: 'É um número longo, e não o telefone. Meta → WhatsApp → Configuração da API.',
+  },
+  {
+    chave: 'token',
+    rotulo: 'Token permanente',
+    tipo: 'segredo',
+    obrigatorio: true,
+    ajuda: 'O do usuário de sistema. O token temporário de 24 h serve para testar e nada mais.',
+  },
+  {
+    chave: 'appSecret',
+    rotulo: 'Chave secreta do aplicativo',
+    tipo: 'segredo',
+    obrigatorio: true,
+    ajuda:
+      'Meta → Configurações do aplicativo → Básico. É ela que prova que a entrega veio da Meta; ' +
+      'sem ela o canal recusa tudo, porque a URL é pública.',
+  },
+  {
+    chave: 'verifyToken',
+    rotulo: 'Token de verificação',
+    tipo: 'segredo',
+    obrigatorio: true,
+    ajuda: 'Você inventa esta palavra e repete a mesma no painel da Meta, ao salvar a URL.',
+  },
+  {
+    chave: 'versao',
+    rotulo: 'Versão da API',
+    tipo: 'texto',
+    padrao: 'v23.0',
+    ajuda: 'A Meta aposenta versões antigas. Mude só quando ela avisar.',
+  },
+  {
+    chave: 'menuAtivo',
+    rotulo: 'Oferecer menu de toque',
+    tipo: 'booleano',
+    padrao: true,
+    ajuda: 'Quem só cumprimenta recebe a lista de opções em vez de abrir um chamado chamado "Oi".',
+  },
+];
+
 export const CAMPOS: Record<TipoDeCanal, Campo[]> = {
   EMAIL_IMAP: IMAP,
   EMAIL_SMTP: SMTP,
   EMAIL_WEBHOOK: WEBHOOK,
   WHATSAPP_EVOLUTION: EVOLUTION,
+  WHATSAPP_META: META,
 };
 
 /** Os valores iniciais de um canal novo, já com os padrões preenchidos. */

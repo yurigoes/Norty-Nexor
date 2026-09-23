@@ -215,10 +215,11 @@ model Client {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   memberships  Membership[]
   tickets      Ticket[]
   apiKeys      ApiKey[]
+  conversas    WhatsappConversa[]
 
   @@unique([organizationId, name])
   /// O domínio é o que gera o login: dois clientes com o mesmo domínio
@@ -1543,6 +1544,13 @@ enum ChannelKind {
   EMAIL_SMTP
   EMAIL_WEBHOOK
   WHATSAPP_EVOLUTION
+  /// WhatsApp pela API oficial da Meta (Cloud API).
+  ///
+  /// Convive com a Evolution de propósito: a migração de um número real
+  /// não acontece num sábado, e durante ela as duas contas precisam
+  /// existir lado a lado. Quem decide por onde a resposta sai é a conta
+  /// ativa da organização, não uma variável de ambiente.
+  WHATSAPP_META
 }
 
 /// Configuração de uma caixa de e-mail ou de uma instância da Evolution.
@@ -1560,8 +1568,9 @@ model ChannelAccount {
   lastSyncAt     DateTime?
   lastError      String?
 
-  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   inboundMessages InboundMessage[]
+  conversas       WhatsappConversa[]
 
   @@unique([organizationId, name])
   @@map("channel_accounts")
@@ -1602,7 +1611,57 @@ model InboundMessage {
 
   @@unique([organizationId, channel, externalId])
   @@index([processedAt])
+  /// A janela de 24 h da Meta é "quando esta pessoa falou comigo pela
+  /// última vez neste número". A resposta é o `max(receivedAt)` desta
+  /// tabela, e não uma coluna à parte que alguém teria de lembrar de
+  /// atualizar: o fato já está gravado, e um segundo lugar para a mesma
+  /// verdade é um segundo lugar para ela ficar errada.
+  @@index([channelAccountId, fromAddress, receivedAt])
   @@map("inbound_messages")
+}
+
+/// O que o bot está esperando desta pessoa.
+enum EsperaDoBot {
+  /// Mandamos a lista de empresas e esperamos o toque.
+  EMPRESA
+  /// A empresa está escolhida; a próxima mensagem é o problema.
+  ASSUNTO
+}
+
+/// O estado curto da conversa do bot no WhatsApp.
+///
+/// Existe por uma razão só: quando a pessoa trabalha para mais de uma
+/// empresa, o bot pergunta para qual é o chamado, e precisa lembrar da
+/// resposta até a próxima mensagem chegar. Tudo o mais que o bot
+/// pergunta vem respondido dentro do toque — a Meta devolve o `id` da
+/// linha que a pessoa tocou, então a escolha do menu não precisa de
+/// memória nenhuma.
+///
+/// Uma linha por pessoa por conta, e com prazo: estado de conversa que
+/// não expira vira um bot que continua achando que a pergunta de
+/// terça-feira ainda está no ar.
+model WhatsappConversa {
+  id               String       @id @default(uuid()) @db.Uuid
+  organizationId   String       @db.Uuid
+  channelAccountId String       @db.Uuid
+  /// E.164, sem espaços. Ex.: +5511999999999
+  phone            String
+  /// A empresa que a pessoa escolheu para este chamado.
+  clientId         String?      @db.Uuid
+  aguardando       EsperaDoBot?
+  expiresAt        DateTime
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  channelAccount ChannelAccount @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
+  client         Client?        @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  /// Uma conversa por pessoa por conta. Sem isto, duas mensagens quase
+  /// simultâneas criariam dois estados e a segunda resposta cairia no
+  /// que o bot não estava esperando (CLAUDE.md, regra 4).
+  @@unique([channelAccountId, phone])
+  @@index([expiresAt])
+  @@map("whatsapp_conversas")
 }
 
 enum DeliveryStatus {
@@ -1613,24 +1672,41 @@ enum DeliveryStatus {
 
 /// Fila de saída: e-mail e WhatsApp. Substitui glpi_queuednotifications.
 model OutboundMessage {
-  id             String         @id @default(uuid()) @db.Uuid
-  organizationId String         @db.Uuid
-  channel        Channel
-  ticketId       String?        @db.Uuid
+  id               String         @id @default(uuid()) @db.Uuid
+  organizationId   String         @db.Uuid
+  channel          Channel
+  ticketId         String?        @db.Uuid
   /// O evento que originou o envio. É o que permite olhar uma falha de
   /// entrega e saber qual resposta não chegou.
-  eventId        String?        @db.Uuid
-  toAddress      String
-  subject        String?
-  body           String
+  eventId          String?        @db.Uuid
+  toAddress        String
+  subject          String?
+  body             String
+  /// Por qual conta de canal esta mensagem sai.
+  ///
+  /// Nulo no que foi enfileirado antes de a Meta existir aqui, e no
+  /// e-mail, que sai pelo SMTP do ambiente. Para o WhatsApp é o que
+  /// decide entre a Evolution e a Meta — e é por conta, não por
+  /// variável de ambiente, porque uma organização pode ter as duas
+  /// durante a migração do número.
+  channelAccountId String?        @db.Uuid
+  /// A mensagem quando ela é mais que texto: lista de opções, mídia,
+  /// template aprovado.
+  ///
+  /// `body` continua sendo a versão em texto **da mesma coisa**, e não
+  /// um resumo dela: é o que sai quando o transporte não sabe desenhar
+  /// lista (a Evolution não sabe), e é o que fica legível no
+  /// diagnóstico. Um `payload` sem `body` equivalente seria uma
+  /// mensagem que ninguém consegue ler no banco.
+  payload          Json?
   /// Message-ID gerado, usado no threading da resposta.
-  externalId     String?
-  status         DeliveryStatus @default(PENDENTE)
-  attempts       Int            @default(0)
-  lastError      String?
-  scheduledFor   DateTime       @default(now())
-  sentAt         DateTime?
-  createdAt      DateTime       @default(now())
+  externalId       String?
+  status           DeliveryStatus @default(PENDENTE)
+  attempts         Int            @default(0)
+  lastError        String?
+  scheduledFor     DateTime       @default(now())
+  sentAt           DateTime?
+  createdAt        DateTime       @default(now())
 
   @@index([status, scheduledFor])
   @@index([organizationId, externalId])

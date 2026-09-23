@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { PORTAS_DE_ENVIO, type PortasDeEnvio } from './canais.tokens';
+import type { ListaInterativa } from './meta.mensagem';
 
 /**
  * Backoff da retentativa: 1 min, 5 min, 15 min, 1 h.
@@ -82,6 +83,11 @@ export class DespachoJob {
         externalId: mensagem.externalId ?? '',
         emRespostaA,
         remetente,
+        organizationId: mensagem.organizationId,
+        channelAccountId: mensagem.channelAccountId ?? undefined,
+        // A lista de toque viaja em `payload`; `body` é a mesma coisa
+        // escrita, para o transporte que não desenha lista.
+        lista: DespachoJob.listaDoPayload(mensagem.payload),
       });
 
       await this.prisma.outboundMessage.update({
@@ -113,6 +119,34 @@ export class DespachoJob {
         this.logger.error(`Mensagem ${id} falhou nas ${tentativas} tentativas. Desisti.`);
       }
     }
+  }
+
+  /**
+   * A lista de toque guardada em `payload`, se houver uma.
+   *
+   * Conferida na leitura e não confiada: `payload` é `Json` e aceita o
+   * que entrar. Uma lista malformada aqui viraria uma requisição
+   * recusada pela Meta com uma mensagem que não diz qual campo estava
+   * errado — e quatro tentativas iguais depois disso.
+   */
+  private static listaDoPayload(payload: unknown): ListaInterativa | undefined {
+    if (!payload || typeof payload !== 'object') return undefined;
+
+    const bruto = payload as { tipo?: string; lista?: unknown };
+    if (bruto.tipo !== 'LISTA' || !bruto.lista || typeof bruto.lista !== 'object') {
+      return undefined;
+    }
+
+    const lista = bruto.lista as Partial<ListaInterativa>;
+    if (!lista.corpo || !lista.botao || !Array.isArray(lista.secoes)) return undefined;
+
+    const secoes = lista.secoes.filter(
+      (s): s is ListaInterativa['secoes'][number] => Array.isArray(s?.linhas) && s.linhas.length > 0,
+    );
+
+    return secoes.length > 0
+      ? { corpo: lista.corpo, botao: lista.botao, secoes }
+      : undefined;
   }
 
   /**

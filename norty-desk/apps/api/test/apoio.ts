@@ -26,7 +26,13 @@ export type Api = {
 };
 
 export async function subirApi(): Promise<Api> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger: false });
+  // `rawBody` igual ao `main.ts`: sem ele a suíte não conseguiria
+  // exercer a conferência de assinatura do webhook da Meta — e provaria
+  // um caminho que não é o de produção.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    logger: false,
+    rawBody: true,
+  });
   app.setGlobalPrefix('v1');
   app.use(cookieParser());
   app.useGlobalPipes(

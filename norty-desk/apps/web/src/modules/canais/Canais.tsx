@@ -16,7 +16,13 @@ import { listarTimes } from '../../api/endpoints';
 import { dataCurta } from '../../lib/formato';
 import { CAMPOS, DESCRICAO_TIPO, ROTULO_TIPO, padroesDe, type Campo } from './campos';
 
-const TIPOS: TipoDeCanal[] = ['EMAIL_IMAP', 'EMAIL_SMTP', 'EMAIL_WEBHOOK', 'WHATSAPP_EVOLUTION'];
+const TIPOS: TipoDeCanal[] = [
+  'EMAIL_IMAP',
+  'EMAIL_SMTP',
+  'EMAIL_WEBHOOK',
+  'WHATSAPP_META',
+  'WHATSAPP_EVOLUTION',
+];
 
 /**
  * Configuração de canais.
@@ -198,7 +204,7 @@ function Cartao({
         <div>
           <h3 className="card-titulo linha" style={{ gap: 'var(--e-2)', alignItems: 'center' }}>
             <span
-              className={`canal ${canal.kind === 'WHATSAPP_EVOLUTION' ? '-whatsapp' : '-email'}`}
+              className={`canal ${canal.kind.startsWith('WHATSAPP') ? '-whatsapp' : '-email'}`}
               aria-hidden="true"
             />
             {canal.name}
@@ -215,6 +221,8 @@ function Cartao({
       </div>
 
       <div className="card-corpo pilha-sm">
+        {canal.kind === 'WHATSAPP_META' ? <UrlDoWebhook canal={canal} /> : null}
+
         <ResumoDaConfig canal={canal} />
 
         {/* O último erro fica na tela até a próxima coleta dar certo. Um
@@ -271,6 +279,55 @@ function Cartao({
 }
 
 /** O que dá para mostrar sem revelar segredo. */
+/**
+ * A URL que vai no painel da Meta.
+ *
+ * É a única coisa nesta tela que anda no sentido contrário: todos os
+ * campos vêm de lá para cá, e esta vai daqui para lá. Sem ela na tela,
+ * quem configura precisa montar a URL à mão a partir do id da conta —
+ * que é onde nascem os erros de digitação que a Meta reporta como
+ * "não foi possível validar o callback", sem dizer por quê.
+ *
+ * O endereço sai de `window.location`: o aplicativo e a API moram no
+ * mesmo domínio (`/api`), então a URL certa é sempre a de onde a pessoa
+ * está. Fixá-la numa constante daria a URL de produção a quem está
+ * configurando em homologação.
+ */
+function UrlDoWebhook({ canal }: { canal: CanalView }) {
+  const [copiado, setCopiado] = useState(false);
+  const url = `${window.location.origin}/api/v1/channels/meta/inbound/${canal.id}`;
+
+  return (
+    <div className="pilha-sm">
+      <p className="campo-ajuda">
+        No painel da Meta, em <strong>WhatsApp → Configuração</strong>, cole esta URL de callback e
+        repita o token de verificação:
+      </p>
+      <div className="linha" style={{ gap: 'var(--e-2)', alignItems: 'center' }}>
+        <code className="mono" style={{ flex: 1, wordBreak: 'break-all' }}>
+          {url}
+        </code>
+        <button
+          type="button"
+          className="btn -fantasma -sm"
+          onClick={() => {
+            void navigator.clipboard
+              ?.writeText(url)
+              .then(() => setCopiado(true))
+              // Sem a área de transferência (http sem TLS, permissão
+              // negada) o texto continua na tela para copiar à mão. Um
+              // botão que falha em silêncio faria a pessoa colar o que
+              // estava antes.
+              .catch(() => setCopiado(false));
+          }}
+        >
+          {copiado ? 'Copiado' : 'Copiar'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ResumoDaConfig({ canal }: { canal: CanalView }) {
   const linhas = CAMPOS[canal.kind]
     .map((campo) => [campo, canal.config[campo.chave]] as const)

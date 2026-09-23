@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { ChatService } from '../chat/chat.service';
+import type { ListaInterativa } from './meta.mensagem';
 
 /**
  * A fila de saída.
@@ -243,6 +244,16 @@ export class SaidaService {
     para: string;
     assunto?: string;
     corpo: string;
+    /** Por qual conta sai. Sem ela, a saída escolhe a ativa da organização. */
+    channelAccountId?: string | null;
+    /**
+     * A mesma mensagem como lista de toque.
+     *
+     * `corpo` continua obrigatório e continua sendo a versão escrita
+     * **da mesma coisa**: é o que sai pela Evolution, que não desenha
+     * lista, e é o que fica legível no diagnóstico e no banco.
+     */
+    lista?: ListaInterativa;
   }): Promise<void> {
     if (dados.channel === 'WEB' || dados.channel === 'SISTEMA' || dados.channel === 'API') return;
 
@@ -264,6 +275,8 @@ export class SaidaService {
         toAddress: dados.para,
         subject: dados.channel === 'EMAIL' ? (assunto ?? 'Norty Desk') : null,
         body: dados.corpo,
+        channelAccountId: dados.channelAccountId ?? null,
+        payload: dados.lista ? { tipo: 'LISTA', lista: dados.lista } : undefined,
         externalId:
           dados.channel === 'EMAIL' ? this.novoMessageId(dados.ticketId ?? 'avulso') : null,
       },

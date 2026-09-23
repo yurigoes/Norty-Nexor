@@ -13,9 +13,13 @@ import { DespachoJob } from './despacho.job';
 import { EmailController } from './email.controller';
 import { EntradaService } from './entrada.service';
 import { EvolutionClient } from './evolution.client';
+import { MetaClient } from './meta.client';
+import { MetaController } from './meta.controller';
 import { SaidaService } from './saida.service';
-import { EnvioPorEmail, EnvioPorWhatsapp, EnvioSimulado } from './transporte';
+import { EnvioPorEmail, EnvioSimulado } from './transporte';
 import { WhatsappController } from './whatsapp.controller';
+import { WhatsappBot } from './whatsapp.bot';
+import { EnvioDeWhatsapp } from './whatsapp.envio';
 
 /**
  * Escolhe os transportes pela configuração.
@@ -27,21 +31,19 @@ import { WhatsappController } from './whatsapp.controller';
  */
 function criarPortas(
   config: ConfigService,
-  evolution: EvolutionClient,
+  whatsapp: EnvioDeWhatsapp,
   simulado: EnvioSimulado,
 ): PortasDeEnvio {
   if ((config.get<string>('ENVIO') ?? 'real') === 'simulado') {
     return { EMAIL: simulado, WHATSAPP: simulado };
   }
 
-  return {
-    EMAIL: new EnvioPorEmail(config),
-    WHATSAPP: new EnvioPorWhatsapp(evolution, () => ({
-      baseUrl: config.get<string>('EVOLUTION_BASE_URL') ?? 'http://192.168.15.72:8080',
-      instance: config.get<string>('EVOLUTION_INSTANCE') ?? 'norty-desk',
-      apiKey: config.get<string>('EVOLUTION_API_KEY') ?? '',
-    })),
-  };
+  // O WhatsApp passou a ser um provider de verdade: ele lê banco para
+  // saber por qual conta a mensagem sai — Meta ou Evolution — e para
+  // conferir a janela de 24 h. Antes era uma classe montada aqui com
+  // valores do ambiente, o que amarrava a instalação inteira a um
+  // transporte só.
+  return { EMAIL: new EnvioPorEmail(config), WHATSAPP: whatsapp };
 }
 
 @Module({
@@ -58,21 +60,34 @@ function criarPortas(
     AuthModule,
     forwardRef(() => TicketsModule),
   ],
-  controllers: [EmailController, WhatsappController, CanaisController],
+  controllers: [EmailController, WhatsappController, MetaController, CanaisController],
   providers: [
     EntradaService,
     SaidaService,
     EvolutionClient,
+    MetaClient,
+    WhatsappBot,
+    EnvioDeWhatsapp,
     EnvioSimulado,
     DespachoJob,
     ColetaJob,
     ProcessamentoService,
     {
       provide: PORTAS_DE_ENVIO,
-      inject: [ConfigService, EvolutionClient, EnvioSimulado],
+      inject: [ConfigService, EnvioDeWhatsapp, EnvioSimulado],
       useFactory: criarPortas,
     },
   ],
-  exports: [EntradaService, SaidaService, EvolutionClient, EnvioSimulado, DespachoJob, ColetaJob, ProcessamentoService],
+  exports: [
+    EntradaService,
+    SaidaService,
+    EvolutionClient,
+    MetaClient,
+    WhatsappBot,
+    EnvioSimulado,
+    DespachoJob,
+    ColetaJob,
+    ProcessamentoService,
+  ],
 })
 export class ChannelsModule {}

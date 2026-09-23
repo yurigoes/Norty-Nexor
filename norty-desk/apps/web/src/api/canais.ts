@@ -9,7 +9,12 @@ import { chamar } from './cliente';
  * já estava lá.
  */
 
-export type TipoDeCanal = 'EMAIL_IMAP' | 'EMAIL_SMTP' | 'EMAIL_WEBHOOK' | 'WHATSAPP_EVOLUTION';
+export type TipoDeCanal =
+  | 'EMAIL_IMAP'
+  | 'EMAIL_SMTP'
+  | 'EMAIL_WEBHOOK'
+  | 'WHATSAPP_EVOLUTION'
+  | 'WHATSAPP_META';
 
 export type CanalView = {
   id: string;

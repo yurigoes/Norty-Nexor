@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import {
   SEGUNDOS_DIGITANDO,
   SEGUNDOS_ONLINE,
@@ -202,7 +203,13 @@ export class ChatService {
    * de forma confiável. Ela é limpa aqui, de tempos em tempos, e a
    * consulta de presença já ignora batida velha — a poda é higiene da
    * tabela, não a regra.
+   *
+   * O `@Cron` faltava: o método existia e ninguém o chamava, então a
+   * tabela só crescia. Não quebrava nada — a consulta de presença
+   * sempre ignorou batida velha —, mas uma linha por pessoa por dia,
+   * para sempre, é lixo que um dia aparece num backup.
    */
+  @Cron(CronExpression.EVERY_HOUR)
   async podar(): Promise<number> {
     const { count } = await this.prisma.chatPresence.deleteMany({
       where: { lastSeenAt: { lt: ChatService.desde(SEGUNDOS_ONLINE * 20) } },

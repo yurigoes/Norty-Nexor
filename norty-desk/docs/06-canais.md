@@ -345,13 +345,185 @@ interno.
 
 ### 3.7 Limites conhecidos
 
-- **Janela de 24 h do WhatsApp Business.** Se a Norty migrar para a API
-  oficial da Meta, mensagem fora da janela exige *template* aprovado. Com
-  a Evolution (que usa Baileys, não a API oficial), isso não se aplica —
-  mas a conta corre risco de bloqueio se houver disparo em massa. **O
-  Desk só responde a quem falou primeiro**, nunca prospecta.
+- **Janela de 24 h do WhatsApp Business.** Com a Evolution (que usa
+  Baileys, não a API oficial) isso não se aplica — mas a conta corre
+  risco de bloqueio se houver disparo em massa. **O Desk só responde a
+  quem falou primeiro**, nunca prospecta.
+  *Atualizado:* a API oficial da Meta existe agora, e ali a janela é
+  regra da plataforma. Ver a seção 3A.
 - **Uma instância por organização.** Duas organizações não compartilham
   número; o `Contact` é único por `(organizationId, phone)`.
+
+---
+
+## 3A. WhatsApp pela API oficial da Meta
+
+*(acrescentado depois — convive com a Evolution durante a migração)*
+
+### 3A.1 Por que as duas existem lado a lado
+
+| | Evolution (Baileys) | Meta (Cloud API) |
+|---|---|---|
+| Como fala | fingindo ser um celular pareado | pela porta da frente |
+| Janela de 24 h | não existe | **existe**, e é a regra |
+| Template aprovado | não precisa | necessário fora da janela |
+| Lista de toque | não desenha | desenha |
+| Risco da conta | **bloqueio sem aviso** | nenhum |
+| Custo | zero | por conversa |
+
+A migração de um número real não acontece num sábado. Durante ela as
+duas contas precisam existir, e mensagens de chamados diferentes saem
+por caminhos diferentes. Por isso quem decide o transporte é a **conta
+de canal ativa da organização**, e não uma variável de ambiente — que
+era como estava e amarrava a instalação inteira a um provedor.
+
+Com as duas ativas, a Meta ganha. A resposta a uma mensagem que entrou
+por uma conta específica sai **pela mesma**: responder por outro número
+é, para quem recebe, mensagem de um desconhecido.
+
+### 3A.2 Configurar: quatro campos e uma URL
+
+Em **Configurações → Canais → WhatsApp (oficial, Meta)**:
+
+| Campo | Onde achar no painel da Meta |
+|---|---|
+| Id do número | WhatsApp → Configuração da API (é um número longo, não o telefone) |
+| Token permanente | usuário de sistema — o token de 24 h só serve para testar |
+| Chave secreta do aplicativo | Configurações do aplicativo → Básico |
+| Token de verificação | você inventa, e repete a mesma palavra lá |
+
+E a URL, que vai no sentido contrário — daqui para o painel:
+
+```
+https://chamados.norty.com.br/api/v1/channels/meta/inbound/<id-da-conta>
+```
+
+Ao salvá-la, a Meta chama uma vez com um desafio e espera o desafio de
+volta **em texto puro**. Devolver JSON reprova a configuração com uma
+mensagem que não explica nada.
+
+### 3A.3 A assinatura é sobre os bytes
+
+A Meta assina o corpo exato que mandou (`X-Hub-Signature-256`).
+Reserializar o JSON já parseado dá outros bytes — a ordem das chaves e o
+escape de acento mudam — e a assinatura de **toda** entrega legítima
+falharia. Por isso a aplicação sobe com `rawBody: true` e a conferência
+é sobre `request.rawBody`.
+
+O canal da Evolution reserializa, e funciona porque quem assina lá somos
+nós mesmos. Aqui quem assina é outra empresa.
+
+Sem `appSecret` configurado, o canal **recusa tudo**. Esta URL é
+pública: aceitar sem conferir deixaria qualquer um abrir chamado em nome
+de qualquer telefone.
+
+### 3A.4 A janela de 24 horas
+
+Texto livre só passa dentro de 24 h da última mensagem **da pessoa**.
+Fora disso, só template aprovado.
+
+O Desk decide isso **antes de tentar**. Mandar e deixar a Meta recusar
+custaria quatro tentativas com backoff — nenhuma passaria, porque o que
+falta não é rede, é permissão — e deixaria `131047` no diagnóstico, que
+não conta nada a quem for investigar. A fila registra a frase em
+português, e é ela que a tela mostra.
+
+A última entrada sai do `max(receivedAt)` de `InboundMessage` para
+aquele telefone naquela conta. O fato já está gravado; uma coluna à
+parte com a mesma verdade seria um segundo lugar para ela ficar errada.
+
+Há cinco minutos de folga antes do fim: o relógio da Meta não é o nosso,
+e mandar aos 23 h 59 min 58 s é apostar que os dois concordam ao segundo.
+
+### 3A.5 O menu vira lista de toque
+
+Na Evolution a pessoa **digita** `status` — e quem digita erra:
+"Status", "status?", "ver status". Na Meta ela toca, e a resposta volta
+com o `id` exato da linha que tocamos escolher.
+
+É isso que faz o fluxo de empresa funcionar sem estado: a Meta devolve
+`empresa:<clientId>`, e a escolha vem identificada. O único estado que o
+bot guarda é entre a escolha da empresa e a mensagem seguinte —
+`WhatsappConversa`, uma linha por pessoa por conta, com prazo de 12 h.
+Estado de conversa que não expira vira um bot que continua achando que a
+pergunta de terça-feira está no ar.
+
+Toda lista sai **também** em texto, e o texto é a mesma coisa, não um
+resumo: é o que a Evolution manda, e é o que fica legível no banco e no
+diagnóstico.
+
+### 3A.6 Quem é a pessoa, e de qual empresa é o chamado
+
+Quem escreve pelo WhatsApp não digita login. O número é o que há, e dele
+saem o nome e a empresa — o chamado nasce identificado, com contrato e
+SLA certos, sem ninguém perguntar nada.
+
+O caso que obriga a perguntar é real: **o mesmo número em mais de uma
+empresa da carteira**. Acontece com quem presta serviço para duas, com o
+dono que tem duas razões sociais, e com o celular que passou de uma
+pessoa para outra. No banco isso é mais de um `User` com o mesmo
+`phone`, cada um no seu `Client` — o vínculo é único por `(userId,
+organizationId)`, então a mesma pessoa em duas empresas é, para o
+modelo, duas pessoas.
+
+```
+mensagem → quantas empresas tem este número?
+             ├─ nenhuma → chamado abre como contato de fora (como sempre foi)
+             ├─ uma     → chamado no nome dela, na empresa dela
+             └─ várias  → lista de toque com as empresas
+                             ↓ toque
+                          "Certo, <Empresa>. Me conte o que aconteceu."
+                             ↓ próxima mensagem
+                          chamado na empresa escolhida
+```
+
+Adivinhar pela primeira erraria em silêncio, e o erro só apareceria no
+relatório do mês, com o chamado cobrado da empresa errada.
+
+O id da empresa chega **de fora**, no toque. Ele é conferido contra a
+organização e contra o vínculo deste número antes de valer: sem essa
+cerca, um id trocado abriria chamado na empresa de outro cliente.
+
+Quem está na Evolution responde o nome da empresa escrito, e o casamento
+é sem acento e sem caixa, aceitando o começo do nome — mas **só quando
+uma** empresa casa. "São" batendo em duas vira escolha errada com cara
+de escolha certa.
+
+### 3A.7 Cumprimento não é chamado
+
+"Bom dia" virava um chamado com assunto "Bom dia", que alguém tinha de
+abrir para descobrir do que se tratava. Agora vira o menu.
+
+"Bom dia, a impressora parou" **não** é cumprimento: é um problema, e
+tratá-lo como saudação faria a pessoa contar tudo de novo. A regra é o
+texto ser só a saudação, com pontuação e emoji descontados.
+
+### 3A.8 Mídia nos dois sentidos
+
+Os dois provedores mandam só uma referência no webhook; o arquivo vem
+num segundo pedido. Na Meta o `media_id` vira uma URL assinada, e **essa
+URL também exige o token** — o que surpreende quem esperava um link
+público e devolve 401 numa URL que parece aberta.
+
+Na saída, mídia vai por `media_id` e nunca por `link`: o `link` faria a
+Meta buscar a URL num servidor nosso, o que exige o arquivo público na
+internet. Anexo de chamado não fica público, nem por cinco minutos.
+
+Foto e áudio não têm nome de arquivo — só documento tem. O Desk inventa
+um legível (`audio-whatsapp-3f2a1b9c.ogg`): sem isso o anexo se chamaria
+pelo id da Meta, que não conta nada, e o navegador não saberia o que
+fazer ao baixar.
+
+### 3A.9 Um defeito antigo que apareceu aqui
+
+O processamento lia `channelAccount.config` **sem decifrar**. Os
+segredos são cifrados na gravação, então a chave que ia para a Evolution
+era o texto cifrado `v1:...`.
+
+O efeito era invisível: a Evolution recusava a busca de mídia com uma
+chave que não existe, o `catch` devolvia `null`, e o chamado abria sem o
+anexo. Ninguém via erro — só faltava o arquivo, e quem atendia culpava o
+cliente por não ter mandado.
 
 ---
 
@@ -374,7 +546,7 @@ a organização. Contrato em `docs/07-api.md`.
 | Ação | Web | E-mail | WhatsApp | API |
 |---|:--:|:--:|:--:|:--:|
 | Abrir chamado | ✓ | ✓ | ✓ | ✓ |
-| Consultar status | ✓ | — | ✓ (`status`) | ✓ |
+| Consultar status | ✓ | — | ✓ (`status` ou toque) | ✓ |
 | Responder | ✓ | ✓ | ✓ | ✓ |
 | Anexar arquivo | ✓ | ✓ | ✓ | ✓ |
 | Baixar anexo | ✓ | ✓ | ✓ | ✓ |

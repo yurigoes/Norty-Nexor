@@ -6,7 +6,11 @@ import { AppModule } from './app.module';
 import { ProblemDetailsFilter } from './common/filters/problem-details.filter';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // `rawBody` porque a Meta assina o **corpo exato** que mandou
+  // (X-Hub-Signature-256). Reserializar o JSON já parseado dá outros
+  // bytes — ordem de chaves e escape de acento diferem — e a
+  // assinatura de toda entrega legítima falharia.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   app.setGlobalPrefix(process.env.API_PREFIX ?? 'v1');
   app.use(cookieParser());

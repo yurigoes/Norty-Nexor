@@ -28,7 +28,13 @@ import { EvolutionClient } from './evolution.client';
 import { ProcessamentoService } from './processamento.service';
 import { cifrarConfig, configParaExibicao, decifrarConfig } from './segredos';
 
-const TIPOS = ['EMAIL_IMAP', 'EMAIL_SMTP', 'EMAIL_WEBHOOK', 'WHATSAPP_EVOLUTION'] as const;
+const TIPOS = [
+  'EMAIL_IMAP',
+  'EMAIL_SMTP',
+  'EMAIL_WEBHOOK',
+  'WHATSAPP_EVOLUTION',
+  'WHATSAPP_META',
+] as const;
 
 export class CriarCanalDto {
   @IsEnum(TIPOS) kind!: (typeof TIPOS)[number];

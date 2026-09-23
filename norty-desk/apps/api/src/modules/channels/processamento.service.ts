@@ -16,7 +16,18 @@ import { TicketsService } from '../tickets/tickets.service';
 import { EntradaService } from './entrada.service';
 import { EvolutionClient } from './evolution.client';
 import { corpoDaMensagem, limparAssunto } from './limpeza';
+import { MetaClient } from './meta.client';
+import { decifrarConfig } from './segredos';
+import {
+  interpretarToque,
+  listaDeChamados,
+  listaDeEmpresas,
+  listaEmTexto,
+  menuDeToque,
+  type ListaInterativa,
+} from './meta.mensagem';
 import { SaidaService } from './saida.service';
+import { WhatsappBot } from './whatsapp.bot';
 import {
   interpretarComando,
   montarMenu,
@@ -45,6 +56,8 @@ export class ProcessamentoService {
     private readonly evolution: EvolutionClient,
     @Inject(PORTA_DE_ARMAZENAMENTO) private readonly armazenamento: PortaDeArmazenamento,
     private readonly transcricao: TranscricaoService,
+    private readonly bot: WhatsappBot,
+    private readonly meta: MetaClient,
   ) {}
 
   @Cron(CronExpression.EVERY_30_SECONDS)
@@ -200,12 +213,25 @@ export class ProcessamentoService {
   ): Promise<void> {
     const telefone = normalizePhone(mensagem.fromAddress);
     const texto = (mensagem.bodyText ?? '').trim();
-    const config = mensagem.channelAccount.config as {
+    // `decifrarConfig` e não o `config` cru: os segredos são cifrados
+    // na gravação (AES-256-GCM, `segredos.ts`), e ler o campo direto
+    // entrega `v1:...` no lugar da chave.
+    //
+    // Estava assim desde antes, e o efeito era invisível: a Evolution
+    // recusava a busca de mídia com uma chave que não existe, o `catch`
+    // devolvia `null`, e o chamado abria sem o anexo. Ninguém via erro
+    // — só faltava o arquivo, e quem atende culpava o cliente por não
+    // ter mandado.
+    const config = decifrarConfig(mensagem.channelAccount.config as Record<string, unknown>) as {
       janelaHoras?: number;
       menuAtivo?: boolean;
       baseUrl?: string;
       instance?: string;
       apiKey?: string;
+      maxAttachmentBytes?: number;
+      phoneNumberId?: string;
+      token?: string;
+      versao?: string;
     };
 
     const contato = await this.resolverContato(mensagem.organizationId, {
@@ -220,6 +246,75 @@ export class ProcessamentoService {
     // quarenta segundos para saber do que se trata.
     const transcrito = await this.transcreverSeForAudio(midia);
     const textoEfetivo = transcrito ? TranscricaoService.comMarca(transcrito, texto) : texto;
+
+    const conta = mensagem.channelAccount;
+    const cabecalhos = (mensagem.rawHeaders ?? {}) as {
+      toque?: string | null;
+      provedor?: string;
+    };
+    const lembrado = await this.bot.lembrar(conta.id, telefone);
+
+    // As duas marcas azuis. Vale mais do que parece: sem elas a pessoa
+    // fica olhando uma mensagem entregue e sem resposta, sem saber se
+    // ela chegou a alguém. Falha em silêncio de propósito — um recibo
+    // que não saiu não pode derrubar o processamento da mensagem.
+    if (cabecalhos.provedor === 'META' && config.phoneNumberId && config.token) {
+      await this.meta.marcarComoLida(
+        { phoneNumberId: config.phoneNumberId, token: config.token, versao: config.versao },
+        mensagem.externalId,
+      );
+    }
+
+    // 0. A pessoa **tocou** numa lista que mandamos.
+    //
+    //    Vem antes de tudo porque a resposta já vem identificada: a
+    //    Meta devolve o `id` exato da linha tocada, então não há o que
+    //    interpretar nem como errar. É a diferença para o menu digitado,
+    //    em que "Status", "status?" e "ver status" são três coisas.
+    const toque = interpretarToque(cabecalhos.toque ?? undefined);
+    if (toque) {
+      await this.tratarToque(mensagem, contato.id, telefone, toque);
+      return;
+    }
+
+    // 0.1. Estávamos esperando a escolha de empresa, e ela veio escrita.
+    //
+    //      É o caminho de quem está na Evolution, que não desenha lista
+    //      de toque: a lista saiu em texto e a pessoa respondeu o nome.
+    if (lembrado?.aguardando === 'EMPRESA' && textoEfetivo && !midia) {
+      const quem = await this.bot.identificar(mensagem.organizationId, telefone);
+      const empresa = WhatsappBot.acharEmpresaPorTexto(textoEfetivo, quem.empresas);
+
+      if (empresa) {
+        await this.bot.anotar({
+          organizationId: mensagem.organizationId,
+          channelAccountId: conta.id,
+          telefone,
+          clientId: empresa.id,
+          aguardando: 'ASSUNTO',
+        });
+
+        await this.saida.enfileirarAviso({
+          organizationId: mensagem.organizationId,
+          ticketId: null,
+          channel: 'WHATSAPP',
+          para: telefone,
+          channelAccountId: conta.id,
+          corpo: `Certo, ${empresa.nome}. Me conte o que está acontecendo.`,
+        });
+
+        await this.descartar(mensagem.id, `Empresa escolhida: ${empresa.nome}.`);
+        return;
+      }
+
+      // Não casou com nenhuma: repete a pergunta em vez de abrir na
+      // errada. Uma pergunta repetida incomoda; um chamado cobrado da
+      // empresa errada custa dinheiro e confiança.
+      if (quem.empresas.length > 1) {
+        await this.pedirEmpresa(mensagem, telefone, quem.empresas);
+        return;
+      }
+    }
 
     // 1. Comando explícito ganha da conversa em andamento. O bot não
     //    tenta interpretar linguagem natural: comando é previsível, e
@@ -252,6 +347,7 @@ export class ProcessamentoService {
           ticketId: alvo.id,
           channel: 'WHATSAPP',
           para: telefone,
+          channelAccountId: conta.id,
           corpo: `${ticketTag(alvo.number)} ${alvo.subject}\n\nPode mandar. Estou ouvindo.`,
         });
 
@@ -304,6 +400,48 @@ export class ProcessamentoService {
       return;
     }
 
+    // 4.1. Só um "bom dia": oferece o menu em vez de abrir um chamado
+    //      chamado "Oi".
+    //
+    //      Um cumprimento não é um problema, e virava um chamado com
+    //      assunto "Oi" que alguém tinha de abrir para descobrir do que
+    //      se tratava. Quem já está no meio de um fluxo (`lembrado`) não
+    //      recebe o menu de novo — aí ele seria uma pergunta repetida.
+    if (
+      config.menuAtivo !== false &&
+      !midia &&
+      !lembrado &&
+      ProcessamentoService.ehSoUmCumprimento(texto)
+    ) {
+      await this.oferecerMenu(mensagem, contato.id, telefone);
+      return;
+    }
+
+    // 4.2. De quem é este chamado.
+    //
+    //      O número identifica a pessoa e a empresa, e o chamado nasce
+    //      com contrato e SLA certos sem ninguém digitar nada. Quando o
+    //      mesmo número aparece em mais de uma empresa, o bot pergunta:
+    //      adivinhar pela primeira erraria em silêncio, e o erro só
+    //      apareceria no relatório do mês.
+    const quem = await this.bot.identificar(mensagem.organizationId, telefone);
+    let clientId = lembrado?.clientId ?? null;
+
+    if (!clientId && quem.empresas.length > 1) {
+      await this.pedirEmpresa(mensagem, telefone, quem.empresas);
+      return;
+    }
+
+    clientId = clientId ?? quem.empresas[0]?.id ?? null;
+
+    // Com a empresa decidida, sabe-se **qual** das contas com este
+    // número está falando — e o chamado sai no nome dela, que é do que
+    // depende ela o enxergar ao entrar no portal.
+    const requerente =
+      clientId && !quem.userId
+        ? await this.bot.pessoaDaEmpresa(mensagem.organizationId, telefone, clientId)
+        : null;
+
     // O assunto sai da transcrição quando o áudio veio sem legenda: um
     // chamado chamado "(mídia sem texto)" não se acha na fila.
     const assunto = ProcessamentoService.assuntoDeTexto(transcrito || texto);
@@ -323,6 +461,8 @@ export class ProcessamentoService {
     const chamado = await this.tickets.abrirPorCanal({
       organizationId: mensagem.organizationId,
       contactId: contato.id,
+      requesterUserId: quem.userId ?? requerente?.id ?? null,
+      clientId,
       channel: 'WHATSAPP',
       // O WhatsApp não tem assunto: a primeira linha vira o título e o
       // texto inteiro vira a descrição.
@@ -361,7 +501,44 @@ export class ProcessamentoService {
     );
     await this.concluir(mensagem.id, abertura.id);
 
-    await this.avisarAbertura(mensagem.organizationId, chamado, 'WHATSAPP', telefone);
+    // O chamado nasceu: o que o bot estava esperando já aconteceu.
+    // Guardar a escolha depois disso faria a mensagem seguinte, sobre
+    // outro assunto, herdar a empresa escolhida para esta.
+    await this.bot.esquecer(conta.id, telefone);
+
+    await this.avisarAbertura(
+      mensagem.organizationId,
+      chamado,
+      'WHATSAPP',
+      telefone,
+      conta.id,
+    );
+  }
+
+  /**
+   * "Oi", "bom dia", "boa tarde" — e nada mais.
+   *
+   * Curto **e** reconhecível: um "bom dia, a impressora parou" é um
+   * problema, e tratá-lo como cumprimento faria a pessoa contar tudo de
+   * novo. A regra é o texto ser só a saudação, com pontuação e emoji
+   * descontados.
+   */
+  private static ehSoUmCumprimento(texto: string): boolean {
+    const limpo = texto
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      // Emoji e pontuação fora: "oi!! 👋" é um oi.
+      .replace(/[^a-z\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!limpo || limpo.length > 30) return false;
+
+    return /^(oi|ola|opa|eai|e ai|alo|bom dia|boa tarde|boa noite|tudo bem|tudo bom|preciso de ajuda|ajuda|menu)$/.test(
+      limpo,
+    );
   }
 
   /** A primeira linha, ou os primeiros oitenta caracteres. */
@@ -372,7 +549,7 @@ export class ProcessamentoService {
   }
 
   private async tratarComando(
-    mensagem: { id: string; organizationId: string },
+    mensagem: { id: string; organizationId: string; channelAccountId: string },
     contactId: string,
     telefone: string,
     comando: NonNullable<ReturnType<typeof interpretarComando>>,
@@ -384,6 +561,11 @@ export class ProcessamentoService {
         ticketId: null,
         channel: 'WHATSAPP',
         para: telefone,
+        // A resposta sai pela conta em que a pessoa falou. Sem isto, uma
+        // organização com Meta **e** Evolution responderia sempre pela
+        // Meta — e quem escreveu no número antigo receberia de um
+        // número que, para ele, é de outra empresa.
+        channelAccountId: mensagem.channelAccountId,
         corpo,
       });
       await this.descartar(mensagem.id, `Comando "${comando.tipo}" respondido.`);
@@ -472,8 +654,273 @@ export class ProcessamentoService {
     }
   }
 
+  /**
+   * Manda uma lista de toque — e a mesma coisa escrita.
+   *
+   * As duas juntas, sempre: a lista é o que a Meta desenha, e o texto é
+   * o que sai pela Evolution, o que fica no banco e o que a tela de
+   * diagnóstico mostra. Um `payload` sem texto equivalente seria uma
+   * mensagem que ninguém consegue ler depois.
+   */
+  private async responderComLista(
+    mensagem: { organizationId: string; channelAccountId: string },
+    telefone: string,
+    lista: ListaInterativa,
+  ): Promise<void> {
+    await this.saida.enfileirarAviso({
+      organizationId: mensagem.organizationId,
+      ticketId: null,
+      channel: 'WHATSAPP',
+      para: telefone,
+      channelAccountId: mensagem.channelAccountId,
+      corpo: listaEmTexto(lista),
+      lista,
+    });
+  }
+
+  /** O menu, para quem só cumprimentou ou pediu ajuda. */
+  private async oferecerMenu(
+    mensagem: { id: string; organizationId: string; channelAccountId: string },
+    contactId: string,
+    telefone: string,
+  ): Promise<void> {
+    const abertos = await this.prisma.ticket.count({
+      where: {
+        organizationId: mensagem.organizationId,
+        status: { not: 'FECHADO' },
+        actors: { some: { contactId, role: 'REQUERENTE' } },
+      },
+    });
+
+    await this.responderComLista(mensagem, telefone, menuDeToque(abertos > 0));
+    await this.descartar(mensagem.id, 'Cumprimento: ofereci o menu.');
+  }
+
+  /**
+   * "Para qual empresa é este chamado?"
+   *
+   * O bot anota que perguntou — é a única coisa que ele precisa lembrar
+   * entre uma mensagem e outra. Tudo o mais que ele pergunta volta
+   * respondido dentro do próprio toque.
+   */
+  private async pedirEmpresa(
+    mensagem: { id: string; organizationId: string; channelAccountId: string },
+    telefone: string,
+    empresas: { id: string; nome: string }[],
+  ): Promise<void> {
+    await this.bot.anotar({
+      organizationId: mensagem.organizationId,
+      channelAccountId: mensagem.channelAccountId,
+      telefone,
+      aguardando: 'EMPRESA',
+    });
+
+    await this.responderComLista(mensagem, telefone, listaDeEmpresas(empresas));
+    await this.descartar(mensagem.id, `Número em ${empresas.length} empresas: perguntei qual.`);
+  }
+
+  /**
+   * O que a pessoa tocou na lista.
+   *
+   * Cada ramo termina em `descartar`: o toque **não** é conteúdo de
+   * chamado. Gravá-lo como mensagem encheria a conversa de "Abrir um
+   * chamado" e "Ver meus chamados" ditos pelo cliente.
+   */
+  private async tratarToque(
+    mensagem: Prisma.InboundMessageGetPayload<{ include: { channelAccount: true } }>,
+    contactId: string,
+    telefone: string,
+    toque: NonNullable<ReturnType<typeof interpretarToque>>,
+  ): Promise<void> {
+    const conta = mensagem.channelAccount;
+
+    const responder = async (corpo: string) => {
+      await this.saida.enfileirarAviso({
+        organizationId: mensagem.organizationId,
+        ticketId: null,
+        channel: 'WHATSAPP',
+        para: telefone,
+        channelAccountId: conta.id,
+        corpo,
+      });
+    };
+
+    switch (toque.tipo) {
+      case 'EMPRESA': {
+        // O id veio da lista que **nós** mandamos, mas chega de fora:
+        // conferir que a empresa é desta organização e que este número
+        // tem vínculo com ela é a mesma cerca de sempre (CLAUDE.md,
+        // regra 3). Sem isso, um id trocado abriria chamado na empresa
+        // de outro cliente.
+        const pessoa = await this.bot.pessoaDaEmpresa(
+          mensagem.organizationId,
+          telefone,
+          toque.clientId,
+        );
+
+        if (!pessoa) {
+          await responder('Não reconheci essa empresa. Me conte o que precisa que eu resolvo.');
+          await this.descartar(mensagem.id, 'Toque de empresa sem vínculo com este número.');
+          return;
+        }
+
+        const empresa = await this.prisma.client.findFirst({
+          where: { id: toque.clientId, organizationId: mensagem.organizationId },
+          select: { name: true },
+        });
+
+        await this.bot.anotar({
+          organizationId: mensagem.organizationId,
+          channelAccountId: conta.id,
+          telefone,
+          clientId: toque.clientId,
+          aguardando: 'ASSUNTO',
+        });
+
+        await responder(
+          `Certo, ${empresa?.name ?? 'sua empresa'}. Me conte o que está acontecendo.`,
+        );
+        await this.descartar(mensagem.id, 'Empresa escolhida pelo toque.');
+        return;
+      }
+
+      case 'NOVO': {
+        const quem = await this.bot.identificar(mensagem.organizationId, telefone);
+
+        if (quem.empresas.length > 1) {
+          await this.pedirEmpresa(mensagem, telefone, quem.empresas);
+          return;
+        }
+
+        await this.bot.anotar({
+          organizationId: mensagem.organizationId,
+          channelAccountId: conta.id,
+          telefone,
+          clientId: quem.empresas[0]?.id ?? null,
+          aguardando: 'ASSUNTO',
+        });
+
+        await responder('Certo. Me conte o que está acontecendo e eu abro um chamado.');
+        await this.descartar(mensagem.id, 'Toque: abrir chamado.');
+        return;
+      }
+
+      case 'STATUS': {
+        const abertos = await this.prisma.ticket.findMany({
+          where: {
+            organizationId: mensagem.organizationId,
+            status: { not: 'FECHADO' },
+            actors: { some: { contactId, role: 'REQUERENTE' } },
+          },
+          include: { commitments: { where: { achievedAt: null }, take: 1 } },
+          orderBy: { updatedAt: 'desc' },
+          take: 10,
+        });
+
+        // Com mais de um, a lista de toque vale mais que o texto: a
+        // pessoa escolhe sem digitar número de chamado.
+        if (abertos.length > 1) {
+          await this.responderComLista(
+            mensagem,
+            telefone,
+            listaDeChamados(
+              abertos.map((c) => ({
+                number: c.number,
+                subject: c.subject,
+                status: montarStatus([c]).split('\n')[1] ?? '',
+              })),
+              'Estes são os seus chamados abertos. Toque em um para falar sobre ele.',
+            ),
+          );
+          await this.descartar(mensagem.id, 'Toque: status (lista).');
+          return;
+        }
+
+        await responder(montarStatus(abertos));
+        await this.descartar(mensagem.id, 'Toque: status.');
+        return;
+      }
+
+      case 'ATENDENTE': {
+        const alvo = await this.prisma.ticket.findFirst({
+          where: {
+            organizationId: mensagem.organizationId,
+            status: { not: 'FECHADO' },
+            actors: { some: { contactId, role: 'REQUERENTE' } },
+          },
+          orderBy: { updatedAt: 'desc' },
+          select: { id: true, number: true },
+        });
+
+        if (!alvo) {
+          // Sem chamado aberto não há onde avisar a equipe. Vira o fluxo
+          // de abrir: o pedido de falar com gente é, ele mesmo, o
+          // chamado.
+          await this.bot.anotar({
+            organizationId: mensagem.organizationId,
+            channelAccountId: conta.id,
+            telefone,
+            aguardando: 'ASSUNTO',
+          });
+          await responder(
+            'Claro. Me conte em uma frase do que se trata e eu já chamo alguém da equipe.',
+          );
+          await this.descartar(mensagem.id, 'Toque: atendente, sem chamado aberto.');
+          return;
+        }
+
+        await this.prisma.ticketEvent.create({
+          data: {
+            ticketId: alvo.id,
+            type: 'NOTA_INTERNA',
+            visibility: 'INTERNA',
+            channel: 'SISTEMA',
+            body: 'O solicitante pediu atendimento humano pelo WhatsApp.',
+          },
+        });
+
+        await responder(
+          'Avisei a equipe que você quer falar com uma pessoa. ' +
+            `Alguém responde neste chamado ${ticketTag(alvo.number)}.`,
+        );
+        await this.descartar(mensagem.id, 'Toque: atendente.');
+        return;
+      }
+
+      case 'CHAMADO': {
+        const alvo = await this.prisma.ticket.findFirst({
+          where: {
+            organizationId: mensagem.organizationId,
+            number: toque.numero,
+            status: { not: 'FECHADO' },
+            actors: { some: { contactId, role: 'REQUERENTE' } },
+          },
+          select: { id: true, number: true, subject: true },
+        });
+
+        if (!alvo) {
+          await responder('Esse chamado não está mais aberto. Me conte o que precisa.');
+          await this.descartar(mensagem.id, 'Toque num chamado que não está aberto.');
+          return;
+        }
+
+        await responder(`${ticketTag(alvo.number)} ${alvo.subject}\n\nPode mandar. Estou ouvindo.`);
+
+        // A marca faz a janela de conversa apontar para ele na próxima
+        // mensagem, que é como a escolha "gruda".
+        await this.prisma.ticket.update({
+          where: { id: alvo.id },
+          data: { updatedAt: new Date() },
+        });
+
+        await this.descartar(mensagem.id, `Toque no chamado #${alvo.number}.`);
+        return;
+      }
+    }
+  }
+
   private async perguntarQualChamado(
-    mensagem: { id: string; organizationId: string },
+    mensagem: { id: string; organizationId: string; channelAccountId: string },
     telefone: string,
     ticketIds: string[],
   ): Promise<void> {
@@ -483,17 +930,25 @@ export class ProcessamentoService {
       orderBy: { updatedAt: 'desc' },
     });
 
-    const lista = chamados
-      .map((c) => `${ticketTag(c.number)} ${c.subject}`)
-      .join('\n');
+    // Lista de toque: a pessoa escolhe sem digitar número de chamado.
+    // O texto embaixo continua sendo a mesma coisa escrita, com a
+    // instrução de responder com o número — é o que sai pela Evolution,
+    // que não desenha lista.
+    const lista = listaDeChamados(
+      chamados.map((c) => ({ number: c.number, subject: c.subject, status: '' })),
+    );
+
+    const escrita = chamados.map((c) => `${ticketTag(c.number)} ${c.subject}`).join('\n');
 
     await this.saida.enfileirarAviso({
       organizationId: mensagem.organizationId,
       ticketId: null,
       channel: 'WHATSAPP',
       para: telefone,
+      channelAccountId: mensagem.channelAccountId,
+      lista,
       corpo:
-        `Você tem ${chamados.length} chamados abertos:\n\n${lista}\n\n` +
+        `Você tem ${chamados.length} chamados abertos:\n\n${escrita}\n\n` +
         'Responda com o número (por exemplo: *#' +
         `${chamados[0]!.number}*) para falar sobre ele, ou *novo* para abrir outro.`,
     });
@@ -526,29 +981,80 @@ export class ProcessamentoService {
     }
   }
 
+  /**
+   * Busca o binário da mídia recebida — pela Evolution ou pela Meta.
+   *
+   * Os dois provedores mandam só uma referência no webhook; o arquivo
+   * vem num segundo pedido. Na Evolution a referência é o próprio id da
+   * mensagem e o retorno é base64; na Meta é um `media_id` que vira uma
+   * URL assinada, e **essa URL também exige o token** — o que surpreende
+   * quem esperava um link público e devolve 401 numa URL que parece
+   * aberta.
+   *
+   * A falha é sempre `null`, nunca exceção: mídia que não baixou não
+   * pode impedir a mensagem de virar chamado. O texto chega, e o
+   * atendente pede o arquivo de novo se precisar.
+   */
   private async baixarMidiaSeHouver(
     mensagem: { externalId: string; organizationId: string; rawHeaders: Prisma.JsonValue | null },
-    config: { baseUrl?: string; instance?: string; apiKey?: string; maxAttachmentBytes?: number },
+    config: {
+      baseUrl?: string;
+      instance?: string;
+      apiKey?: string;
+      maxAttachmentBytes?: number;
+      phoneNumberId?: string;
+      token?: string;
+      versao?: string;
+    },
   ): Promise<AnexoRecebido | null> {
-    const cabecalhos = mensagem.rawHeaders as { messageType?: string } | null;
-    const tipo = cabecalhos?.messageType;
+    const cabecalhos = mensagem.rawHeaders as {
+      messageType?: string;
+      provedor?: string;
+      midia?: { id?: string; mimeType?: string; filename?: string } | null;
+    } | null;
 
-    const ehMidia =
-      tipo === 'imageMessage' ||
-      tipo === 'documentMessage' ||
-      tipo === 'audioMessage' ||
-      tipo === 'videoMessage';
-
-    if (!ehMidia || !config.baseUrl || !config.apiKey || !config.instance) return null;
+    const limite = config.maxAttachmentBytes ?? 16 * 1024 * 1024;
 
     try {
-      const midia = await this.evolution.baixarMidia(
-        { baseUrl: config.baseUrl, instance: config.instance, apiKey: config.apiKey },
-        mensagem.externalId,
-      );
+      let conteudo: Buffer;
+      let mimetype: string;
+      let nome: string;
 
-      const conteudo = Buffer.from(midia.base64, 'base64');
-      const limite = config.maxAttachmentBytes ?? 16 * 1024 * 1024;
+      if (cabecalhos?.provedor === 'META') {
+        const referencia = cabecalhos.midia;
+        if (!referencia?.id || !config.phoneNumberId || !config.token) return null;
+
+        const midia = await this.meta.baixarMidia(
+          {
+            phoneNumberId: config.phoneNumberId,
+            token: config.token,
+            versao: config.versao,
+          },
+          referencia.id,
+        );
+
+        conteudo = midia.bytes;
+        mimetype = referencia.mimeType ?? midia.mimeType;
+        nome = referencia.filename ?? ProcessamentoService.nomeDeMidia(mimetype, referencia.id);
+      } else {
+        const tipo = cabecalhos?.messageType;
+        const ehMidia =
+          tipo === 'imageMessage' ||
+          tipo === 'documentMessage' ||
+          tipo === 'audioMessage' ||
+          tipo === 'videoMessage';
+
+        if (!ehMidia || !config.baseUrl || !config.apiKey || !config.instance) return null;
+
+        const midia = await this.evolution.baixarMidia(
+          { baseUrl: config.baseUrl, instance: config.instance, apiKey: config.apiKey },
+          mensagem.externalId,
+        );
+
+        conteudo = Buffer.from(midia.base64, 'base64');
+        mimetype = midia.mimetype;
+        nome = midia.fileName ?? `whatsapp-${mensagem.externalId.slice(0, 8)}`;
+      }
 
       if (conteudo.length > limite) {
         this.logger.warn(`Mídia de ${mensagem.externalId} acima do limite; ignorada.`);
@@ -557,15 +1063,14 @@ export class ProcessamentoService {
 
       const { createHash, randomUUID } = await import('node:crypto');
       const checksum = createHash('sha256').update(conteudo).digest('hex');
-      const nome = midia.fileName ?? `whatsapp-${mensagem.externalId.slice(0, 8)}`;
       const chave = `${mensagem.organizationId}/entrada/${randomUUID()}-${nome}`;
 
-      await this.armazenamento.guardar(chave, conteudo, midia.mimetype);
+      await this.armazenamento.guardar(chave, conteudo, mimetype);
 
       return {
         storageKey: chave,
         filename: nome,
-        contentType: midia.mimetype,
+        contentType: mimetype,
         sizeBytes: conteudo.length,
         checksum: `sha256:${checksum}`,
       };
@@ -575,6 +1080,39 @@ export class ProcessamentoService {
       );
       return null;
     }
+  }
+
+  /**
+   * Um nome de arquivo para a mídia que veio sem nome.
+   *
+   * Foto e áudio do WhatsApp não têm nome — só documento tem. Sem isto,
+   * o anexo na tela do chamado se chamaria pelo id da Meta, que não
+   * conta nada a ninguém, e o navegador não saberia o que fazer ao
+   * baixar.
+   */
+  private static nomeDeMidia(mimetype: string, id: string): string {
+    const extensao =
+      {
+        'image/jpeg': 'jpg',
+        'image/png': 'png',
+        'image/webp': 'webp',
+        'audio/ogg': 'ogg',
+        'audio/mpeg': 'mp3',
+        'audio/mp4': 'm4a',
+        'audio/amr': 'amr',
+        'video/mp4': 'mp4',
+        'application/pdf': 'pdf',
+      }[mimetype.split(';')[0]!.trim()] ?? 'bin';
+
+    const rotulo = mimetype.startsWith('audio/')
+      ? 'audio'
+      : mimetype.startsWith('image/')
+        ? 'foto'
+        : mimetype.startsWith('video/')
+          ? 'video'
+          : 'arquivo';
+
+    return `${rotulo}-whatsapp-${id.slice(-8)}.${extensao}`;
   }
 
   // -------------------------------------------------------------------
@@ -647,6 +1185,7 @@ export class ProcessamentoService {
     chamado: { id: string; number: number },
     canal: Channel,
     para: string,
+    channelAccountId?: string,
   ): Promise<void> {
     const corpo =
       canal === 'WHATSAPP'
@@ -660,6 +1199,7 @@ export class ProcessamentoService {
       ticketId: chamado.id,
       channel: canal,
       para,
+      channelAccountId,
       corpo,
     });
   }

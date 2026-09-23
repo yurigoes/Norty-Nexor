@@ -71,8 +71,23 @@ export function ehCifrado(valor: unknown): boolean {
   return typeof valor === 'string' && valor.startsWith(`${PREFIXO}:`);
 }
 
-/** As chaves de `config` que guardam segredo. */
-const CAMPOS_SECRETOS = ['password', 'apiKey', 'webhookSecret', 'secret', 'token'];
+/**
+ * As chaves de `config` que guardam segredo.
+ *
+ * `appSecret` e `verifyToken` entraram com a Meta. O segundo parece
+ * inofensivo — é só o que ela repete no aperto de mão —, mas quem o
+ * conhece consegue fazer a Meta apontar para um webhook próprio na hora
+ * de configurar. Custa nada cifrá-lo.
+ */
+const CAMPOS_SECRETOS = [
+  'password',
+  'apiKey',
+  'webhookSecret',
+  'secret',
+  'token',
+  'appSecret',
+  'verifyToken',
+];
 
 /** Cifra os campos secretos de uma configuração de canal. */
 export function cifrarConfig(config: Record<string, unknown>): Record<string, unknown> {

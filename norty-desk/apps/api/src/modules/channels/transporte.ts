@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import { EvolutionClient, type ConfigEvolution } from './evolution.client';
+import type { ListaInterativa } from './meta.mensagem';
 
 /**
  * O que uma mensagem precisa carregar para sair.
@@ -17,6 +18,25 @@ export type Despacho = {
   /** `Message-ID` da última mensagem nossa neste chamado. */
   emRespostaA?: string;
   remetente?: string;
+  /** Quem manda. É por ela que o WhatsApp acha a conta de canal. */
+  organizationId?: string;
+  /**
+   * A conta de canal escolhida.
+   *
+   * A resposta sai pela conta em que a pessoa falou: responder por
+   * outro número é, do ponto de vista de quem recebe, mensagem de um
+   * desconhecido.
+   */
+  channelAccountId?: string;
+  /**
+   * A mesma mensagem como lista de toque, quando o transporte souber
+   * desenhar uma.
+   *
+   * `corpo` continua sendo a versão escrita **da mesma coisa**, e não um
+   * resumo: é o que sai pela Evolution, que não desenha lista, e é o que
+   * fica legível no diagnóstico.
+   */
+  lista?: ListaInterativa;
 };
 
 export interface PortaDeEnvio {
