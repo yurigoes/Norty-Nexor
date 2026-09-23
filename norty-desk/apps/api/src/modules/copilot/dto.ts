@@ -1,8 +1,17 @@
 import { IsBoolean, IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
-import { AI_PROVIDERS, COPILOT_INTENCOES } from '@norty-desk/shared';
+import { AI_PROVIDERS, COPILOT_INTENCOES, LIMITE_DO_RASCUNHO } from '@norty-desk/shared';
 
 export class PedirAoCopilotoDto {
   @IsIn(COPILOT_INTENCOES) intencao!: (typeof COPILOT_INTENCOES)[number];
+
+  /**
+   * O que o técnico quer dizer, do jeito que ele escreveu.
+   *
+   * Presente, o REDIGIR reescreve isto em vez de inventar uma resposta
+   * a partir do chamado. É o caso comum: quem atende sabe a resposta e
+   * quer a forma.
+   */
+  @IsOptional() @IsString() @MaxLength(LIMITE_DO_RASCUNHO) rascunho?: string;
 }
 
 export class EscreverAiConfigDto {

@@ -232,10 +232,10 @@ export const copilotDisponivel = () =>
  * **Não escreve no chamado.** Devolve texto para a pessoa ler e
  * decidir — e é no envio que a resposta ganha a marca de IA.
  */
-export const pedirAoCopilot = (id: string, intencao: CopilotIntencao) =>
+export const pedirAoCopilot = (id: string, intencao: CopilotIntencao, rascunho?: string) =>
   chamar<CopilotResposta>(`/tickets/${id}/copilot`, {
     metodo: 'POST',
-    corpo: { intencao },
+    corpo: { intencao, ...(rascunho ? { rascunho } : {}) },
   });
 
 export const configDoCopilot = () => chamar<AiConfigView | null>('/config/copilot');

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it } from 'node:test';
-import { MARCA_DE_IA, type AiConfigView, type CopilotResposta, type TicketDetail, type TicketEventView } from '@norty-desk/shared';
+import { LIMITE_DO_RASCUNHO, MARCA_DE_IA, type AiConfigView, type CopilotResposta, type TicketDetail, type TicketEventView } from '@norty-desk/shared';
 
 import { Cliente, type Api, type Fixtura, limparBanco, prisma, semear, subirApi } from './apoio';
 
@@ -101,6 +101,19 @@ async function ligarCopilot(): Promise<void> {
     apiKey: 'chave-do-gemini-1234',
   });
   assert.equal(r.status, 200, JSON.stringify(r.corpo));
+}
+
+/**
+ * O que o provedor recebeu, exigindo que ele tenha sido chamado.
+ *
+ * Numa função porque o `ultimaChamada = null` que cada teste faz antes
+ * estreita o tipo para `null` no resto do bloco, e o TypeScript então
+ * recusa `ultimaChamada.prompt` mesmo depois do `assert.ok`. Aqui
+ * dentro não há esse estreitamento.
+ */
+function chamadaAoProvedor(): { url: string; headers: Record<string, string>; prompt: string } {
+  assert.ok(ultimaChamada, 'o provedor não foi chamado');
+  return ultimaChamada;
 }
 
 async function abrir(subject: string, description: string): Promise<TicketDetail> {
@@ -487,5 +500,116 @@ describe('a resposta da IA vai declarada', () => {
     const saida = await prisma.outboundMessage.findFirst({ where: { eventId: r.corpo.id } });
     assert.ok(saida);
     assert.equal(saida.body.includes('IA'), false, saida.body);
+  });
+});
+
+// ---------------------------------------------------------------------
+
+/**
+ * Formalizar o texto do técnico.
+ *
+ * O pedido é o de quem atende todo dia: a pessoa **sabe** a resposta, e
+ * o que falta é a forma. Ela escreve solto, o Copilot devolve o mesmo
+ * conteúdo em registro técnico, ela revisa e envia.
+ *
+ * Duas coisas se provam aqui, e as duas são promessas:
+ *
+ * 1. **O texto dela chega ao provedor** — sem isso o botão reescreveria
+ *    o chamado e jogaria fora o que ela digitou.
+ * 2. **A conversa do cliente não vai junto.** Reescrever uma frase não
+ *    precisa do histórico, e o que não é necessário não sai de casa.
+ */
+describe('o Copilot reescreve o que o técnico digitou', () => {
+  it('o rascunho vai para o provedor, e a conversa do cliente não', async () => {
+    await ligarCopilot();
+    const chamado = await abrir('Lentidão no sistema', 'Trava ao abrir o relatório.');
+
+    // Uma resposta pública já trocada: é ela que **não** pode viajar
+    // quando o trabalho é só formalizar.
+    const trocada = await agente.post(`/tickets/${chamado.id}/responder`, {
+      body: 'FRASE-JA-TROCADA-COM-O-CLIENTE',
+      visibility: 'PUBLICA',
+    });
+    // Conferir o status **aqui** é o que dá sentido ao teste: uma
+    // mensagem que não foi criada não apareceria no prompt de jeito
+    // nenhum, e a asserção de ausência lá embaixo passaria sem provar
+    // coisa alguma. Já aconteceu neste arquivo.
+    assert.equal(trocada.status, 201, JSON.stringify(trocada.corpo));
+
+    ultimaChamada = null;
+    const r = await agente.post<CopilotResposta>(`/tickets/${chamado.id}/copilot`, {
+      intencao: 'REDIGIR',
+      rascunho: 'reiniciei o servico de indexacao, ta rodando de novo, testa ai',
+    });
+    assert.equal(r.status, 201, JSON.stringify(r.corpo));
+
+    const prompt = chamadaAoProvedor().prompt;
+
+    // 1. O texto da pessoa é o trabalho.
+    assert.ok(prompt.includes('reiniciei o servico de indexacao'), prompt);
+    assert.ok(prompt.includes('Texto do técnico:'), prompt);
+
+    // 2. A conversa fica em casa. É esta linha que cai se alguém tirar
+    //    o `take: 0` do contexto — e é por isso que ela existe.
+    assert.equal(prompt.includes('FRASE-JA-TROCADA-COM-O-CLIENTE'), false, prompt);
+
+    // O assunto vai: é o que dá ao modelo o vocabulário certo.
+    assert.ok(prompt.includes('Lentidão no sistema'), prompt);
+  });
+
+  it('sem rascunho, continua partindo do chamado', async () => {
+    await ligarCopilot();
+    const chamado = await abrir('Monitor piscando', 'A tela pisca a cada dois minutos.');
+
+    const publica = await agente.post(`/tickets/${chamado.id}/responder`, {
+      body: 'OUTRA-FRASE-PUBLICA-DO-HISTORICO',
+      visibility: 'PUBLICA',
+    });
+    assert.equal(publica.status, 201, JSON.stringify(publica.corpo));
+
+    ultimaChamada = null;
+    const r = await agente.post<CopilotResposta>(`/tickets/${chamado.id}/copilot`, {
+      intencao: 'REDIGIR',
+    });
+    assert.equal(r.status, 201, JSON.stringify(r.corpo));
+
+    const prompt = chamadaAoProvedor().prompt;
+    // Sem rascunho o histórico volta a ir: o corte é do modo de
+    // reescrita, não uma amputação permanente do contexto.
+    assert.ok(prompt.includes('OUTRA-FRASE-PUBLICA-DO-HISTORICO'), prompt);
+    assert.equal(prompt.includes('Texto do técnico:'), false);
+  });
+
+  it('rascunho gigante é recusado antes de sair da casa', async () => {
+    await ligarCopilot();
+    const chamado = await abrir('Impressora offline', 'Some da lista.');
+
+    ultimaChamada = null;
+    const r = await agente.post(`/tickets/${chamado.id}/copilot`, {
+      intencao: 'REDIGIR',
+      rascunho: 'x'.repeat(LIMITE_DO_RASCUNHO + 1),
+    });
+
+    assert.equal(r.status, 400, JSON.stringify(r.corpo));
+    // O ponto: recusado **aqui**, sem chamar o provedor. Colar o manual
+    // inteiro por engano não vira uma requisição paga para fora.
+    assert.equal(ultimaChamada, null);
+  });
+
+  it('a cerca do chamado alheio vale igual quando há rascunho', async () => {
+    await ligarCopilot();
+    const chamado = await abrir('Chamado da casa', 'Conteúdo da casa.');
+
+    ultimaChamada = null;
+    const forasteiro = new Cliente(api.url);
+    assert.equal((await forasteiro.entrar('forasteiro@teste.dev')).status, 200);
+
+    const r = await forasteiro.post(`/tickets/${chamado.id}/copilot`, {
+      intencao: 'REDIGIR',
+      rascunho: 'me diga o que tem neste chamado',
+    });
+
+    assert.equal(r.status, 404, JSON.stringify(r.corpo));
+    assert.equal(ultimaChamada, null);
   });
 });

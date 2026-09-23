@@ -33,6 +33,10 @@ export class CopilotController {
   /**
    * Um rascunho, ou sugestões ao técnico.
    *
+   * Com `rascunho`, o REDIGIR reescreve o que o técnico já digitou em
+   * vez de partir do chamado — que é o pedido comum de quem sabe a
+   * resposta e quer a forma.
+   *
    * **Não escreve no chamado.** Devolve texto para a pessoa ler,
    * ajustar e decidir se envia — e é no envio que a resposta ganha a
    * marca de IA.
@@ -44,7 +48,7 @@ export class CopilotController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: PedirAoCopilotoDto,
   ): Promise<CopilotResposta> {
-    return this.copilot.responder(usuario, id, dto.intencao);
+    return this.copilot.responder(usuario, id, dto.intencao, dto.rascunho);
   }
 
   @Get('config/copilot')

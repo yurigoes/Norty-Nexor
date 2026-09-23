@@ -61,6 +61,7 @@ export class CopilotService {
     usuario: UsuarioAutenticado,
     ticketId: string,
     intencao: CopilotIntencao,
+    rascunho?: string,
   ): Promise<CopilotResposta> {
     const config = await this.prisma.aiConfig.findUnique({
       where: { organizationId: usuario.organizationId },
@@ -72,8 +73,19 @@ export class CopilotService {
       );
     }
 
-    const contexto = await this.contextoPublico(usuario.organizationId, ticketId);
-    const prompt = CopilotService.montarPrompt(intencao, contexto);
+    const texto_do_tecnico = rascunho?.trim() || null;
+
+    // Reescrever é um trabalho menor que responder, e por isso leva
+    // menos do cliente para fora: só o assunto e o tipo, para o modelo
+    // acertar o vocabulário. A conversa fica em casa — formalizar uma
+    // frase não precisa do histórico, e o que não é necessário não sai.
+    const contexto = await this.contextoPublico(
+      usuario.organizationId,
+      ticketId,
+      texto_do_tecnico !== null,
+    );
+
+    const prompt = CopilotService.montarPrompt(intencao, contexto, texto_do_tecnico);
 
     const texto = await this.chamarProvedor(
       config.provider,
@@ -93,7 +105,7 @@ export class CopilotService {
    * um `console.log` de depuração no lugar errado já o teria mandado
    * para o log.
    */
-  private async contextoPublico(organizationId: string, ticketId: string) {
+  private async contextoPublico(organizationId: string, ticketId: string, soOCabecalho = false) {
     const chamado = await this.prisma.ticket.findFirst({
       where: { id: ticketId, organizationId },
       select: {
@@ -101,10 +113,19 @@ export class CopilotService {
         description: true,
         category: { select: { name: true } },
         actors: { where: { role: 'REQUERENTE' }, select: { userId: true } },
+        // `take: 0` não traz linha nenhuma: quando há rascunho, a
+        // conversa não é carregada — não é filtrada depois.
+        //
+        // São duas barras, e cada uma segura sozinha: o prompt de
+        // reescrita também não desenha a conversa. Redundância de
+        // propósito — a que fica aqui protege contra a mudança de
+        // amanhã no prompt, e a de lá protege se alguém tirar esta.
+        // Só quebrando as duas o histórico chega ao provedor, e é
+        // exatamente isso que o teste comprova.
         events: {
           where: { visibility: 'PUBLICA', type: { in: ['MENSAGEM', 'SOLUCAO'] } },
           orderBy: { createdAt: 'asc' },
-          take: 20,
+          take: soOCabecalho ? 0 : 20,
           select: { body: true, authorId: true, createdAt: true },
         },
       },
@@ -141,6 +162,7 @@ export class CopilotService {
       categoria: string | null;
       conversa: { de: string; texto: string }[];
     },
+    rascunho: string | null = null,
   ): string {
     const conversa = contexto.conversa
       .map((m) => `${m.de === 'cliente' ? 'Cliente' : 'Atendimento'}: ${m.texto}`)
@@ -154,6 +176,39 @@ export class CopilotService {
     ]
       .filter(Boolean)
       .join('\n');
+
+    // O rascunho manda no REDIGIR. Reescrever o que a pessoa disse é
+    // trabalho diferente de responder por ela: o conteúdo já está
+    // decidido, e a única liberdade do modelo é a forma.
+    //
+    // "Não acrescente informação" está em três frases de propósito. Um
+    // modelo que preenche lacuna é útil em quase todo lugar e é um
+    // defeito aqui: o técnico revisa a forma, e uma frase plausível que
+    // ele não escreveu passa despercebida justamente por ser plausível.
+    if (intencao === 'REDIGIR' && rascunho) {
+      const cabecalho = [
+        `Assunto do chamado: ${contexto.assunto}`,
+        contexto.categoria ? `Tipo: ${contexto.categoria}` : null,
+      ]
+        .filter(Boolean)
+        .join('\n');
+
+      return (
+        'Você reescreve a resposta de um técnico de suporte brasileiro para o ' +
+        'cliente. Reescreva o texto abaixo em português do Brasil, em registro ' +
+        'técnico e formal, com pontuação e concordância corretas, em parágrafos ' +
+        'curtos e tom cordial e direto.\n\n' +
+        'Regras:\n' +
+        '- Não acrescente informação que não esteja no texto. Nenhuma.\n' +
+        '- Não invente causa, procedimento, prazo nem número de versão.\n' +
+        '- Não prometa nada que o texto não prometa.\n' +
+        '- Se o texto estiver incompleto, deixe-o incompleto: quem completa é o técnico.\n' +
+        '- Mantenha comando, caminho de arquivo, código de erro e nome próprio exatamente como estão.\n' +
+        '- Não use saudação nem despedida se o texto não tiver.\n' +
+        '- Devolva só o texto reescrito, sem comentário seu.\n\n' +
+        `${cabecalho}\n\nTexto do técnico:\n${rascunho}`
+      );
+    }
 
     if (intencao === 'SUGERIR') {
       return (

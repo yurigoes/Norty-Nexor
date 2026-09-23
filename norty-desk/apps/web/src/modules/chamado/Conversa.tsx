@@ -281,6 +281,17 @@ function Responder({ chamado, aoEnviar }: { chamado: TicketDetail; aoEnviar: () 
   const [sugestao, setSugestao] = useState<string | null>(null);
   const [temCopilot, setTemCopilot] = useState(false);
 
+  /**
+   * O que o técnico tinha escrito antes de mandar reescrever.
+   *
+   * Reescrever **substitui** o campo — acrescentar deixaria as duas
+   * versões grudadas e a pessoa apagando a sua à mão. Substituir sem
+   * guardar, porém, apaga o trabalho de quem não gostou do resultado, e
+   * um recurso que come o texto da pessoa uma vez não é usado uma
+   * segunda. Então guarda-se, e o botão de voltar fica à vista.
+   */
+  const [meuTexto, setMeuTexto] = useState<string | null>(null);
+
   const podeNotaInterna = can('chamado:nota-interna');
   const avisarQueDigita = useAvisarQueDigita(chamado.id);
 
@@ -301,14 +312,23 @@ function Responder({ chamado, aoEnviar }: { chamado: TicketDetail; aoEnviar: () 
   }, []);
 
   async function pedir(intencao: CopilotIntencao) {
+    // Com texto no campo, REDIGIR vira "reescreva isto": quem atende
+    // sabe a resposta, e o que falta é a forma. Vazio, continua sendo
+    // "escreva a partir do chamado".
+    const rascunho = intencao === 'REDIGIR' ? corpo.trim() : '';
+
     setPensando(intencao);
     setErro(null);
     try {
-      const resposta = await api.pedirAoCopilot(chamado.id, intencao);
+      const resposta = await api.pedirAoCopilot(chamado.id, intencao, rascunho || undefined);
       if (intencao === 'SUGERIR') {
         // Sugestão é para o técnico ler, não para o cliente receber.
         // Vai para um painel ao lado do campo, nunca para dentro dele.
         setSugestao(resposta.texto);
+      } else if (rascunho) {
+        setMeuTexto(rascunho);
+        setCorpo(resposta.texto);
+        setPorIa(true);
       } else {
         setCorpo((atual) => (atual.trim() ? `${atual.trimEnd()}\n\n${resposta.texto}` : resposta.texto));
         setPorIa(true);
@@ -341,6 +361,7 @@ function Responder({ chamado, aoEnviar }: { chamado: TicketDetail; aoEnviar: () 
 
       setCorpo('');
       setPorIa(false);
+      setMeuTexto(null);
       setSugestao(null);
       setArquivo(null);
       if (campoArquivo.current) campoArquivo.current.value = '';
@@ -371,18 +392,38 @@ function Responder({ chamado, aoEnviar }: { chamado: TicketDetail; aoEnviar: () 
         value={corpo}
         onChange={(e) => {
           setCorpo(e.target.value);
-          if (!e.target.value.trim()) setPorIa(false);
+          if (!e.target.value.trim()) {
+            setPorIa(false);
+            setMeuTexto(null);
+          }
           avisarQueDigita();
         }}
       />
 
       {porIa ? (
         <p className="responder-ia">
-          <span aria-hidden="true">🤖</span> Rascunho do {NOME_DA_IA}. Revise antes de enviar — a
-          resposta vai marcada como IA para quem receber.{' '}
-          <button type="button" className="btn -fantasma -sm" onClick={() => setPorIa(false)}>
-            Reescrevi do zero
-          </button>
+          <span aria-hidden="true">🤖</span>{' '}
+          {meuTexto ? `O ${NOME_DA_IA} reescreveu o seu texto.` : `Rascunho do ${NOME_DA_IA}.`} Revise
+          antes de enviar — a resposta vai marcada como IA para quem receber.{' '}
+          {meuTexto ? (
+            <button
+              type="button"
+              className="btn -fantasma -sm"
+              onClick={() => {
+                setCorpo(meuTexto);
+                setMeuTexto(null);
+                // Volta a ser texto da pessoa, então a marca de IA sai
+                // junto: o que ela vai enviar é o que ela escreveu.
+                setPorIa(false);
+              }}
+            >
+              Voltar ao meu texto
+            </button>
+          ) : (
+            <button type="button" className="btn -fantasma -sm" onClick={() => setPorIa(false)}>
+              Reescrevi do zero
+            </button>
+          )}
         </p>
       ) : null}
 
@@ -422,10 +463,14 @@ function Responder({ chamado, aoEnviar }: { chamado: TicketDetail; aoEnviar: () 
               type="button"
               className={`btn -secundario -sm ${pensando === 'REDIGIR' ? '-carregando' : ''}`}
               disabled={pensando !== null}
-              title={`O ${NOME_DA_IA} escreve um rascunho a partir do chamado. Você revisa e envia.`}
+              title={
+                corpo.trim()
+                  ? `O ${NOME_DA_IA} reescreve o que você digitou em linguagem técnica e formal. Você revisa e envia.`
+                  : `O ${NOME_DA_IA} escreve um rascunho a partir do chamado. Você revisa e envia.`
+              }
               onClick={() => void pedir('REDIGIR')}
             >
-              <span aria-hidden="true">🤖</span> Redigir
+              <span aria-hidden="true">🤖</span> {corpo.trim() ? 'Formalizar' : 'Redigir'}
             </button>
             <button
               type="button"

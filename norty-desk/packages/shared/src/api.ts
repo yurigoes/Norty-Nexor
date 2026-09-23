@@ -1532,6 +1532,29 @@ export type RegistrarResolucaoRequest = {
 export const COPILOT_INTENCOES = ['REDIGIR', 'SUGERIR'] as const;
 export type CopilotIntencao = (typeof COPILOT_INTENCOES)[number];
 
+/**
+ * Quanto texto o técnico pode mandar para o Copilot reescrever.
+ *
+ * Generoso o bastante para uma resposta longa e curto o bastante para
+ * que ninguém cole o manual inteiro e mande para fora sem perceber.
+ */
+export const LIMITE_DO_RASCUNHO = 4000;
+
+/**
+ * O pedido ao Copilot.
+ *
+ * `rascunho` é o que **muda o trabalho** do REDIGIR: com ele, o Copilot
+ * não escreve uma resposta a partir do chamado — ele reescreve o que a
+ * pessoa já disse, em português técnico e formal. Quem sabe o que
+ * responder é o técnico; o que falta, às vezes, é a forma.
+ *
+ * Sem `rascunho`, o REDIGIR continua o de antes: parte do chamado.
+ */
+export type PedirAoCopilotoRequest = {
+  intencao: CopilotIntencao;
+  rascunho?: string;
+};
+
 export const AI_PROVIDERS = ['GEMINI', 'GROQ'] as const;
 export type AiProviderNome = (typeof AI_PROVIDERS)[number];
 

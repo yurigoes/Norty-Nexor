@@ -622,6 +622,46 @@ A sugestão vai para um painel ao lado do campo, nunca para dentro dele.
 Se caísse no campo, uma lista de hipóteses viraria resposta ao cliente
 com um clique distraído.
 
+### Formalizar o que o técnico já escreveu
+
+*(acrescentado depois — o `REDIGIR` ganhou um segundo modo)*
+
+O pedido veio de quem atende todo dia: a pessoa **sabe** a resposta. O
+que falta é a forma. Ela escreve solto — "reiniciei o serviço de
+indexação, tá rodando de novo, testa aí" — e o que precisa sair é isso
+mesmo, em registro técnico.
+
+Então o `REDIGIR` olha para o campo antes de decidir o que fazer:
+
+| No campo | O que o Copilot faz | Botão |
+|---|---|---|
+| vazio | escreve um rascunho a partir do chamado | **Redigir** |
+| com texto | reescreve aquele texto em linguagem formal | **Formalizar** |
+
+Três decisões dentro disso:
+
+**O prompt proíbe acrescentar informação, em três frases.** Um modelo
+que preenche lacuna é útil em quase todo lugar e é um defeito aqui: o
+técnico revisa a **forma**, e uma frase plausível que ele não escreveu
+passa despercebida justamente por ser plausível. Comando, caminho de
+arquivo, código de erro e nome próprio saem exatamente como entraram.
+
+**Reescrever substitui o campo, mas o texto original fica guardado.**
+Acrescentar deixaria as duas versões grudadas e a pessoa apagando a sua
+à mão. Substituir sem guardar apaga o trabalho de quem não gostou do
+resultado — e um recurso que come o texto da pessoa uma vez não é usado
+uma segunda. O botão **Voltar ao meu texto** fica à vista enquanto o
+rascunho da IA estiver no campo, e voltar tira junto a marca de IA: o
+que ela vai enviar é o que ela escreveu.
+
+**Formalizar leva menos para fora do que responder.** Vai o assunto, o
+tipo e o texto da pessoa. A conversa com o cliente **não vai** —
+reescrever uma frase não precisa do histórico, e o que não é necessário
+não sai de casa. São duas barras outra vez: a conversa não é carregada
+(`take: 0`) e o prompt de reescrita não a desenha. O teste quebra as
+duas de uma vez para provar que ele detecta o vazamento; com uma só, o
+histórico continua em casa.
+
 ### A cerca é uma consulta, não um filtro
 
 Gemini e Groq são terceiros. Vai para lá o assunto, a descrição e as
