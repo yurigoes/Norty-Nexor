@@ -17,6 +17,15 @@ const ESPERA_MINUTOS = [1, 5, 15, 60, 360];
 /** Um destino lento não pode segurar a fila inteira. */
 const TEMPO_LIMITE_MS = 10_000;
 
+/**
+ * Por quanto tempo uma reserva segura a entrega.
+ *
+ * Mesmo prazo das filas de mensagem, e pelo mesmo motivo: quem
+ * reservou pode morrer no meio, e reserva sem prazo é entrega que
+ * nunca sai. Cobre com folga o tempo limite de dez segundos do POST.
+ */
+const VALIDADE_DA_RESERVA_MS = 5 * 60_000;
+
 @Injectable()
 export class EntregaJob {
   private readonly logger = new Logger(EntregaJob.name);
@@ -30,18 +39,30 @@ export class EntregaJob {
   @Cron(CronExpression.EVERY_30_SECONDS)
   async entregar(): Promise<void> {
     const pendentes = await this.prisma.webhookDelivery.findMany({
-      where: { status: 'PENDENTE', scheduledFor: { lte: new Date() } },
+      where: {
+        status: 'PENDENTE',
+        scheduledFor: { lte: new Date() },
+        // O que outro processo já tomou não entra na lista.
+        OR: [{ claimedAt: null }, { claimedAt: { lt: this.limiteDaReserva() } }],
+      },
       orderBy: { scheduledFor: 'asc' },
       take: 50,
+      select: { id: true },
     });
 
-    for (const entrega of pendentes) {
-      await this.entregarUma(entrega.id);
+    for (const { id } of pendentes) {
+      await this.entregarUma(id);
     }
   }
 
   /** Exposto para a suíte não depender do relógio do cron. */
   async entregarUma(id: string): Promise<void> {
+    // Reservar antes de ler. A API roda em mais de um processo e os
+    // crons de trinta segundos caem juntos; dois que leem a mesma
+    // linha "PENDENTE" mandam o mesmo POST duas vezes, e do lado do
+    // assinante isso pode virar dois registros.
+    if (!(await this.reservar(id))) return;
+
     const entrega = await this.prisma.webhookDelivery.findUnique({
       where: { id },
       include: { webhook: true },
@@ -143,7 +164,12 @@ export class EntregaJob {
         ...(responseCode !== null ? { responseCode } : {}),
         ...(espera === undefined
           ? { status: 'FALHOU' }
-          : { scheduledFor: new Date(Date.now() + espera * 60_000) }),
+          : {
+              scheduledFor: new Date(Date.now() + espera * 60_000),
+              // Devolve a linha para a fila: a retentativa é uma nova
+              // entrega e não deve esperar a reserva desta vencer.
+              claimedAt: null,
+            }),
       },
     });
 
@@ -153,6 +179,31 @@ export class EntregaJob {
           (definitivo ? ' (erro de contrato, não adianta repetir)' : ''),
       );
     }
+  }
+
+  private limiteDaReserva(): Date {
+    return new Date(Date.now() - VALIDADE_DA_RESERVA_MS);
+  }
+
+  /**
+   * Toma a entrega para este processo, ou devolve `false`.
+   *
+   * O `updateMany` condicional **é** a reserva: o Postgres serializa
+   * duas gravações na mesma linha e reavalia o `where` da segunda
+   * depois que a primeira comita, então uma afeta uma linha e a outra
+   * nenhuma. Ler e só então gravar deixaria as duas passarem.
+   */
+  private async reservar(id: string): Promise<boolean> {
+    const { count } = await this.prisma.webhookDelivery.updateMany({
+      where: {
+        id,
+        status: 'PENDENTE',
+        OR: [{ claimedAt: null }, { claimedAt: { lt: this.limiteDaReserva() } }],
+      },
+      data: { claimedAt: new Date() },
+    });
+
+    return count === 1;
   }
 
   /**

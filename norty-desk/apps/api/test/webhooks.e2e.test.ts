@@ -413,6 +413,38 @@ describe('log e reenvio', () => {
     await prisma.outboundWebhook.delete({ where: { id: webhook.id } });
   });
 
+  it('dois despachantes juntos entregam uma vez só', async () => {
+    const webhook = await assinarEventos(['ticket.criado']);
+
+    const linha = await prisma.webhookDelivery.create({
+      data: { webhookId: webhook.id, event: 'ticket.criado', payload: { teste: true } },
+    });
+
+    // A API roda em mais de um processo e o cron de trinta segundos de
+    // cada um cai no mesmo instante. Dois POSTs iguais no endpoint do
+    // assinante podem virar dois registros do lado dele — e o
+    // `X-Desk-Delivery` só o ajuda se ele guardar o que já viu.
+    //
+    // A corrida é montada em `entregarUma`, e não em `entregar`: é ali
+    // que está a decisão de entregar ou não. Pelo cron ela também
+    // acontece, mas depende de quanto tempo a primeira passada demora
+    // entre ler a fila e mandar o POST — e um teste que depende disso
+    // passa sozinho no dia em que o defeito volta.
+    await Promise.all([entrega.entregarUma(linha.id), entrega.entregarUma(linha.id)]);
+
+    assert.equal(
+      recebidas.filter((r) => r.entrega === linha.id).length,
+      1,
+      'a mesma entrega saiu mais de uma vez',
+    );
+
+    const depois = await prisma.webhookDelivery.findUniqueOrThrow({ where: { id: linha.id } });
+    assert.equal(depois.status, 'ENVIADO');
+    assert.equal(depois.attempts, 1, 'contou duas tentativas para uma entrega');
+
+    await prisma.outboundWebhook.delete({ where: { id: webhook.id } });
+  });
+
   it('a poda só apaga o que já terminou', async () => {
     const webhook = await assinarEventos(['ticket.criado']);
 

@@ -2040,6 +2040,13 @@ model WebhookDelivery {
   lastError    String?
   createdAt    DateTime       @default(now())
   deliveredAt  DateTime?
+  /// Quando um processo tomou esta entrega para si.
+  ///
+  /// A mesma reserva das filas de mensagem, aqui porque duas entregas
+  /// da mesma linha viram dois POSTs iguais no endpoint do assinante —
+  /// e do lado dele isso pode ser dois registros no ERP. Volta a nulo
+  /// na retentativa, para o reenvio não esperar o prazo vencer.
+  claimedAt    DateTime?
 
   webhook OutboundWebhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
 
