@@ -1858,6 +1858,16 @@ model InboundMessage {
   processedAt      DateTime?
   /// Preenchido quando a mensagem é descartada por regra ou erro.
   discardedReason  String?
+  /// Quando um processo tomou esta mensagem para si.
+  ///
+  /// A API roda em mais de um processo e o cron de trinta segundos de
+  /// cada um cai no mesmo instante. Sem esta coluna, dois leem a linha
+  /// com `processedAt` nulo e a mesma mensagem vira dois chamados.
+  ///
+  /// A reserva tem prazo: quem a tomou pode morrer no meio, e reserva
+  /// eterna é mensagem que ninguém processa. Passado o prazo, outro
+  /// processo toma de volta.
+  claimedAt        DateTime?
 
   channelAccount ChannelAccount @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
   event          TicketEvent?   @relation(fields: [eventId], references: [id])
@@ -1960,6 +1970,13 @@ model OutboundMessage {
   scheduledFor     DateTime       @default(now())
   sentAt           DateTime?
   createdAt        DateTime       @default(now())
+  /// Quando um processo tomou esta mensagem para despachar.
+  ///
+  /// Mesma reserva da entrada, por um motivo pior: duas entregas da
+  /// mesma linha são o mesmo WhatsApp chegando duas vezes no telefone
+  /// do cliente, e isso não se desfaz. Volta a nulo na retentativa,
+  /// para o reenvio não esperar o prazo da reserva vencer.
+  claimedAt        DateTime?
 
   @@index([status, scheduledFor])
   @@index([organizationId, externalId])

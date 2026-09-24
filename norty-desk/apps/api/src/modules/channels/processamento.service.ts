@@ -43,6 +43,20 @@ import {
  * esperando — e por isso pode buscar mídia, criar contato e abrir
  * chamado sem estourar o tempo do webhook.
  */
+/**
+ * Por quanto tempo uma reserva segura a mensagem.
+ *
+ * Existe porque quem reservou pode morrer no meio — contêiner
+ * reiniciado, processo derrubado no deploy. Sem prazo, aquela linha
+ * ficaria reservada para sempre e viraria mensagem que ninguém
+ * processa; com prazo, o próximo ciclo a toma de volta.
+ *
+ * Cinco minutos é folgado para o pior caminho (buscar mídia e
+ * transcrever áudio) e curto para quem está do outro lado esperando
+ * resposta.
+ */
+const VALIDADE_DA_RESERVA_MS = 5 * 60_000;
+
 @Injectable()
 export class ProcessamentoService {
   private readonly logger = new Logger(ProcessamentoService.name);
@@ -63,7 +77,14 @@ export class ProcessamentoService {
   @Cron(CronExpression.EVERY_30_SECONDS)
   async processarPendentes(): Promise<void> {
     const pendentes = await this.prisma.inboundMessage.findMany({
-      where: { processedAt: null, discardedReason: null },
+      where: {
+        processedAt: null,
+        discardedReason: null,
+        // O que outro processo já tomou não entra na lista. Sem isto,
+        // os cinquenta da leitura seriam os mesmos cinquenta que o
+        // vizinho está processando, e este ciclo passaria em branco.
+        OR: [{ claimedAt: null }, { claimedAt: { lt: this.limiteDaReserva() } }],
+      },
       orderBy: { receivedAt: 'asc' },
       take: 50,
       select: { id: true },
@@ -78,6 +99,11 @@ export class ProcessamentoService {
   }
 
   async processarUma(id: string): Promise<void> {
+    // A reserva vem antes da leitura, e não depois: ler para decidir e
+    // gravar em seguida deixa os dois processos passarem pela janela
+    // entre uma coisa e outra.
+    if (!(await this.reservar(id))) return;
+
     const mensagem = await this.prisma.inboundMessage.findUnique({
       where: { id },
       include: { channelAccount: true },
@@ -88,6 +114,34 @@ export class ProcessamentoService {
     if (mensagem.channel === 'EMAIL') await this.processarEmail(mensagem);
     else if (mensagem.channel === 'WHATSAPP') await this.processarWhatsapp(mensagem);
     else await this.descartar(id, `Canal ${mensagem.channel} não tem processador.`);
+  }
+
+  private limiteDaReserva(): Date {
+    return new Date(Date.now() - VALIDADE_DA_RESERVA_MS);
+  }
+
+  /**
+   * Toma a mensagem para este processo, ou devolve `false`.
+   *
+   * O `updateMany` condicional **é** a reserva. O Postgres serializa
+   * duas gravações na mesma linha e reavalia o `where` da segunda
+   * depois que a primeira comita: uma afeta uma linha, a outra
+   * nenhuma. É o que um `findUnique` seguido de `update` não dá — ali
+   * as duas leem "livre" antes de qualquer uma gravar, e as duas
+   * seguem em frente.
+   */
+  private async reservar(id: string): Promise<boolean> {
+    const { count } = await this.prisma.inboundMessage.updateMany({
+      where: {
+        id,
+        processedAt: null,
+        discardedReason: null,
+        OR: [{ claimedAt: null }, { claimedAt: { lt: this.limiteDaReserva() } }],
+      },
+      data: { claimedAt: new Date() },
+    });
+
+    return count === 1;
   }
 
   private async descartar(id: string, motivo: string): Promise<void> {

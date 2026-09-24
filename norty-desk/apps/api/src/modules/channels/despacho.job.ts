@@ -26,6 +26,15 @@ const ESPERA_MINUTOS = [1, 5, 15, 60];
  */
 const LIMITE_DE_ANEXO = 16 * 1024 * 1024;
 
+/**
+ * Por quanto tempo uma reserva segura a mensagem.
+ *
+ * Mesmo prazo da fila de entrada, e pelo mesmo motivo: quem reservou
+ * pode morrer no meio, e reserva sem prazo é resposta que nunca sai.
+ * Cinco minutos cobre com folga um SMTP lento e um upload de anexo.
+ */
+const VALIDADE_DA_RESERVA_MS = 5 * 60_000;
+
 @Injectable()
 export class DespachoJob {
   private readonly logger = new Logger(DespachoJob.name);
@@ -39,18 +48,31 @@ export class DespachoJob {
   @Cron(CronExpression.EVERY_30_SECONDS)
   async despachar(): Promise<void> {
     const pendentes = await this.prisma.outboundMessage.findMany({
-      where: { status: 'PENDENTE', scheduledFor: { lte: new Date() } },
+      where: {
+        status: 'PENDENTE',
+        scheduledFor: { lte: new Date() },
+        // O que outro processo já tomou não entra na lista.
+        OR: [{ claimedAt: null }, { claimedAt: { lt: this.limiteDaReserva() } }],
+      },
       orderBy: { scheduledFor: 'asc' },
       take: 50,
+      select: { id: true },
     });
 
-    for (const mensagem of pendentes) {
-      await this.despacharUma(mensagem.id);
+    for (const { id } of pendentes) {
+      await this.despacharUma(id);
     }
   }
 
   /** Exposto para a suíte não depender do relógio do cron. */
   async despacharUma(id: string): Promise<void> {
+    // Reservar antes de ler. A API roda em mais de um processo, os
+    // crons de trinta segundos caem juntos, e dois que leem a mesma
+    // linha "PENDENTE" entregam a mesma mensagem duas vezes — o mesmo
+    // WhatsApp chegando duas vezes no telefone do cliente, que não tem
+    // como ser desentregue. É a razão de a reserva existir.
+    if (!(await this.reservar(id))) return;
+
     const mensagem = await this.prisma.outboundMessage.findUnique({ where: { id } });
     if (!mensagem || mensagem.status !== 'PENDENTE') return;
 
@@ -125,7 +147,12 @@ export class DespachoJob {
           lastError: erro instanceof Error ? erro.message.slice(0, 500) : String(erro),
           ...(espera === undefined
             ? { status: 'FALHOU' }
-            : { scheduledFor: new Date(Date.now() + espera * 60_000) }),
+            : {
+                scheduledFor: new Date(Date.now() + espera * 60_000),
+                // Devolve a linha para a fila: a retentativa é um novo
+                // despacho e não deve esperar a reserva desta vencer.
+                claimedAt: null,
+              }),
         },
       });
 
@@ -133,6 +160,32 @@ export class DespachoJob {
         this.logger.error(`Mensagem ${id} falhou nas ${tentativas} tentativas. Desisti.`);
       }
     }
+  }
+
+  private limiteDaReserva(): Date {
+    return new Date(Date.now() - VALIDADE_DA_RESERVA_MS);
+  }
+
+  /**
+   * Toma a mensagem para este processo, ou devolve `false`.
+   *
+   * O `updateMany` condicional **é** a reserva. O Postgres serializa
+   * duas gravações na mesma linha e reavalia o `where` da segunda
+   * depois que a primeira comita: uma afeta uma linha, a outra
+   * nenhuma. Ler e só então gravar deixaria as duas passarem pela
+   * janela entre a leitura e a gravação.
+   */
+  private async reservar(id: string): Promise<boolean> {
+    const { count } = await this.prisma.outboundMessage.updateMany({
+      where: {
+        id,
+        status: 'PENDENTE',
+        OR: [{ claimedAt: null }, { claimedAt: { lt: this.limiteDaReserva() } }],
+      },
+      data: { claimedAt: new Date() },
+    });
+
+    return count === 1;
   }
 
   /**
