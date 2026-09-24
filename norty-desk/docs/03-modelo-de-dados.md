@@ -205,6 +205,11 @@ Entra nas fases seguintes (`docs/10-roadmap.md`):
   Componente é o que está parafusado dentro e não vai a lugar nenhum
   sozinho. Um nível só — o serviço recusa pendurar num ativo que já
   tem pai, e o banco recusa ser pai de si mesmo.
+  `deviceUuid`, `hostname`, `osName`, `osVersion`, `lastSeenAt` e
+  `agentVersion` são do **agente de inventário** (`agente/`): ele os
+  reescreve a cada varredura e não toca em mais nada. O `deviceUuid` é a
+  identidade estável da máquina — vem antes da série, que montadora de
+  máquina branca preenche com texto de fábrica (ver `serieUtil`).
 - `AssetTerm` — (novo) o papel que a pessoa assinou: `COMPROMISSO` na
   entrega, `QUEBRA` na devolução com dano. `body` é o texto
   **renderizado no instante da assinatura**, e não um ponteiro para o

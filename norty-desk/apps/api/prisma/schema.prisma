@@ -1458,6 +1458,45 @@ model Asset {
   /// Etiqueta de patrimônio. É por ela que o suporte procura.
   tag            String?
   serialNumber   String?
+
+  /// --- O que o agente de inventário preenche ------------------------
+  ///
+  /// Estes campos são **da máquina**, não do cadastro: o agente os
+  /// reescreve a cada varredura, e nenhum deles é o que alguém digitou.
+  /// O que é digitado — nome, patrimônio, situação, local, observações,
+  /// empresa, quem está com ele — o agente nunca toca.
+
+  /// O UUID do SMBIOS. É a identidade estável da máquina.
+  ///
+  /// Vem antes da série na hora de reconhecer o equipamento porque
+  /// sobrevive ao que a série não sobrevive: montadora de máquina
+  /// branca escreve "To Be Filled By O.E.M." no campo de série, e aí
+  /// duas máquinas diferentes teriam a mesma (ver `serieUtil`).
+  deviceUuid     String?
+  /// O nome da máquina na rede — "NB-FIN-03".
+  ///
+  /// Separado de `name` de propósito: `name` é como a casa chama o
+  /// equipamento ("Notebook da Ana"), e o agente o escreve só no
+  /// cadastro inicial. Renomear a máquina no Windows não pode apagar o
+  /// nome que alguém deu a ela aqui.
+  hostname       String?
+  /// Sistema operacional, como o agente o encontrou.
+  ///
+  /// Duas colunas e não uma instalação de software: "quantas máquinas
+  /// ainda estão no Windows 10?" é pergunta de inventário, e tem de
+  /// sair de um `where` — não de um `join` com a tabela de licenças,
+  /// que existe para contar assento pago.
+  osName         String?
+  osVersion      String?
+  /// Quando o agente falou desta máquina pela última vez.
+  ///
+  /// É o que responde "esta máquina ainda existe?". Sem isto, o parque
+  /// só cresce: equipamento que sumiu fica no inventário para sempre,
+  /// idêntico ao que está ligado agora.
+  lastSeenAt     DateTime?
+  /// A versão do agente que reportou. A primeira pergunta quando uma
+  /// máquina reporta coisa estranha é qual agente está nela.
+  agentVersion   String?
   /// Fabricante, modelo e localização vêm do catálogo.
   ///
   /// Eram texto livre, e texto livre é a origem da sujeira de
@@ -1550,6 +1589,10 @@ model Asset {
   /// mesmo equipamento são a origem de metade da sujeira de inventário.
   @@unique([organizationId, tag])
   @@unique([organizationId, serialNumber])
+  /// E o UUID do SMBIOS também não: é justamente a chave pela qual o
+  /// agente reconhece a máquina, e duas linhas com o mesmo UUID fariam
+  /// a varredura seguinte escolher uma das duas ao acaso.
+  @@unique([organizationId, deviceUuid])
   @@index([organizationId, status])
   /// "O parque desta empresa" é a pergunta da tela do cliente e do
   /// agente de inventário, e é a que precisa de índice próprio.

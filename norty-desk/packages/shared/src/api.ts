@@ -722,6 +722,21 @@ export type AssetView = {
   purchasedAt: string | null;
   warrantyUntil: string | null;
   notes: string | null;
+
+  /**
+   * O que o agente de inventário preencheu.
+   *
+   * Nulo em tudo é equipamento que nunca foi varrido — cadastrado à
+   * mão, ou sem agente instalado. `lastSeenAt` é o que responde "esta
+   * máquina ainda existe?": sem ele o parque só cresce, e o que sumiu
+   * fica idêntico ao que está ligado agora.
+   */
+  hostname: string | null;
+  osName: string | null;
+  osVersion: string | null;
+  lastSeenAt: string | null;
+  agentVersion: string | null;
+
   /**
    * De qual máquina este periférico faz parte.
    *
@@ -829,6 +844,74 @@ export type WriteAssetRequest = {
   purchasedAt?: string | null;
   warrantyUntil?: string | null;
   notes?: string | null;
+};
+
+// ---------------------------------------------------------------------
+// Inventário automático
+// ---------------------------------------------------------------------
+
+/**
+ * O que o agente encontrou numa máquina.
+ *
+ * Desenhado para ser o que o WMI/CIM do Windows devolve sem
+ * interpretação: o agente lê e traduz nomes, e nada mais. Toda decisão
+ * — que máquina é esta, o que sobrescrever, o que preservar — é do
+ * servidor, que é onde ela pode ser testada.
+ */
+export type InventarioRequest = {
+  /**
+   * O UUID do SMBIOS. A identidade estável da máquina.
+   *
+   * Obrigatório porque é o que impede a varredura de amanhã de criar
+   * uma segunda linha para a mesma máquina.
+   */
+  uuid: string;
+  hostname: string;
+  serialNumber?: string | null;
+  manufacturer?: string | null;
+  model?: string | null;
+  /** Derivado do tipo de gabinete. O servidor confere contra a lista. */
+  kind?: AssetKind;
+  os?: { name?: string | null; version?: string | null };
+  agente?: { versao?: string | null };
+
+  processadores?: {
+    name: string;
+    nucleos?: number | null;
+    threads?: number | null;
+    /** MHz. */
+    frequencia?: number | null;
+    arquitetura?: string | null;
+  }[];
+
+  memorias?: {
+    name: string;
+    serialNumber?: string | null;
+    /** MB, como manda a ficha do componente. */
+    capacidade: number;
+    tecnologia?: string | null;
+    frequencia?: number | null;
+    slot?: string | null;
+  }[];
+
+  discos?: {
+    name: string;
+    serialNumber?: string | null;
+    /** GB, como manda a ficha do componente. */
+    capacidade: number;
+    tecnologia?: string | null;
+    interface?: string | null;
+  }[];
+};
+
+/** O que o agente recebe de volta — curto, porque ele não tem tela. */
+export type InventarioResponse = {
+  assetId: string;
+  /** Nasceu agora, ou já existia e foi atualizado. */
+  criado: boolean;
+  /** Como a máquina foi reconhecida, para o diagnóstico de quem instala. */
+  reconhecidoPor: 'UUID' | 'SERIE' | 'NOVO';
+  componentes: { criados: number; atualizados: number; removidos: number };
 };
 
 // ---------------------------------------------------------------------

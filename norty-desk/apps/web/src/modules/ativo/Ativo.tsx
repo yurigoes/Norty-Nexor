@@ -128,6 +128,20 @@ function Identificacao({ ativo }: { ativo: AssetDetail }) {
   const linhas: [string, React.ReactNode][] = [
     ['Empresa', ativo.client?.name ?? 'Da casa'],
     ['Tipo', ROTULO_ATIVO[ativo.kind]],
+    ...(ativo.hostname
+      ? ([['Nome na rede', <span key="h" className="mono">{ativo.hostname}</span>]] as [
+          string,
+          React.ReactNode,
+        ][])
+      : []),
+    ...(ativo.osName
+      ? ([
+          [
+            'Sistema',
+            `${ativo.osName}${ativo.osVersion ? ` · ${ativo.osVersion}` : ''}`,
+          ],
+        ] as [string, React.ReactNode][])
+      : []),
     [
       'Situação',
       <span key="s" className={`selo ${seloDoStatus(ativo.status)}`}>
@@ -149,6 +163,18 @@ function Identificacao({ ativo }: { ativo: AssetDetail }) {
         ] as [string, React.ReactNode][])
       : []),
     ['Garantia até', ativo.warrantyUntil ? dataCurta(ativo.warrantyUntil) : '—'],
+    // Só quando há agente: "—" em máquina cadastrada à mão faria
+    // parecer que o agente falhou nela, e ele nunca foi instalado.
+    ...(ativo.lastSeenAt
+      ? ([
+          [
+            'Visto pelo agente',
+            <span key="v" title={ativo.agentVersion ? `Agente ${ativo.agentVersion}` : undefined}>
+              {dataCurta(ativo.lastSeenAt)}
+            </span>,
+          ],
+        ] as [string, React.ReactNode][])
+      : []),
   ];
 
   return (

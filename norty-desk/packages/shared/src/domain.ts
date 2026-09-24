@@ -2099,6 +2099,72 @@ export function deClientesDiferentes(a: string | null, b: string | null): boolea
 }
 
 // ---------------------------------------------------------------------
+// Inventário automático
+// ---------------------------------------------------------------------
+
+/**
+ * O que fabricante de placa escreve quando não escreveu nada.
+ *
+ * O SMBIOS tem campo de série obrigatório, e montadora de máquina
+ * branca preenche com texto de fábrica. O efeito no inventário é pior
+ * que campo vazio: `@@unique([organizationId, serialNumber])` recusa a
+ * segunda máquina com "To Be Filled By O.E.M.", e o agente passa a
+ * falhar em metade do parque — ou, pior, casa duas máquinas diferentes
+ * como se fossem a mesma.
+ *
+ * Comparado sem acento, sem espaço repetido e em minúsculas, porque a
+ * mesma frase aparece com variações de caixa e espaçamento entre
+ * fabricantes.
+ */
+const SERIE_DE_MENTIRA = new Set([
+  'tobefilledbyoem',
+  'tobefilledbyoem.',
+  'defaultstring',
+  'systemserialnumber',
+  'serialnumber',
+  'none',
+  'notspecified',
+  'notapplicable',
+  'na',
+  'n/a',
+  'unknown',
+  'invalid',
+  'chassisserialnumber',
+  'basemanagementcontroller',
+  'oem',
+  'xxxxxxx',
+  '0',
+  '00000000',
+  '123456789',
+]);
+
+/**
+ * A série que serve para identificar, ou nulo.
+ *
+ * Nulo é melhor que texto de fábrica: a coluna aceita nulo repetido, e
+ * o inventário fica dizendo "não sei a série desta" em vez de dizer uma
+ * série errada que casa com a máquina do vizinho.
+ */
+export function serieUtil(valor: string | null | undefined): string | null {
+  const limpo = (valor ?? '').trim().replace(/\s+/g, ' ');
+  if (!limpo) return null;
+
+  const chave = limpo
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\s._-]/g, '');
+
+  if (SERIE_DE_MENTIRA.has(chave)) return null;
+
+  // Série de um caractere só, ou só de zeros, não identifica nada.
+  if (chave.length < 3) return null;
+  if (/^0+$/.test(chave)) return null;
+
+  return limpo;
+}
+
+// ---------------------------------------------------------------------
 // Identificar a empresa: nome aproximado ou documento exato
 // ---------------------------------------------------------------------
 

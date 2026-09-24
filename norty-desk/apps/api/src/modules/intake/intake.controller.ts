@@ -12,7 +12,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import type { Scale, TicketType } from '@norty-desk/shared';
+import type { InventarioResponse, Scale, TicketType } from '@norty-desk/shared';
 import { loginDoCliente, telefoneBrasileiro } from '@norty-desk/shared';
 import {
   IsEmail,
@@ -32,6 +32,8 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { RegrasService } from '../regras/regras.service';
 import { TicketsService } from '../tickets/tickets.service';
 import { ApiKeyGuard, type AplicacaoAutenticada } from './api-key.guard';
+import { InventarioDto } from './inventario.dto';
+import { InventarioService } from './inventario.service';
 
 class RequerenteDto {
   @IsOptional() @IsEmail() email?: string;
@@ -74,12 +76,35 @@ export class IntakeController {
     private readonly prisma: PrismaService,
     private readonly tickets: TicketsService,
     private readonly regras: RegrasService,
+    private readonly inventarios: InventarioService,
   ) {}
 
   private exigirEscopo(aplicacao: AplicacaoAutenticada, escopo: string): void {
     if (!aplicacao.scopes.includes(escopo)) {
       throw new ForbiddenException(`Esta chave não tem o escopo ${escopo}.`);
     }
+  }
+
+  /**
+   * O inventário de uma máquina.
+   *
+   * Escopo próprio — uma chave que abre chamado não varre parque, e
+   * vice-versa: o agente roda em duzentas máquinas de cliente, e a
+   * chave que vai junto com ele é a que mais tem chance de vazar.
+   *
+   * Sem idempotência por referência: varrer de novo **é** a operação,
+   * e o servidor reconcilia. Duas varreduras seguidas dão o mesmo
+   * resultado, que é o que idempotência queria garantir.
+   */
+  @Post('inventario')
+  async inventario(
+    @Req() requisicao: { aplicacao: AplicacaoAutenticada },
+    @Body() dto: InventarioDto,
+  ): Promise<InventarioResponse> {
+    const aplicacao = requisicao.aplicacao;
+    this.exigirEscopo(aplicacao, 'inventario:enviar');
+
+    return this.inventarios.receber(aplicacao, dto);
   }
 
   @Post('tickets')

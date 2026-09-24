@@ -4,6 +4,7 @@ import { RegrasModule } from '../regras/regras.module';
 import { TicketsModule } from '../tickets/tickets.module';
 import { ApiKeyGuard } from './api-key.guard';
 import { IntakeController } from './intake.controller';
+import { InventarioService } from './inventario.service';
 
 /**
  * Endpoint público de abertura de chamado, autenticado por `ApiKey` com
@@ -11,10 +12,14 @@ import { IntakeController } from './intake.controller';
  *
  * `externalRef` mais `Idempotency-Key` garantem que um monitoramento em
  * laço não abra mil chamados do mesmo incidente.
+ *
+ * A mesma porta recebe o inventário do agente de máquina, com escopo
+ * próprio: quem varre parque não abre chamado, e quem abre chamado não
+ * varre parque.
  */
 @Module({
   imports: [TicketsModule, RegrasModule],
   controllers: [IntakeController],
-  providers: [ApiKeyGuard],
+  providers: [ApiKeyGuard, InventarioService],
 })
 export class IntakeModule {}

@@ -13,6 +13,7 @@ import {
   normalizePhone,
   parseTicketNumberFromSubject,
   preencherTermo,
+  serieUtil,
 } from './domain';
 import { ROLE_PERMISSIONS, can, ticketReadScope } from './permissions';
 
@@ -155,4 +156,40 @@ test('o modelo de resposta e o termo não compartilham vocabulário', () => {
   // num termo — que renderizaria vazio no papel assinado.
   assert.deepEqual(marcadoresInvalidosDoTermo('{{chamado.numero}}'), ['chamado.numero']);
   assert.deepEqual(marcadoresInvalidos('{{pessoa.nome}}'), ['pessoa.nome']);
+});
+
+// ---------------------------------------------------------------------
+// Inventário automático
+// ---------------------------------------------------------------------
+
+test('série de fábrica não identifica máquina nenhuma', () => {
+  // O SMBIOS exige o campo, e montadora de máquina branca preenche com
+  // texto de catálogo. Aceitá-lo faz a segunda máquina bater no índice
+  // único — ou casar com a primeira, que é pior.
+  for (const mentira of [
+    'To Be Filled By O.E.M.',
+    'to be filled by o.e.m.',
+    'Default string',
+    'System Serial Number',
+    'None',
+    'Not Specified',
+    'N/A',
+    '00000000',
+    '   ',
+    '',
+  ]) {
+    assert.equal(serieUtil(mentira), null, `"${mentira}" deveria ser descartada`);
+  }
+});
+
+test('série de verdade passa, e chega limpa', () => {
+  assert.equal(serieUtil('BR9XK32'), 'BR9XK32');
+  assert.equal(serieUtil('  5CD123ABCD  '), '5CD123ABCD');
+  assert.equal(serieUtil('S/N  ABC   123'), 'S/N ABC 123');
+});
+
+test('série curta demais não identifica', () => {
+  assert.equal(serieUtil('0'), null);
+  assert.equal(serieUtil('AB'), null);
+  assert.equal(serieUtil('ABC'), 'ABC');
 });

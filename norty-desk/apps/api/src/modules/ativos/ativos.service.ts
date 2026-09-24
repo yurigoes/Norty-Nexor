@@ -739,6 +739,11 @@ export class AtivosService {
       purchasedAt: ativo.purchasedAt?.toISOString() ?? null,
       warrantyUntil: ativo.warrantyUntil?.toISOString() ?? null,
       notes: ativo.notes,
+      hostname: ativo.hostname,
+      osName: ativo.osName,
+      osVersion: ativo.osVersion,
+      lastSeenAt: ativo.lastSeenAt?.toISOString() ?? null,
+      agentVersion: ativo.agentVersion,
       parent: ativo.parent,
       ticketCount: ativo._count.tickets,
     };

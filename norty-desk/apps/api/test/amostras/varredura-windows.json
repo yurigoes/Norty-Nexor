@@ -1,0 +1,51 @@
+{
+  "uuid": "4c4c4544-0039-5310-8052-b4c04f565431",
+  "manufacturer": "Dell Inc.",
+  "processadores": [
+    {
+      "arquitetura": "x86_64",
+      "name": "11th Gen Intel(R) Core(TM) i5-1135G7 @ 2.40GHz",
+      "frequencia": 2400,
+      "nucleos": 4,
+      "threads": 8
+    }
+  ],
+  "agente": {
+    "versao": "1.0.0"
+  },
+  "model": "Latitude 5420",
+  "memorias": [
+    {
+      "tecnologia": "DDR4",
+      "slot": "DIMM A",
+      "serialNumber": "E1A2B3C4",
+      "name": "Kingston KVR26S19S8/8",
+      "capacidade": 8192,
+      "frequencia": 3200
+    },
+    {
+      "tecnologia": "DDR4",
+      "slot": "DIMM B",
+      "serialNumber": "To Be Filled By O.E.M.",
+      "name": "Samsung M471A1K43DB1",
+      "capacidade": 8192,
+      "frequencia": 3200
+    }
+  ],
+  "os": {
+    "name": "Microsoft Windows 11 Pro",
+    "version": "10.0.22631"
+  },
+  "discos": [
+    {
+      "capacidade": 477,
+      "name": "Samsung SSD 980 512GB",
+      "serialNumber": "S64ANS0T123456",
+      "interface": "NVMe",
+      "tecnologia": "NVMe"
+    }
+  ],
+  "serialNumber": "9SR0123",
+  "kind": "COMPUTADOR",
+  "hostname": "NB-FIN-03"
+}

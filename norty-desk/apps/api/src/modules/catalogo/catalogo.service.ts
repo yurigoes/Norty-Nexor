@@ -534,6 +534,11 @@ export class CatalogoService {
       'chamado:ler:proprios',
       'chamado:responder',
       'anexo:enviar',
+      // O agente de inventário. Escopo à parte porque a chave dele vai
+      // junto com um executável instalado em dezenas de máquinas de
+      // cliente — é a que mais tem chance de vazar, e ela não pode
+      // abrir chamado em nome de ninguém.
+      'inventario:enviar',
     ]);
 
     const invalidos = dados.scopes.filter((e) => !permitidos.has(e));

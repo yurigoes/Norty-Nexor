@@ -270,8 +270,15 @@ O inventário que o chamado referencia.
   PDU e gabinete entram como equipamentos no rack; cabo é a conexão de portas.
 - **Dicionários de regra** — o mesmo motor da Fase 2, com o catálogo de
   alvos que normaliza fabricante, modelo e sistema operacional.
-- **Inventário automático** — recepção do que o agente do GLPI já
-  coleta, com regras de importação e de atribuição de entidade.
+- **Inventário automático** — **feito em 24/09/2026**, e não como o
+  GLPI faz: em vez de receber o que o agente dele coleta, o Desk tem
+  agente próprio (`agente/`, PowerShell, Windows). `POST
+  /intake/inventario` com escopo `inventario:enviar`, uma chave por
+  empresa-cliente — é a chave que diz de quem é o parque, e o corpo não
+  tem como dizer outra coisa. O agente lê e manda; toda decisão é do
+  servidor, que é onde ela se testa.
+  Falta a rede (portas, MAC, IP): a reconciliação de IP com DHCP tem
+  modos de falhar que merecem passo próprio.
 
 ---
 
