@@ -186,6 +186,40 @@ Três armadilhas que já custaram caro aqui:
    quatro tabelas separadas. É a correção do maior defeito estrutural do
    GLPI (ver `docs/02-gap-analysis.md`, item 4).
 
+9. **`@Cron` roda em todo processo — reserve antes de agir.**
+   A API roda em mais de uma cópia, e o cron de cada uma dispara no
+   mesmo instante. Ler a linha, ver que ninguém pegou e seguir em
+   frente deixa os dois passarem: dois chamados da mesma mensagem, o
+   mesmo WhatsApp entregue duas vezes, o mesmo POST no assinante, a
+   mesma cobrança no telefone de quem já foi cobrado.
+
+   A reserva é um `updateMany` condicionado ao estado que foi lido. O
+   Postgres serializa as duas gravações na mesma linha e reavalia o
+   `where` da segunda depois que a primeira comita: uma afeta uma
+   linha, a outra nenhuma.
+
+   ```ts
+   const { count } = await this.prisma.outboundMessage.updateMany({
+     where: { id, status: 'PENDENTE', OR: [{ claimedAt: null }, { claimedAt: { lt: limite } }] },
+     data: { claimedAt: new Date() },
+   });
+   if (count !== 1) return;
+   ```
+
+   Onde a reserva é uma coluna (`claimedAt` nas três filas), ela tem
+   prazo: quem reservou pode morrer no meio, e reserva eterna é
+   mensagem que ninguém processa. Onde é um contador
+   (`escalationLevel`, `pendingRemindersSent`, `nextRunAt`), ele avança
+   **antes** da ação — perder um aviso é recuperável, mandá-lo duas
+   vezes não.
+
+   **O teste tem de correr no ponto da decisão.** Chamar o método do
+   cron duas vezes em `Promise.all` costuma *não* reproduzir a
+   corrida: a segunda passada lê a fila depois de a primeira já ter
+   terminado, e o teste passa mesmo com a reserva removida. Por isso
+   `despacharUma`, `entregarUma` e `marcarUma` são públicos. Confira
+   sempre tirando a reserva e vendo o teste certo falhar.
+
 ## Canais de entrada
 
 Um chamado nasce por quatro portas, e todas convergem para o mesmo caso
