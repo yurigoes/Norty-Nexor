@@ -39,6 +39,13 @@ export class EscreverAtivoDto {
 
   @IsOptional() @Transform(vazioVirandoNulo) @IsUUID() userId?: string | null;
 
+  /**
+   * Em qual equipamento este periférico pendura. `null` despendura.
+   *
+   * Um nível só: o serviço recusa pendurar num ativo que já tem pai.
+   */
+  @IsOptional() @Transform(vazioVirandoNulo) @IsUUID() parentAssetId?: string | null;
+
   @IsOptional() @Transform(vazioVirandoNulo) @IsDateString() purchasedAt?: string | null;
   @IsOptional() @Transform(vazioVirandoNulo) @IsDateString() warrantyUntil?: string | null;
 }
@@ -49,6 +56,8 @@ export class EditarAtivoDto extends EscreverAtivoDto {
 
 export class BuscarAtivosDto {
   @IsOptional() @IsString() @MaxLength(160) q?: string;
+  /** Só os periféricos pendurados neste equipamento. */
+  @IsOptional() @IsUUID() parentAssetId?: string;
   @IsOptional() @IsUUID() locationId?: string;
   @IsOptional() @IsIn(ASSET_KINDS) kind?: (typeof ASSET_KINDS)[number];
   @IsOptional() @IsIn(ASSET_STATUSES) status?: (typeof ASSET_STATUSES)[number];

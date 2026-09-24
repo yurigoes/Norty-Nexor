@@ -99,6 +99,7 @@ export function Ativo() {
       </div>
 
       <Identificacao ativo={ativo} />
+      <Perifericos ativo={ativo} />
       <Hardware ativo={ativo} podeEditar={can('ativo:gerenciar')} aoMudar={setAtivo} />
       <RedeDoAtivoCard assetId={ativo.id} />
       <SuprimentosDoAtivoCard assetId={ativo.id} kind={ativo.kind} />
@@ -123,6 +124,16 @@ function Identificacao({ ativo }: { ativo: AssetDetail }) {
     ['Modelo', ativo.assetModel?.name ?? '—'],
     ['Localização', ativo.location?.path ?? '—'],
     ['Com quem está', ativo.user?.name ?? 'Em estoque'],
+    ...(ativo.parent
+      ? ([
+          [
+            'Pendurado em',
+            <Link key="pai" to={`/ativos/${ativo.parent.id}`}>
+              {ativo.parent.name}
+            </Link>,
+          ],
+        ] as [string, React.ReactNode][])
+      : []),
     ['Garantia até', ativo.warrantyUntil ? dataCurta(ativo.warrantyUntil) : '—'],
   ];
 
@@ -144,6 +155,38 @@ function Identificacao({ ativo }: { ativo: AssetDetail }) {
             <span style={{ textAlign: 'right', minWidth: 0 }}>{valor}</span>
           </div>
         ))}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * O que está pendurado nesta máquina.
+ *
+ * Separado do hardware de propósito: componente é o que está parafusado
+ * dentro e não vai a lugar nenhum sozinho; periférico tem série, termo
+ * assinado e caminho de troca próprio. Misturar os dois na mesma lista
+ * faria parecer que trocar o teclado é a mesma coisa que trocar o pente
+ * de memória — e só um dos dois vira chamado com termo novo.
+ */
+function Perifericos({ ativo }: { ativo: AssetDetail }) {
+  if (ativo.peripherals.length === 0) return null;
+
+  return (
+    <section className="card">
+      <div className="card-topo">
+        <h3 className="card-titulo">Periféricos</h3>
+        <span className="selo -neutro">{ativo.peripherals.length}</span>
+      </div>
+      <div className="card-corpo">
+        <ul className="lista-simples">
+          {ativo.peripherals.map((p) => (
+            <li key={p.id}>
+              <Link to={`/ativos/${p.id}`}>{p.name}</Link>
+              {p.tag ? <span className="mono suave"> · {p.tag}</span> : null}
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   );

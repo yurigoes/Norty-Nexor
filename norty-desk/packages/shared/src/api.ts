@@ -640,6 +640,17 @@ export const ASSET_KINDS = [
   'TELEFONE',
   'REDE',
   'LICENCA',
+  /**
+   * Teclado, mouse, headset, webcam, dock.
+   *
+   * É ativo, e não `AssetComponent`, porque tem vida própria: número de
+   * série, termo de compromisso assinado por quem usa, e um caminho de
+   * troca que passa por chamado — sai um, entra outro, e o que saiu vai
+   * para o estoque ou para o descarte. Componente é o que está parafusado
+   * dentro da máquina e não vai a lugar nenhum sozinho: pente de memória
+   * não assina termo.
+   */
+  'PERIFERICO',
   'OUTRO',
 ] as const;
 export type AssetKind = (typeof ASSET_KINDS)[number];
@@ -654,6 +665,7 @@ export const ROTULO_ATIVO: Record<AssetKind, string> = {
   TELEFONE: 'Telefone',
   REDE: 'Rede',
   LICENCA: 'Licença',
+  PERIFERICO: 'Periférico',
   OUTRO: 'Outro',
 };
 
@@ -694,12 +706,22 @@ export type AssetView = {
   purchasedAt: string | null;
   warrantyUntil: string | null;
   notes: string | null;
+  /**
+   * De qual máquina este periférico faz parte.
+   *
+   * Um nível só, e de propósito: teclado pendura no desktop, não no hub
+   * que pendura no desktop. Corrente mais funda é árvore, e árvore de
+   * inventário é o que ninguém mantém.
+   */
+  parent: AtivoRef | null;
   /** Quantos chamados já envolveram este equipamento. */
   ticketCount?: number;
 };
 
 export type WriteAssetRequest = {
   kind?: AssetKind;
+  /** `null` despendura do equipamento e devolve o periférico ao avulso. */
+  parentAssetId?: string | null;
   status?: AssetStatus;
   name: string;
   tag?: string | null;
@@ -970,6 +992,8 @@ export type EscreverComponenteRequest = {
  */
 export type AssetDetail = AssetView & {
   components: ComponenteView[];
+  /** O que está pendurado neste equipamento: teclado, mouse, headset. */
+  peripherals: AtivoRef[];
 };
 
 /**
@@ -2187,6 +2211,14 @@ export const ROTULO_PORTA: Record<PortKind, string> = {
 };
 
 export type VlanRef = { id: string; tag: number; name: string };
+
+/**
+ * O suficiente para reconhecer um ativo numa lista curta.
+ *
+ * Mora aqui por ter nascido com a rede, e é o mesmo shape usado pelo
+ * pai e pelos periféricos de um equipamento — um segundo tipo com os
+ * mesmos três campos seria um segundo lugar para eles divergirem.
+ */
 export type AtivoRef = { id: string; name: string; tag: string | null };
 
 export type VlanView = VlanRef & { notes: string | null; networkCount: number; portCount: number };

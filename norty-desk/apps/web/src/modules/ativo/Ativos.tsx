@@ -231,12 +231,17 @@ function Formulario({
     assetModelId: ativo?.assetModel?.id ?? '',
     locationId: ativo?.location?.id ?? '',
     userId: ativo?.user?.id ?? '',
+    parentAssetId: ativo?.parent?.id ?? '',
     notes: ativo?.notes ?? '',
   });
   const [pessoas, setPessoas] = useState<PessoaView[]>([]);
   const [fabricantes, setFabricantes] = useState<FabricanteView[]>([]);
   const [modelos, setModelos] = useState<ModeloDeAtivoView[]>([]);
   const [locais, setLocais] = useState<LocalizacaoView[]>([]);
+  // Onde um periférico pode pendurar. Só equipamentos que não são
+  // periféricos: pendurar teclado em teclado é a corrente que a API
+  // recusa, e oferecer a opção seria convidar ao erro.
+  const [maquinas, setMaquinas] = useState<AssetView[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
@@ -250,6 +255,9 @@ function Formulario({
         setModelos(m);
         setLocais(l);
       })
+      .catch(() => undefined);
+    void buscarAtivos({ limit: 200 })
+      .then((lista) => setMaquinas(lista.filter((a) => a.kind !== 'PERIFERICO')))
       .catch(() => undefined);
   }, []);
 
@@ -460,6 +468,33 @@ function Formulario({
                 </select>
               </div>
             </div>
+
+            {campos.kind === 'PERIFERICO' ? (
+              <div className="campo">
+                <label className="campo-rotulo" htmlFor="pai-ativo">
+                  Pendurado em
+                </label>
+                <select
+                  id="pai-ativo"
+                  className="select"
+                  value={campos.parentAssetId ?? ''}
+                  onChange={(e) => definir('parentAssetId', e.target.value)}
+                >
+                  <option value="">Avulso — não está em nenhuma máquina</option>
+                  {maquinas.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                      {m.tag ? ` · ${m.tag}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <span className="campo-ajuda">
+                  Teclado, mouse e headset têm série e termo próprios, e por isso são equipamentos
+                  — não peças da máquina. Despendurar aqui não apaga nada: o periférico volta a
+                  ser avulso.
+                </span>
+              </div>
+            ) : null}
 
             <div className="campo">
               <label className="campo-rotulo" htmlFor="notas-ativo">

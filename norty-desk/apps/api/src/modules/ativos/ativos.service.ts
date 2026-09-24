@@ -19,8 +19,12 @@ import type {
   EscreverComponenteDto,
 } from './dto';
 
+/** O `AtivoRef` do domínio compartilhado, do lado do Prisma. */
+const REF = { select: { id: true, name: true, tag: true } } as const;
+
 const INCLUDE = {
   user: true,
+  parent: REF,
   manufacturer: { select: { id: true, name: true } },
   assetModel: { select: { id: true, name: true } },
   location: { select: { id: true, name: true, parentId: true } },
@@ -54,6 +58,7 @@ export class AtivosService {
       ...(filtro.kind ? { kind: filtro.kind } : {}),
       ...(filtro.status ? { status: filtro.status } : {}),
       ...(filtro.userId ? { userId: filtro.userId } : {}),
+      ...(filtro.parentAssetId ? { parentAssetId: filtro.parentAssetId } : {}),
       ...(filtro.locationId ? { locationId: filtro.locationId } : {}),
       ...(termo
         ? {
@@ -101,14 +106,19 @@ export class AtivosService {
     return view!;
   }
 
-  /** O ativo com o que está pendurado dentro dele. */
+  /** O ativo com o que está pendurado dentro e o que pendura nele. */
   async detalhe(usuario: UsuarioAutenticado, id: string): Promise<AssetDetail> {
-    const [ativo, componentes] = await Promise.all([
+    const [ativo, componentes, perifericos] = await Promise.all([
       this.obter(usuario, id),
       this.componentes(usuario, id),
+      this.prisma.asset.findMany({
+        where: { parentAssetId: id, organizationId: usuario.organizationId },
+        ...REF,
+        orderBy: [{ kind: 'asc' }, { name: 'asc' }],
+      }),
     ]);
 
-    return { ...ativo, components: componentes };
+    return { ...ativo, components: componentes, peripherals: perifericos };
   }
 
   // -------------------------------------------------------------------
@@ -246,6 +256,7 @@ export class AtivosService {
   async criar(usuario: UsuarioAutenticado, dto: EscreverAtivoDto): Promise<AssetView> {
     await this.exigirUsuarioDaOrganizacao(usuario, dto.userId);
     await this.exigirCatalogo(usuario, dto);
+    await this.exigirPaiValido(usuario, dto.parentAssetId, null);
 
     try {
       const ativo = await this.prisma.asset.create({
@@ -261,6 +272,7 @@ export class AtivosService {
           locationId: dto.locationId ?? null,
           notes: dto.notes ?? null,
           userId: dto.userId ?? null,
+          parentAssetId: dto.parentAssetId ?? null,
           purchasedAt: dto.purchasedAt ? new Date(dto.purchasedAt) : null,
           warrantyUntil: dto.warrantyUntil ? new Date(dto.warrantyUntil) : null,
         },
@@ -282,6 +294,7 @@ export class AtivosService {
     await this.obter(usuario, id);
     await this.exigirUsuarioDaOrganizacao(usuario, dto.userId);
     await this.exigirCatalogo(usuario, dto);
+    await this.exigirPaiValido(usuario, dto.parentAssetId, id);
 
     try {
       const ativo = await this.prisma.asset.update({
@@ -297,6 +310,7 @@ export class AtivosService {
           ...(dto.locationId !== undefined ? { locationId: dto.locationId } : {}),
           ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
           ...(dto.userId !== undefined ? { userId: dto.userId } : {}),
+          ...(dto.parentAssetId !== undefined ? { parentAssetId: dto.parentAssetId } : {}),
           ...(dto.purchasedAt !== undefined
             ? { purchasedAt: dto.purchasedAt ? new Date(dto.purchasedAt) : null }
             : {}),
@@ -472,6 +486,47 @@ export class AtivosService {
     if (!pessoa) throw new NotFoundException('Pessoa não encontrada nesta organização.');
   }
 
+  /**
+   * O equipamento em que o periférico vai pendurar.
+   *
+   * Três recusas, e cada uma existe por um estrago diferente:
+   *
+   * - **Outra organização.** Um id vindo do corpo da requisição não
+   *   prova nada; sem esta conferência, dava para pendurar o teclado
+   *   numa máquina de outra empresa e ler o nome dela no detalhe.
+   * - **Ele mesmo.** O banco também barra, por `CHECK` — aqui a recusa
+   *   vem em português, em vez de um erro de constraint.
+   * - **Um pai que já tem pai.** É o que segura o nível único. Sem
+   *   isso a corrente cresce, "o que está nesta máquina?" vira busca
+   *   recursiva, e o inventário passa a ter uma árvore que ninguém
+   *   mantém.
+   */
+  private async exigirPaiValido(
+    usuario: UsuarioAutenticado,
+    parentAssetId: string | null | undefined,
+    filhoId: string | null,
+  ): Promise<void> {
+    if (!parentAssetId) return;
+
+    if (filhoId && parentAssetId === filhoId) {
+      throw new BadRequestException('Um equipamento não pendura em si mesmo.');
+    }
+
+    const pai = await this.prisma.asset.findFirst({
+      where: { id: parentAssetId, organizationId: usuario.organizationId },
+      select: { id: true, name: true, parentAssetId: true },
+    });
+
+    if (!pai) throw new BadRequestException('Equipamento não encontrado nesta organização.');
+
+    if (pai.parentAssetId) {
+      throw new BadRequestException(
+        `${pai.name} já está pendurado noutro equipamento. ` +
+          'Periférico pendura direto na máquina, e não noutro periférico.',
+      );
+    }
+  }
+
   private async exigirFabricante(
     usuario: UsuarioAutenticado,
     manufacturerId: string | null | undefined,
@@ -592,6 +647,7 @@ export class AtivosService {
       purchasedAt: ativo.purchasedAt?.toISOString() ?? null,
       warrantyUntil: ativo.warrantyUntil?.toISOString() ?? null,
       notes: ativo.notes,
+      parent: ativo.parent,
       ticketCount: ativo._count.tickets,
     };
   }

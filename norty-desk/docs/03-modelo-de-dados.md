@@ -190,7 +190,13 @@ de WhatsApp, e é por ele que o threading reconhece uma resposta
 
 Entra nas fases seguintes (`docs/10-roadmap.md`):
 
-- `Asset` — ativo simples vinculável a chamado (Fase 3).
+- `Asset` — ativo simples vinculável a chamado (Fase 3). Teclado, mouse
+  e headset são **ativos** com `kind = PERIFERICO` e `parentAssetId`
+  apontando para a máquina, não `AssetComponent`: têm série, termo de
+  compromisso assinado por quem usa e caminho de troca por chamado.
+  Componente é o que está parafusado dentro e não vai a lugar nenhum
+  sozinho. Um nível só — o serviço recusa pendurar num ativo que já
+  tem pai, e o banco recusa ser pai de si mesmo.
 - `Change` e `Problem` — como colunas nulas distintas em `TicketEvent` e
   `Attachment`, com `CHECK` de exclusividade; nunca como
   `(itemtype, items_id)` em texto (Fase 4).

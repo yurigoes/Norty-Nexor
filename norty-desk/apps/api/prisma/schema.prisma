@@ -1388,6 +1388,8 @@ enum AssetKind {
   TELEFONE
   REDE
   LICENCA
+  /// Teclado, mouse, headset, webcam, dock. Ver `Asset.parentAssetId`.
+  PERIFERICO
   OUTRO
 }
 
@@ -1448,6 +1450,23 @@ model Asset {
   locationId     String?     @db.Uuid
   /// Quem usa hoje. Nulo quando está em estoque.
   userId         String?     @db.Uuid
+  /// De qual equipamento este periférico faz parte.
+  ///
+  /// Teclado, mouse e headset são **ativos**, não `AssetComponent`: têm
+  /// número de série, termo de compromisso assinado por quem usa, e um
+  /// caminho de troca que passa por chamado — sai um, entra outro, e o
+  /// que saiu vai para o estoque ou para o descarte. Componente é o que
+  /// está parafusado dentro da máquina e não vai a lugar nenhum sozinho;
+  /// pente de memória não assina termo.
+  ///
+  /// Um nível só, e o serviço recusa pendurar num que já tem pai:
+  /// corrente mais funda é árvore, e árvore de inventário é o que
+  /// ninguém mantém. O `CHECK` do banco pega o caso de um passo — ser
+  /// pai de si mesmo —, que é o único que cabe numa linha.
+  ///
+  /// `SetNull` ao apagar: sumir com a máquina não pode sumir com o
+  /// teclado, que continua existindo e volta a ser avulso.
+  parentAssetId  String?     @db.Uuid
   purchasedAt    DateTime?
   warrantyUntil  DateTime?
   notes          String?
@@ -1490,6 +1509,8 @@ model Asset {
 
   organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User?                  @relation("AtivoDoUsuario", fields: [userId], references: [id], onDelete: SetNull)
+  parent       Asset?                 @relation("PerifericoDoAtivo", fields: [parentAssetId], references: [id], onDelete: SetNull)
+  peripherals  Asset[]                @relation("PerifericoDoAtivo")
   supplier     Supplier?              @relation("FornecedorDoAtivo", fields: [supplierId], references: [id], onDelete: SetNull)
   manufacturer Manufacturer?          @relation(fields: [manufacturerId], references: [id], onDelete: SetNull)
   assetModel   AssetModel?            @relation(fields: [assetModelId], references: [id], onDelete: SetNull)
@@ -1512,6 +1533,7 @@ model Asset {
   @@index([organizationId, status])
   @@index([userId])
   @@index([locationId])
+  @@index([parentAssetId])
   @@map("assets")
 }
 
