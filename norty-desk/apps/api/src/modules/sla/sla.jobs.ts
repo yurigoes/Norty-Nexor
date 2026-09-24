@@ -48,26 +48,31 @@ export class SlaJobs {
       take: 500,
     });
 
+    // Marcar é idempotente — a data gravada é sempre a mesma —, mas
+    // **avisar** não é: dois processos que lessem o mesmo compromisso
+    // vencido emitiriam `sla.violado` duas vezes, e o painel do
+    // assinante contaria duas violações onde houve uma.
+    //
+    // O `where: { breachedAt: null }` é o que resolve: o Postgres
+    // reavalia a condição da segunda gravação depois que a primeira
+    // comita, então só um dos dois afeta uma linha — e só esse avisa.
+    const marcados: typeof vencidos = [];
+
     for (const compromisso of vencidos) {
-      await this.prisma.slaCommitment.update({
-        where: { id: compromisso.id },
-        // A hora da violação é o vencimento, não a hora em que o cron
-        // percebeu: um cron atrasado não pode piorar o número.
-        data: { breachedAt: compromisso.dueAt },
-      });
+      if (await this.marcarUma(compromisso.id, compromisso.dueAt)) marcados.push(compromisso);
     }
 
-    if (vencidos.length) {
-      this.logger.warn(`${vencidos.length} compromisso(s) de SLA estouraram.`);
+    if (marcados.length) {
+      this.logger.warn(`${marcados.length} compromisso(s) de SLA estouraram.`);
 
       // Quem assinou `sla.violado` costuma querer isto num painel de
       // parede ou num canal do Slack: chega no minuto da violação.
       const chamados = await this.prisma.ticket.findMany({
-        where: { id: { in: vencidos.map((v) => v.ticketId) } },
+        where: { id: { in: marcados.map((v) => v.ticketId) } },
         select: { id: true, organizationId: true, number: true, subject: true, priority: true },
       });
 
-      for (const compromisso of vencidos) {
+      for (const compromisso of marcados) {
         const chamado = chamados.find((c) => c.id === compromisso.ticketId);
         if (!chamado) continue;
 
@@ -82,7 +87,27 @@ export class SlaJobs {
       }
     }
 
-    return vencidos.length;
+    return marcados.length;
+  }
+
+  /**
+   * Toma a violação para este processo, ou devolve `false`.
+   *
+   * A hora gravada é o vencimento, não a hora em que o cron percebeu:
+   * um cron atrasado não pode piorar o número.
+   *
+   * Exposto para a suíte correr os dois lados de propósito. Pelo cron
+   * a corrida também acontece, mas depende de a segunda passada ler a
+   * fila antes de a primeira terminar de marcá-la — e um teste que
+   * depende disso passa sozinho no dia em que o defeito volta.
+   */
+  async marcarUma(id: string, venceuEm: Date): Promise<boolean> {
+    const { count } = await this.prisma.slaCommitment.updateMany({
+      where: { id, breachedAt: null },
+      data: { breachedAt: venceuEm },
+    });
+
+    return count === 1;
   }
 
   // -------------------------------------------------------------------
@@ -126,11 +151,22 @@ export class SlaJobs {
 
         if (quando > agora) break;
 
-        await this.aplicarNivel(compromisso, nivel);
-        await this.prisma.slaCommitment.update({
-          where: { id: compromisso.id },
+        // O nível avança **antes** de o aviso sair, e condicionado ao
+        // valor que foi lido. Se outro processo já avançou, este
+        // `updateMany` afeta zero linhas e esta passada desiste — que
+        // é o que impede o mesmo escalonamento de ser avisado duas
+        // vezes. É a mesma escolha que a recorrência faz ao abrir o
+        // chamado, e pelo mesmo motivo: na ordem inversa, uma falha
+        // entre o aviso e o avanço mandaria o aviso de novo no minuto
+        // seguinte, e de novo, até alguém resolver.
+        const { count } = await this.prisma.slaCommitment.updateMany({
+          where: { id: compromisso.id, escalationLevel: indice },
           data: { escalationLevel: indice + 1 },
         });
+
+        if (count === 0) break;
+
+        await this.aplicarNivel(compromisso, nivel);
 
         disparados += 1;
       }
@@ -358,13 +394,30 @@ export class SlaJobs {
       const encerra =
         motivo.followupsBeforeResolution > 0 && jaCobrado > motivo.followupsBeforeResolution;
 
+      // Toma a vez desta cobrança antes de mandá-la, condicionado ao
+      // contador que foi lido. Dois processos que lessem o mesmo valor
+      // cobrariam a mesma pessoa duas vezes pela mesma pendência — ou
+      // encerrariam o mesmo chamado duas vezes, com dois eventos de
+      // solução na conversa.
+      //
+      // Contar antes significa que uma falha no envio perde a
+      // cobrança em vez de duplicá-la. É o lado certo de errar: a
+      // próxima passada cobra de novo em quinze minutos, e mensagem
+      // que já saiu não volta.
+      const { count } = await this.prisma.ticket.updateMany({
+        where: { id: chamado.id, pendingRemindersSent: chamado.pendingRemindersSent },
+        data: { pendingRemindersSent: jaCobrado },
+      });
+
+      if (count === 0) continue;
+
       if (encerra) {
         await this.encerrarPorInatividade(chamado.id, motivo.name);
         cobrados += 1;
         continue;
       }
 
-      await this.enviarCobranca(chamado, motivo.followupTemplate, jaCobrado);
+      await this.enviarCobranca(chamado, motivo.followupTemplate);
       cobrados += 1;
     }
 
@@ -420,36 +473,29 @@ export class SlaJobs {
       }[];
     },
     modelo: string | null,
-    numeroDaCobranca: number,
   ): Promise<void> {
     const destino = SlaJobs.enderecoDoRequerente(chamado);
 
     if (!destino) {
       // Sem endereço não há como cobrar, e insistir a cada quinze
-      // minutos para sempre não ajuda ninguém. Registra na conversa e
-      // conta a cobrança, para o encerramento por inatividade seguir
-      // seu curso.
+      // minutos para sempre não ajuda ninguém. Registra na conversa; a
+      // cobrança já foi contada por quem chamou, então o encerramento
+      // por inatividade segue seu curso.
       this.logger.warn(
         `Chamado ${chamado.number} está pendente e o requerente não tem endereço em canal nenhum.`,
       );
 
-      await this.prisma.$transaction([
-        this.prisma.ticket.update({
-          where: { id: chamado.id },
-          data: { pendingRemindersSent: numeroDaCobranca },
-        }),
-        this.prisma.ticketEvent.create({
-          data: {
-            ticketId: chamado.id,
-            type: 'NOTA_INTERNA',
-            visibility: 'INTERNA',
-            channel: 'SISTEMA',
-            body:
-              'Não foi possível cobrar: o requerente não tem e-mail nem telefone cadastrado. ' +
-              'Fale com ele por fora ou complete o cadastro.',
-          },
-        }),
-      ]);
+      await this.prisma.ticketEvent.create({
+        data: {
+          ticketId: chamado.id,
+          type: 'NOTA_INTERNA',
+          visibility: 'INTERNA',
+          channel: 'SISTEMA',
+          body:
+            'Não foi possível cobrar: o requerente não tem e-mail nem telefone cadastrado. ' +
+            'Fale com ele por fora ou complete o cadastro.',
+        },
+      });
       return;
     }
 
@@ -469,23 +515,18 @@ export class SlaJobs {
       corpo,
     });
 
-    await this.prisma.$transaction([
-      this.prisma.ticket.update({
-        where: { id: chamado.id },
-        data: { pendingRemindersSent: numeroDaCobranca },
-      }),
-      // A cobrança fica na conversa: sem isso o solicitante recebe três
-      // mensagens que a tela do chamado não explica.
-      this.prisma.ticketEvent.create({
-        data: {
-          ticketId: chamado.id,
-          type: 'MENSAGEM',
-          visibility: 'PUBLICA',
-          channel: 'SISTEMA',
-          body: corpo,
-        },
-      }),
-    ]);
+    // A cobrança fica na conversa: sem isso o solicitante recebe três
+    // mensagens que a tela do chamado não explica. O contador já foi
+    // avançado por quem chamou, ao tomar a vez desta cobrança.
+    await this.prisma.ticketEvent.create({
+      data: {
+        ticketId: chamado.id,
+        type: 'MENSAGEM',
+        visibility: 'PUBLICA',
+        channel: 'SISTEMA',
+        body: corpo,
+      },
+    });
   }
 
   private async encerrarPorInatividade(ticketId: string, motivo: string): Promise<void> {

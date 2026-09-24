@@ -105,6 +105,36 @@ describe('violação de prazo', () => {
       assert.equal(c.breachedAt, null, 'cumprido no prazo não estoura');
     }
   });
+
+  it('dois crons juntos avisam a violação uma vez só', async () => {
+    const { chamado } = await abrirComContato('Corrida na violação', '+5511900000011');
+
+    await prisma.slaCommitment.updateMany({
+      where: { ticketId: chamado.id },
+      data: { dueAt: new Date(Date.now() - 3600 * 1000) },
+    });
+
+    const compromisso = await prisma.slaCommitment.findFirstOrThrow({
+      where: { ticketId: chamado.id, target: 'TTR' },
+    });
+
+    // A API roda em mais de um processo e o cron de um minuto de cada
+    // um cai junto. Gravar `breachedAt` duas vezes é inofensivo — o
+    // valor é o mesmo —, mas quem marca é quem emite `sla.violado`, e
+    // dois avisos fazem o painel do assinante contar duas violações
+    // onde houve uma.
+    const [a, b] = await Promise.all([
+      jobs.marcarUma(compromisso.id, compromisso.dueAt),
+      jobs.marcarUma(compromisso.id, compromisso.dueAt),
+    ]);
+
+    assert.equal([a, b].filter(Boolean).length, 1, 'os dois processos avisariam a violação');
+
+    const depois = await prisma.slaCommitment.findUniqueOrThrow({
+      where: { id: compromisso.id },
+    });
+    assert.equal(depois.breachedAt?.getTime(), compromisso.dueAt.getTime());
+  });
 });
 
 describe('escalonamento', () => {
@@ -233,6 +263,40 @@ describe('escalonamento', () => {
     });
     assert.equal(atores.length, 1, 'o time anterior deveria ter saído');
     assert.equal(atores[0]!.teamId, f.outroTime.id);
+
+    await prisma.escalationLevel.delete({ where: { id: nivel.id } });
+  });
+});
+
+describe('escalonamento concorrente', () => {
+  it('dois crons juntos disparam o nível uma vez só', async () => {
+    const nivel = await prisma.escalationLevel.create({
+      data: {
+        agreementId: f.ttr.id,
+        name: 'Estourou (corrida)',
+        offsetSeconds: 0,
+        actions: [{ tipo: 'NOTIFICAR', alvo: 'TIME' }],
+      },
+    });
+
+    const { chamado } = await abrirComContato('Corrida no escalonamento', '+5511900000012');
+
+    await prisma.slaCommitment.updateMany({
+      where: { ticketId: chamado.id, target: 'TTR' },
+      data: { dueAt: new Date(Date.now() - 60_000) },
+    });
+
+    await Promise.all([jobs.escalonar(), jobs.escalonar()]);
+
+    const notas = await prisma.ticketEvent.count({
+      where: { ticketId: chamado.id, type: 'NOTA_INTERNA', channel: 'SISTEMA' },
+    });
+    assert.equal(notas, 1, 'o mesmo nível avisou a equipe duas vezes');
+
+    const compromisso = await prisma.slaCommitment.findFirstOrThrow({
+      where: { ticketId: chamado.id, target: 'TTR' },
+    });
+    assert.equal(compromisso.escalationLevel, 1);
 
     await prisma.escalationLevel.delete({ where: { id: nivel.id } });
   });
@@ -379,6 +443,41 @@ describe('cobrança de pendência', () => {
     const atual = await prisma.ticket.findUniqueOrThrow({ where: { id: chamado.id } });
     assert.equal(atual.status, 'PENDENTE');
     assert.equal(atual.pendingRemindersSent, 0, 'motivo sem intervalo não cobra');
+  });
+
+  it('dois crons juntos cobram a pessoa uma vez só', async () => {
+    const motivo = await prisma.pendingReason.create({
+      data: {
+        organizationId: f.organizacao.id,
+        name: 'Aguardando (corrida)',
+        followupIntervalSeconds: 60,
+        followupsBeforeResolution: 3,
+        followupTemplate: 'Retorno no chamado {{numero}}?',
+      },
+    });
+
+    const { chamado, agente } = await abrirComContato('Corrida na cobrança', '+5511900000013');
+    await agente.post(`/tickets/${chamado.id}/pausar`, { pendingReasonId: motivo.id });
+
+    await prisma.ticket.update({
+      where: { id: chamado.id },
+      data: { pendingSince: new Date(Date.now() - 2 * 3600 * 1000) },
+    });
+
+    // Duas cobranças pela mesma pendência são duas mensagens iguais no
+    // telefone de quem já foi cobrado — e queimam duas das três
+    // cobranças combinadas antes do encerramento automático.
+    await Promise.all([jobs.cobrarPendencias(), jobs.cobrarPendencias()]);
+
+    const depois = await prisma.ticket.findUniqueOrThrow({ where: { id: chamado.id } });
+    assert.equal(depois.pendingRemindersSent, 1, 'contou duas cobranças onde houve uma');
+
+    const naConversa = await prisma.ticketEvent.count({
+      where: { ticketId: chamado.id, channel: 'SISTEMA', type: 'MENSAGEM' },
+    });
+    assert.equal(naConversa, 1, 'a mesma cobrança saiu duas vezes');
+
+    await prisma.pendingReason.delete({ where: { id: motivo.id } }).catch(() => undefined);
   });
 });
 
