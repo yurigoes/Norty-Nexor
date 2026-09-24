@@ -1914,6 +1914,23 @@ export function assinaturaInvalida(dataUrl: string): string | null {
   return null;
 }
 
+/**
+ * Os dois pertencem a empresas-cliente diferentes?
+ *
+ * Nulo é "da casa", e da casa combina com todo mundo: o notebook de
+ * empréstimo vai para o funcionário do cliente, e o teclado do cliente
+ * entra na máquina de empréstimo. O que não pode é um ser da empresa do
+ * João e o outro da empresa da Maria — aí o nome de uma aparece no
+ * histórico da outra, e nenhuma das duas contagens de parque fecha.
+ *
+ * Mora aqui, e não no serviço de ativos, porque a mesma pergunta é
+ * feita em três lugares: o periférico contra a máquina, a pessoa contra
+ * o equipamento que recebe, e a troca de empresa contra o que já existe.
+ */
+export function deClientesDiferentes(a: string | null, b: string | null): boolean {
+  return a !== null && b !== null && a !== b;
+}
+
 // ---------------------------------------------------------------------
 // Identificar a empresa: nome aproximado ou documento exato
 // ---------------------------------------------------------------------

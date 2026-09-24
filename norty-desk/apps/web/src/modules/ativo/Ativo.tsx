@@ -124,6 +124,7 @@ export function Ativo() {
 
 function Identificacao({ ativo }: { ativo: AssetDetail }) {
   const linhas: [string, React.ReactNode][] = [
+    ['Empresa', ativo.client?.name ?? 'Da casa'],
     ['Tipo', ROTULO_ATIVO[ativo.kind]],
     [
       'Situação',

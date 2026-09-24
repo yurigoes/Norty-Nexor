@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { AssetDetail, AssetView, ComponentKind, ComponenteView } from '@norty-desk/shared';
-import { validarAtributos } from '@norty-desk/shared';
+import { deClientesDiferentes, validarAtributos } from '@norty-desk/shared';
 import { Prisma } from '@prisma/client';
 
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
@@ -26,6 +26,7 @@ const REF = { select: { id: true, name: true, tag: true } } as const;
 const INCLUDE = {
   user: true,
   parent: REF,
+  client: { select: { id: true, name: true } },
   manufacturer: { select: { id: true, name: true } },
   assetModel: { select: { id: true, name: true } },
   location: { select: { id: true, name: true, parentId: true } },
@@ -63,6 +64,14 @@ export class AtivosService {
       ...(filtro.status ? { status: filtro.status } : {}),
       ...(filtro.userId ? { userId: filtro.userId } : {}),
       ...(filtro.parentAssetId ? { parentAssetId: filtro.parentAssetId } : {}),
+      // `semCliente` e `clientId` respondem perguntas diferentes: "o
+      // parque da empresa do João" e "o que é nosso". O primeiro ganha
+      // quando os dois vêm, porque é o mais específico.
+      ...(filtro.clientId
+        ? { clientId: filtro.clientId }
+        : filtro.semCliente
+          ? { clientId: null }
+          : {}),
       ...(filtro.locationId ? { locationId: filtro.locationId } : {}),
       ...(termo
         ? {
@@ -265,12 +274,14 @@ export class AtivosService {
 
   async criar(usuario: UsuarioAutenticado, dto: EscreverAtivoDto): Promise<AssetView> {
     await this.exigirCatalogo(usuario, dto);
-    await this.exigirPaiValido(usuario, dto.parentAssetId, null);
+    await this.exigirCliente(usuario, dto.clientId);
+    await this.exigirPaiValido(usuario, dto.parentAssetId, null, dto.clientId ?? null);
 
     try {
       const ativo = await this.prisma.asset.create({
         data: {
           organizationId: usuario.organizationId,
+          clientId: dto.clientId ?? null,
           name: dto.name,
           kind: dto.kind ?? 'OUTRO',
           status: dto.status ?? 'EM_USO',
@@ -299,15 +310,24 @@ export class AtivosService {
     id: string,
     dto: EditarAtivoDto,
   ): Promise<AssetView> {
-    await this.obter(usuario, id);
+    const atual = await this.obter(usuario, id);
     await this.exigirCatalogo(usuario, dto);
-    await this.exigirPaiValido(usuario, dto.parentAssetId, id);
+    await this.exigirCliente(usuario, dto.clientId);
+
+    // O cliente depois desta edição é quem manda nas coerências abaixo:
+    // conferir contra o de antes deixaria passar a troca de empresa que
+    // contradiz o pai ou quem está com o equipamento.
+    const clienteFinal = dto.clientId !== undefined ? dto.clientId : (atual.client?.id ?? null);
+
+    await this.exigirPaiValido(usuario, dto.parentAssetId, id, clienteFinal);
+    if (dto.clientId !== undefined) await this.exigirTrocaDeClienteCoerente(id, clienteFinal);
 
     try {
       const ativo = await this.prisma.asset.update({
         where: { id },
         data: {
           ...(dto.name !== undefined ? { name: dto.name } : {}),
+          ...(dto.clientId !== undefined ? { clientId: dto.clientId } : {}),
           ...(dto.kind !== undefined ? { kind: dto.kind } : {}),
           ...(dto.status !== undefined ? { status: dto.status } : {}),
           ...(dto.tag !== undefined ? { tag: dto.tag } : {}),
@@ -494,6 +514,7 @@ export class AtivosService {
     usuario: UsuarioAutenticado,
     parentAssetId: string | null | undefined,
     filhoId: string | null,
+    clienteDoFilho: string | null,
   ): Promise<void> {
     if (!parentAssetId) return;
 
@@ -503,7 +524,7 @@ export class AtivosService {
 
     const pai = await this.prisma.asset.findFirst({
       where: { id: parentAssetId, organizationId: usuario.organizationId },
-      select: { id: true, name: true, parentAssetId: true },
+      select: { id: true, name: true, parentAssetId: true, clientId: true },
     });
 
     if (!pai) throw new BadRequestException('Equipamento não encontrado nesta organização.');
@@ -512,6 +533,87 @@ export class AtivosService {
       throw new BadRequestException(
         `${pai.name} já está pendurado noutro equipamento. ` +
           'Periférico pendura direto na máquina, e não noutro periférico.',
+      );
+    }
+
+    if (deClientesDiferentes(clienteDoFilho, pai.clientId)) {
+      throw new BadRequestException(
+        `${pai.name} é de outra empresa. Um periférico não pendura no ` +
+          'equipamento de outro cliente — o parque de cada um tem de fechar sozinho.',
+      );
+    }
+  }
+
+  /**
+   * A empresa-cliente dona do equipamento.
+   *
+   * Um id vindo do corpo da requisição não prova nada: sem esta
+   * conferência dava para cadastrar equipamento na carteira de outra
+   * organização e ler o nome dela de volta no detalhe.
+   */
+  private async exigirCliente(
+    usuario: UsuarioAutenticado,
+    clientId: string | null | undefined,
+  ): Promise<void> {
+    if (!clientId) return;
+
+    const existe = await this.prisma.client.count({
+      where: { id: clientId, organizationId: usuario.organizationId },
+    });
+
+    if (!existe) throw new BadRequestException('Empresa não encontrada nesta organização.');
+  }
+
+  /**
+   * Trocar o equipamento de empresa não pode contradizer o que já existe.
+   *
+   * São dois estragos diferentes, e por isso duas recusas:
+   *
+   * - **Periférico de outra empresa pendurado nele.** Mover a máquina
+   *   deixaria o teclado da empresa do João dentro do parque da empresa
+   *   da Maria, e nenhuma das duas contagens fecharia.
+   * - **Está na mão de alguém de outra empresa.** A posse aberta ficaria
+   *   dizendo que um funcionário da empresa antiga está com equipamento
+   *   da nova. Devolver primeiro é o gesto certo, e é o que a mensagem
+   *   pede.
+   */
+  private async exigirTrocaDeClienteCoerente(
+    assetId: string,
+    clienteNovo: string | null,
+  ): Promise<void> {
+    const [perifericoAlheio, posseAberta] = await Promise.all([
+      this.prisma.asset.findFirst({
+        where: {
+          parentAssetId: assetId,
+          ...(clienteNovo === null ? { NOT: { clientId: null } } : { NOT: { clientId: clienteNovo } }),
+        },
+        select: { name: true },
+      }),
+      this.prisma.assetHolding.findFirst({
+        where: { assetId, endedAt: null },
+        select: { user: { select: { name: true, memberships: { select: { clientId: true } } } } },
+      }),
+    ]);
+
+    if (perifericoAlheio) {
+      throw new BadRequestException(
+        `${perifericoAlheio.name} está pendurado neste equipamento e é de outra empresa. ` +
+          'Despendure antes de trocar a empresa.',
+      );
+    }
+
+    if (!posseAberta) return;
+
+    // "De outra empresa" é ter vínculo de cliente e nenhum deles bater.
+    // Quem é da casa (vínculo sem cliente) segura equipamento de
+    // qualquer um: é o técnico que levou a máquina para o conserto.
+    const clientesDaPessoa = posseAberta.user.memberships.map((m) => m.clientId);
+    const daCasa = clientesDaPessoa.some((c) => c === null);
+
+    if (!daCasa && !clientesDaPessoa.includes(clienteNovo)) {
+      throw new BadRequestException(
+        `${posseAberta.user.name} está com este equipamento e é de outra empresa. ` +
+          'Registre a devolução antes de trocar a empresa.',
       );
     }
   }
@@ -616,6 +718,7 @@ export class AtivosService {
   ): AssetView {
     return {
       id: ativo.id,
+      client: ativo.client,
       kind: ativo.kind,
       status: ativo.status,
       name: ativo.name,

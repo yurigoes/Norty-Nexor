@@ -32,6 +32,10 @@ export const buscarAtivos = (filtro: {
   kind?: string;
   status?: string;
   userId?: string;
+  /** Só o parque desta empresa-cliente. */
+  clientId?: string;
+  /** Só o que é da casa. */
+  semCliente?: boolean;
   limit?: number;
 } = {}) => chamar<AssetView[]>(`/assets${query(filtro)}`);
 

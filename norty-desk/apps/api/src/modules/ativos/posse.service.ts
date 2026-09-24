@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { PosseView } from '@norty-desk/shared';
-import { assinaturaInvalida } from '@norty-desk/shared';
+import { assinaturaInvalida, deClientesDiferentes } from '@norty-desk/shared';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 
@@ -85,7 +85,7 @@ export class PosseService {
     dto: EntregarAtivoDto,
   ): Promise<PosseView[]> {
     const ativo = await this.exigirAtivo(usuario, assetId);
-    const pessoa = await this.exigirPessoa(usuario, dto.userId);
+    const pessoa = await this.exigirPessoa(usuario, dto.userId, ativo.clientId);
 
     const aberta = await this.prisma.assetHolding.findFirst({
       where: { assetId, endedAt: null },
@@ -211,7 +211,7 @@ export class PosseService {
   private async exigirAtivo(usuario: UsuarioAutenticado, assetId: string) {
     const ativo = await this.prisma.asset.findFirst({
       where: { id: assetId, organizationId: usuario.organizationId },
-      select: { id: true, organizationId: true },
+      select: { id: true, organizationId: true, clientId: true },
     });
 
     if (!ativo) throw new NotFoundException('Ativo não encontrado.');
@@ -225,15 +225,47 @@ export class PosseService {
    * para quem assina o termo e não abre chamado. O que se exige é o
    * vínculo com a organização — um id vindo do corpo da requisição não
    * prova nada, e sem esta conferência dava para entregar o equipamento
-   * a alguém de outra empresa e ler o nome dela no histórico.
+   * a alguém de outra organização e ler o nome dela no histórico.
+   *
+   * E, dentro da organização, a pessoa não pode ser de **outra
+   * empresa-cliente**: entregar a máquina da empresa do João ao
+   * funcionário da empresa da Maria põe o nome de uma no histórico da
+   * outra, e nenhuma das duas contagens de parque fecha.
+   *
+   * Quem é da casa segura equipamento de qualquer cliente — é o técnico
+   * que levou a máquina para o conserto —, e equipamento da casa vai
+   * para qualquer pessoa, que é o notebook de empréstimo. Só a
+   * combinação "cliente A x cliente B" é recusada.
    */
-  private async exigirPessoa(usuario: UsuarioAutenticado, userId: string) {
+  private async exigirPessoa(
+    usuario: UsuarioAutenticado,
+    userId: string,
+    clienteDoAtivo: string | null,
+  ) {
     const pessoa = await this.prisma.user.findFirst({
       where: { id: userId, memberships: { some: { organizationId: usuario.organizationId } } },
-      select: { id: true, name: true },
+      select: {
+        id: true,
+        name: true,
+        memberships: {
+          where: { organizationId: usuario.organizationId },
+          select: { clientId: true },
+        },
+      },
     });
 
     if (!pessoa) throw new BadRequestException('Pessoa não encontrada nesta organização.');
+
+    const clientes = pessoa.memberships.map((m) => m.clientId);
+    const daCasa = clientes.some((c) => c === null);
+
+    if (!daCasa && clientes.every((c) => deClientesDiferentes(clienteDoAtivo, c))) {
+      throw new BadRequestException(
+        `${pessoa.name} é de outra empresa. O equipamento de um cliente não vai ` +
+          'para o funcionário de outro.',
+      );
+    }
+
     return pessoa;
   }
 

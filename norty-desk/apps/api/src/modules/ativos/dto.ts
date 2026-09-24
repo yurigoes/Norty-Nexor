@@ -1,5 +1,6 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsDateString,
   IsIn,
   IsInt,
@@ -23,12 +24,29 @@ import { ASSET_KINDS, ASSET_STATUSES, COMPONENT_KINDS, type ComponentKind } from
  */
 const TETO_DA_ASSINATURA = 4 * 1024 * 1024;
 
+/**
+ * Booleano vindo da query.
+ *
+ * `Boolean('false')` é `true`, e é assim que um filtro de "só os que
+ * não têm" passa a devolver o contrário do pedido.
+ */
+const booleano = ({ value }: { value: unknown }) => value === true || value === 'true';
+
 /** Campo de texto opcional que aceita `null` para limpar. */
 const vazioVirandoNulo = ({ value }: { value: unknown }) =>
   typeof value === 'string' && value.trim() === '' ? null : value;
 
 export class EscreverAtivoDto {
   @IsString() @MinLength(2) @MaxLength(160) name!: string;
+
+  /**
+   * De qual empresa-cliente é o equipamento. `null` é da casa.
+   *
+   * É o campo que o agente de inventário preenche antes de varrer a
+   * máquina: sem ele, o que a varredura encontra cai num parque só, e
+   * "quantas máquinas a empresa do João tem?" deixa de ter resposta.
+   */
+  @IsOptional() @Transform(vazioVirandoNulo) @IsUUID() clientId?: string | null;
 
   @IsOptional() @IsIn(ASSET_KINDS) kind?: (typeof ASSET_KINDS)[number];
   @IsOptional() @IsIn(ASSET_STATUSES) status?: (typeof ASSET_STATUSES)[number];
@@ -63,6 +81,10 @@ export class EditarAtivoDto extends EscreverAtivoDto {
 
 export class BuscarAtivosDto {
   @IsOptional() @IsString() @MaxLength(160) q?: string;
+  /** Só o parque desta empresa. */
+  @IsOptional() @IsUUID() clientId?: string;
+  /** Só o que é da casa — o que nenhuma empresa-cliente reivindica. */
+  @IsOptional() @Transform(booleano) @IsBoolean() semCliente?: boolean;
   /** Só os periféricos pendurados neste equipamento. */
   @IsOptional() @IsUUID() parentAssetId?: string;
   @IsOptional() @IsUUID() locationId?: string;

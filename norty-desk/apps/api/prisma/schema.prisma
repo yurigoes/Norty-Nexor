@@ -234,6 +234,7 @@ model Client {
   tickets      Ticket[]
   apiKeys      ApiKey[]
   conversas    WhatsappConversa[]
+  assets       Asset[]
 
   @@unique([organizationId, name])
   /// O domínio é o que gera o login: dois clientes com o mesmo domínio
@@ -1436,6 +1437,19 @@ enum AssetStatus {
 model Asset {
   id             String      @id @default(uuid()) @db.Uuid
   organizationId String      @db.Uuid
+  /// De qual empresa-cliente é este equipamento.
+  ///
+  /// Nulo é equipamento **da casa** — o notebook de empréstimo, a
+  /// impressora do escritório. Preenchido é o parque do cliente, que é
+  /// o caso da maioria: a Norty administra parque alheio, e o agente de
+  /// inventário precisa saber em qual carteira cadastrar o que
+  /// encontrou.
+  ///
+  /// `Restrict`, e não cascata: apagar a empresa não pode apagar o
+  /// inventário dela. A carteira já recusa remover empresa com pessoa
+  /// ou chamado, e agora também com equipamento — esta é a cerca de
+  /// baixo, para o caso de alguém apagar por SQL.
+  clientId       String?     @db.Uuid
   kind           AssetKind   @default(OUTRO)
   status         AssetStatus @default(EM_USO)
   name           String
@@ -1510,6 +1524,7 @@ model Asset {
   updatedAt          DateTime          @updatedAt
 
   organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client       Client?                @relation(fields: [clientId], references: [id], onDelete: Restrict)
   user         User?                  @relation("AtivoDoUsuario", fields: [userId], references: [id], onDelete: SetNull)
   parent       Asset?                 @relation("PerifericoDoAtivo", fields: [parentAssetId], references: [id], onDelete: SetNull)
   peripherals  Asset[]                @relation("PerifericoDoAtivo")
@@ -1534,6 +1549,9 @@ model Asset {
   @@unique([organizationId, tag])
   @@unique([organizationId, serialNumber])
   @@index([organizationId, status])
+  /// "O parque desta empresa" é a pergunta da tela do cliente e do
+  /// agente de inventário, e é a que precisa de índice próprio.
+  @@index([organizationId, clientId])
   @@index([userId])
   @@index([locationId])
   @@index([parentAssetId])

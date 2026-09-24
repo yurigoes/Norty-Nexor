@@ -168,14 +168,16 @@ export class CarteiraService {
   async remover(usuario: UsuarioAutenticado, id: string): Promise<void> {
     const cliente = await this.exigir(usuario, id);
 
-    const [pessoas, chamados] = await Promise.all([
+    const [pessoas, chamados, equipamentos] = await Promise.all([
       this.prisma.membership.count({ where: { clientId: id } }),
       this.prisma.ticket.count({ where: { clientId: id } }),
+      this.prisma.asset.count({ where: { clientId: id } }),
     ]);
 
-    if (pessoas > 0 || chamados > 0) {
+    if (pessoas > 0 || chamados > 0 || equipamentos > 0) {
       throw new ConflictException(
-        `Esta empresa tem ${pessoas} pessoa(s) e ${chamados} chamado(s): desative em vez de excluir.`,
+        `Esta empresa tem ${pessoas} pessoa(s), ${chamados} chamado(s) e ` +
+          `${equipamentos} equipamento(s): desative em vez de excluir.`,
       );
     }
 

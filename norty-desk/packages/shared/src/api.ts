@@ -694,6 +694,13 @@ export type CatalogoRef = { id: string; name: string };
 
 export type AssetView = {
   id: string;
+  /**
+   * De qual empresa-cliente é o equipamento.
+   *
+   * Nulo é equipamento **da casa** — o notebook de empréstimo, a
+   * impressora do escritório.
+   */
+  client: CatalogoRef | null;
   kind: AssetKind;
   status: AssetStatus;
   name: string;
@@ -768,6 +775,8 @@ export type DevolverAtivoRequest = {
 };
 
 export type WriteAssetRequest = {
+  /** `null` devolve o equipamento à casa. */
+  clientId?: string | null;
   kind?: AssetKind;
   /** `null` despendura do equipamento e devolve o periférico ao avulso. */
   parentAssetId?: string | null;

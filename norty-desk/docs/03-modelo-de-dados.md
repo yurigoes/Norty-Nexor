@@ -190,7 +190,15 @@ de WhatsApp, e é por ele que o threading reconhece uma resposta
 
 Entra nas fases seguintes (`docs/10-roadmap.md`):
 
-- `Asset` — ativo simples vinculável a chamado (Fase 3). Teclado, mouse
+- `Asset` — ativo simples vinculável a chamado (Fase 3). `clientId`
+  opcional diz de qual empresa-cliente é o equipamento; nulo é **da
+  casa**, o notebook de empréstimo e a impressora do escritório. É o
+  campo que o agente de inventário preenche antes de varrer a máquina,
+  e sem ele "quantas máquinas a empresa do João tem?" não tem resposta.
+  `Restrict` ao apagar a empresa, e a carteira já recusa antes disso.
+  Periférico, posse e troca de empresa não podem se contradizer: a regra
+  é `deClientesDiferentes` no domínio compartilhado — da casa combina com
+  todo mundo, cliente A com cliente B não. Teclado, mouse
   e headset são **ativos** com `kind = PERIFERICO` e `parentAssetId`
   apontando para a máquina, não `AssetComponent`: têm série, termo de
   compromisso assinado por quem usa e caminho de troca por chamado.

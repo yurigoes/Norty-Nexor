@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type {
   AssetView,
+  ClienteView,
   FabricanteView,
   LocalizacaoView,
   ModeloDeAtivoView,
@@ -15,6 +16,7 @@ import {
 } from '@norty-desk/shared';
 
 import { buscarAtivos, criarAtivo, editarAtivo } from '../../api/ativos';
+import { listarClientes } from '../../api/carteira';
 import {
   listarFabricantes,
   listarLocalizacoes,
@@ -36,18 +38,34 @@ export function Ativos() {
   const [termo, setTermo] = useState('');
   const [busca, setBusca] = useState('');
   const [status, setStatus] = useState('');
+  // `''` é "todas", `'casa'` é o que nenhuma empresa reivindica, e um
+  // uuid é o parque daquela empresa.
+  const [empresa, setEmpresa] = useState('');
+  const [clientes, setClientes] = useState<ClienteView[]>([]);
   const [ativos, setAtivos] = useState<AssetView[] | null>(null);
   const [emEdicao, setEmEdicao] = useState<AssetView | 'novo' | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
   const recarregar = useCallback(async () => {
-    setAtivos(await buscarAtivos({ q: busca || undefined, status: status || undefined }));
-  }, [busca, status]);
+    setAtivos(
+      await buscarAtivos({
+        q: busca || undefined,
+        status: status || undefined,
+        ...(empresa === 'casa' ? { semCliente: true } : empresa ? { clientId: empresa } : {}),
+      }),
+    );
+  }, [busca, status, empresa]);
 
   useEffect(() => {
     setAtivos(null);
     void recarregar().catch(() => setErro('Não foi possível carregar os ativos.'));
   }, [recarregar]);
+
+  useEffect(() => {
+    void listarClientes()
+      .then(setClientes)
+      .catch(() => undefined);
+  }, []);
 
   return (
     <div className="pilha" style={{ maxWidth: 1040 }}>
@@ -87,6 +105,21 @@ export function Ativos() {
             onChange={(e) => setTermo(e.target.value)}
           />
         </div>
+
+        <select
+          className="select -auto"
+          aria-label="Empresa"
+          value={empresa}
+          onChange={(e) => setEmpresa(e.target.value)}
+        >
+          <option value="">Todas as empresas</option>
+          <option value="casa">Da casa</option>
+          {clientes.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
 
         <select
           className="select -auto"
@@ -131,6 +164,7 @@ export function Ativos() {
               <thead>
                 <tr>
                   <th>Equipamento</th>
+                  <th>Empresa</th>
                   <th>Patrimônio</th>
                   <th>Quem usa</th>
                   <th>Local</th>
@@ -150,6 +184,7 @@ export function Ativos() {
                         {ativo.assetModel ? ` ${ativo.assetModel.name}` : ''}
                       </span>
                     </td>
+                    <td>{ativo.client?.name ?? 'Da casa'}</td>
                     <td className="mono">{ativo.tag ?? '—'}</td>
                     <td>{ativo.user?.name ?? '—'}</td>
                     <td>{ativo.location?.path ?? '—'}</td>
@@ -229,6 +264,7 @@ function Formulario({
     manufacturerId: ativo?.manufacturer?.id ?? '',
     assetModelId: ativo?.assetModel?.id ?? '',
     locationId: ativo?.location?.id ?? '',
+    clientId: ativo?.client?.id ?? '',
     parentAssetId: ativo?.parent?.id ?? '',
     notes: ativo?.notes ?? '',
   });
@@ -239,6 +275,7 @@ function Formulario({
   // periféricos: pendurar teclado em teclado é a corrente que a API
   // recusa, e oferecer a opção seria convidar ao erro.
   const [maquinas, setMaquinas] = useState<AssetView[]>([]);
+  const [clientes, setClientes] = useState<ClienteView[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
@@ -252,6 +289,9 @@ function Formulario({
       .catch(() => undefined);
     void buscarAtivos({ limit: 200 })
       .then((lista) => setMaquinas(lista.filter((a) => a.kind !== 'PERIFERICO')))
+      .catch(() => undefined);
+    void listarClientes()
+      .then(setClientes)
       .catch(() => undefined);
   }, []);
 
@@ -294,6 +334,29 @@ function Formulario({
                 <span>{erro}</span>
               </div>
             ) : null}
+
+            <div className="campo">
+              <label className="campo-rotulo" htmlFor="empresa-ativo">
+                De qual empresa
+              </label>
+              <select
+                id="empresa-ativo"
+                className="select"
+                value={campos.clientId ?? ''}
+                onChange={(e) => definir('clientId', e.target.value)}
+              >
+                <option value="">Da casa — nosso equipamento</option>
+                {clientes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <span className="campo-ajuda">
+                É o que faz &ldquo;quantas máquinas a empresa do João tem?&rdquo; ter resposta. Da
+                casa é o notebook de empréstimo e a impressora do escritório.
+              </span>
+            </div>
 
             <div className="campo">
               <label className="campo-rotulo" htmlFor="nome-ativo">
