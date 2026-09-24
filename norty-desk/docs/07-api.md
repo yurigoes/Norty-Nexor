@@ -384,6 +384,29 @@ POST /v1/intake/tickets/:id/anexos
 `externalRef` mais `Idempotency-Key` garantem que um monitoramento em
 laço não abra mil chamados do mesmo incidente.
 
+### Escopos da chave
+
+A chave é de **integração, não de administração**: a criação
+(`POST /api-keys`) recusa qualquer escopo fora desta lista.
+
+| Escopo | Para quê |
+|---|---|
+| `chamado:criar` | abrir chamado pela API |
+| `chamado:ler:proprios` | consultar o que a própria chave abriu |
+| `chamado:responder` | acompanhar o chamado |
+| `anexo:enviar` | juntar arquivo |
+| `inventario:enviar` | o agente de máquina (seção 20) |
+
+`inventario:enviar` é escopo à parte e não um acréscimo ao de chamado:
+a chave do agente vai junto com um executável instalado em dezenas de
+máquinas de cliente — é a que mais tem chance de vazar, e quem a pegar
+não pode abrir chamado em nome de ninguém.
+
+A chave pode ser **de uma empresa-cliente** (`clientId` na criação). Aí
+é ela que diz de quem é o chamado — ou de quem é o parque —, e o corpo
+da requisição não tem como dizer outra coisa: quem tem o token diz por
+si.
+
 ---
 
 ## 7. Configuração
@@ -398,7 +421,7 @@ POST|DELETE           /v1/calendars/:id/feriados
 GET|POST|PATCH|DELETE /v1/pending-reasons
 GET|POST|PATCH|DELETE /v1/intake-rules
 GET|POST|PATCH|DELETE /v1/teams
-GET|POST|PATCH|DELETE /v1/users
+GET|POST|PATCH|DELETE /v1/users            (POST aceita `semAcesso`)
 GET|POST|PATCH|DELETE /v1/webhooks
 GET|POST|DELETE       /v1/api-keys
 GET                   /v1/audit-logs?entity=&entityId=&actorId=&limit=
@@ -493,6 +516,73 @@ saber que a senha do IMAP mudou, não qual ela era.
 
 Registrar nunca lança. Falha de auditoria não pode desfazer a ação já
 feita — isso deixaria o sistema pior do que sem trilha nenhuma.
+
+---
+
+### 7.3 Cadastro de uso: a pessoa existe, a credencial não
+
+`POST /users` com `semAcesso: true` cria alguém que **não entra**:
+`passwordHash` fica nulo, e nenhuma senha provisória é gerada.
+
+É quem assina o termo de um equipamento, aparece no inventário e é quem
+se procura quando o notebook some — e não precisa da central de
+chamados. Obrigar essa pessoa a ter senha criaria credencial para quem
+não pediu: conta a mais para vazar, e mais uma para alguém tentar
+adivinhar. Inventar uma senha provisória seria pior ainda — não há o que
+mostrar, e portanto não há o que esquecer num chat.
+
+O login recusa quem não tem hash com **a mesma mensagem** de senha
+errada, e pagando o mesmo custo de Argon2: responder rápido só para
+essas contas diria a quem medisse quais delas não têm senha, e saber em
+quais não insistir é meio caminho.
+
+Antes disto o lugar do "sem senha" era a string vazia. Vazio não é nulo:
+passava pelo `NOT NULL`, entrava no `argon2.verify` e falhava **rápido**.
+
+A ação automática de troca de senha (seção 7.4) recusa o cadastro de
+uso: sem essa cerca, bastava abrir um chamado em nome da pessoa para o
+sistema mandar o link e dar acesso justamente a quem a organização
+escolheu não dar — sem ninguém decidir de novo.
+
+---
+
+### 7.4 O que o sistema resolve sozinho
+
+```
+GET /v1/automacoes        → config:formularios
+```
+
+A ação automática é ligada num campo escondido dentro da edição de **um**
+modelo de chamado. Sem esta rota, "o que este sistema faz sem passar por
+ninguém?" só se responde abrindo modelo por modelo — e é exatamente a
+pergunta que um auditor, um gestor novo ou o próprio dono daqui a seis
+meses vai fazer. Automação que ninguém consegue enumerar é automação que
+ninguém controla.
+
+**Toda ação aparece, inclusive a que ninguém ligou.** Uma lista que só
+mostra o que está ligado não responde "o que dá para automatizar?", que
+é metade da pergunta de quem abre a tela.
+
+Só leitura. Ligar e desligar continua na edição do modelo, onde está o
+aviso de que o chamado vai se resolver sem passar por ninguém — um
+segundo lugar para ligar seria um segundo lugar para esquecer o aviso.
+
+Hoje a única ação é `RESET_DE_SENHA`, e o que ela faz é mandar um
+**link**, nunca uma senha. As cercas são o que separa recurso útil de
+porta dos fundos, e todas recusam com nota interna em português:
+
+- **Só com identidade provada.** Chamado que chegou por e-mail ou
+  WhatsApp não executa: a mensagem prova o endereço, não a pessoa. Vale
+  para quem abriu logado ou pelo integrador.
+- **Nunca conta de diretório.** A senha é do AD, e trocar aqui daria a
+  impressão de ter funcionado sem mudar nada onde a pessoa entra.
+- **Nunca cadastro de uso** (seção 7.3).
+- **Limite de três por pessoa por hora.** Sem ele, abrir o mesmo chamado
+  dez vezes vira dez mensagens no telefone de alguém — incômodo
+  dirigido, e feito pelo próprio sistema.
+- **O link não entra na linha do tempo.** O evento é público e diz que o
+  envio aconteceu; o link vai só para quem pediu, porque a timeline é
+  lida por quem atende, e o link troca a senha de quem pediu.
 
 ---
 
@@ -597,6 +687,7 @@ como "SoluÃ§Ã£o".
 
 ```
 GET    /v1/assets?q=...&kind=...&status=...&userId=...
+                 &clientId=...&semCliente=true&parentAssetId=...
 GET    /v1/assets/:id
 GET    /v1/assets/:id/chamados      → o histórico do equipamento
 POST   /v1/assets
@@ -606,6 +697,48 @@ GET    /v1/tickets/:id/ativos
 POST   /v1/tickets/:id/ativos       { assetId }
 DELETE /v1/tickets/:id/ativos/:assetId
 ```
+
+**De quem é o equipamento.** `clientId` diz de qual empresa-cliente ele
+é; nulo é **da casa** — o notebook de empréstimo, a impressora do
+escritório. A Norty administra parque alheio, e sem esta coluna tudo que
+o agente de inventário encontra cai num parque só: "quantas máquinas a
+empresa do João tem?" deixa de ter resposta. `semCliente=true` filtra o
+que é nosso.
+
+`semCliente` vem por `Transform`, e não por `Type(() => Boolean)`:
+`Boolean('false')` é `true`, e seria um filtro devolvendo o contrário do
+pedido.
+
+**Periférico é ativo, com pai.** Teclado, mouse e headset têm
+`kind = PERIFERICO` e `parentAssetId` apontando para a máquina. São
+ativos e não `AssetComponent` porque têm série, termo de compromisso
+assinado e caminho de troca próprio; componente é o que está parafusado
+dentro e não vai a lugar nenhum sozinho. **Um nível só** — o serviço
+recusa pendurar num ativo que já tem pai, e o banco recusa ser pai de si
+mesmo por `CHECK`. Apagar a máquina solta o periférico (`SET NULL`) em
+vez de levá-lo junto.
+
+**`userId` saiu do corpo de escrita.** Quem está com o equipamento muda
+pela entrega (seção 19), e não por um `PATCH`: um `salvar` trocava o
+nome e apagava a única resposta que existia para "quem estava com ele
+antes?". O campo continua no `AssetView` e no filtro da busca — é
+derivado da posse aberta, e só `entregar`/`devolver` escrevem nele
+(regra 7 do CLAUDE.md).
+
+**Nada disso pode se contradizer.** Periférico não pendura em máquina de
+outro cliente, equipamento de um cliente não vai para o funcionário de
+outro, e trocar a empresa é recusado quando há periférico alheio
+pendurado ou alguém de outra empresa com ele. A regra é uma só,
+`deClientesDiferentes` (`packages/shared`): **da casa combina com todo
+mundo**, nos dois sentidos — o notebook de empréstimo vai para o
+funcionário do cliente, e o técnico da casa leva a máquina do cliente
+para o conserto. Só a combinação "cliente A × cliente B" é recusada; as
+outras são atendimento normal, e recusá-las empurraria o gesto para fora
+do sistema.
+
+**Os campos do agente de inventário** — `deviceUuid`, `hostname`,
+`osName`, `osVersion`, `lastSeenAt`, `agentVersion` — são só leitura por
+aqui. Quem os escreve é a seção 20.
 
 **Não é CMDB, e é de propósito.** O inventário do GLPI são 60 tabelas e
 um agente de coleta — e é por isso que o campo do chamado fica vazio. A
@@ -627,6 +760,24 @@ palavra que o `to_tsvector` reconheça.
 histórico do equipamento não é porta lateral para ler chamado alheio.
 **Vincular exige `ativo:ler`**, não `ativo:gerenciar` — quem atende
 precisa dizer qual máquina é; mudar o cadastro dela é outra conversa.
+
+### Como se chega na máquina
+
+```
+GET   /v1/assets/:id/acesso-remoto
+PATCH /v1/assets/:id/acesso-remoto
+POST  /v1/assets/:id/acesso-remoto/revelar   → 200, a senha em claro
+```
+
+`ativo:acesso-remoto`, e não `ativo:ler`: "que máquina é essa" é
+inventário, "como eu entro nela agora" é chave de casa. Tailscale, VPN e
+o identificador do programa de acesso saem só para quem tem a permissão,
+**nunca em listagem** e nunca para cliente.
+
+A senha é cifrada (AES-256-GCM) e não vem no `GET`: existe rota própria
+para revelá-la, que grava na auditoria quem revelou e quando. Em texto
+claro, um dump do banco entregaria o acesso remoto do parque inteiro de
+uma vez.
 
 ---
 
@@ -1333,7 +1484,258 @@ do ativo, porque a peça é parte dele.
 
 ---
 
-## 19. Saúde
+## 19. Posse, termo e troca de equipamento
+
+```
+GET    /v1/assets/:id/posses            → por quantas mãos passou
+POST   /v1/assets/:id/posse             → entregar a alguém
+POST   /v1/assets/:id/devolver          → o equipamento volta
+POST   /v1/tickets/:id/troca            → sai um, entra outro
+GET    /v1/termos/:termId/pdf           → o papel assinado
+
+GET    /v1/config/termos                → a redação que a casa usa
+PUT    /v1/config/termos/:kind          { body }
+DELETE /v1/config/termos/:kind          → volta ao texto de fábrica
+```
+
+Ler é `ativo:ler`; entregar, devolver e trocar são `ativo:gerenciar`. A
+redação dos termos é `config:modelos` — é política da casa, como o
+modelo de resposta, e quem mexe nela é quem responde por texto que vai
+para fora, não quem cadastra equipamento.
+
+### Por que posse é tabela, e não um campo no ativo
+
+`Asset.userId` respondia "quem está com ele hoje" e esquecia o resto. A
+pergunta que aparece quando some um notebook é outra: **quem estava com
+ele, desde quando, e assinou o quê** — e um `UPDATE` no campo apagava a
+única resposta que existia.
+
+O campo continua, porque a listagem filtra e ordena por ele, mas virou
+derivado: quem escreve é `entregar`/`devolver`, na mesma transação que
+abre ou fecha a posse, e o `PATCH` do ativo perdeu o `userId`. Uma
+porta, e a porta registra.
+
+**A posse aberta é única, e isso mora no banco.** `AssetHolding.isCurrent`
+é coluna **gerada** (`true` enquanto `endedAt` é nulo, `NULL` depois), e
+`@@unique([assetId, isCurrent])` deixa passar quantas encerradas
+quiserem — `NULL` não colide com `NULL` — e recusa a segunda aberta.
+Duas entregas simultâneas leem "está livre" antes de qualquer uma
+gravar; nenhuma validação na aplicação as separa, e o índice separa.
+
+`returnedTo` guarda para onde o equipamento foi ao voltar — guardar ou
+descarte — **na posse**, e não só no ativo: o que está baixado hoje pode
+ter voltado ao estoque na época, e o histórico tem de dizer o que era
+verdade quando aconteceu.
+
+A chave estrangeira da pessoa é `RESTRICT`: apagar o cadastro não pode
+apagar a prova de quem estava com o equipamento. O caminho de saída
+continua sendo `isActive: false`.
+
+### O termo
+
+```json
+POST /v1/assets/:id/posse
+{ "userId": "...", "notes": "...", "signature": "data:image/png;base64,...",
+  "signedByName": "Ana Lima" }
+```
+
+`AssetTerm` guarda o papel, e guarda o texto **renderizado no instante
+da assinatura**, com os marcadores já trocados. Não é um ponteiro para o
+modelo: a casa vai ajustar a redação, o jurídico vai pedir outra
+cláusula, e um termo que apontasse para o modelo passaria a afirmar que
+a pessoa assinou o texto de hoje. Ela não assinou.
+
+São dois tipos — `COMPROMISSO` na entrega, `QUEBRA` na devolução com
+dano —, e por isso uma linha por termo em vez de colunas na posse: a
+mesma posse produz os dois em momentos diferentes.
+
+Os marcadores são lista fechada (`CAMPOS_DO_TERMO`, em
+`packages/shared`) e usam o mesmo motor do modelo de resposta, com
+vocabulários separados: um termo não aceita `{{chamado.numero}}`, que
+renderizaria vazio no papel assinado. Marcador inventado é recusado ao
+salvar o modelo — no papel impresso ele sairia cru, com a pessoa
+esperando para assinar.
+
+**Não há marcador para o CPF de quem assina:** `User` não guarda
+documento, e um marcador que sempre renderiza vazio é pior que marcador
+nenhum — deixa a lacuna no papel e a impressão de que o dado está lá.
+
+**Entrega sem termo vale**, e fica marcada como tal. Recusá-la
+empurraria a entrega para fora do sistema: o equipamento sai na mesma, e
+aí some do inventário também.
+
+O PDF traz o texto e o traço. O traço sozinho não é o documento — o que
+vale é o que estava escrito embaixo dele.
+
+### A quebra
+
+```json
+POST /v1/assets/:id/devolver
+{ "returnedTo": "BAIXADO", "comQuebra": true,
+  "notes": "Caiu da mesa e a tela trincou.", "signature": "..." }
+```
+
+`comQuebra` é separado de `returnedTo` de propósito: nem todo descarte é
+quebra — equipamento velho também sai do parque —, e nem toda quebra
+vira descarte, que é o caso do conserto. A descrição é **obrigatória**
+quando há quebra: é ela que entra no papel, e um termo de ocorrência sem
+a ocorrência não serve.
+
+### A troca
+
+```json
+POST /v1/tickets/:id/troca
+{ "saiAssetId": "...", "entraAssetId": "...", "returnedTo": "EM_ESTOQUE",
+  "comQuebra": false, "notes": "...", "signature": "..." }
+```
+
+A tela poderia devolver um e entregar o outro. O que ela não consegue é
+fazer as duas caberem numa transação: se a entrega falhasse depois da
+devolução — porque alguém pegou o equipamento de reserva no meio —, a
+pessoa ficaria sem nada e o chamado sem o registro do porquê. Aqui as
+duas são um `$transaction` só: **ou o equipamento trocou de mão, ou nada
+aconteceu**.
+
+A pessoa é a mesma dos dois lados. Trocar para outra não é troca — são
+uma devolução e uma entrega, que já existem separadas —, e o serviço
+recusa em vez de adivinhar qual leitura era a intenção. O que entra tem
+de estar livre (409 se já está com alguém), o que sai tem de estar na
+mão de alguém (409 se não está).
+
+**Uma assinatura para os dois papéis**: quem devolve e quem recebe é a
+mesma pessoa, no mesmo instante, com o mesmo dedo na tela.
+
+O chamado recebe um evento `TROCA_DE_ATIVO` **público**, com os nomes
+gravados na hora — renomear o equipamento meses depois não pode
+reescrever o que o chamado disse que aconteceu. Nota interna deixaria o
+histórico dizendo que nada houve, num atendimento em que a máquina que
+trocou de mão é a coisa mais concreta que existe. Os dois equipamentos
+ficam vinculados ao chamado.
+
+Para quem **tem** `ativo:gerenciar` e não enxerga o chamado, a resposta
+é **404** e não 403: 403 confirmaria que ele existe. (Sem a permissão da
+rota o guard responde 403 antes, e isso não diz nada sobre o chamado.)
+
+---
+
+## 20. Inventário automático
+
+```
+POST /v1/intake/inventario        → chave de aplicação, escopo inventario:enviar
+```
+
+```json
+{ "uuid": "4c4c4544-0039-...", "hostname": "NB-FIN-03",
+  "serialNumber": "9SR0123", "manufacturer": "Dell Inc.",
+  "model": "Latitude 5420", "kind": "COMPUTADOR",
+  "os": { "name": "Microsoft Windows 11 Pro", "version": "10.0.22631" },
+  "agente": { "versao": "1.0.0" },
+  "processadores": [{ "name": "...", "nucleos": 4, "threads": 8,
+                      "frequencia": 2400, "arquitetura": "x86_64" }],
+  "memorias": [{ "name": "Kingston", "serialNumber": "E1A2B3C4",
+                 "capacidade": 8192, "tecnologia": "DDR4", "slot": "DIMM A" }],
+  "discos": [{ "name": "Samsung 980", "serialNumber": "S64...",
+               "capacidade": 512, "tecnologia": "NVMe", "interface": "NVMe" }] }
+```
+
+Resposta:
+
+```json
+{ "assetId": "...", "criado": true, "reconhecidoPor": "NOVO",
+  "componentes": { "criados": 3, "atualizados": 0, "removidos": 0 } }
+```
+
+**O agente lê e manda; toda decisão é do servidor.** Ele não sabe se a
+máquina já existe, não escolhe a empresa, não apaga nada. Código rodando
+em duzentas máquinas de cliente não se corrige numa tarde — a regra que
+vai mudar tem de ficar do lado que se testa. O agente é `agente/`, em
+PowerShell, com o próprio README.
+
+### Como a máquina é reconhecida
+
+Pelo **UUID do SMBIOS** primeiro, pela série depois, e por último é
+máquina nova (`reconhecidoPor`: `UUID` | `SERIE` | `NOVO`).
+
+A ordem importa. Montadora de máquina branca preenche o campo de série
+obrigatório com "To Be Filled By O.E.M.", e aceitá-lo faria duas
+máquinas diferentes virarem uma. A lista desses textos de fábrica é
+`serieUtil` (`packages/shared`): nulo é melhor que série errada, porque
+a coluna aceita nulo repetido. O UUID sobrevive à troca de disco e à
+reinstalação.
+
+A série ainda serve para **adotar** a máquina que já estava cadastrada à
+mão: sem isso, a primeira varredura criaria uma segunda linha para o
+notebook que o técnico já tinha digitado, com patrimônio, local e dono
+na linha errada.
+
+### O que o agente escreve, e o que ele nunca toca
+
+Escreve o que é da máquina: `hostname`, sistema operacional,
+`lastSeenAt`, versão do agente, e as peças de três tipos —
+`PROCESSADOR`, `MEMORIA`, `DISCO`.
+
+Nunca toca em nome, patrimônio, situação, local, observações, empresa,
+quem está com o equipamento, nem em que máquina o periférico pendura. E
+**preenche o que está em branco** — série, fabricante, modelo — sem
+sobrescrever o que já tem valor: quem apontou o ativo para o fabricante
+"HP" do catálogo não pode vê-lo virar "Hewlett-Packard" na varredura da
+madrugada, que é a sujeira que o catálogo existe para evitar. O catálogo
+é procurado **sem diferenciar caixa** antes de criar, senão o agente
+seria quem mais o multiplicaria: uma linha por máquina.
+
+`lastSeenAt` é o que responde "esta máquina ainda existe?". Sem ele o
+parque só cresce, e o que sumiu fica idêntico ao que está ligado agora.
+
+### As peças
+
+Peça que sumiu da varredura sai; peça que o agente **não enxerga**
+fica — "não li" não é "não existe", e a fonte que alguém cadastrou à mão
+continua ali. A peça é reconhecida pela série quando ela presta, e pelo
+tipo mais nome mais slot quando não: dois pentes iguais em slots
+diferentes são duas peças.
+
+Disco que mudou de máquina **muda de dono** em vez de duplicar: é o que
+de fato aconteceu, e é o que responde "para onde foi aquele SSD?".
+
+A ficha é validada pela mesma `validarAtributos` do cadastro à mão.
+Guardar valor fora da lista deixaria a peça no banco e a tela sem
+conseguir desenhá-la — falha muda, descoberta meses depois por quem abre
+o ativo.
+
+### A chave
+
+**Uma por empresa-cliente**, criada em `POST /api-keys` com o escopo
+`inventario:enviar` (seção 6). É a chave que diz de quem é o parque — o
+corpo não tem como dizer outra coisa, e `forbidNonWhitelisted` recusa um
+`clientId` que apareça nele.
+
+Cada chave escreve no parque que ela representa, por **igualdade
+exata** — e não pela regra de `deClientesDiferentes` da seção 9.1.
+Aquela diz que "da casa combina com todo mundo", e vale para quem segura
+equipamento; aqui é uma credencial dizendo onde pode escrever, e o
+coringa abriria nos dois sentidos: a chave de um cliente passaria a
+escrever no equipamento da casa. Varredura no parque errado responde
+**409** e não move a máquina de carteira — o que houve foi agente
+instalado com a chave errada.
+
+Escopo próprio porque a chave vai junto com um executável instalado em
+dezenas de máquinas de cliente: é a que mais tem chance de vazar, e ela
+não abre chamado em nome de ninguém.
+
+**Sem idempotência por referência**, ao contrário do intake de chamados:
+varrer de novo **é** a operação, e o servidor reconcilia. Duas
+varreduras seguidas dão o mesmo resultado, que é o que a idempotência
+queria garantir.
+
+### O que ainda não entra
+
+Rede — portas, MAC, IP. A reconciliação de IP com DHCP tem modos de
+falhar próprios (endereço que troca de dono entre varreduras) e merece
+passo à parte.
+
+---
+
+## 21. Saúde
 
 ```
 GET /v1/health        → { status, uptime }
