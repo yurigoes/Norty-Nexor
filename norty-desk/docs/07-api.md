@@ -1950,7 +1950,358 @@ com três aparelhos não sabe qual desinscrever.
 
 ---
 
-## 25. Saúde
+## 25. Software e licenças
+
+```
+GET|POST         /v1/software
+GET|PATCH|DELETE /v1/software/:id            (DELETE 204)
+POST             /v1/software/:id/versions
+DELETE           /v1/software/:id/versions/:versionId
+
+GET    /v1/licenses
+POST   /v1/software/:id/licenses
+PATCH  /v1/licenses/:id
+DELETE /v1/licenses/:id
+POST   /v1/licenses/:id/assignments          { assetId } ou { userId }, nunca os dois
+DELETE /v1/licenses/:id/assignments/:assignmentId
+
+GET    /v1/assets/:id/software
+POST   /v1/assets/:id/software               { softwareId, version }
+DELETE /v1/assets/:id/software/:installationId
+```
+
+Ler é `ativo:ler`, escrever é `ativo:gerenciar` — as mesmas do ativo.
+
+`kind` da licença é `PERPETUA`, `ASSINATURA`, `OEM`, `VOLUME` ou
+`GRATUITA`.
+
+**A conformidade é por software, não por versão** — é a leitura que o
+GLPI faz na prática. Uma instalação está coberta se o equipamento ocupa
+um assento de alguma licença daquele software, **ou** se a pessoa que
+usa o equipamento ocupa um assento nominal (o caso do Microsoft 365).
+Contar por versão transformaria toda atualização numa falsa falta de
+licença.
+
+O assento é ocupado **por equipamento ou por pessoa** — nunca pelos
+dois: `assetId` e `userId` são exclusivos, e o DTO recusa quem mandar os
+dois ou nenhum.
+
+A chave da licença é cifrada e só aparece para quem gerencia ativos.
+Licença vencendo é a que expira dentro de 30 dias.
+
+---
+
+## 26. Consumíveis e cartuchos
+
+```
+GET|POST         /v1/consumables
+GET|PATCH|DELETE /v1/consumables/:id         (DELETE 204)
+POST             /v1/consumables/:id/movements   → consumivel:movimentar
+GET              /v1/assets/:id/consumables
+```
+
+`kind` é `CONSUMIVEL` ou `TONER`; o movimento é `ENTRADA`, `SAIDA` ou
+`AJUSTE`.
+
+**O estoque é a soma das movimentações**, não uma coluna de saldo. O
+GLPI guarda uma linha por unidade — cada cartucho, com data de entrada e
+de uso; aqui a soma responde as mesmas perguntas ("quanto tem?", "para
+quem foi?", "quantos toners essa impressora comeu?") sem mil linhas para
+cem caixas de papel.
+
+**Saída não deixa o saldo negativo**, e a conferência corre com a linha
+do item travada (`FOR UPDATE`): duas pessoas tirando o último toner ao
+mesmo tempo não viram saldo −1. Validar só na aplicação deixaria as duas
+passarem juntas.
+
+`minStock` é o aviso de compra: no mínimo ou abaixo, a lista alerta.
+Saída aponta para um equipamento **ou** uma pessoa, e é isso que
+responde "quantos toners essa impressora comeu?".
+
+`consumivel:movimentar` é permissão à parte de `ativo:gerenciar`, e vem
+junto com ela: o agente registra a troca de toner sem poder mexer no
+cadastro do parque.
+
+Consumível com movimentação **não se exclui** — desative. Apagar levaria
+o histórico junto, e o histórico é o estoque.
+
+---
+
+## 27. Rede
+
+```
+GET|POST         /v1/vlans
+PATCH|DELETE     /v1/vlans/:id
+GET|POST         /v1/ip-networks
+GET              /v1/ip-networks/:id         → com os endereços e o próximo livre
+PATCH|DELETE     /v1/ip-networks/:id         (DELETE 204)
+POST             /v1/ip-addresses
+PATCH|DELETE     /v1/ip-addresses/:id        (DELETE 204)
+
+GET    /v1/assets/:id/network                → portas, conexões e IPs
+POST   /v1/assets/:id/ports
+PATCH  /v1/ports/:id
+DELETE /v1/ports/:id
+POST   /v1/ports/:id/connection              { outraId }
+DELETE /v1/ports/:id/connection
+```
+
+Ler é `ativo:ler`, escrever é `ativo:gerenciar`.
+
+**O Postgres faz o trabalho pesado.** O tipo `inet` valida e normaliza o
+endereço, o índice único barra IP duplicado — e a mensagem de erro traz
+**o dono do endereço**, que é o que resolve o conflito em vez de só
+apontá-lo. O operador `<<=` responde "que sub-rede contém este IP?" em
+IPv4 e IPv6 sem código nosso.
+
+**O uso da sub-rede é por contenção, não pelo vínculo gravado.** IP
+cadastrado antes de a sub-rede existir também conta; contar só o
+vinculado mostraria uma faixa vazia que na verdade está cheia.
+
+O cabo é gravado **dos dois lados, numa transação**: porta conectada só
+de um lado é o desenho de rede que mente no dia em que alguém segue o
+cabo.
+
+---
+
+## 28. Datacenter
+
+```
+GET|POST     /v1/dc-rooms
+PATCH|DELETE /v1/dc-rooms/:id
+GET|POST     /v1/racks
+GET          /v1/racks/:id                   → com a ocupação e as faixas livres
+PATCH|DELETE /v1/racks/:id                   (DELETE 204)
+POST         /v1/racks/:id/items             { assetId, positionU, heightU, face }
+PATCH|DELETE /v1/rack-items/:id
+GET          /v1/assets/:id/rack             → em que rack e em que U está
+```
+
+Ler é `ativo:ler`, escrever é `ativo:gerenciar`.
+
+A posição é em **U**, com face: `FRENTE`, `TRAS` ou `AMBAS`. Duas faces
+se chocam se forem a mesma, ou se uma delas ocupa a profundidade
+inteira — é o que permite pôr um patch panel na frente e um organizador
+atrás no mesmo U, e o que impede empilhar dois servidores no mesmo lugar.
+
+**Sobreposição é conferida com a linha do rack travada** (`FOR UPDATE`),
+na mesma transação da gravação: duas pessoas montando o mesmo rack ao
+mesmo tempo não põem dois equipamentos no U 12.
+
+PDU e gabinete entram como equipamentos no rack; cabo é a conexão de
+portas da seção 27.
+
+---
+
+## 29. Projetos e agenda
+
+```
+GET|POST         /v1/projects                → projeto:ler / projeto:gerenciar
+GET|PATCH|DELETE /v1/projects/:id            (DELETE 204)
+POST             /v1/projects/:id/tasks
+PATCH            /v1/projects/:id/tasks/:taskId    → projeto:ler
+DELETE           /v1/projects/:id/tasks/:taskId
+POST|DELETE      /v1/projects/:id/tickets
+
+GET          /v1/agenda?from=&to=&userIds=&teamId=    → agenda:usar
+POST         /v1/agenda/events
+PATCH|DELETE /v1/agenda/events/:id                    (DELETE 204)
+```
+
+**O percentual do projeto sai das tarefas** — ninguém o digita —,
+ponderado pelas horas, e o custo é a soma dos custos dos chamados
+vinculados. Os chamados passam pelo **mesmo escopo de leitura da fila**:
+o projeto não é porta lateral para ler chamado alheio.
+
+Mexer na própria tarefa é `projeto:ler`, e não `projeto:gerenciar`: quem
+executa marca o andamento do que é seu sem poder reorganizar o projeto.
+
+### A agenda junta três fontes, sem copiar nenhuma
+
+Compromissos avulsos, tarefas de chamado com início previsto e tarefas
+de projeto com datas. Copiar qualquer uma delas para uma tabela de
+agenda criaria a cópia que envelhece: a tarefa remarcada no chamado
+continuaria no horário velho aqui.
+
+**Privacidade é a razão de o formato ser este.** Compromisso privado de
+outra pessoa aparece só como "Ocupado"; tarefa de chamado alheia não
+mostra o assunto a quem não lê todos os chamados. A agenda não é porta
+lateral para a fila.
+
+A janela é limitada a 62 dias e 50 pessoas por consulta — dois meses
+bastam para qualquer visão, e o teto existe para que uma tela não peça o
+ano inteiro da empresa inteira.
+
+---
+
+## 30. Ordem de serviço
+
+```
+GET    /v1/tickets/:id/ordens                → ordem:ler
+POST   /v1/tickets/:id/ordens                → ordem:gerenciar
+PATCH  /v1/ordens/:id
+POST   /v1/ordens/:id/itens
+PATCH  /v1/ordens/:id/itens/:itemId
+DELETE /v1/ordens/:id/itens/:itemId
+POST   /v1/ordens/:id/concluir               { signature, signedByName, signedByRole?, report? }
+POST   /v1/ordens/:id/cancelar
+GET    /v1/ordens/:id/pdf                    → ordem:ler
+```
+
+É o documento que o técnico leva, preenche na frente do cliente e assina
+ali mesmo. **A regra que governa tudo aqui é uma só: depois de assinada,
+não muda.** A assinatura atesta a lista de itens que estava na tela
+naquele momento; deixar editá-la depois transformaria o documento numa
+declaração de qualquer coisa — e é justamente ele que o cliente guarda
+como prova do atendimento.
+
+Concluir exige **ao menos um item marcado como realizado**: ordem
+assinada sem nada feito é papel que não atesta nada. Quem não fez nada
+cancela, que é outra coisa e fica registrada como tal.
+
+A assinatura é o PNG do traço, limitado a 512 KB — um traço, não uma
+foto. O PNG vai para o armazenamento, não para uma coluna em base64: o
+traço de um dedo em tela de celular dá dezenas de kilobytes, e uma
+listagem de ordens carregaria todos eles.
+
+**O nome e o papel de quem assina são gravados na hora**, e não lidos do
+cadastro ao emitir o PDF: o documento tem de dizer o que era verdade
+quando foi assinado.
+
+O rodapé do PDF traz o **protocolo do chamado** como código de
+verificação — é ele que responde "este documento é mesmo da Norty?",
+conferido na consulta pública da seção 31. Não é assinatura
+criptográfica, e o documento não finge que é (`docs/13-carteira-e-campo.md`,
+seção 6).
+
+---
+
+## 31. Portal público — abertura e protocolo
+
+Sem sessão, todas. Quem usa não tem conta, e mandá-lo para o login seria
+o mesmo que não ter a função. A autorização é o próprio código do
+protocolo, e o que a sustenta é a **escada de bloqueio por IP** no
+serviço.
+
+```
+GET  /v1/publico/empresas?q=...
+GET  /v1/publico/empresas/:clientId/tipos
+GET  /v1/publico/empresas/:clientId/modelos
+GET  /v1/publico/empresas/:clientId/pessoa?q=...
+POST /v1/publico/chamados
+POST /v1/publico/chamados/:protocolo/anexos     (multipart)
+GET  /v1/publico/protocolo/:codigo
+GET  /v1/publico/protocolo/:codigo/pdf
+GET  /v1/publico/definir-senha/:token
+POST /v1/publico/definir-senha                  { token, nova }
+```
+
+**A empresa se acha por nome aproximado ou documento exato.** O nome
+aceita erro de digitação e acento; o documento casa por dígitos, com ou
+sem pontuação. Formas societárias ("ltda", "s/a") saem da comparação —
+sem isso, digitar "ltda" casaria com a carteira inteira.
+
+**`/pessoa` devolve uma pessoa ou `null`, nunca uma lista**, e só casa
+com o e-mail inteiro ou o nome completo. Com prefixo, esta rota seria o
+catálogo de funcionários da empresa aberto a quem digitou uma letra.
+
+**O anexo é rota separada** do `POST /chamados`, de propósito: o corpo
+do chamado é JSON, e misturar `multipart` ali faria toda abertura pagar
+o preço de um formulário de arquivo para anexar nada. Quem anexa já tem
+o protocolo — é ele a credencial, como na consulta.
+
+O comprovante em PDF sai com `Cache-Control: no-store`: ele mostra o
+andamento **do momento**, e guardado em cache mostraria o de ontem na
+próxima consulta.
+
+`GET /definir-senha/:token` existe porque a tela pergunta antes de pedir
+a senha nova: digitar duas vezes uma senha e só então descobrir que o
+link expirou é a forma mais irritante possível de dar essa notícia.
+
+---
+
+## 32. Marca
+
+```
+GET    /v1/brand                    → público
+GET    /v1/brand/logo               → público
+GET    /v1/brand/favicon            → público
+PATCH  /v1/brand                    → organizacao:gerenciar
+POST   /v1/brand/logo|favicon       → organizacao:gerenciar (multipart)
+DELETE /v1/brand/logo|favicon       → organizacao:gerenciar
+```
+
+**As leituras são públicas de propósito:** a tela de entrada precisa da
+marca antes de haver token. A rota não devolve nada além da marca.
+
+A imagem sai com `X-Content-Type-Options: nosniff` e cache de um ano
+como **imutável** — a URL carrega `?v=`, então trocar a logo muda a URL,
+e o cache longo não atrapalha.
+
+A URL é reescrita para o caminho que o navegador alcança (`/api/v1`).
+Sem isso, a logo pedida em `/v1/...` cai no fallback da SPA e volta
+HTML — imagem quebrada logo depois do upload.
+
+---
+
+## 33. Diretório (LDAP / Active Directory)
+
+```
+GET|POST     /v1/auth-sources        → config:autenticacao
+PATCH|DELETE /v1/auth-sources/:id    (DELETE 204)
+POST         /v1/auth-sources/:id/testar
+```
+
+A conta do AD entra pelo login normal (seção 2): o que muda é onde a
+senha é conferida. Detalhes do fluxo, do `syncField` e da criação na
+primeira entrada estão em `docs/13-autenticacao-ldap.md`.
+
+A senha da conta de serviço é cifrada como as dos canais, e **não sai
+por nenhuma rota**: é decifrada num lugar só, e vai direto para o bind.
+
+`testar` existe pela mesma razão do `testar` dos canais: a alternativa é
+o operador salvar, ir embora e descobrir dois dias depois — pelo usuário
+que não entra — que o `baseDn` estava errado.
+
+---
+
+## 34. Carteira de clientes
+
+```
+GET|POST         /v1/clients              → cliente:ler / cliente:gerenciar
+GET|PATCH|DELETE /v1/clients/:id          (DELETE 204)
+POST             /v1/clients/:id/people
+DELETE           /v1/clients/:id/people/:userId
+POST             /v1/clients/:id/people/:userId/pin    { pin }
+```
+
+A empresa-cliente é quem a Norty atende. `emailDomain` é o que gera o
+login das pessoas dela (`ana.lima@empresadojoao.com.br`), e por isso é
+único por organização: dois clientes com o mesmo domínio produziriam
+logins que colidem entre empresas diferentes.
+
+**A pessoa nasce sem PIN e não entra até alguém definir um.** Quem opera
+a carteira define o dela — `passwordHash` nulo até lá, e a listagem
+marca `pinPendente` (ver a seção 7.3).
+
+O PIN é de **seis dígitos**, e a API recusa os que não protegem nada:
+dígito repetido seis vezes e sequência crescente ou decrescente são as
+primeiras coisas que se tenta. O resto da cerca — bloqueio progressivo
+por conta e por IP — está em `docs/13-carteira-e-campo.md`.
+
+**Excluir empresa é recusado** enquanto houver pessoa, chamado ou
+equipamento nela: desative. A mensagem diz quantos de cada, e as chaves
+estrangeiras (`RESTRICT` no equipamento) são a cerca de baixo para quem
+apagar por SQL.
+
+A pessoa da empresa-cliente não sai do próprio cliente: o escopo de
+leitura recorta por `clientId` **antes** de olhar quem é ator no
+chamado. É o que impede o vazamento entre empresas da carteira, e por
+isso está no escopo e não numa tela.
+
+---
+
+## 35. Saúde
 
 ```
 GET /v1/health        → { status, uptime }
