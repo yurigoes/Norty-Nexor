@@ -197,6 +197,13 @@ Entra nas fases seguintes (`docs/10-roadmap.md`):
   Componente é o que está parafusado dentro e não vai a lugar nenhum
   sozinho. Um nível só — o serviço recusa pendurar num ativo que já
   tem pai, e o banco recusa ser pai de si mesmo.
+- `AssetHolding` — (novo) quem está com o equipamento e quem esteve
+  antes, com o termo de compromisso assinado. `Asset.userId` continua
+  como o ponteiro de hoje, derivado e escrito só por
+  `entregar`/`devolver` (regra 7 do CLAUDE.md): o `PATCH` do ativo não
+  o aceita mais. `isCurrent` é coluna gerada a partir de `endedAt`, e o
+  `@@unique([assetId, isCurrent])` é o que impede duas entregas
+  simultâneas de pôr o mesmo equipamento em duas mãos.
 - `Change` e `Problem` — como colunas nulas distintas em `TicketEvent` e
   `Attachment`, com `CHECK` de exclusividade; nunca como
   `(itemtype, items_id)` em texto (Fase 4).

@@ -702,6 +702,14 @@ export type AssetView = {
   manufacturer: CatalogoRef | null;
   assetModel: CatalogoRef | null;
   location: LocalizacaoRef | null;
+  /**
+   * Quem está com ele hoje.
+   *
+   * Derivado da posse aberta (`AssetHolding`), e escrito só por
+   * `entregar`/`devolver` — é a regra 7 do CLAUDE.md: campo derivado
+   * existe no banco porque a listagem filtra e ordena por ele, e uma
+   * porta só escreve nele.
+   */
   user: PartyRef | null;
   purchasedAt: string | null;
   warrantyUntil: string | null;
@@ -718,6 +726,47 @@ export type AssetView = {
   ticketCount?: number;
 };
 
+/**
+ * Uma passagem do equipamento pelas mãos de alguém.
+ *
+ * `isCurrent` sai de `endedAt === null`: é a posse aberta, e há no
+ * máximo uma por equipamento — o banco garante.
+ */
+export type PosseView = {
+  id: string;
+  user: PartyRef;
+  startedAt: string;
+  endedAt: string | null;
+  isCurrent: boolean;
+  /** Para onde o equipamento foi quando voltou, na hora em que voltou. */
+  returnedTo: AssetStatus | null;
+  notes: string | null;
+  /** Quem assinou o termo de compromisso, e quando. */
+  signedByName: string | null;
+  signedAt: string | null;
+  /** Há termo assinado guardado. A imagem sai por rota própria. */
+  hasSignature: boolean;
+};
+
+export type EntregarAtivoRequest = {
+  userId: string;
+  notes?: string;
+  /**
+   * O termo de compromisso, assinado na hora da entrega.
+   *
+   * Opcional porque nem toda entrega acontece com a pessoa na frente —
+   * mas a posse sem termo aparece marcada, e não some.
+   */
+  signature?: string;
+  signedByName?: string;
+};
+
+export type DevolverAtivoRequest = {
+  /** Guardar ou descartar. É o que o equipamento vira ao voltar. */
+  returnedTo: Extract<AssetStatus, 'EM_ESTOQUE' | 'BAIXADO'>;
+  notes?: string;
+};
+
 export type WriteAssetRequest = {
   kind?: AssetKind;
   /** `null` despendura do equipamento e devolve o periférico ao avulso. */
@@ -729,7 +778,6 @@ export type WriteAssetRequest = {
   manufacturerId?: string | null;
   assetModelId?: string | null;
   locationId?: string | null;
-  userId?: string | null;
   purchasedAt?: string | null;
   warrantyUntil?: string | null;
   notes?: string | null;
@@ -994,6 +1042,8 @@ export type AssetDetail = AssetView & {
   components: ComponenteView[];
   /** O que está pendurado neste equipamento: teclado, mouse, headset. */
   peripherals: AtivoRef[];
+  /** Por quantas mãos passou, da mais recente para a mais antiga. */
+  holdings: PosseView[];
 };
 
 /**

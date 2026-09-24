@@ -21,7 +21,6 @@ import {
   listarModelosDeAtivo,
 } from '../../api/catalogoAtivo';
 import { ErroDaApi } from '../../api/cliente';
-import { listarPessoas, type PessoaView } from '../../api/aprovacoes';
 import { useAutenticacao } from '../../auth/Autenticacao';
 
 /**
@@ -230,11 +229,9 @@ function Formulario({
     manufacturerId: ativo?.manufacturer?.id ?? '',
     assetModelId: ativo?.assetModel?.id ?? '',
     locationId: ativo?.location?.id ?? '',
-    userId: ativo?.user?.id ?? '',
     parentAssetId: ativo?.parent?.id ?? '',
     notes: ativo?.notes ?? '',
   });
-  const [pessoas, setPessoas] = useState<PessoaView[]>([]);
   const [fabricantes, setFabricantes] = useState<FabricanteView[]>([]);
   const [modelos, setModelos] = useState<ModeloDeAtivoView[]>([]);
   const [locais, setLocais] = useState<LocalizacaoView[]>([]);
@@ -246,9 +243,6 @@ function Formulario({
   const [ocupado, setOcupado] = useState(false);
 
   useEffect(() => {
-    void listarPessoas()
-      .then(setPessoas)
-      .catch(() => undefined);
     void Promise.all([listarFabricantes(), listarModelosDeAtivo(), listarLocalizacoes()])
       .then(([f, m, l]) => {
         setFabricantes(f);
@@ -450,22 +444,12 @@ function Formulario({
               </div>
 
               <div className="campo">
-                <label className="campo-rotulo" htmlFor="dono-ativo">
-                  Quem usa
-                </label>
-                <select
-                  id="dono-ativo"
-                  className="select"
-                  value={campos.userId ?? ''}
-                  onChange={(e) => definir('userId', e.target.value)}
-                >
-                  <option value="">Ninguém — em estoque</option>
-                  {pessoas.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
+                <span className="campo-rotulo">Quem usa</span>
+                <p className="campo-ajuda" style={{ marginTop: 'var(--e-1)' }}>
+                  {ativo?.user?.name ?? 'Ninguém — em estoque'}. Quem está com o equipamento muda
+                  pela entrega, na tela dele: é lá que fica o termo de compromisso, e um campo
+                  aqui apagaria o histórico com um salvar.
+                </p>
               </div>
             </div>
 

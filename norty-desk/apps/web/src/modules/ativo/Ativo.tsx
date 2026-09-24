@@ -6,6 +6,7 @@ import type {
   ComponentKind,
   EscreverComponenteRequest,
   FabricanteView,
+  PosseView,
 } from '@norty-desk/shared';
 import {
   ATRIBUTOS_DO_COMPONENTE,
@@ -22,11 +23,16 @@ import { ErroDaApi } from '../../api/cliente';
 import {
   adicionarComponente,
   chamadosDoAtivo,
+  devolverAtivo,
   editarComponente,
+  entregarAtivo,
   obterAtivo,
   removerComponente,
+  termoAssinado,
   type ChamadoDoAtivo,
 } from '../../api/ativos';
+import { listarPessoas, type PessoaView } from '../../api/aprovacoes';
+import { Assinatura } from '../ordem/Assinatura';
 import { listarFabricantes } from '../../api/catalogoAtivo';
 import { useAutenticacao } from '../../auth/Autenticacao';
 import { CampoDinamico } from '../formulario/CamposDinamicos';
@@ -99,6 +105,11 @@ export function Ativo() {
       </div>
 
       <Identificacao ativo={ativo} />
+      <Posse
+        ativo={ativo}
+        podeGerenciar={can('ativo:gerenciar')}
+        aoMudar={() => void recarregar().catch(() => undefined)}
+      />
       <Perifericos ativo={ativo} />
       <Hardware ativo={ativo} podeEditar={can('ativo:gerenciar')} aoMudar={setAtivo} />
       <RedeDoAtivoCard assetId={ativo.id} />
@@ -576,5 +587,352 @@ function Historico({ chamados }: { chamados: ChamadoDoAtivo[] | null }) {
         )}
       </div>
     </section>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Posse
+// ---------------------------------------------------------------------
+
+/**
+ * Por quantas mãos o equipamento passou.
+ *
+ * O campo "quem usa" saiu do formulário do ativo de propósito: um
+ * `salvar` trocava o nome e apagava a única resposta que existia para
+ * "quem estava com ele antes?". A troca de mão passou a ter uma porta
+ * só, e a porta registra — com o termo de compromisso assinado, quando
+ * há quem assine na hora.
+ */
+function Posse({
+  ativo,
+  podeGerenciar,
+  aoMudar,
+}: {
+  ativo: AssetDetail;
+  podeGerenciar: boolean;
+  /**
+   * Recarrega o ativo inteiro, e não só a lista de posses.
+   *
+   * Entregar muda também quem consta no ativo e a situação dele. Trocar
+   * só o histórico deixaria a Identificação logo acima dizendo "em
+   * estoque" com o nome de quem acabou de receber embaixo.
+   */
+  aoMudar: () => void;
+}) {
+  const [aberto, setAberto] = useState<'entregar' | 'devolver' | null>(null);
+  const atual = ativo.holdings.find((h) => h.isCurrent) ?? null;
+
+  return (
+    <section className="card">
+      <div className="card-topo">
+        <div>
+          <h3 className="card-titulo">Posse</h3>
+          <p className="card-sub">
+            {atual
+              ? `Com ${atual.user.name} desde ${dataCurta(atual.startedAt)}`
+              : 'Com ninguém — em estoque'}
+          </p>
+        </div>
+        {podeGerenciar ? (
+          <div style={{ display: 'flex', gap: 'var(--e-2)' }}>
+            <button
+              type="button"
+              className="btn -secundario -sm"
+              onClick={() => setAberto(aberto === 'entregar' ? null : 'entregar')}
+            >
+              {atual ? 'Passar a outra pessoa' : 'Entregar'}
+            </button>
+            {atual ? (
+              <button
+                type="button"
+                className="btn -fantasma -sm"
+                onClick={() => setAberto(aberto === 'devolver' ? null : 'devolver')}
+              >
+                Devolver
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="card-corpo pilha-sm">
+        {aberto === 'entregar' ? (
+          <FormularioDeEntrega
+            assetId={ativo.id}
+            aoConcluir={() => {
+              setAberto(null);
+              aoMudar();
+            }}
+          />
+        ) : null}
+
+        {aberto === 'devolver' ? (
+          <FormularioDeDevolucao
+            assetId={ativo.id}
+            aoConcluir={() => {
+              setAberto(null);
+              aoMudar();
+            }}
+          />
+        ) : null}
+
+        {ativo.holdings.length === 0 ? (
+          <p className="campo-ajuda">
+            Este equipamento nunca saiu do estoque — ou saiu antes de o histórico existir.
+          </p>
+        ) : (
+          <ul className="lista-simples">
+            {ativo.holdings.map((h) => (
+              <LinhaDaPosse key={h.id} posse={h} />
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function LinhaDaPosse({ posse }: { posse: PosseView }) {
+  const [termo, setTermo] = useState<string | null>(null);
+
+  // O `blob:` é solto ao sair da tela: o que ninguém solta fica na
+  // memória da aba até ela fechar.
+  useEffect(() => () => { if (termo) URL.revokeObjectURL(termo); }, [termo]);
+
+  return (
+    <li className="pilha-sm">
+      <div className="linha-entre" style={{ gap: 'var(--e-3)' }}>
+        <strong>{posse.user.name}</strong>
+        <span className={`selo ${posse.isCurrent ? '-sucesso' : '-neutro'}`}>
+          {posse.isCurrent ? 'Com ela agora' : 'Encerrada'}
+        </span>
+      </div>
+
+      <span className="campo-ajuda">
+        {dataCurta(posse.startedAt)}
+        {posse.endedAt ? ` até ${dataCurta(posse.endedAt)}` : ''}
+        {posse.returnedTo
+          ? ` · voltou para ${ROTULO_ATIVO_STATUS[posse.returnedTo].toLowerCase()}`
+          : ''}
+      </span>
+
+      {posse.notes ? <span className="campo-ajuda">{posse.notes}</span> : null}
+
+      {posse.signedAt ? (
+        <span className="campo-ajuda">
+          Termo assinado por {posse.signedByName} em {dataCurta(posse.signedAt)}
+          {posse.hasSignature ? (
+            <>
+              {' · '}
+              <button
+                type="button"
+                className="btn -fantasma -sm"
+                onClick={() => {
+                  void termoAssinado(posse.id)
+                    .then(setTermo)
+                    .catch(() => undefined);
+                }}
+              >
+                ver o traço
+              </button>
+            </>
+          ) : null}
+        </span>
+      ) : (
+        // Entrega sem termo não é recusada — recusá-la empurraria o
+        // gesto para fora do sistema —, mas fica visível.
+        <span className="campo-ajuda">Entregue sem termo assinado.</span>
+      )}
+
+      {termo ? <img src={termo} alt={`Assinatura de ${posse.signedByName ?? ''}`} style={{ maxWidth: 280 }} /> : null}
+    </li>
+  );
+}
+
+function FormularioDeEntrega({
+  assetId,
+  aoConcluir,
+}: {
+  assetId: string;
+  aoConcluir: () => void;
+}) {
+  const [pessoas, setPessoas] = useState<PessoaView[]>([]);
+  const [userId, setUserId] = useState('');
+  const [notes, setNotes] = useState('');
+  const [assinatura, setAssinatura] = useState<string | null>(null);
+  const [signedByName, setSignedByName] = useState('');
+  const [erro, setErro] = useState<string | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+
+  useEffect(() => {
+    void listarPessoas()
+      .then(setPessoas)
+      .catch(() => undefined);
+  }, []);
+
+  return (
+    <form
+      className="pilha-sm"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setErro(null);
+        setOcupado(true);
+        void entregarAtivo(assetId, {
+          userId,
+          ...(notes.trim() ? { notes: notes.trim() } : {}),
+          ...(assinatura ? { signature: assinatura } : {}),
+          ...(signedByName.trim() ? { signedByName: signedByName.trim() } : {}),
+        })
+          .then(() => aoConcluir())
+          .catch((e2: unknown) =>
+            setErro(e2 instanceof ErroDaApi ? e2.message : 'Não foi possível entregar.'),
+          )
+          .finally(() => setOcupado(false));
+      }}
+    >
+      {erro ? (
+        <div className="alerta-bloco -erro" role="alert">
+          <span aria-hidden="true">!</span>
+          <span>{erro}</span>
+        </div>
+      ) : null}
+
+      <div className="campo">
+        <label className="campo-rotulo" htmlFor="posse-pessoa">
+          Para quem
+        </label>
+        <select
+          id="posse-pessoa"
+          className="select"
+          required
+          value={userId}
+          onChange={(e) => setUserId(e.target.value)}
+        >
+          <option value="">Escolha a pessoa</option>
+          {pessoas.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+        <span className="campo-ajuda">
+          Não precisa ter acesso à central: cadastro de uso basta, e é para isso que ele existe.
+        </span>
+      </div>
+
+      <div className="campo">
+        <label className="campo-rotulo" htmlFor="posse-notas">
+          Observações
+        </label>
+        <textarea
+          id="posse-notas"
+          className="textarea"
+          rows={2}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+        />
+      </div>
+
+      <div className="campo">
+        <span className="campo-rotulo">Termo de compromisso</span>
+        <Assinatura aoMudar={setAssinatura} />
+        <span className="campo-ajuda">
+          Opcional. Sem assinatura a entrega vale, e fica marcada como entregue sem termo — o
+          equipamento sai de qualquer jeito, e recusar aqui só o tiraria do inventário.
+        </span>
+      </div>
+
+      {assinatura ? (
+        <div className="campo">
+          <label className="campo-rotulo" htmlFor="posse-assinante">
+            Quem assinou
+          </label>
+          <input
+            id="posse-assinante"
+            className="input"
+            placeholder="Em branco, vale o nome de quem recebe"
+            value={signedByName}
+            onChange={(e) => setSignedByName(e.target.value)}
+          />
+        </div>
+      ) : null}
+
+      <button type="submit" className="btn -primario" disabled={ocupado || !userId}>
+        {ocupado ? 'Entregando…' : 'Entregar'}
+      </button>
+    </form>
+  );
+}
+
+function FormularioDeDevolucao({
+  assetId,
+  aoConcluir,
+}: {
+  assetId: string;
+  aoConcluir: () => void;
+}) {
+  const [returnedTo, setReturnedTo] = useState<'EM_ESTOQUE' | 'BAIXADO'>('EM_ESTOQUE');
+  const [notes, setNotes] = useState('');
+  const [erro, setErro] = useState<string | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+
+  return (
+    <form
+      className="pilha-sm"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setErro(null);
+        setOcupado(true);
+        void devolverAtivo(assetId, { returnedTo, ...(notes.trim() ? { notes: notes.trim() } : {}) })
+          .then(() => aoConcluir())
+          .catch((e2: unknown) =>
+            setErro(e2 instanceof ErroDaApi ? e2.message : 'Não foi possível devolver.'),
+          )
+          .finally(() => setOcupado(false));
+      }}
+    >
+      {erro ? (
+        <div className="alerta-bloco -erro" role="alert">
+          <span aria-hidden="true">!</span>
+          <span>{erro}</span>
+        </div>
+      ) : null}
+
+      <div className="campo">
+        <label className="campo-rotulo" htmlFor="posse-destino">
+          Para onde vai
+        </label>
+        <select
+          id="posse-destino"
+          className="select"
+          value={returnedTo}
+          onChange={(e) => setReturnedTo(e.target.value as 'EM_ESTOQUE' | 'BAIXADO')}
+        >
+          <option value="EM_ESTOQUE">Guardar — volta ao estoque</option>
+          <option value="BAIXADO">Descarte — sai do parque</option>
+        </select>
+        <span className="campo-ajuda">
+          Fica gravado na posse, e não só no equipamento: o que foi baixado hoje pode ter voltado
+          ao estoque na época, e o histórico tem de dizer o que era verdade quando aconteceu.
+        </span>
+      </div>
+
+      <div className="campo">
+        <label className="campo-rotulo" htmlFor="devolucao-notas">
+          Observações
+        </label>
+        <textarea
+          id="devolucao-notas"
+          className="textarea"
+          rows={2}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+        />
+      </div>
+
+      <button type="submit" className="btn -primario" disabled={ocupado}>
+        {ocupado ? 'Devolvendo…' : 'Devolver'}
+      </button>
+    </form>
   );
 }

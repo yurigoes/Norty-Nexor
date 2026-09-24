@@ -1,6 +1,9 @@
 import type {
   AssetDetail,
   AssetView,
+  DevolverAtivoRequest,
+  EntregarAtivoRequest,
+  PosseView,
   ComponenteView,
   EscreverComponenteRequest,
   SatisfacaoResumo,
@@ -12,7 +15,7 @@ import type {
   SenhaRevelada,
 } from '@norty-desk/shared';
 
-import { chamar } from './cliente';
+import { buscarComoBlob, chamar } from './cliente';
 
 function query(filtro: Record<string, unknown>): string {
   const p = new URLSearchParams();
@@ -34,6 +37,32 @@ export const buscarAtivos = (filtro: {
 
 /** O ativo com os componentes juntos — a tela de detalhe lê os dois. */
 export const obterAtivo = (id: string) => chamar<AssetDetail>(`/assets/${id}`);
+
+// --- Posse: quem está com o equipamento --------------------------------
+
+export const possesDoAtivo = (id: string) => chamar<PosseView[]>(`/assets/${id}/posses`);
+
+/**
+ * Entrega a alguém, com o termo assinado.
+ *
+ * É a única porta que muda quem está com o equipamento — o `PATCH` do
+ * ativo não tem mais `userId`.
+ */
+export const entregarAtivo = (id: string, dados: EntregarAtivoRequest) =>
+  chamar<PosseView[]>(`/assets/${id}/posse`, { metodo: 'POST', corpo: dados });
+
+export const devolverAtivo = (id: string, dados: DevolverAtivoRequest) =>
+  chamar<PosseView[]>(`/assets/${id}/devolver`, { metodo: 'POST', corpo: dados });
+
+/**
+ * A imagem do termo assinado, como endereço local.
+ *
+ * Não serve num `<img src>` direto: a rota exige `Authorization`, e o
+ * navegador não o manda numa imagem. Quem chamar devolve o endereço com
+ * `URL.revokeObjectURL`.
+ */
+export const termoAssinado = (holdingId: string) =>
+  buscarComoBlob(`/posses/${holdingId}/termo`, 'image/png');
 
 // --- Componentes -------------------------------------------------------
 

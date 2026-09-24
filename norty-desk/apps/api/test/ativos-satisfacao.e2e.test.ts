@@ -68,11 +68,18 @@ describe('cadastro de ativos', () => {
       kind: 'COMPUTADOR',
       tag: 'PAT-4721',
       serialNumber: 'BR9XK32',
-      userId: f.agente.id,
     });
 
     assert.equal(primeiro.status, 201, JSON.stringify(primeiro.corpo));
-    assert.equal(primeiro.corpo.user?.id, f.agente.id);
+
+    // Quem está com o equipamento vem da entrega, e não de um campo do
+    // ativo: um `salvar` trocando o nome apagava o histórico.
+    const entrega = await supervisor.post<{ user: { id: string } }[]>(
+      `/assets/${primeiro.corpo.id}/posse`,
+      { userId: f.agente.id },
+    );
+    assert.equal(entrega.status, 201, JSON.stringify(entrega.corpo));
+    assert.equal(entrega.corpo[0]?.user.id, f.agente.id);
 
     const repetido = await supervisor.post<{ detail?: string }>('/assets', {
       name: 'Outro registro do mesmo notebook',
@@ -114,13 +121,16 @@ describe('cadastro de ativos', () => {
     assert.ok(porSerie.corpo.some((a) => a.serialNumber === 'BR9XK32'));
   });
 
-  it('pessoa de outra organização não vira dono do ativo', async () => {
+  it('o ativo não nasce com dono: quem está com ele vem da entrega', async () => {
+    // `forbidNonWhitelisted`: campo desconhecido no corpo é erro, e não
+    // algo a ignorar em silêncio. Sem isso, quem ainda mandasse `userId`
+    // acharia que definiu o dono e não teria definido nada.
     const r = await supervisor.post('/assets', {
-      name: 'Ativo com dono alheio',
-      userId: f.forasteiro.id,
+      name: 'Ativo com dono no corpo',
+      userId: f.agente.id,
     });
 
-    assert.equal(r.status, 404);
+    assert.equal(r.status, 400);
   });
 });
 

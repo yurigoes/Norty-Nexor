@@ -14,6 +14,15 @@ import {
 } from 'class-validator';
 import { ASSET_KINDS, ASSET_STATUSES, COMPONENT_KINDS, type ComponentKind } from '@norty-desk/shared';
 
+/**
+ * Teto do `data:` da assinatura, em caracteres.
+ *
+ * O limite de verdade é o de `assinaturaInvalida`, em bytes, no domínio
+ * compartilhado. Este aqui só evita que um corpo absurdo chegue a ser
+ * decodificado — base64 cresce um terço, daí a folga.
+ */
+const TETO_DA_ASSINATURA = 4 * 1024 * 1024;
+
 /** Campo de texto opcional que aceita `null` para limpar. */
 const vazioVirandoNulo = ({ value }: { value: unknown }) =>
   typeof value === 'string' && value.trim() === '' ? null : value;
@@ -36,8 +45,6 @@ export class EscreverAtivoDto {
   @IsOptional() @Transform(vazioVirandoNulo) @IsUUID() assetModelId?: string | null;
   @IsOptional() @Transform(vazioVirandoNulo) @IsUUID() locationId?: string | null;
   @IsOptional() @Transform(vazioVirandoNulo) @IsString() @MaxLength(2000) notes?: string | null;
-
-  @IsOptional() @Transform(vazioVirandoNulo) @IsUUID() userId?: string | null;
 
   /**
    * Em qual equipamento este periférico pendura. `null` despendura.
@@ -67,6 +74,27 @@ export class BuscarAtivosDto {
 
 export class VincularAtivoDto {
   @IsUUID() assetId!: string;
+}
+
+/**
+ * Entregar o equipamento a alguém.
+ *
+ * A assinatura é o termo de compromisso, desenhado na tela como na ordem
+ * de serviço. Opcional porque nem toda entrega acontece com a pessoa na
+ * frente — e recusar a entrega sem termo empurraria o gesto para fora do
+ * sistema: o equipamento sai na mesma, e aí some do inventário também.
+ */
+export class EntregarAtivoDto {
+  @IsUUID() userId!: string;
+  @IsOptional() @IsString() @MaxLength(2000) notes?: string;
+  @IsOptional() @IsString() @MaxLength(TETO_DA_ASSINATURA) signature?: string;
+  @IsOptional() @IsString() @MaxLength(200) signedByName?: string;
+}
+
+export class DevolverAtivoDto {
+  /** Guardar ou descartar: é o que o equipamento vira ao voltar. */
+  @IsIn(['EM_ESTOQUE', 'BAIXADO']) returnedTo!: 'EM_ESTOQUE' | 'BAIXADO';
+  @IsOptional() @IsString() @MaxLength(2000) notes?: string;
 }
 
 export class ResponderPesquisaDto {

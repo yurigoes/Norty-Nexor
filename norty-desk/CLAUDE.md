@@ -73,16 +73,23 @@ Três armadilhas que já custaram caro aqui:
    passo obrigatório é o mesmo desde o começo: **leia o SQL gerado antes
    de aplicar e apague todo `DROP` ou `ALTER` que você não pediu.**
 
-   Hoje são **três** colunas geradas, e o diff emite lixo para as três a
+   Hoje são **quatro** colunas geradas, e o diff emite lixo para todas a
    cada migração. Apague sempre estas linhas:
 
    ```sql
    ALTER TABLE "articles" ALTER COLUMN "busca" DROP DEFAULT;
+   ALTER TABLE "asset_holdings" ALTER COLUMN "isCurrent" DROP DEFAULT,
+   ALTER COLUMN "isCurrent" SET DATA TYPE boolean;
    ALTER TABLE "clients" ALTER COLUMN "buscaNome" DROP DEFAULT,
    ALTER COLUMN "buscaNome" SET DATA TYPE text,
    ALTER COLUMN "documentoDigitos" DROP DEFAULT,
    ALTER COLUMN "documentoDigitos" SET DATA TYPE text;
    ```
+
+   A de `asset_holdings` é `GENERATED ALWAYS AS (CASE WHEN "endedAt" IS
+   NULL THEN true END) STORED`, e é o que faz
+   `@@unique([assetId, isCurrent])` significar "no máximo uma posse
+   aberta por equipamento" — NULL não colide com NULL.
 
    O comando:
 

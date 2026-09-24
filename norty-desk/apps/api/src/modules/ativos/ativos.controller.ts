@@ -9,13 +9,16 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import type {
   AcessoRemotoView,
   AssetDetail,
   AssetView,
   ComponenteView,
+  PosseView,
   SenhaRevelada,
 } from '@norty-desk/shared';
 
@@ -25,11 +28,14 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { AcessoRemotoService } from './acesso-remoto.service';
 import { AtivosService } from './ativos.service';
+import { PosseService } from './posse.service';
 import { EscreverAcessoRemotoDto } from './dto-acesso';
 import {
   BuscarAtivosDto,
+  DevolverAtivoDto,
   EditarAtivoDto,
   EditarComponenteDto,
+  EntregarAtivoDto,
   EscreverAtivoDto,
   EscreverComponenteDto,
   VincularAtivoDto,
@@ -41,6 +47,7 @@ export class AtivosController {
   constructor(
     private readonly ativos: AtivosService,
     private readonly acesso: AcessoRemotoService,
+    private readonly posse: PosseService,
   ) {}
 
   @Get('assets')
@@ -134,6 +141,63 @@ export class AtivosController {
     @Body() dto: EditarAtivoDto,
   ): Promise<AssetView> {
     return this.ativos.editar(usuario, id, dto);
+  }
+
+  // --- Posse: quem está com o equipamento ------------------------------
+
+  /**
+   * Por quantas mãos passou.
+   *
+   * `ativo:ler` e não `ativo:gerenciar`: quem atende precisa saber com
+   * quem está a máquina antes de sair procurando por ela.
+   */
+  @Get('assets/:id/posses')
+  @RequirePermission('ativo:ler')
+  posses(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<PosseView[]> {
+    return this.posse.listar(usuario, id);
+  }
+
+  /**
+   * Entrega a alguém, com o termo de compromisso assinado.
+   *
+   * É a única porta que muda quem está com o equipamento: o `PATCH` do
+   * ativo perdeu o `userId`. Trocar de mão sem registrar era o que
+   * apagava o histórico com um `UPDATE`.
+   */
+  @Post('assets/:id/posse')
+  @RequirePermission('ativo:gerenciar')
+  entregar(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: EntregarAtivoDto,
+  ): Promise<PosseView[]> {
+    return this.posse.entregar(usuario, id, dto);
+  }
+
+  @Post('assets/:id/devolver')
+  @RequirePermission('ativo:gerenciar')
+  devolver(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: DevolverAtivoDto,
+  ): Promise<PosseView[]> {
+    return this.posse.devolver(usuario, id, dto);
+  }
+
+  /** O PNG do termo assinado, para conferir ou imprimir. */
+  @Get('posses/:holdingId/termo')
+  @RequirePermission('ativo:ler')
+  async termo(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('holdingId', ParseUUIDPipe) holdingId: string,
+    @Res() resposta: Response,
+  ): Promise<void> {
+    const png = await this.posse.assinatura(usuario, holdingId);
+    resposta.setHeader('Content-Type', 'image/png');
+    resposta.send(png);
   }
 
   // --- Como se chega na máquina ---------------------------------------

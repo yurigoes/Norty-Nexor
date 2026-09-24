@@ -11,6 +11,7 @@ import { Prisma } from '@prisma/client';
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { escopoDeLeitura } from '../tickets/tickets.escopo';
+import { PosseService } from './posse.service';
 import type {
   BuscarAtivosDto,
   EditarAtivoDto,
@@ -47,7 +48,10 @@ const EH_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 @Injectable()
 export class AtivosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly posse: PosseService,
+  ) {}
 
   async buscar(usuario: UsuarioAutenticado, filtro: BuscarAtivosDto): Promise<AssetView[]> {
     const limite = filtro.limit ?? 50;
@@ -106,9 +110,9 @@ export class AtivosService {
     return view!;
   }
 
-  /** O ativo com o que está pendurado dentro e o que pendura nele. */
+  /** O ativo com o que pendura nele, o que tem dentro, e por que mãos passou. */
   async detalhe(usuario: UsuarioAutenticado, id: string): Promise<AssetDetail> {
-    const [ativo, componentes, perifericos] = await Promise.all([
+    const [ativo, componentes, perifericos, posses] = await Promise.all([
       this.obter(usuario, id),
       this.componentes(usuario, id),
       this.prisma.asset.findMany({
@@ -116,9 +120,15 @@ export class AtivosService {
         ...REF,
         orderBy: [{ kind: 'asc' }, { name: 'asc' }],
       }),
+      this.posse.listar(usuario, id),
     ]);
 
-    return { ...ativo, components: componentes, peripherals: perifericos };
+    return {
+      ...ativo,
+      components: componentes,
+      peripherals: perifericos,
+      holdings: posses,
+    };
   }
 
   // -------------------------------------------------------------------
@@ -254,7 +264,6 @@ export class AtivosService {
   }
 
   async criar(usuario: UsuarioAutenticado, dto: EscreverAtivoDto): Promise<AssetView> {
-    await this.exigirUsuarioDaOrganizacao(usuario, dto.userId);
     await this.exigirCatalogo(usuario, dto);
     await this.exigirPaiValido(usuario, dto.parentAssetId, null);
 
@@ -271,7 +280,6 @@ export class AtivosService {
           assetModelId: dto.assetModelId ?? null,
           locationId: dto.locationId ?? null,
           notes: dto.notes ?? null,
-          userId: dto.userId ?? null,
           parentAssetId: dto.parentAssetId ?? null,
           purchasedAt: dto.purchasedAt ? new Date(dto.purchasedAt) : null,
           warrantyUntil: dto.warrantyUntil ? new Date(dto.warrantyUntil) : null,
@@ -292,7 +300,6 @@ export class AtivosService {
     dto: EditarAtivoDto,
   ): Promise<AssetView> {
     await this.obter(usuario, id);
-    await this.exigirUsuarioDaOrganizacao(usuario, dto.userId);
     await this.exigirCatalogo(usuario, dto);
     await this.exigirPaiValido(usuario, dto.parentAssetId, id);
 
@@ -309,7 +316,6 @@ export class AtivosService {
           ...(dto.assetModelId !== undefined ? { assetModelId: dto.assetModelId } : {}),
           ...(dto.locationId !== undefined ? { locationId: dto.locationId } : {}),
           ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
-          ...(dto.userId !== undefined ? { userId: dto.userId } : {}),
           ...(dto.parentAssetId !== undefined ? { parentAssetId: dto.parentAssetId } : {}),
           ...(dto.purchasedAt !== undefined
             ? { purchasedAt: dto.purchasedAt ? new Date(dto.purchasedAt) : null }
@@ -467,23 +473,6 @@ export class AtivosService {
       });
       if (!existe) throw new NotFoundException('Localização não encontrada nesta organização.');
     }
-  }
-
-  private async exigirUsuarioDaOrganizacao(
-    usuario: UsuarioAutenticado,
-    userId?: string | null,
-  ): Promise<void> {
-    if (!userId) return;
-
-    const pessoa = await this.prisma.user.findFirst({
-      where: {
-        id: userId,
-        memberships: { some: { organizationId: usuario.organizationId } },
-      },
-      select: { id: true },
-    });
-
-    if (!pessoa) throw new NotFoundException('Pessoa não encontrada nesta organização.');
   }
 
   /**

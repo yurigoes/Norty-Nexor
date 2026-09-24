@@ -67,6 +67,7 @@ model Organization {
   manufacturers       Manufacturer[]
   assetModels         AssetModel[]
   components          AssetComponent[]
+  assetHoldings       AssetHolding[]
   authSources         AuthSource[]
   software            Software[]
   softwareLicenses    SoftwareLicense[]
@@ -132,6 +133,7 @@ model User {
   refreshTokens          RefreshToken[]
   articles               Article[]
   assets                 Asset[]                 @relation("AtivoDoUsuario")
+  posses                 AssetHolding[]          @relation("PosseDoAtivo")
   problems               Problem[]               @relation("ResponsavelPeloProblema")
   changes                Change[]                @relation("ResponsavelPelaMudanca")
   recurrences            RecurringTicket[]       @relation("RequerenteDaRecorrencia")
@@ -1525,6 +1527,7 @@ model Asset {
   ipAddresses  IpAddress[]
   rackItem     RackItem?
   secrets      Secret[]
+  holdings     AssetHolding[]
 
   /// Patrimônio e série não se repetem na organização: dois registros do
   /// mesmo equipamento são a origem de metade da sujeira de inventário.
@@ -1535,6 +1538,77 @@ model Asset {
   @@index([locationId])
   @@index([parentAssetId])
   @@map("assets")
+}
+
+/// Quem está com o equipamento, e quem esteve antes.
+///
+/// ## Por que uma tabela, e não só `Asset.userId`
+///
+/// O ponteiro responde "quem está com ele hoje" e esquece todo o resto.
+/// A pergunta que aparece quando some um notebook é outra: **quem estava
+/// com ele, desde quando, e assinou o quê?** Um `UPDATE` no ponteiro
+/// apaga a única resposta que existia.
+///
+/// O ponteiro continua, porque a listagem de ativos filtra e ordena por
+/// ele — é a regra 7 do CLAUDE.md aplicada aqui: campo derivado existe
+/// no banco porque índice precisa dele, e **só o serviço de domínio
+/// escreve nele**. Quem escreve nos dois é `entregar`/`devolver`, na
+/// mesma transação, e o DTO do ativo perdeu o campo: uma porta só.
+///
+/// ## A posse aberta é única, e isso mora no banco
+///
+/// `isCurrent` é coluna **gerada**: `true` enquanto `endedAt` é nulo,
+/// `NULL` depois. Com `@@unique([assetId, isCurrent])` o Postgres deixa
+/// passar quantas posses encerradas quiserem (NULL não colide com NULL)
+/// e recusa a segunda aberta. Duas requisições simultâneas de entrega
+/// não conseguem pôr o mesmo teclado na mão de duas pessoas.
+///
+/// A verdade continua sendo `endedAt`; a coluna gerada existe só para
+/// carregar a unicidade, e por isso é `Unsupported` — ninguém a escreve.
+model AssetHolding {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  assetId        String    @db.Uuid
+  userId         String    @db.Uuid
+  /// Quando o equipamento passou às mãos desta pessoa.
+  startedAt      DateTime  @default(now())
+  /// Quando voltou. Nulo é a posse corrente.
+  endedAt        DateTime?
+  /// Para onde foi quando voltou — guardar ou descarte.
+  ///
+  /// Guardado no momento da devolução, e não lido do ativo depois: o
+  /// ativo baixado hoje pode ter voltado para o estoque na época, e o
+  /// histórico tem de dizer o que era verdade quando aconteceu.
+  returnedTo     AssetStatus?
+  notes          String?
+
+  /// --- Termo de compromisso ----------------------------------------
+  /// Chave do PNG no armazenamento, como na ordem de serviço: o traço
+  /// de um dedo em tela de celular dá dezenas de kilobytes, e o
+  /// histórico de um ativo carregaria todos eles.
+  signatureKey String?
+  /// Quem assinou e quando, como era na hora de assinar.
+  signedByName String?
+  signedAt     DateTime?
+
+  createdAt DateTime @default(now())
+
+  /// `true` enquanto está com a pessoa, `NULL` depois. Ver o cabeçalho.
+  isCurrent Unsupported("boolean")?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  asset        Asset        @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  /// `Restrict`, e não cascata: apagar a pessoa não pode apagar a prova
+  /// de quem estava com o equipamento. O caminho normal de saída é
+  /// `isActive: false`; quem insiste em apagar devolve o que está na mão
+  /// dela primeiro.
+  user         User         @relation("PosseDoAtivo", fields: [userId], references: [id], onDelete: Restrict)
+
+  /// No máximo uma posse aberta por ativo. Ver o cabeçalho.
+  @@unique([assetId, isCurrent])
+  @@index([organizationId, userId])
+  @@index([assetId, startedAt])
+  @@map("asset_holdings")
 }
 
 /// Um chamado pode envolver mais de um equipamento, e um equipamento

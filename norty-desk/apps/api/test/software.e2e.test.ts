@@ -35,10 +35,23 @@ async function entrar(email: string): Promise<Cliente> {
   return c;
 }
 
+/**
+ * Um ativo, opcionalmente já na mão de alguém.
+ *
+ * Quem está com o equipamento não é campo do ativo: é a posse, criada
+ * pela entrega. Por isso são duas chamadas, e não um `userId` no corpo.
+ */
 async function criarAtivo(c: Cliente, name: string, userId?: string): Promise<AssetView> {
-  const r = await c.post<AssetView>('/assets', { name, kind: 'COMPUTADOR', ...(userId ? { userId } : {}) });
+  const r = await c.post<AssetView>('/assets', { name, kind: 'COMPUTADOR' });
   assert.equal(r.status, 201, JSON.stringify(r.corpo));
-  return r.corpo;
+
+  if (!userId) return r.corpo;
+
+  const entrega = await c.post(`/assets/${r.corpo.id}/posse`, { userId });
+  assert.equal(entrega.status, 201, JSON.stringify(entrega.corpo));
+
+  const atualizado = await c.get<AssetView>(`/assets/${r.corpo.id}`);
+  return atualizado.corpo;
 }
 
 async function criarSoftware(c: Cliente, name: string): Promise<SoftwareDetail> {
