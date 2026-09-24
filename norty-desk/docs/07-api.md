@@ -235,7 +235,7 @@ POST /v1/channels/email/accounts/:id/testar     → testa IMAP/SMTP
 POST /v1/channels/email/accounts/:id/coletar    → força um poll
 ```
 
-### 5.2 WhatsApp (Evolution)
+### 5.2 WhatsApp pela Evolution
 
 ```
 POST /v1/channels/whatsapp/inbound/:channelAccountId
@@ -245,13 +245,78 @@ X-Evolution-Signature: <HMAC-SHA256 do corpo>
 Recebe o corpo da Evolution sem transformação (`messages.upsert`,
 `messages.update`). Mesmas respostas do e-mail.
 
+A conta é criada e testada pelas rotas comuns de conta de canal (5.3),
+com `kind: WHATSAPP_EVOLUTION` — não há rotas `/channels/whatsapp/*`
+para isso.
+
+### 5.2-b WhatsApp pela API oficial da Meta
+
 ```
-GET  /v1/channels/whatsapp/accounts
-POST /v1/channels/whatsapp/accounts
-POST /v1/channels/whatsapp/accounts/:id/testar   → GET instance/connectionState
-POST /v1/channels/whatsapp/accounts/:id/qrcode   → pareia a instância
-POST /v1/channels/whatsapp/enviar                → envio avulso (uso interno)
+GET  /v1/channels/meta/inbound/:channelAccountId   → o aperto de mão
+POST /v1/channels/meta/inbound/:channelAccountId
+X-Hub-Signature-256: sha256=<HMAC do corpo cru>
 ```
+
+Convive com a Evolution de propósito: migrar um número real não acontece
+num sábado, e durante a migração as duas contas existem lado a lado.
+Quem decide por onde a resposta sai é a **conta ativa da organização**, e
+não uma variável de ambiente — a oficial ganha quando as duas existem, e
+a Evolution fica para o que ainda não migrou.
+
+**O `GET` é o aperto de mão, e acontece uma vez.** Ao salvar a URL no
+painel da Meta, ela chama com um desafio e espera o desafio de volta em
+**texto puro**. Devolver JSON — que é o padrão desta API — reprova a
+configuração com uma mensagem que não explica nada. O `hub.verify_token`
+é comparado em tempo constante, pela mesma razão da assinatura.
+
+**A assinatura é sobre os bytes, não sobre o objeto.** A Meta assina o
+corpo exato que mandou; reserializar o JSON já parseado dá outros bytes
+— a ordem das chaves e o escape de acento mudam — e aí a assinatura de
+**toda** entrega legítima falharia. A aplicação sobe com `rawBody: true`
+e a conferência é sobre `request.rawBody`. O canal da Evolution
+reserializa e funciona porque quem assina lá somos nós; aqui quem assina
+é outra empresa.
+
+**Sem `appSecret` configurado a entrega é recusada.** Esta URL é
+pública, e aceitar sem conferir deixaria qualquer um abrir chamado em
+nome de qualquer telefone.
+
+**A rota só grava; o processamento é do job.** A Meta reentrega o que
+não recebeu 200 em poucos segundos, com o mesmo `wamid` — a unicidade de
+`externalId` absorve a reentrega, e processar aqui dentro faria a
+entrega demorar e a Meta reentregar a mesma mensagem já em
+processamento.
+
+Entrega só com recibo (`statuses`, sem `messages`) não é erro: responde
+`DESCARTADO`. Recibo de **falha** marca a linha da fila de saída como
+`FALHOU` — um `ENVIADO` que nunca chegou ao aparelho é pior que um
+`FALHOU`, porque encerra a investigação no lugar errado.
+
+#### A janela de 24 horas
+
+Decidida **antes** de tentar enviar, e não deixando a Meta recusar:
+quatro tentativas com backoff não passariam — o que falta não é rede, é
+permissão — e o diagnóstico ficaria com um "131047" que não conta nada a
+quem for investigar. Fora da janela, a saída falha com o motivo em
+português.
+
+A última entrada da pessoa sai de `InboundMessage`, que já grava o fato;
+uma coluna à parte com a mesma verdade seria um segundo lugar para ela
+ficar errada.
+
+#### Identificar quem escreveu
+
+Pelo telefone. Uma empresa só, o chamado sai identificado sem perguntar
+nada; mais de uma, a pessoa recebe a **lista de toque** com as empresas
+e escolhe. A escolha escrita também vale, para quem não recebe lista
+interativa. Tocar numa empresa sem vínculo com aquele número é recusado.
+
+Mídia sai por `media_id` — nunca por `link`, que exporia um endereço
+nosso ao servidor da Meta. A legenda vai no **primeiro** arquivo e não
+em todos: repetida, "Segue o arquivo" aparece embaixo de cada foto.
+Áudio gravado no navegador chega como `audio/webm`, que a Meta não
+aceita como `audio`, e vai como documento — chega tocável no aparelho,
+em vez de não chegar.
 
 ### 5.3 Contas de canal
 
@@ -267,11 +332,13 @@ POST   /v1/channels/accounts/:id/testar
 POST   /v1/channels/accounts/:id/coletar
 ```
 
-`kind` é `EMAIL_IMAP`, `EMAIL_SMTP`, `EMAIL_WEBHOOK` ou
-`WHATSAPP_EVOLUTION`, e decide quais campos `config` aceita.
+`kind` é `EMAIL_IMAP`, `EMAIL_SMTP`, `EMAIL_WEBHOOK`,
+`WHATSAPP_EVOLUTION` ou `WHATSAPP_META`, e decide quais campos `config`
+aceita.
 
-**O segredo nunca sai.** `password`, `apiKey`, `webhookSecret`, `secret`
-e `token` são cifrados em AES-256-GCM antes de gravar, no formato
+**O segredo nunca sai.** `password`, `apiKey`, `webhookSecret`, `secret`,
+`token`, `appSecret` e `verifyToken` são cifrados em AES-256-GCM antes
+de gravar, no formato
 `v1:<iv>:<tag>:<cifrado>` (base64url), com a chave em
 `CHANNEL_SECRET_KEY`. Na resposta cada um desses campos vira `true` ou
 `false`: a tela aprende **se** existe segredo, nunca **qual** é.
@@ -1735,7 +1802,155 @@ passo à parte.
 
 ---
 
-## 21. Saúde
+## 21. Cofre de senhas
+
+```
+GET    /v1/cofre/disponivel                        → cofre:usar
+GET    /v1/cofre                                   → os meus e os que me deram
+GET    /v1/cofre/todos                             → cofre:administrar
+POST   /v1/cofre
+PATCH  /v1/cofre/:id
+DELETE /v1/cofre/:id
+POST   /v1/cofre/:id/revelar                       → a senha, uma vez
+GET    /v1/cofre/:id/leituras                      → quem abriu, quando, de onde
+GET|POST /v1/cofre/:id/compartilhamentos
+DELETE /v1/cofre/:id/compartilhamentos/:grantId
+POST   /v1/cofre/:id/assumir                       → cofre:administrar
+```
+
+`cofre:usar` abre a porta; quem decide o que cada um vê lá dentro é o
+**dono de cada segredo**. Esconder o botão é conveniência — a cerca é a
+conferência de acesso no serviço.
+
+**`POST` para revelar, e não `GET`**, pela mesma razão do acesso remoto
+do ativo (seção 9.1): revelar é um **ato**, não uma leitura. `GET`
+entraria no histórico do navegador, em log de proxy e num `prefetch` que
+ninguém pediu — cada um uma cópia da senha fora daqui.
+
+**Cada leitura fica registrada**, com quem, quando e de que IP, e o dono
+do segredo a vê. Segredo compartilhado sem registro de leitura é segredo
+que ninguém sabe quem levou.
+
+O compartilhamento aceita **prazo** (`expiresAt`), e a listagem mostra
+até quando o acesso de cada um vale. Sem prazo a concessão não vence — é
+permitido, e é justamente o que vira acesso permanente que ninguém
+lembra de revogar, então a tela mostra a data para que a escolha seja
+consciente. Revogar tira na hora, independentemente do prazo.
+
+`assumir` existe para o dia em que alguém sai da empresa com o cofre
+dele. **Não é leitura** — a senha continua fechada até ser aberta, e aí
+a abertura gera o próprio registro. O ato fica na trilha de auditoria.
+
+`GET /cofre/disponivel` existe porque a tela pergunta antes de oferecer:
+cofre sem chave configurada não guarda nada, e oferecer o que não
+funciona é pior que não oferecer.
+
+---
+
+## 22. Chat ao vivo
+
+```
+POST /v1/chat/presenca                  { ticketId }
+GET  /v1/chat/:ticketId/presenca        → quem está aqui, quem está digitando
+GET  /v1/chat/:ticketId/fluxo           → text/event-stream
+```
+
+`chamado:ler:proprios` nas três: quem pode ler o chamado pode conversar
+nele. O escopo de leitura decide o resto.
+
+**Server-Sent Events, e não WebSocket.** O aplicativo lê com `fetch` e
+um `ReadableStream` — não com `EventSource`, que não carrega cabeçalho
+`Authorization` e obrigaria a pôr o token na URL, onde ele cairia em log
+de acesso e no histórico do navegador. Com `fetch`, o token vai no
+cabeçalho como em toda outra chamada, e o guard de sempre protege a
+rota.
+
+**A fonte é uma consulta ao banco a cada volta**, e não um barramento em
+memória. A API roda em mais de um processo: uma mensagem gravada pelo
+processo A precisa chegar a quem escuta no processo B, e um barramento
+em memória não a entregaria. Uma consulta indexada por chamado a cada
+dois segundos custa pouco no tamanho deste produto — dezenas de
+conversas simultâneas, não milhares. **É aqui que se mexe** se um dia
+forem milhares: `LISTEN/NOTIFY` do Postgres, ou o Redis que já está na
+infraestrutura.
+
+A conexão vive quinze minutos e o cliente reabre. Proxy e balanceador
+cortam conexão parada, e reconectar de propósito é mais previsível que
+descobrir o corte de cada intermediário. O cabeçalho
+`X-Accel-Buffering: no` vai junto porque o nginx guarda resposta em
+buffer por padrão, e fluxo em buffer não é fluxo: nada chega até o
+buffer encher.
+
+O fluxo **começa do agora**: o histórico já veio pela lista de eventos
+do chamado, e reenviá-lo duplicaria a conversa na tela.
+
+**Presença não tem "sair".** O aplicativo bate ponto a cada
+`INTERVALO_DA_BATIDA`; quem fecha a aba para de bater e some sozinho.
+`beforeunload` é um evento que o navegador entrega quando quer, e que
+não chega quando a aba morre de vez.
+
+---
+
+## 23. Norty Copilot
+
+```
+GET  /v1/copilot/disponivel             → chamado:responder
+POST /v1/tickets/:id/copilot            { intencao, rascunho? }
+GET  /v1/config/copilot                 → config:copilot
+PUT  /v1/config/copilot                 { provider, model, apiKey?, isActive? }
+```
+
+`intencao` é `REDIGIR` ou `SUGERIR`; `provider` é `GEMINI` ou `GROQ`.
+
+**O Copilot nunca responde sozinho.** A rota devolve **texto**, e nada
+além: quem envia é a pessoa, depois de ler e ajustar — e é no envio que
+a resposta ganha a marca de IA. Uma IA que publica direto no chamado é
+uma IA que erra em nome da casa.
+
+**Com `rascunho`, o `REDIGIR` reescreve o que o técnico já digitou** em
+vez de partir do chamado. É o pedido comum de quem sabe a resposta e
+quer a forma; sem isso, a ferramenta só serve para quem não sabe o que
+dizer, que é a minoria dos casos.
+
+O limite do rascunho é generoso para uma resposta longa e curto o
+bastante para que ninguém cole o manual inteiro e mande para fora sem
+perceber.
+
+**O Copilot não lê nota interna.** O que vai no contexto é o que o
+cliente já poderia ver — mandar o que a equipe escreveu entre si para
+fora é vazamento, mesmo que o texto volte só para a tela do técnico.
+
+`GET /copilot/disponivel` existe porque a tela pergunta antes de mostrar
+o botão: oferecer o que não responde é pior que não oferecer.
+
+Na configuração, **omitir `apiKey` mantém a que está guardada** — assim
+dá para trocar o modelo sem redigitar a chave. String vazia apaga, que é
+como se desliga sem perder o resto. A chave é cifrada como as dos
+canais, e a resposta diz **se** existe, nunca qual é.
+
+---
+
+## 24. Notificações fora da aba
+
+```
+GET    /v1/notificacoes?endpoint=...    → o estado, e qual aparelho é este
+POST   /v1/notificacoes/aparelhos       { endpoint, keys }
+DELETE /v1/notificacoes/aparelhos/:id?endpoint=...
+PUT    /v1/notificacoes/preferencias    { silenciados }
+```
+
+**Sem `@RequirePermission`, de propósito:** não existe papel que possa
+mexer no aviso de outra pessoa, e não existe papel que não possa mexer
+no seu. Quem pode entrar pode escolher onde quer ser avisado.
+
+Push da Web (VAPID), que é o que funciona no navegador e no aparelho sem
+loja de aplicativo. O `endpoint` na consulta serve para a tela saber
+qual da lista é o aparelho em que ela está rodando — sem isso, a pessoa
+com três aparelhos não sabe qual desinscrever.
+
+---
+
+## 25. Saúde
 
 ```
 GET /v1/health        → { status, uptime }
