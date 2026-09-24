@@ -80,27 +80,37 @@ describe('posse do equipamento', () => {
     const posse = r.corpo[0]!;
     assert.equal(posse.isCurrent, true);
     assert.equal(posse.user.id, f.solicitante.id);
-    assert.ok(posse.signedAt, 'com assinatura, o termo tem data');
+
+    const termo = posse.terms[0]!;
+    assert.equal(posse.terms.length, 1);
+    assert.equal(termo.kind, 'COMPROMISSO');
+    assert.ok(termo.signedAt, 'com assinatura, o termo tem data');
     assert.equal(
-      posse.signedByName,
+      termo.signedByName,
       f.solicitante.name,
       'sem nome informado, quem assina é quem recebe',
     );
-    assert.equal(posse.hasSignature, true);
+    assert.equal(termo.hasSignature, true);
+
+    // E o papel diz o nome de quem assinou e o do equipamento: um termo
+    // com o marcador cru no lugar do dado não vale nada.
+    assert.ok(termo.body.includes(f.solicitante.name), termo.body);
+    assert.ok(termo.body.includes('Compra de licença') || termo.body.includes('Notebook'), termo.body);
+    assert.ok(!termo.body.includes('{{'), 'sobrou marcador sem trocar');
 
     // O ponteiro do ativo anda junto: é o que a listagem filtra.
     const naBase = await prisma.asset.findUniqueOrThrow({ where: { id: ativo.id } });
     assert.equal(naBase.userId, f.solicitante.id);
     assert.equal(naBase.status, 'EM_USO');
 
-    // E o traço sai por rota própria, não no corpo da listagem. O
-    // `fetch` é direto porque o que volta é PNG, e o cliente da suíte
+    // E o papel sai por rota própria, não no corpo da listagem. O
+    // `fetch` é direto porque o que volta é PDF, e o cliente da suíte
     // tenta ler tudo como JSON.
-    const termo = await fetch(`${api.url}/posses/${posse.id}/termo`, {
+    const pdf = await fetch(`${api.url}/termos/${termo.id}/pdf`, {
       headers: { Authorization: `Bearer ${supervisor.token}` },
     });
-    assert.equal(termo.status, 200);
-    assert.equal(termo.headers.get('content-type'), 'image/png');
+    assert.equal(pdf.status, 200);
+    assert.equal(pdf.headers.get('content-type'), 'application/pdf');
   });
 
   it('passar a outra pessoa encerra a anterior em vez de apagá-la', async () => {
@@ -183,14 +193,7 @@ describe('posse do equipamento', () => {
     const r = await entregar(ativo.id, { userId: f.solicitante.id });
     assert.equal(r.status, 201, JSON.stringify(r.corpo));
 
-    const posse = r.corpo[0]!;
-    assert.equal(posse.signedAt, null);
-    assert.equal(posse.hasSignature, false);
-
-    const termo = await fetch(`${api.url}/posses/${posse.id}/termo`, {
-      headers: { Authorization: `Bearer ${supervisor.token}` },
-    });
-    assert.equal(termo.status, 404, 'sem termo, não há o que servir');
+    assert.deepEqual(r.corpo[0]!.terms, [], 'sem assinatura, nenhum papel nasce');
   });
 
   it('o cadastro de uso recebe equipamento sem precisar entrar na central', async () => {

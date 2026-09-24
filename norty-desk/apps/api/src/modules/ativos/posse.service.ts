@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { PosseView } from '@norty-desk/shared';
+import type { PosseView, TermKind } from '@norty-desk/shared';
 import { assinaturaInvalida, deClientesDiferentes } from '@norty-desk/shared';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
@@ -14,9 +14,11 @@ import type { UsuarioAutenticado } from '../../common/decorators/current-user.de
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { PORTA_DE_ARMAZENAMENTO, type PortaDeArmazenamento } from '../attachments/armazenamento';
 import type { DevolverAtivoDto, EntregarAtivoDto } from './dto';
+import { SELECT_DO_ATIVO, TermosService, type DadosDoTermo } from './termos.service';
 
 const INCLUDE = {
   user: { select: { id: true, name: true, email: true } },
+  terms: { orderBy: { signedAt: 'asc' } },
 } satisfies Prisma.AssetHoldingInclude;
 
 type PosseComPessoa = Prisma.AssetHoldingGetPayload<{ include: typeof INCLUDE }>;
@@ -37,15 +39,17 @@ type PosseComPessoa = Prisma.AssetHoldingGetPayload<{ include: typeof INCLUDE }>
  * que abre ou fecha a posse. O DTO do ativo perdeu `userId`: trocar de
  * mão passou a ter uma porta só, e a porta registra.
  *
- * ## O termo de compromisso
+ * ## Os papéis
  *
- * A entrega aceita a assinatura desenhada, igual à ordem de serviço, e
- * guarda o PNG no armazenamento — não numa coluna em base64, porque o
+ * A entrega gera o **termo de compromisso**; a devolução com dano gera
+ * o **termo de quebra**. Os dois nascem com o texto já renderizado e
+ * congelado (ver `TermosService`): o que a pessoa assinou não muda
+ * quando a casa edita a redação.
+ *
+ * A assinatura desenhada segue o caminho da ordem de serviço — o PNG
+ * vai para o armazenamento, não para uma coluna em base64, porque o
  * traço de um dedo em tela de celular dá dezenas de kilobytes e o
  * histórico de um ativo carregaria todos eles.
- *
- * O nome de quem assina é gravado na hora, e não lido do cadastro na
- * emissão: o termo tem de dizer o que era verdade quando foi assinado.
  *
  * Entrega **sem** termo é permitida, e fica marcada como tal. Recusá-la
  * empurraria a entrega para fora do sistema — o equipamento sai na
@@ -55,6 +59,7 @@ type PosseComPessoa = Prisma.AssetHoldingGetPayload<{ include: typeof INCLUDE }>
 export class PosseService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly termos: TermosService,
     @Inject(PORTA_DE_ARMAZENAMENTO) private readonly armazenamento: PortaDeArmazenamento,
   ) {}
 
@@ -96,13 +101,25 @@ export class PosseService {
       throw new ConflictException(`${pessoa.name} já está com este equipamento.`);
     }
 
+    const agora = new Date();
     const chave = dto.signature ? await this.guardarAssinatura(ativo, dto.signature) : null;
 
     // Sem nome de quem assina não há termo: a imagem sozinha não diz de
     // quem é. Cair para o nome de quem recebe é o certo — é ela que
-    // assina o termo de compromisso do próprio equipamento.
-    const assinante = chave ? (dto.signedByName?.trim() || pessoa.name) : null;
-    const agora = new Date();
+    // assina o compromisso do próprio equipamento.
+    const assinante = chave ? dto.signedByName?.trim() || pessoa.name : null;
+
+    // O texto sai renderizado **antes** da transação: é uma leitura, e
+    // do lado de dentro ficaria esperando um cadeado que a própria
+    // transação segura.
+    const texto = assinante
+      ? await this.termos.renderizar(
+          usuario.organizationId,
+          'COMPROMISSO',
+          await this.dadosDoTermo(usuario, assetId, pessoa.name),
+          agora,
+        )
+      : null;
 
     await this.prisma.$transaction([
       ...(aberta
@@ -120,9 +137,20 @@ export class PosseService {
           userId: dto.userId,
           startedAt: agora,
           notes: dto.notes?.trim() || null,
-          signatureKey: chave,
-          signedByName: assinante,
-          signedAt: chave ? agora : null,
+          ...(texto && assinante
+            ? {
+                terms: {
+                  create: {
+                    organizationId: usuario.organizationId,
+                    kind: 'COMPROMISSO' as const,
+                    body: texto,
+                    signatureKey: chave,
+                    signedByName: assinante,
+                    signedAt: agora,
+                  },
+                },
+              }
+            : {}),
         },
       }),
       // O ponteiro do ativo anda junto, na mesma transação. É o que
@@ -149,22 +177,65 @@ export class PosseService {
     assetId: string,
     dto: DevolverAtivoDto,
   ): Promise<PosseView[]> {
-    await this.exigirAtivo(usuario, assetId);
+    const ativo = await this.exigirAtivo(usuario, assetId);
 
     const aberta = await this.prisma.assetHolding.findFirst({
       where: { assetId, endedAt: null },
-      select: { id: true },
+      select: { id: true, user: { select: { name: true } } },
     });
 
     if (!aberta) throw new ConflictException('Este equipamento não está com ninguém.');
+
+    const agora = new Date();
+    const notas = dto.notes?.trim() || null;
+
+    // O termo de quebra descreve o que aconteceu, e o que aconteceu está
+    // nas observações da devolução. Sem elas o papel diria "—" no lugar
+    // do fato, e um termo de ocorrência sem a ocorrência não serve.
+    if (dto.comQuebra && !notas) {
+      throw new BadRequestException(
+        'Descreva o que aconteceu nas observações: é esse texto que entra no termo de quebra.',
+      );
+    }
+
+    const chave =
+      dto.comQuebra && dto.signature ? await this.guardarAssinatura(ativo, dto.signature) : null;
+    const assinante = chave ? dto.signedByName?.trim() || aberta.user.name : null;
+
+    const texto =
+      dto.comQuebra && assinante && notas
+        ? await this.termos.renderizar(
+            usuario.organizationId,
+            'QUEBRA',
+            {
+              ...(await this.dadosDoTermo(usuario, assetId, aberta.user.name)),
+              ocorrencia: { descricao: notas, destino: dto.returnedTo },
+            },
+            agora,
+          )
+        : null;
 
     await this.prisma.$transaction([
       this.prisma.assetHolding.update({
         where: { id: aberta.id },
         data: {
-          endedAt: new Date(),
+          endedAt: agora,
           returnedTo: dto.returnedTo,
-          notes: dto.notes?.trim() || null,
+          notes: notas,
+          ...(texto && assinante
+            ? {
+                terms: {
+                  create: {
+                    organizationId: usuario.organizationId,
+                    kind: 'QUEBRA' as const,
+                    body: texto,
+                    signatureKey: chave,
+                    signedByName: assinante,
+                    signedAt: agora,
+                  },
+                },
+              }
+            : {}),
         },
       }),
       this.prisma.asset.update({
@@ -176,19 +247,86 @@ export class PosseService {
     return this.listar(usuario, assetId);
   }
 
-  /** O PNG do termo assinado, para quem for imprimir ou conferir. */
-  async assinatura(usuario: UsuarioAutenticado, holdingId: string): Promise<Buffer> {
-    const posse = await this.prisma.assetHolding.findFirst({
-      where: { id: holdingId, organizationId: usuario.organizationId },
-      select: { signatureKey: true },
+  /** O que o texto do termo precisa saber, numa consulta. */
+  private async dadosDoTermo(
+    usuario: UsuarioAutenticado,
+    assetId: string,
+    nomeDaPessoa: string,
+  ): Promise<DadosDoTermo> {
+    const [ativo, organizacao] = await Promise.all([
+      this.prisma.asset.findUniqueOrThrow({ where: { id: assetId }, select: SELECT_DO_ATIVO }),
+      this.prisma.organization.findUniqueOrThrow({
+        where: { id: usuario.organizationId },
+        select: { name: true },
+      }),
+    ]);
+
+    return { pessoa: { name: nomeDaPessoa }, ativo, organizacao };
+  }
+
+  /**
+   * O termo, com o texto e o traço, pronto para imprimir.
+   *
+   * Devolve os dois: o texto congelado e o PNG da assinatura, quando há.
+   * Quem monta o PDF é o controller — este serviço não conhece papel.
+   */
+  async termo(
+    usuario: UsuarioAutenticado,
+    termId: string,
+  ): Promise<{
+    kind: TermKind;
+    body: string;
+    signedByName: string;
+    signedAt: Date;
+    assinatura: Buffer | null;
+    ativo: { name: string; tag: string | null };
+    organizacao: { name: string };
+  }> {
+    const termo = await this.prisma.assetTerm.findFirst({
+      where: { id: termId, organizationId: usuario.organizationId },
+      select: {
+        kind: true,
+        body: true,
+        signedByName: true,
+        signedAt: true,
+        signatureKey: true,
+        holding: { select: { asset: { select: { name: true, tag: true } } } },
+        organization: { select: { name: true } },
+      },
     });
 
-    if (!posse?.signatureKey) throw new NotFoundException('Esta posse não tem termo assinado.');
+    if (!termo) throw new NotFoundException('Termo não encontrado.');
 
-    const fluxo = await this.armazenamento.ler(posse.signatureKey);
-    const pedacos: Buffer[] = [];
-    for await (const pedaco of fluxo) pedacos.push(Buffer.from(pedaco as Buffer));
-    return Buffer.concat(pedacos);
+    return {
+      kind: termo.kind,
+      body: termo.body,
+      signedByName: termo.signedByName,
+      signedAt: termo.signedAt,
+      assinatura: await this.lerAssinatura(termo.signatureKey),
+      ativo: termo.holding.asset,
+      organizacao: termo.organization,
+    };
+  }
+
+  /**
+   * O traço, se ainda estiver no armazenamento.
+   *
+   * Assinatura que sumiu do bucket não impede emitir o documento: o
+   * texto continua sendo o que a pessoa assinou, e um papel sem o traço
+   * é melhor que erro na tela de quem foi imprimir. É a mesma escolha
+   * da ordem de serviço.
+   */
+  private async lerAssinatura(chave: string | null): Promise<Buffer | null> {
+    if (!chave) return null;
+
+    try {
+      const fluxo = await this.armazenamento.ler(chave);
+      const pedacos: Buffer[] = [];
+      for await (const pedaco of fluxo) pedacos.push(Buffer.from(pedaco as Buffer));
+      return Buffer.concat(pedacos);
+    } catch {
+      return null;
+    }
   }
 
   // -------------------------------------------------------------------
@@ -283,9 +421,7 @@ export class PosseService {
       isCurrent: posse.endedAt === null,
       returnedTo: posse.returnedTo,
       notes: posse.notes,
-      signedByName: posse.signedByName,
-      signedAt: posse.signedAt?.toISOString() ?? null,
-      hasSignature: posse.signatureKey !== null,
+      terms: posse.terms.map(TermosService.paraView),
     };
   }
 }

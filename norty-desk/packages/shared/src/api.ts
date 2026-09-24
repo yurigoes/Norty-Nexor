@@ -29,6 +29,7 @@ import type {
   ProblemStatus,
   Scale,
   TargetKind,
+  TermKind,
   TicketStatus,
   TicketType,
   Visibility,
@@ -739,6 +740,24 @@ export type AssetView = {
  * `isCurrent` sai de `endedAt === null`: é a posse aberta, e há no
  * máximo uma por equipamento — o banco garante.
  */
+/**
+ * Um papel assinado.
+ *
+ * `body` é o texto **como foi assinado** — renderizado no instante da
+ * assinatura, com os marcadores já trocados. Editar o modelo depois não
+ * mexe nele, que é o ponto: um termo que mudasse de texto não seria
+ * termo.
+ */
+export type TermoView = {
+  id: string;
+  kind: TermKind;
+  body: string;
+  signedByName: string;
+  signedAt: string;
+  /** Há traço desenhado guardado. O PDF do termo o traz junto. */
+  hasSignature: boolean;
+};
+
 export type PosseView = {
   id: string;
   user: PartyRef;
@@ -748,11 +767,8 @@ export type PosseView = {
   /** Para onde o equipamento foi quando voltou, na hora em que voltou. */
   returnedTo: AssetStatus | null;
   notes: string | null;
-  /** Quem assinou o termo de compromisso, e quando. */
-  signedByName: string | null;
-  signedAt: string | null;
-  /** Há termo assinado guardado. A imagem sai por rota própria. */
-  hasSignature: boolean;
+  /** Os papéis desta posse: o compromisso da entrega e, se houve, a quebra. */
+  terms: TermoView[];
 };
 
 export type EntregarAtivoRequest = {
@@ -772,6 +788,29 @@ export type DevolverAtivoRequest = {
   /** Guardar ou descartar. É o que o equipamento vira ao voltar. */
   returnedTo: Extract<AssetStatus, 'EM_ESTOQUE' | 'BAIXADO'>;
   notes?: string;
+  /**
+   * Voltou quebrado, e a pessoa assina o termo de ocorrência.
+   *
+   * Separado de `returnedTo`: nem todo descarte é quebra — equipamento
+   * velho também sai do parque —, e nem toda quebra vira descarte, que
+   * é o caso do conserto.
+   */
+  comQuebra?: boolean;
+  signature?: string;
+  signedByName?: string;
+};
+
+/** O texto do termo que a casa usa, por tipo. */
+export type ModeloDeTermoView = {
+  kind: TermKind;
+  body: string;
+  /** Nunca editado: o que está no ar é o texto que veio de fábrica. */
+  padrao: boolean;
+  updatedAt: string | null;
+};
+
+export type EscreverModeloDeTermoRequest = {
+  body: string;
 };
 
 export type WriteAssetRequest = {

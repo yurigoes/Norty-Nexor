@@ -68,6 +68,8 @@ model Organization {
   assetModels         AssetModel[]
   components          AssetComponent[]
   assetHoldings       AssetHolding[]
+  assetTerms          AssetTerm[]
+  termTemplates       TermTemplate[]
   authSources         AuthSource[]
   software            Software[]
   softwareLicenses    SoftwareLicense[]
@@ -1600,15 +1602,6 @@ model AssetHolding {
   returnedTo     AssetStatus?
   notes          String?
 
-  /// --- Termo de compromisso ----------------------------------------
-  /// Chave do PNG no armazenamento, como na ordem de serviço: o traço
-  /// de um dedo em tela de celular dá dezenas de kilobytes, e o
-  /// histórico de um ativo carregaria todos eles.
-  signatureKey String?
-  /// Quem assinou e quando, como era na hora de assinar.
-  signedByName String?
-  signedAt     DateTime?
-
   createdAt DateTime @default(now())
 
   /// `true` enquanto está com a pessoa, `NULL` depois. Ver o cabeçalho.
@@ -1616,6 +1609,7 @@ model AssetHolding {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   asset        Asset        @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  terms        AssetTerm[]
   /// `Restrict`, e não cascata: apagar a pessoa não pode apagar a prova
   /// de quem estava com o equipamento. O caminho normal de saída é
   /// `isActive: false`; quem insiste em apagar devolve o que está na mão
@@ -1627,6 +1621,82 @@ model AssetHolding {
   @@index([organizationId, userId])
   @@index([assetId, startedAt])
   @@map("asset_holdings")
+}
+
+/// O papel que a pessoa assinou.
+///
+/// ## Por que o texto fica aqui, e não só no modelo
+///
+/// O modelo (`TermTemplate`) é editável: a casa ajusta a redação, o
+/// jurídico pede outra cláusula, e meses depois o texto é outro. Um
+/// termo que aponta para o modelo passaria a dizer que a pessoa assinou
+/// o texto de hoje — e ela não assinou. O `body` aqui é o texto
+/// **renderizado no instante da assinatura**, com os marcadores já
+/// trocados. É o que existe no papel que ela pegou na mão.
+///
+/// Pelo mesmo motivo `signedByName` é gravado aqui e não lido do
+/// cadastro depois: o documento tem de dizer o que era verdade quando
+/// foi assinado.
+///
+/// ## Por que é uma linha por termo, e não campos na posse
+///
+/// A mesma posse produz dois papéis em momentos diferentes: o
+/// compromisso na entrega e, se o equipamento voltar quebrado, o termo
+/// de quebra na devolução. Dois jogos de colunas na posse dariam no
+/// mesmo até alguém precisar de um terceiro.
+model AssetTerm {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  holdingId      String   @db.Uuid
+  kind           TermKind
+
+  /// O texto renderizado, como foi assinado. Ver o cabeçalho.
+  body String
+
+  /// Chave do PNG no armazenamento, como na ordem de serviço: o traço
+  /// de um dedo em tela de celular dá dezenas de kilobytes, e o
+  /// histórico de um ativo carregaria todos eles.
+  ///
+  /// Nulo é termo registrado sem assinatura desenhada — o papel foi
+  /// impresso e assinado à mão, e o sistema guarda o texto e a data.
+  signatureKey String?
+  signedByName String
+  signedAt     DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  holding      AssetHolding @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, signedAt])
+  @@index([holdingId])
+  @@map("asset_terms")
+}
+
+/// O texto que a casa usa, por tipo de termo.
+///
+/// Um por organização e por tipo — a redação é política da casa, e duas
+/// redações ativas ao mesmo tempo seriam duas políticas. Editar aqui
+/// vale para o **próximo** termo; o que já foi assinado guarda o
+/// próprio texto (ver `AssetTerm.body`).
+model TermTemplate {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  kind           TermKind
+  body           String
+  updatedAt      DateTime @updatedAt
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, kind])
+  @@map("term_templates")
+}
+
+enum TermKind {
+  /// Assinado na entrega: a pessoa recebe e se compromete a guardar.
+  COMPROMISSO
+  /// Assinado na devolução com dano: ela reconhece o que aconteceu.
+  QUEBRA
 }
 
 /// Um chamado pode envolver mais de um equipamento, e um equipamento

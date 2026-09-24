@@ -205,8 +205,18 @@ Entra nas fases seguintes (`docs/10-roadmap.md`):
   Componente é o que está parafusado dentro e não vai a lugar nenhum
   sozinho. Um nível só — o serviço recusa pendurar num ativo que já
   tem pai, e o banco recusa ser pai de si mesmo.
+- `AssetTerm` — (novo) o papel que a pessoa assinou: `COMPROMISSO` na
+  entrega, `QUEBRA` na devolução com dano. `body` é o texto
+  **renderizado no instante da assinatura**, e não um ponteiro para o
+  modelo — editar a redação depois não pode reescrever o que alguém já
+  assinou, senão o histórico deixa de valer como prova.
+- `TermTemplate` — (novo) a redação que a casa usa, uma por tipo. Enquanto
+  ninguém edita, vale o `TEXTO_PADRAO_DO_TERMO` do domínio
+  compartilhado. Os marcadores são lista fechada (`CAMPOS_DO_TERMO`), e
+  marcador inventado é recusado ao salvar: no papel ele sairia cru, com
+  a pessoa esperando para assinar.
 - `AssetHolding` — (novo) quem está com o equipamento e quem esteve
-  antes, com o termo de compromisso assinado. `Asset.userId` continua
+  antes. `Asset.userId` continua
   como o ponteiro de hoje, derivado e escrito só por
   `entregar`/`devolver` (regra 7 do CLAUDE.md): o `PATCH` do ativo não
   o aceita mais. `isCurrent` é coluna gerada a partir de `endedAt`, e o

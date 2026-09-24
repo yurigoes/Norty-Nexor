@@ -117,6 +117,21 @@ export class DevolverAtivoDto {
   /** Guardar ou descartar: é o que o equipamento vira ao voltar. */
   @IsIn(['EM_ESTOQUE', 'BAIXADO']) returnedTo!: 'EM_ESTOQUE' | 'BAIXADO';
   @IsOptional() @IsString() @MaxLength(2000) notes?: string;
+
+  /**
+   * Voltou quebrado, e a pessoa assina o termo de ocorrência.
+   *
+   * Separado de `returnedTo` de propósito: nem todo descarte é quebra —
+   * equipamento velho também sai do parque —, e nem toda quebra vira
+   * descarte, que é o caso do conserto.
+   */
+  @IsOptional() @Transform(booleano) @IsBoolean() comQuebra?: boolean;
+  @IsOptional() @IsString() @MaxLength(TETO_DA_ASSINATURA) signature?: string;
+  @IsOptional() @IsString() @MaxLength(200) signedByName?: string;
+}
+
+export class EscreverModeloDeTermoDto {
+  @IsString() @MinLength(40) @MaxLength(20000) body!: string;
 }
 
 export class ResponderPesquisaDto {

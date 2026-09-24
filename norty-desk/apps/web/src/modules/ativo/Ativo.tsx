@@ -7,12 +7,14 @@ import type {
   EscreverComponenteRequest,
   FabricanteView,
   PosseView,
+  TermoView,
 } from '@norty-desk/shared';
 import {
   ATRIBUTOS_DO_COMPONENTE,
   COMPONENT_KINDS,
   ROTULO_ATIVO,
   ROTULO_ATIVO_STATUS,
+  ROTULO_TERMO,
   ROTULO_COMPONENTE,
   descreverComponente,
   emCapacidade,
@@ -28,7 +30,7 @@ import {
   entregarAtivo,
   obterAtivo,
   removerComponente,
-  termoAssinado,
+  termoEmPdf,
   type ChamadoDoAtivo,
 } from '../../api/ativos';
 import { listarPessoas, type PessoaView } from '../../api/aprovacoes';
@@ -694,12 +696,6 @@ function Posse({
 }
 
 function LinhaDaPosse({ posse }: { posse: PosseView }) {
-  const [termo, setTermo] = useState<string | null>(null);
-
-  // O `blob:` é solto ao sair da tela: o que ninguém solta fica na
-  // memória da aba até ela fechar.
-  useEffect(() => () => { if (termo) URL.revokeObjectURL(termo); }, [termo]);
-
   return (
     <li className="pilha-sm">
       <div className="linha-entre" style={{ gap: 'var(--e-3)' }}>
@@ -719,34 +715,52 @@ function LinhaDaPosse({ posse }: { posse: PosseView }) {
 
       {posse.notes ? <span className="campo-ajuda">{posse.notes}</span> : null}
 
-      {posse.signedAt ? (
-        <span className="campo-ajuda">
-          Termo assinado por {posse.signedByName} em {dataCurta(posse.signedAt)}
-          {posse.hasSignature ? (
-            <>
-              {' · '}
-              <button
-                type="button"
-                className="btn -fantasma -sm"
-                onClick={() => {
-                  void termoAssinado(posse.id)
-                    .then(setTermo)
-                    .catch(() => undefined);
-                }}
-              >
-                ver o traço
-              </button>
-            </>
-          ) : null}
-        </span>
-      ) : (
+      {posse.terms.length === 0 ? (
         // Entrega sem termo não é recusada — recusá-la empurraria o
         // gesto para fora do sistema —, mas fica visível.
         <span className="campo-ajuda">Entregue sem termo assinado.</span>
+      ) : (
+        posse.terms.map((t) => <Termo key={t.id} termo={t} />)
       )}
-
-      {termo ? <img src={termo} alt={`Assinatura de ${posse.signedByName ?? ''}`} style={{ maxWidth: 280 }} /> : null}
     </li>
+  );
+}
+
+/**
+ * Um papel assinado, e o caminho para abri-lo.
+ *
+ * O PDF, e não só o traço: a imagem sozinha não prova nada — o que vale
+ * é o texto que estava embaixo dela, e é esse texto que o termo
+ * congelou.
+ */
+function Termo({ termo }: { termo: TermoView }) {
+  const [pdf, setPdf] = useState<string | null>(null);
+
+  // O `blob:` é solto ao sair da tela: o que ninguém solta fica na
+  // memória da aba até ela fechar.
+  useEffect(() => () => { if (pdf) URL.revokeObjectURL(pdf); }, [pdf]);
+
+  useEffect(() => {
+    if (pdf) window.open(pdf, '_blank', 'noopener');
+  }, [pdf]);
+
+  return (
+    <span className="campo-ajuda">
+      {ROTULO_TERMO[termo.kind]} assinado por {termo.signedByName} em{' '}
+      {dataCurta(termo.signedAt)}
+      {' · '}
+      <button
+        type="button"
+        className="btn -fantasma -sm"
+        onClick={() => {
+          void termoEmPdf(termo.id)
+            .then(setPdf)
+            .catch(() => undefined);
+        }}
+      >
+        abrir o papel
+      </button>
+    </span>
   );
 }
 
@@ -874,6 +888,9 @@ function FormularioDeDevolucao({
 }) {
   const [returnedTo, setReturnedTo] = useState<'EM_ESTOQUE' | 'BAIXADO'>('EM_ESTOQUE');
   const [notes, setNotes] = useState('');
+  const [comQuebra, setComQuebra] = useState(false);
+  const [assinatura, setAssinatura] = useState<string | null>(null);
+  const [signedByName, setSignedByName] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
@@ -884,7 +901,13 @@ function FormularioDeDevolucao({
         e.preventDefault();
         setErro(null);
         setOcupado(true);
-        void devolverAtivo(assetId, { returnedTo, ...(notes.trim() ? { notes: notes.trim() } : {}) })
+        void devolverAtivo(assetId, {
+          returnedTo,
+          ...(notes.trim() ? { notes: notes.trim() } : {}),
+          ...(comQuebra ? { comQuebra: true } : {}),
+          ...(comQuebra && assinatura ? { signature: assinatura } : {}),
+          ...(comQuebra && signedByName.trim() ? { signedByName: signedByName.trim() } : {}),
+        })
           .then(() => aoConcluir())
           .catch((e2: unknown) =>
             setErro(e2 instanceof ErroDaApi ? e2.message : 'Não foi possível devolver.'),
@@ -920,16 +943,67 @@ function FormularioDeDevolucao({
 
       <div className="campo">
         <label className="campo-rotulo" htmlFor="devolucao-notas">
-          Observações
+          {comQuebra ? 'O que aconteceu' : 'Observações'}
         </label>
         <textarea
           id="devolucao-notas"
           className="textarea"
-          rows={2}
+          rows={comQuebra ? 4 : 2}
+          required={comQuebra}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
         />
+        {comQuebra ? (
+          <span className="campo-ajuda">
+            Este texto entra no termo de quebra, no lugar da descrição da ocorrência. Um termo de
+            ocorrência sem a ocorrência não serve para nada.
+          </span>
+        ) : null}
       </div>
+
+      <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+        <input
+          type="checkbox"
+          checked={comQuebra}
+          onChange={(e) => setComQuebra(e.target.checked)}
+        />
+        <span>
+          Voltou quebrado
+          <span className="campo-ajuda">
+            Gera o termo de ocorrência para a pessoa assinar. Independe do destino: equipamento
+            velho também vai para descarte sem ter quebrado, e quebra que vai para conserto volta
+            ao estoque.
+          </span>
+        </span>
+      </label>
+
+      {comQuebra ? (
+        <>
+          <div className="campo">
+            <span className="campo-rotulo">Assinatura de quem devolve</span>
+            <Assinatura aoMudar={setAssinatura} />
+            <span className="campo-ajuda">
+              Opcional. Sem ela a devolução vale e o dano fica registrado — mas o termo de quebra
+              só nasce com alguém assinando.
+            </span>
+          </div>
+
+          {assinatura ? (
+            <div className="campo">
+              <label className="campo-rotulo" htmlFor="devolucao-assinante">
+                Quem assinou
+              </label>
+              <input
+                id="devolucao-assinante"
+                className="input"
+                placeholder="Em branco, vale o nome de quem estava com o equipamento"
+                value={signedByName}
+                onChange={(e) => setSignedByName(e.target.value)}
+              />
+            </div>
+          ) : null}
+        </>
+      ) : null}
 
       <button type="submit" className="btn -primario" disabled={ocupado}>
         {ocupado ? 'Devolvendo…' : 'Devolver'}

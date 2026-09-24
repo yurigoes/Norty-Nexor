@@ -28,6 +28,7 @@ import { Integracoes } from '../modules/configuracao/Integracoes';
 import { CatalogoDoAtivo } from '../modules/configuracao/CatalogoDoAtivo';
 import { Contratos } from '../modules/configuracao/Contratos';
 import { Modelos } from '../modules/configuracao/Modelos';
+import { Termos } from '../modules/configuracao/Termos';
 import { Recorrencias } from '../modules/configuracao/Recorrencias';
 import { Sla } from '../modules/configuracao/Sla';
 import { Ativo } from '../modules/ativo/Ativo';
@@ -191,6 +192,7 @@ function Aplicativo() {
               element={<Navigate to="/config/modelos-de-chamado" replace />}
             />
             <Route path="/config/modelos" element={<Modelos />} />
+            <Route path="/config/termos" element={<Termos />} />
             <Route path="/config/contratos" element={<Contratos />} />
             <Route path="/config/catalogo-ativos" element={<CatalogoDoAtivo />} />
             <Route path="/config/canais" element={<Canais />} />

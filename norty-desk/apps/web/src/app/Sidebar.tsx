@@ -60,6 +60,11 @@ export function Sidebar() {
       para: '/config/modelos',
       permissao: 'config:modelos' as const,
     },
+    {
+      rotulo: 'Termos de equipamento',
+      para: '/config/termos',
+      permissao: 'config:modelos' as const,
+    },
     { rotulo: 'Contratos e custo', para: '/config/contratos', permissao: 'contrato:ler' as const },
     {
       rotulo: 'Catálogo do ativo',

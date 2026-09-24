@@ -802,27 +802,194 @@ export type ContextoDoModelo = Partial<Record<CampoDoModelo, string>>;
 const MARCADOR = /\{\{\s*([a-z]+\.[a-z]+)\s*\}\}/g;
 
 /**
- * Preenche o modelo.
+ * Troca os marcadores pelos valores. O motor, sem vocabulário.
  *
- * Marcador desconhecido fica **como está**, visível no texto: some-lo
- * faria a frase perder um pedaço sem ninguém reparar, e é justamente
- * o que acontece quando alguém renomeia um campo. `marcadoresInvalidos`
- * existe para a tela de configuração recusar antes — errar na hora de
- * salvar é barato, errar na resposta ao cliente não é.
+ * Marcador desconhecido fica **como está**, visível no texto: sumir com
+ * ele faria a frase perder um pedaço sem ninguém reparar, e é
+ * justamente o que acontece quando alguém renomeia um campo.
+ */
+function preencher(texto: string, contexto: Record<string, string | undefined>): string {
+  return texto.replace(MARCADOR, (inteiro, campo: string) => contexto[campo] ?? inteiro);
+}
+
+/** Os marcadores do texto que não estão na lista. */
+function foraDaLista(texto: string, conhecidos: readonly string[]): string[] {
+  const lista = new Set<string>(conhecidos);
+  const achados = [...texto.matchAll(MARCADOR)].map((m) => m[1]!);
+  return [...new Set(achados.filter((c) => !lista.has(c)))];
+}
+
+/**
+ * Preenche o modelo de resposta, solução ou tarefa.
+ *
+ * `marcadoresInvalidos` existe para a tela de configuração recusar
+ * antes — errar na hora de salvar é barato, errar na resposta ao
+ * cliente não é.
  */
 export function preencherModelo(texto: string, contexto: ContextoDoModelo): string {
-  return texto.replace(MARCADOR, (inteiro, campo: string) => {
-    const valor = contexto[campo as CampoDoModelo];
-    return valor === undefined ? inteiro : valor;
-  });
+  return preencher(texto, contexto);
 }
 
 /** Os marcadores do texto que não existem. */
 export function marcadoresInvalidos(texto: string): string[] {
-  const conhecidos = new Set<string>(CAMPOS_DO_MODELO);
-  const achados = [...texto.matchAll(MARCADOR)].map((m) => m[1]!);
-  return [...new Set(achados.filter((c) => !conhecidos.has(c)))];
+  return foraDaLista(texto, CAMPOS_DO_MODELO);
 }
+
+// ---------------------------------------------------------------------
+// Termos de compromisso e de quebra
+// ---------------------------------------------------------------------
+
+/**
+ * Os dois papéis que a pessoa assina.
+ *
+ * `COMPROMISSO` na entrega: ela recebe o equipamento e se compromete a
+ * guardá-lo. `QUEBRA` na devolução com dano: ela reconhece o que
+ * aconteceu, e o documento registra o estado em que o equipamento
+ * voltou.
+ */
+export const TERM_KINDS = ['COMPROMISSO', 'QUEBRA'] as const;
+export type TermKind = (typeof TERM_KINDS)[number];
+
+export const ROTULO_TERMO: Record<TermKind, string> = {
+  COMPROMISSO: 'Termo de compromisso',
+  QUEBRA: 'Termo de quebra',
+};
+
+/**
+ * O que o texto do termo pode interpolar.
+ *
+ * Lista fechada, pela mesma razão do modelo de resposta: um motor de
+ * expressões dentro do texto seria mais uma linguagem para manter.
+ *
+ * Não há marcador para o documento de quem assina — `User` não guarda
+ * CPF. Um marcador que sempre renderiza vazio é pior que marcador
+ * nenhum: ele deixa uma lacuna no papel e a impressão de que o dado
+ * está lá.
+ */
+export const CAMPOS_DO_TERMO = [
+  'pessoa.nome',
+  'empresa.nome',
+  'empresa.documento',
+  'equipamento.nome',
+  'equipamento.tipo',
+  'equipamento.patrimonio',
+  'equipamento.serie',
+  'equipamento.fabricante',
+  'equipamento.modelo',
+  'equipamento.destino',
+  'ocorrencia.descricao',
+  'organizacao.nome',
+  'termo.data',
+] as const;
+
+export type CampoDoTermo = (typeof CAMPOS_DO_TERMO)[number];
+export type ContextoDoTermo = Partial<Record<CampoDoTermo, string>>;
+
+export function preencherTermo(texto: string, contexto: ContextoDoTermo): string {
+  return preencher(texto, contexto);
+}
+
+/** Os marcadores do termo que não existem. */
+export function marcadoresInvalidosDoTermo(texto: string): string[] {
+  return foraDaLista(texto, CAMPOS_DO_TERMO);
+}
+
+/**
+ * O texto que a instalação começa usando.
+ *
+ * **Ponto de partida, não parecer jurídico.** Quem responde por contrato
+ * na casa tem de ler e ajustar antes do primeiro uso — é por isso que o
+ * texto é editável por organização, e é por isso que ele é congelado no
+ * momento da assinatura: mudar o modelo depois não pode mudar o que
+ * alguém já assinou.
+ */
+export const TEXTO_PADRAO_DO_TERMO: Record<TermKind, string> = {
+  COMPROMISSO: `TERMO DE COMPROMISSO E RESPONSABILIDADE — GUARDA DE EQUIPAMENTO
+
+Eu, {{pessoa.nome}}, declaro ter recebido de {{empresa.nome}}, em
+{{termo.data}}, o equipamento abaixo, em condições de uso, para o
+desempenho das minhas atividades:
+
+  Equipamento: {{equipamento.nome}} ({{equipamento.tipo}})
+  Fabricante e modelo: {{equipamento.fabricante}} {{equipamento.modelo}}
+  Patrimônio: {{equipamento.patrimonio}}
+  Número de série: {{equipamento.serie}}
+
+E me comprometo a:
+
+1. Utilizar o equipamento exclusivamente para as atividades
+   profissionais a que ele se destina.
+2. Zelar pela sua guarda e conservação, adotando os cuidados que
+   adotaria com bem próprio, e mantê-lo protegido de calor, umidade,
+   quedas e líquidos.
+3. Não emprestar, ceder, alienar nem permitir o uso por terceiros.
+4. Não remover, substituir nem alterar componentes, lacres, etiquetas de
+   patrimônio ou o sistema operacional sem autorização.
+5. Comunicar imediatamente, pelo canal de atendimento, qualquer defeito,
+   dano, furto, roubo ou extravio, bem como qualquer mudança de
+   endereço em que o equipamento passe a ficar.
+6. Devolver o equipamento, com todos os seus acessórios, quando
+   solicitado ou ao término do vínculo, no mesmo estado em que o recebi,
+   ressalvado o desgaste natural do uso regular.
+
+Declaro estar ciente de que o equipamento é patrimônio de
+{{empresa.nome}}, e de que o uso em desacordo com este termo, bem como o
+dano decorrente de negligência, imprudência ou imperícia, poderá ser
+objeto de apuração e de ressarcimento na forma da lei e das normas
+internas aplicáveis.
+
+Declaro, ainda, estar ciente de que o equipamento pode conter
+informações de titularidade de {{empresa.nome}} e de terceiros, e me
+comprometo a preservar o sigilo delas.
+
+{{termo.data}}
+
+
+_______________________________________
+{{pessoa.nome}}
+
+
+Registrado por {{organizacao.nome}}.`,
+
+  QUEBRA: `TERMO DE OCORRÊNCIA — DANO EM EQUIPAMENTO
+
+Eu, {{pessoa.nome}}, declaro que o equipamento abaixo, que estava sob a
+minha guarda por força de termo de compromisso firmado com
+{{empresa.nome}}, apresentou o dano descrito nesta data:
+
+  Equipamento: {{equipamento.nome}} ({{equipamento.tipo}})
+  Fabricante e modelo: {{equipamento.fabricante}} {{equipamento.modelo}}
+  Patrimônio: {{equipamento.patrimonio}}
+  Número de série: {{equipamento.serie}}
+
+Descrição da ocorrência:
+
+{{ocorrencia.descricao}}
+
+Declaro que as informações acima são verdadeiras e que o equipamento foi
+devolvido nesta data, tendo como destino: {{equipamento.destino}}.
+
+Declaro estar ciente de que a ocorrência será apurada, e de que o dano
+decorrente de negligência, imprudência ou imperícia poderá ser objeto de
+ressarcimento na forma da lei e das normas internas aplicáveis.
+
+{{termo.data}}
+
+
+_______________________________________
+{{pessoa.nome}}
+
+
+Registrado por {{organizacao.nome}}.`,
+};
+
+/**
+ * O que entra no lugar do marcador quando o dado não existe.
+ *
+ * Um travessão, e não vazio: "Patrimônio:" seguido de nada parece campo
+ * esquecido na impressão; seguido de "—" diz que não há patrimônio.
+ */
+export const SEM_DADO_NO_TERMO = '—';
 
 // ---------------------------------------------------------------------
 // Recorrência — substitui glpi_ticketrecurrents

@@ -59,14 +59,14 @@ export const devolverAtivo = (id: string, dados: DevolverAtivoRequest) =>
   chamar<PosseView[]>(`/assets/${id}/devolver`, { metodo: 'POST', corpo: dados });
 
 /**
- * A imagem do termo assinado, como endereço local.
+ * O termo em PDF, como endereço local para abrir numa aba.
  *
- * Não serve num `<img src>` direto: a rota exige `Authorization`, e o
- * navegador não o manda numa imagem. Quem chamar devolve o endereço com
+ * A rota exige `Authorization`, e o navegador não o manda numa
+ * navegação comum. Quem chamar devolve o endereço com
  * `URL.revokeObjectURL`.
  */
-export const termoAssinado = (holdingId: string) =>
-  buscarComoBlob(`/posses/${holdingId}/termo`, 'image/png');
+export const termoEmPdf = (termId: string) =>
+  buscarComoBlob(`/termos/${termId}/pdf`, 'application/pdf');
 
 // --- Componentes -------------------------------------------------------
 

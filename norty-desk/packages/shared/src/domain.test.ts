@@ -3,11 +3,16 @@ import { test } from 'node:test';
 
 import {
   DEFAULT_PRIORITY_MATRIX,
+  TERM_KINDS,
+  TEXTO_PADRAO_DO_TERMO,
   canTransition,
   computePriority,
   emailSubject,
+  marcadoresInvalidos,
+  marcadoresInvalidosDoTermo,
   normalizePhone,
   parseTicketNumberFromSubject,
+  preencherTermo,
 } from './domain';
 import { ROLE_PERMISSIONS, can, ticketReadScope } from './permissions';
 
@@ -110,4 +115,44 @@ test('o escopo de leitura continua sendo o mais amplo do perfil', () => {
   assert.equal(ticketReadScope('SOLICITANTE'), 'PROPRIOS');
   assert.equal(ticketReadScope('AGENTE'), 'TIME');
   assert.equal(ticketReadScope('GESTOR'), 'TODOS');
+});
+
+// ---------------------------------------------------------------------
+// Termos
+// ---------------------------------------------------------------------
+
+test('o termo troca o marcador conhecido e deixa o desconhecido à vista', () => {
+  const texto = 'Eu, {{pessoa.nome}}, recebi o {{equipamento.nome}} de {{fulano.ciclano}}.';
+
+  assert.equal(
+    preencherTermo(texto, { 'pessoa.nome': 'Ana', 'equipamento.nome': 'Notebook' }),
+    'Eu, Ana, recebi o Notebook de {{fulano.ciclano}}.',
+  );
+});
+
+test('marcador conhecido sem valor no contexto também fica à vista', () => {
+  // Some-lo faria a frase perder um pedaço sem ninguém reparar — que é
+  // exatamente o defeito que o termo não pode ter.
+  assert.equal(
+    preencherTermo('Patrimônio: {{equipamento.patrimonio}}', {}),
+    'Patrimônio: {{equipamento.patrimonio}}',
+  );
+});
+
+test('o texto padrão dos dois termos não tem marcador inventado', () => {
+  for (const kind of TERM_KINDS) {
+    assert.deepEqual(
+      marcadoresInvalidosDoTermo(TEXTO_PADRAO_DO_TERMO[kind]),
+      [],
+      `o texto padrão de ${kind} usa marcador que não existe`,
+    );
+  }
+});
+
+test('o modelo de resposta e o termo não compartilham vocabulário', () => {
+  // Os dois usam o mesmo motor. Se um passasse a aceitar os campos do
+  // outro, a tela de configuração deixaria salvar `{{chamado.numero}}`
+  // num termo — que renderizaria vazio no papel assinado.
+  assert.deepEqual(marcadoresInvalidosDoTermo('{{chamado.numero}}'), ['chamado.numero']);
+  assert.deepEqual(marcadoresInvalidos('{{pessoa.nome}}'), ['pessoa.nome']);
 });

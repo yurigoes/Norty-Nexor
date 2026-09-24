@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -8,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   Res,
   UseGuards,
@@ -18,9 +20,12 @@ import type {
   AssetDetail,
   AssetView,
   ComponenteView,
+  ModeloDeTermoView,
   PosseView,
   SenhaRevelada,
+  TermKind,
 } from '@norty-desk/shared';
+import { TERM_KINDS } from '@norty-desk/shared';
 
 import { CurrentUser, type UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
@@ -29,11 +34,14 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { AcessoRemotoService } from './acesso-remoto.service';
 import { AtivosService } from './ativos.service';
 import { PosseService } from './posse.service';
+import { TermosService } from './termos.service';
+import { termoEmPdf } from './termo.pdf';
 import { EscreverAcessoRemotoDto } from './dto-acesso';
 import {
   BuscarAtivosDto,
   DevolverAtivoDto,
   EditarAtivoDto,
+  EscreverModeloDeTermoDto,
   EditarComponenteDto,
   EntregarAtivoDto,
   EscreverAtivoDto,
@@ -48,6 +56,7 @@ export class AtivosController {
     private readonly ativos: AtivosService,
     private readonly acesso: AcessoRemotoService,
     private readonly posse: PosseService,
+    private readonly termos: TermosService,
   ) {}
 
   @Get('assets')
@@ -187,17 +196,71 @@ export class AtivosController {
     return this.posse.devolver(usuario, id, dto);
   }
 
-  /** O PNG do termo assinado, para conferir ou imprimir. */
-  @Get('posses/:holdingId/termo')
+  /**
+   * O termo em PDF, com o texto assinado e o traço.
+   *
+   * PDF e não só a imagem: o traço sozinho não prova nada — o que vale
+   * é o texto que estava embaixo dele, e é esse texto que `AssetTerm`
+   * congelou.
+   */
+  @Get('termos/:termId/pdf')
   @RequirePermission('ativo:ler')
-  async termo(
+  async baixarTermo(
     @CurrentUser() usuario: UsuarioAutenticado,
-    @Param('holdingId', ParseUUIDPipe) holdingId: string,
+    @Param('termId', ParseUUIDPipe) termId: string,
     @Res() resposta: Response,
   ): Promise<void> {
-    const png = await this.posse.assinatura(usuario, holdingId);
-    resposta.setHeader('Content-Type', 'image/png');
-    resposta.send(png);
+    const termo = await this.posse.termo(usuario, termId);
+    const pdf = await termoEmPdf(termo);
+
+    resposta.setHeader('Content-Type', 'application/pdf');
+    resposta.setHeader(
+      'Content-Disposition',
+      `inline; filename="termo-${termo.kind.toLowerCase()}.pdf"`,
+    );
+    resposta.send(pdf);
+  }
+
+  // --- O texto dos termos ----------------------------------------------
+
+  /**
+   * A redação que a casa usa.
+   *
+   * `config:modelos` e não `ativo:gerenciar`: a redação de um termo é
+   * política da casa, como o modelo de resposta — e quem mexe nela é
+   * quem responde por texto que vai para fora, não quem cadastra
+   * equipamento.
+   */
+  @Get('config/termos')
+  @RequirePermission('config:modelos')
+  modelosDeTermo(@CurrentUser() usuario: UsuarioAutenticado): Promise<ModeloDeTermoView[]> {
+    return this.termos.modelos(usuario);
+  }
+
+  @Put('config/termos/:kind')
+  @RequirePermission('config:modelos')
+  salvarModeloDeTermo(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('kind') kind: string,
+    @Body() dto: EscreverModeloDeTermoDto,
+  ): Promise<ModeloDeTermoView[]> {
+    return this.termos.salvarModelo(usuario, AtivosController.exigirTipoDeTermo(kind), dto.body);
+  }
+
+  /** Volta ao texto de fábrica. */
+  @Delete('config/termos/:kind')
+  @RequirePermission('config:modelos')
+  restaurarModeloDeTermo(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('kind') kind: string,
+  ): Promise<ModeloDeTermoView[]> {
+    return this.termos.restaurarModelo(usuario, AtivosController.exigirTipoDeTermo(kind));
+  }
+
+  /** O tipo vem da URL, e a URL aceita qualquer coisa. */
+  private static exigirTipoDeTermo(kind: string): TermKind {
+    if ((TERM_KINDS as readonly string[]).includes(kind)) return kind as TermKind;
+    throw new BadRequestException(`Tipo de termo desconhecido: ${kind}.`);
   }
 
   // --- Como se chega na máquina ---------------------------------------
