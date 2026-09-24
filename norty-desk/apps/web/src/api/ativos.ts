@@ -4,6 +4,8 @@ import type {
   DevolverAtivoRequest,
   EntregarAtivoRequest,
   PosseView,
+  TrocaResponse,
+  TrocarAtivoRequest,
   ComponenteView,
   EscreverComponenteRequest,
   SatisfacaoResumo,
@@ -57,6 +59,16 @@ export const entregarAtivo = (id: string, dados: EntregarAtivoRequest) =>
 
 export const devolverAtivo = (id: string, dados: DevolverAtivoRequest) =>
   chamar<PosseView[]>(`/assets/${id}/devolver`, { metodo: 'POST', corpo: dados });
+
+/**
+ * Sai um, entra outro — numa operação só.
+ *
+ * Não é devolver e depois entregar pela tela: se a segunda falhasse, a
+ * pessoa ficaria sem nada. Do lado de lá as duas cabem na mesma
+ * transação.
+ */
+export const trocarAtivo = (ticketId: string, dados: TrocarAtivoRequest) =>
+  chamar<TrocaResponse>(`/tickets/${ticketId}/troca`, { metodo: 'POST', corpo: dados });
 
 /**
  * O termo em PDF, como endereço local para abrir numa aba.

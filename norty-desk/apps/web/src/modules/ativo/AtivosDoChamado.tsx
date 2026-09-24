@@ -9,6 +9,7 @@ import {
   vincularAtivo,
 } from '../../api/ativos';
 import { useAutenticacao } from '../../auth/Autenticacao';
+import { TrocaDeEquipamento } from './TrocaDeEquipamento';
 
 /**
  * Qual máquina é essa.
@@ -36,6 +37,7 @@ export function AtivosDoChamado({
   const [buscando, setBuscando] = useState(false);
   const [termo, setTermo] = useState('');
   const [achados, setAchados] = useState<AssetView[]>([]);
+  const [trocando, setTrocando] = useState<AssetView | null>(null);
 
   const recarregar = useCallback(async () => {
     setVinculados(await ativosDoChamado(ticketId));
@@ -88,21 +90,46 @@ export function AtivosDoChamado({
               {ativo.tag ? ` · ${ativo.tag}` : ''}
             </span>
           </span>
-          <button
-            type="button"
-            className="btn-icone"
-            aria-label={`Desvincular ${ativo.name}`}
-            onClick={() => {
-              void desvincularAtivo(ticketId, ativo.id).then((lista) => {
-                setVinculados(lista);
-                aoMudar?.();
-              });
-            }}
-          >
-            ×
-          </button>
+          <span style={{ display: 'flex', gap: 'var(--e-1)', flexShrink: 0 }}>
+            {/* Trocar só aparece no que está com alguém: sem posse
+                aberta não é troca, é entrega — e a API recusa. */}
+            {ativo.user && can('ativo:gerenciar') ? (
+              <button
+                type="button"
+                className="btn-link"
+                onClick={() => setTrocando(ativo)}
+              >
+                trocar
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="btn-icone"
+              aria-label={`Desvincular ${ativo.name}`}
+              onClick={() => {
+                void desvincularAtivo(ticketId, ativo.id).then((lista) => {
+                  setVinculados(lista);
+                  aoMudar?.();
+                });
+              }}
+            >
+              ×
+            </button>
+          </span>
         </div>
       ))}
+
+      {trocando ? (
+        <TrocaDeEquipamento
+          ticketId={ticketId}
+          sai={trocando}
+          aoFechar={() => setTrocando(null)}
+          aoTrocar={() => {
+            setTrocando(null);
+            void recarregar().then(() => aoMudar?.());
+          }}
+        />
+      ) : null}
 
       {buscando ? (
         <div className="pilha-sm">

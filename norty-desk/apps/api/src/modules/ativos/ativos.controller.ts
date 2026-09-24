@@ -24,6 +24,7 @@ import type {
   PosseView,
   SenhaRevelada,
   TermKind,
+  TrocaResponse,
 } from '@norty-desk/shared';
 import { TERM_KINDS } from '@norty-desk/shared';
 
@@ -46,6 +47,7 @@ import {
   EntregarAtivoDto,
   EscreverAtivoDto,
   EscreverComponenteDto,
+  TrocarAtivoDto,
   VincularAtivoDto,
 } from './dto';
 
@@ -334,6 +336,23 @@ export class AtivosController {
     @Body() dto: VincularAtivoDto,
   ): Promise<AssetView[]> {
     return this.ativos.vincular(usuario, id, dto.assetId);
+  }
+
+  /**
+   * Sai um equipamento, entra outro.
+   *
+   * `ativo:gerenciar`, e não `ativo:ler` como o vínculo: vincular
+   * equipamento ao chamado é dizer sobre o que ele é; trocar muda o
+   * parque e gera termo assinado.
+   */
+  @Post('tickets/:id/troca')
+  @RequirePermission('ativo:gerenciar')
+  trocar(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: TrocarAtivoDto,
+  ): Promise<TrocaResponse> {
+    return this.posse.trocar(usuario, id, dto);
   }
 
   @Delete('tickets/:id/ativos/:assetId')

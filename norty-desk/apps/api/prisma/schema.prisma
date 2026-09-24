@@ -683,6 +683,8 @@ enum EventType {
   MUDANCA_CLASSIFICACAO
   PAUSA_SLA
   RETOMADA_SLA
+  /// Saiu um equipamento, entrou outro. Público: ver `EVENT_TYPES`.
+  TROCA_DE_ATIVO
   ENTRADA_CANAL
   SAIDA_CANAL
 }

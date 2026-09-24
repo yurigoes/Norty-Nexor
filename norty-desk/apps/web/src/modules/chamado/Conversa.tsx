@@ -23,6 +23,7 @@ const TIPOS_DE_SISTEMA = new Set([
   'RETOMADA_SLA',
   'ANEXO_REMOVIDO',
   'AGENDAMENTO',
+  'TROCA_DE_ATIVO',
 ]);
 
 /**
@@ -248,6 +249,16 @@ function corpoDoEvento(evento: TicketEventView): string {
         ? textoDoAdiamento(payload.postponedSeconds)
         : '';
     return `${verbo} ${quando}.${prazo}`;
+  }
+  if (payload?.type === 'TROCA_DE_ATIVO') {
+    const onde = payload.destino === 'BAIXADO' ? 'foi para descarte' : 'voltou ao estoque';
+    const patrimonio = (p: { patrimonio: string | null }) => (p.patrimonio ? ` (${p.patrimonio})` : '');
+
+    return (
+      `Equipamento trocado: entrou ${payload.entrou.nome}${patrimonio(payload.entrou)}, ` +
+      `saiu ${payload.saiu.nome}${patrimonio(payload.saiu)} e ${onde}` +
+      `${payload.comQuebra ? ', com termo de quebra assinado' : ''}.`
+    );
   }
   if (payload?.type === 'PAUSA_SLA') return 'Chamado em pendência. O SLA foi pausado.';
   if (payload?.type === 'RETOMADA_SLA') {

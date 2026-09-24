@@ -221,7 +221,11 @@ Entra nas fases seguintes (`docs/10-roadmap.md`):
   marcador inventado é recusado ao salvar: no papel ele sairia cru, com
   a pessoa esperando para assinar.
 - `AssetHolding` — (novo) quem está com o equipamento e quem esteve
-  antes. `Asset.userId` continua
+  antes. A **troca** (`POST /tickets/:id/troca`) fecha uma posse e abre
+  outra na mesma transação, com uma assinatura para os dois termos: se a
+  entrega falhasse depois da devolução, a pessoa ficaria sem nada e o
+  chamado sem o registro do porquê. O evento `TROCA_DE_ATIVO` é público
+  — a máquina que trocou de mão é a coisa mais concreta do atendimento. `Asset.userId` continua
   como o ponteiro de hoje, derivado e escrito só por
   `entregar`/`devolver` (regra 7 do CLAUDE.md): o `PATCH` do ativo não
   o aceita mais. `isCurrent` é coluna gerada a partir de `endedAt`, e o

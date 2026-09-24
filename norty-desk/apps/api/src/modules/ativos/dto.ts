@@ -165,3 +165,22 @@ export class EditarComponenteDto extends EscreverComponenteDto {
   @IsOptional() @IsIn(COMPONENT_KINDS) declare kind: ComponentKind;
   @IsOptional() @IsString() @MinLength(1) @MaxLength(160) declare name: string;
 }
+
+/**
+ * Sai um equipamento, entra outro.
+ *
+ * Uma assinatura só para os dois papéis: quem devolve e quem recebe é a
+ * mesma pessoa, no mesmo instante, com o mesmo dedo na tela. Pedir duas
+ * seria teatro.
+ */
+export class TrocarAtivoDto {
+  @IsUUID() saiAssetId!: string;
+  @IsUUID() entraAssetId!: string;
+
+  @IsIn(['EM_ESTOQUE', 'BAIXADO']) returnedTo!: 'EM_ESTOQUE' | 'BAIXADO';
+
+  @IsOptional() @Transform(booleano) @IsBoolean() comQuebra?: boolean;
+  @IsOptional() @IsString() @MaxLength(2000) notes?: string;
+  @IsOptional() @IsString() @MaxLength(TETO_DA_ASSINATURA) signature?: string;
+  @IsOptional() @IsString() @MaxLength(200) signedByName?: string;
+}

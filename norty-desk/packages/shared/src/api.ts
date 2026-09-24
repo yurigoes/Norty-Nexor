@@ -815,6 +815,41 @@ export type DevolverAtivoRequest = {
   signedByName?: string;
 };
 
+/**
+ * Sai um equipamento, entra outro — pelo chamado.
+ *
+ * É a composição de uma devolução e uma entrega, e por isso carrega os
+ * campos das duas. A pessoa que recebe é a mesma que estava com o que
+ * saiu: trocar para outra pessoa não é troca, são duas operações
+ * separadas, e o serviço recusa em vez de adivinhar.
+ */
+export type TrocarAtivoRequest = {
+  /** O que a pessoa devolve. Tem de estar na mão dela. */
+  saiAssetId: string;
+  /** O que ela recebe no lugar. Tem de estar livre. */
+  entraAssetId: string;
+  /** Guardar ou descartar, para o que saiu. */
+  returnedTo: Extract<AssetStatus, 'EM_ESTOQUE' | 'BAIXADO'>;
+  /** O que saiu voltou quebrado; gera o termo de ocorrência. */
+  comQuebra?: boolean;
+  /** Vira a observação da devolução, e a descrição no termo de quebra. */
+  notes?: string;
+  /**
+   * Uma assinatura para os dois papéis.
+   *
+   * Quem devolve e quem recebe é a mesma pessoa, no mesmo instante, com
+   * o mesmo dedo na tela. Pedir duas seria teatro.
+   */
+  signature?: string;
+  signedByName?: string;
+};
+
+/** O histórico dos dois equipamentos, depois da troca. */
+export type TrocaResponse = {
+  saiu: PosseView[];
+  entrou: PosseView[];
+};
+
 /** O texto do termo que a casa usa, por tipo. */
 export type ModeloDeTermoView = {
   kind: TermKind;

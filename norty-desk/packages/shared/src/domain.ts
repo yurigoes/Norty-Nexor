@@ -77,6 +77,16 @@ export const EVENT_TYPES = [
   'MUDANCA_CLASSIFICACAO',
   'PAUSA_SLA',
   'RETOMADA_SLA',
+  /**
+   * Sai um equipamento, entra outro.
+   *
+   * Tipo próprio, e **público**: o cliente tem direito de ver que o
+   * notebook dele mudou, qual entrou e para onde o antigo foi. Registrar
+   * isso só como nota interna deixaria o histórico do chamado dizendo
+   * que nada aconteceu, num atendimento em que a coisa mais concreta
+   * que existe é a máquina que trocou de mão.
+   */
+  'TROCA_DE_ATIVO',
   'ENTRADA_CANAL',
   'SAIDA_CANAL',
 ] as const;
@@ -315,6 +325,23 @@ export type AppointmentPayload = {
   postponedSeconds: number;
 };
 
+/**
+ * A troca, como ela fica no papel do chamado.
+ *
+ * Os nomes são gravados aqui e não lidos do cadastro depois: renomear o
+ * equipamento meses adiante não pode reescrever o que o chamado disse
+ * que aconteceu. Os ids vão junto para a tela conseguir linkar.
+ */
+export type AssetSwapPayload = {
+  type: 'TROCA_DE_ATIVO';
+  saiu: { id: string; nome: string; patrimonio: string | null };
+  entrou: { id: string; nome: string; patrimonio: string | null };
+  /** Para onde o que saiu foi, na hora em que saiu. */
+  destino: 'EM_ESTOQUE' | 'BAIXADO';
+  /** Voltou quebrado, e há termo de ocorrência assinado. */
+  comQuebra: boolean;
+};
+
 export type EventPayload =
   | TaskPayload
   | AppointmentPayload
@@ -327,6 +354,7 @@ export type EventPayload =
   | ApprovalPayload
   | SlaPausePayload
   | SlaResumePayload
+  | AssetSwapPayload
   | ChannelIoPayload;
 
 /** Anexo já gravado no armazenamento, aguardando virar `Attachment`. */

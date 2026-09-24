@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { PosseView, TermKind } from '@norty-desk/shared';
+import type { PosseView, TermKind, TrocaResponse } from '@norty-desk/shared';
 import { assinaturaInvalida, deClientesDiferentes } from '@norty-desk/shared';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
@@ -13,7 +13,8 @@ import { randomUUID } from 'node:crypto';
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { PORTA_DE_ARMAZENAMENTO, type PortaDeArmazenamento } from '../attachments/armazenamento';
-import type { DevolverAtivoDto, EntregarAtivoDto } from './dto';
+import { escopoDeLeitura } from '../tickets/tickets.escopo';
+import type { DevolverAtivoDto, EntregarAtivoDto, TrocarAtivoDto } from './dto';
 import { SELECT_DO_ATIVO, TermosService, type DadosDoTermo } from './termos.service';
 
 const INCLUDE = {
@@ -262,6 +263,226 @@ export class PosseService {
     ]);
 
     return { pessoa: { name: nomeDaPessoa }, ativo, organizacao };
+  }
+
+  // -------------------------------------------------------------------
+  // Troca
+  // -------------------------------------------------------------------
+
+  /**
+   * Sai um equipamento, entra outro — pelo chamado.
+   *
+   * ## Por que é uma operação, e não duas chamadas da tela
+   *
+   * A tela poderia devolver um e entregar o outro. O que ela não
+   * consegue é fazer as duas caberem numa transação: se a entrega
+   * falhasse depois da devolução — porque alguém pegou o equipamento de
+   * reserva no meio —, a pessoa ficaria sem nada e o chamado sem
+   * registro do porquê. Aqui as duas são um `$transaction` só: ou o
+   * equipamento trocou de mão, ou nada aconteceu.
+   *
+   * ## A pessoa é a mesma dos dois lados
+   *
+   * Trocar para outra pessoa não é troca — são uma devolução e uma
+   * entrega, que já existem separadas. O serviço recusa em vez de
+   * adivinhar qual das duas leituras era a intenção.
+   *
+   * ## O que fica no chamado
+   *
+   * Um evento **público** com o que saiu, o que entrou e para onde o
+   * antigo foi. Nota interna deixaria o histórico dizendo que nada
+   * aconteceu, num atendimento em que a coisa mais concreta que existe
+   * é a máquina que trocou de mão.
+   */
+  async trocar(
+    usuario: UsuarioAutenticado,
+    ticketId: string,
+    dto: TrocarAtivoDto,
+  ): Promise<TrocaResponse> {
+    const chamado = await this.prisma.ticket.findFirst({
+      where: { AND: [escopoDeLeitura(usuario), { id: ticketId }] },
+      select: { id: true },
+    });
+    if (!chamado) throw new NotFoundException('Chamado não encontrado.');
+
+    if (dto.saiAssetId === dto.entraAssetId) {
+      throw new BadRequestException('O equipamento que sai e o que entra são o mesmo.');
+    }
+
+    const notas = dto.notes?.trim() || null;
+    if (dto.comQuebra && !notas) {
+      throw new BadRequestException(
+        'Descreva o que aconteceu nas observações: é esse texto que entra no termo de quebra.',
+      );
+    }
+
+    const [sai, entra] = await Promise.all([
+      this.exigirAtivo(usuario, dto.saiAssetId),
+      this.exigirAtivo(usuario, dto.entraAssetId),
+    ]);
+
+    const posseAberta = await this.prisma.assetHolding.findFirst({
+      where: { assetId: sai.id, endedAt: null },
+      select: { id: true, userId: true, user: { select: { name: true } } },
+    });
+
+    if (!posseAberta) {
+      throw new ConflictException(
+        'O equipamento que sai não está com ninguém. Sem posse aberta não há troca — ' +
+          'é uma entrega.',
+      );
+    }
+
+    const jaOcupado = await this.prisma.assetHolding.findFirst({
+      where: { assetId: entra.id, endedAt: null },
+      select: { user: { select: { name: true } } },
+    });
+
+    if (jaOcupado) {
+      throw new ConflictException(
+        `O equipamento que entra já está com ${jaOcupado.user.name}. ` +
+          'Registre a devolução dele primeiro.',
+      );
+    }
+
+    // A mesma cerca da entrega: o equipamento de um cliente não vai
+    // para o funcionário de outro. Conferida antes de qualquer escrita.
+    await this.exigirPessoa(usuario, posseAberta.userId, entra.clientId);
+
+    const agora = new Date();
+
+    // O arquivo vai para o armazenamento **antes** da transação: é
+    // efeito de fora do banco, e dentro dela ele não teria como voltar
+    // atrás. Uma assinatura órfã no bucket é lixo barato; meia troca
+    // gravada, não.
+    const chave = dto.signature ? await this.guardarAssinatura(entra, dto.signature) : null;
+    const assinante = chave ? dto.signedByName?.trim() || posseAberta.user.name : null;
+
+    const [textoDaEntrega, textoDaQuebra] = await Promise.all([
+      assinante
+        ? this.termos.renderizar(
+            usuario.organizationId,
+            'COMPROMISSO',
+            await this.dadosDoTermo(usuario, entra.id, posseAberta.user.name),
+            agora,
+          )
+        : Promise.resolve(null),
+      assinante && dto.comQuebra && notas
+        ? this.termos.renderizar(
+            usuario.organizationId,
+            'QUEBRA',
+            {
+              ...(await this.dadosDoTermo(usuario, sai.id, posseAberta.user.name)),
+              ocorrencia: { descricao: notas, destino: dto.returnedTo },
+            },
+            agora,
+          )
+        : Promise.resolve(null),
+    ]);
+
+    const dadosDosAtivos = await this.prisma.asset.findMany({
+      where: { id: { in: [sai.id, entra.id] } },
+      select: { id: true, name: true, tag: true },
+    });
+
+    const resumo = (id: string) => {
+      const ativo = dadosDosAtivos.find((a) => a.id === id)!;
+      return { id: ativo.id, nome: ativo.name, patrimonio: ativo.tag };
+    };
+
+    await this.prisma.$transaction([
+      // --- Sai ---------------------------------------------------------
+      this.prisma.assetHolding.update({
+        where: { id: posseAberta.id },
+        data: {
+          endedAt: agora,
+          returnedTo: dto.returnedTo,
+          notes: notas,
+          ...(textoDaQuebra && assinante
+            ? {
+                terms: {
+                  create: {
+                    organizationId: usuario.organizationId,
+                    kind: 'QUEBRA' as const,
+                    body: textoDaQuebra,
+                    signatureKey: chave,
+                    signedByName: assinante,
+                    signedAt: agora,
+                  },
+                },
+              }
+            : {}),
+        },
+      }),
+      this.prisma.asset.update({
+        where: { id: sai.id },
+        data: { userId: null, status: dto.returnedTo },
+      }),
+
+      // --- Entra -------------------------------------------------------
+      this.prisma.assetHolding.create({
+        data: {
+          organizationId: usuario.organizationId,
+          assetId: entra.id,
+          userId: posseAberta.userId,
+          startedAt: agora,
+          notes: notas,
+          ...(textoDaEntrega && assinante
+            ? {
+                terms: {
+                  create: {
+                    organizationId: usuario.organizationId,
+                    kind: 'COMPROMISSO' as const,
+                    body: textoDaEntrega,
+                    signatureKey: chave,
+                    signedByName: assinante,
+                    signedAt: agora,
+                  },
+                },
+              }
+            : {}),
+        },
+      }),
+      this.prisma.asset.update({
+        where: { id: entra.id },
+        data: { userId: posseAberta.userId, status: 'EM_USO' },
+      }),
+
+      // --- O chamado ---------------------------------------------------
+      //
+      // Os dois equipamentos ficam amarrados ao chamado: é por ele que
+      // se responde "quando foi que esta máquina entrou?".
+      this.prisma.ticketAsset.createMany({
+        data: [
+          { ticketId, assetId: sai.id },
+          { ticketId, assetId: entra.id },
+        ],
+        skipDuplicates: true,
+      }),
+      this.prisma.ticketEvent.create({
+        data: {
+          ticketId,
+          type: 'TROCA_DE_ATIVO',
+          visibility: 'PUBLICA',
+          authorId: usuario.userId,
+          channel: 'WEB',
+          payload: {
+            type: 'TROCA_DE_ATIVO',
+            saiu: resumo(sai.id),
+            entrou: resumo(entra.id),
+            destino: dto.returnedTo,
+            comQuebra: Boolean(dto.comQuebra),
+          },
+        },
+      }),
+    ]);
+
+    const [saiu, entrou] = await Promise.all([
+      this.listar(usuario, sai.id),
+      this.listar(usuario, entra.id),
+    ]);
+
+    return { saiu, entrou };
   }
 
   /**
