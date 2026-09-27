@@ -38,6 +38,10 @@ export const buscarAtivos = (filtro: {
   clientId?: string;
   /** Só o que é da casa. */
   semCliente?: boolean;
+  /** Só o que o agente parou de reportar há mais de tantos dias. */
+  semReportarDias?: number;
+  /** Só o que nenhum agente jamais varreu. */
+  nuncaVarridos?: boolean;
   limit?: number;
 } = {}) => chamar<AssetView[]>(`/assets${query(filtro)}`);
 

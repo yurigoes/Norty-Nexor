@@ -511,3 +511,95 @@ describe('o que a tela mostra', () => {
     assert.ok(detalhe.corpo.lastSeenAt);
   });
 });
+
+/**
+ * O parque não pode só crescer.
+ *
+ * Sem uma pergunta que responda "quem parou de falar", equipamento que
+ * sumiu fica no inventário idêntico ao que está ligado agora — e a
+ * conta de assento pago, a garantia e o próximo inventário físico saem
+ * todos errados pelo mesmo motivo.
+ *
+ * Duas perguntas diferentes, e é de propósito que sejam duas: a máquina
+ * que **parou** de reportar é um problema; a que **nunca** reportou é
+ * uma impressora cadastrada à mão. Juntá-las faria a lista encher de
+ * coisa normal até ninguém mais abrir.
+ */
+describe('quem parou de reportar', () => {
+  const HA_TRINTA_DIAS = new Date(Date.now() - 30 * 86_400_000);
+
+  it('quem parou entra no filtro; quem falou hoje, não', async () => {
+    const paradaId = (await varrer(varredura())).corpo.assetId;
+    const ativaId = (await varrer(varredura())).corpo.assetId;
+
+    await prisma.asset.update({
+      where: { id: paradaId },
+      data: { lastSeenAt: HA_TRINTA_DIAS },
+    });
+
+    const r = await admin.get<AssetView[]>('/assets?semReportarDias=7');
+    assert.equal(r.status, 200);
+
+    const ids = r.corpo.map((a) => a.id);
+    assert.ok(ids.includes(paradaId), 'a máquina parada devia estar na lista');
+    assert.ok(!ids.includes(ativaId), 'a máquina que acabou de reportar não está parada');
+  });
+
+  it('a que nunca foi varrida não é a que parou', async () => {
+    const aMao = await admin.post<AssetView>('/assets', {
+      name: 'Impressora do balcão',
+      kind: 'IMPRESSORA',
+    });
+    assert.equal(aMao.status, 201, JSON.stringify(aMao.corpo));
+    assert.equal(aMao.corpo.lastSeenAt, null);
+
+    // Não entra em "parou de reportar": ela nunca reportou, e nunca vai.
+    const paradas = await admin.get<AssetView[]>('/assets?semReportarDias=7');
+    assert.ok(
+      !paradas.corpo.some((a) => a.id === aMao.corpo.id),
+      'impressora à mão na lista de sumidas faz o aviso ser ignorado',
+    );
+
+    // Entra na outra pergunta, que é "onde o agente não chegou".
+    const nunca = await admin.get<AssetView[]>('/assets?nuncaVarridos=true&limit=200');
+    assert.equal(nunca.status, 200);
+    assert.ok(nunca.corpo.some((a) => a.id === aMao.corpo.id));
+    assert.ok(
+      nunca.corpo.every((a) => a.lastSeenAt === null),
+      'nuncaVarridos trouxe máquina que já reportou',
+    );
+  });
+
+  it('a mais esquecida vem primeiro', async () => {
+    // A menos velha é cadastrada **primeiro** de propósito: o nome dela
+    // fica antes no alfabeto, então a ordem antiga (situação, nome) a
+    // colocaria na frente. Sem isso o teste passava por coincidência,
+    // com ou sem a ordenação por esquecimento.
+    const menosVelha = (await varrer(varredura())).corpo.assetId;
+    const velha = (await varrer(varredura())).corpo.assetId;
+
+    await prisma.asset.update({
+      where: { id: velha },
+      data: { lastSeenAt: new Date(Date.now() - 90 * 86_400_000) },
+    });
+    await prisma.asset.update({
+      where: { id: menosVelha },
+      data: { lastSeenAt: new Date(Date.now() - 10 * 86_400_000) },
+    });
+
+    const r = await admin.get<AssetView[]>('/assets?semReportarDias=7&limit=200');
+    const ids = r.corpo.map((a) => a.id);
+
+    // Quem abre esta lista está triando, e a triagem começa pela pior.
+    assert.ok(
+      ids.indexOf(velha) < ids.indexOf(menosVelha),
+      'a ordem da lista de sumidas é a mais esquecida primeiro',
+    );
+  });
+
+  it('o prazo do filtro é conferido: dia zero e prazo absurdo não passam', async () => {
+    assert.equal((await admin.get('/assets?semReportarDias=0')).status, 400);
+    assert.equal((await admin.get('/assets?semReportarDias=999')).status, 400);
+    assert.equal((await admin.get('/assets?semReportarDias=abacaxi')).status, 400);
+  });
+});

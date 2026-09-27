@@ -348,6 +348,49 @@ async function main() {
         },
       });
     }
+
+    // --- Um parque com idades diferentes ------------------------------
+    //
+    // Sem isto a demonstração abria o parque vazio, e o aviso de quem
+    // parou de reportar não tinha o que avisar — a tela existia e não
+    // mostrava nada. As datas são escolhidas para cobrir os quatro
+    // casos que a tela distingue: reportou agora, reportou ontem,
+    // parou há semanas, e equipamento que nunca vai reportar porque
+    // agente nenhum roda nele.
+    const DIA = 86_400_000;
+
+    const parque = [
+      { tag: 'PAT-1001', name: 'NB-MARINA', visto: 2 * 3600e3, cliente: false },
+      { tag: 'PAT-1002', name: 'NB-JOAO', visto: 1 * DIA, cliente: true },
+      { tag: 'PAT-1003', name: 'NB-FERIAS', visto: 22 * DIA, cliente: false },
+      { tag: 'PAT-1004', name: 'DESK-RECEPCAO', visto: 96 * DIA, cliente: true },
+      { tag: 'PAT-2001', name: 'Impressora do balcão', visto: null, kind: 'IMPRESSORA' as const },
+      { tag: 'PAT-2002', name: 'Switch do rack', visto: null, kind: 'REDE' as const },
+    ];
+
+    for (const maquina of parque) {
+      await prisma.asset.upsert({
+        where: { organizationId_tag: { organizationId: organizacao.id, tag: maquina.tag } },
+        update: {},
+        create: {
+          organizationId: organizacao.id,
+          clientId: 'cliente' in maquina && maquina.cliente ? empresa.id : null,
+          kind: 'kind' in maquina ? maquina.kind : 'COMPUTADOR',
+          status: 'EM_USO',
+          name: maquina.name,
+          tag: maquina.tag,
+          ...(maquina.visto === null
+            ? {}
+            : {
+                hostname: maquina.name,
+                osName: 'Windows 11 Pro',
+                osVersion: '10.0.22631',
+                lastSeenAt: new Date(Date.now() - maquina.visto),
+                agentVersion: '1.0.0',
+              }),
+        },
+      });
+    }
   }
 
   console.log(

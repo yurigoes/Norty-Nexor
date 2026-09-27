@@ -11,6 +11,7 @@ import type {
 import {
   ASSET_KINDS,
   ASSET_STATUSES,
+  DIAS_PARA_SUMIDO,
   ROTULO_ATIVO,
   ROTULO_ATIVO_STATUS,
 } from '@norty-desk/shared';
@@ -24,6 +25,7 @@ import {
 } from '../../api/catalogoAtivo';
 import { ErroDaApi } from '../../api/cliente';
 import { useAutenticacao } from '../../auth/Autenticacao';
+import { VistoPeloAgente } from './VistoPeloAgente';
 
 /**
  * O parque de equipamentos.
@@ -33,6 +35,15 @@ import { useAutenticacao } from '../../auth/Autenticacao';
  * que o campo do chamado fica vazio. Aqui a pergunta é só "qual máquina
  * é essa?", e essa se responde.
  */
+/**
+ * Quantas sumidas o aviso conta antes de desistir de contar.
+ *
+ * O número existe para alguém olhar, e "200+" convence tanto quanto
+ * "237" — buscar o parque inteiro para melhorar a segunda casa seria
+ * pagar uma consulta grande por nada.
+ */
+const TETO_DO_AVISO = 200;
+
 export function Ativos() {
   const { can } = useAutenticacao();
   const [termo, setTermo] = useState('');
@@ -41,8 +52,12 @@ export function Ativos() {
   // `''` é "todas", `'casa'` é o que nenhuma empresa reivindica, e um
   // uuid é o parque daquela empresa.
   const [empresa, setEmpresa] = useState('');
+  // `''` é todas, `'sumidas'` é o que parou de reportar, `'nunca'` é o
+  // que agente nenhum jamais varreu.
+  const [inventario, setInventario] = useState<'' | 'sumidas' | 'nunca'>('');
   const [clientes, setClientes] = useState<ClienteView[]>([]);
   const [ativos, setAtivos] = useState<AssetView[] | null>(null);
+  const [sumidas, setSumidas] = useState<number | null>(null);
   const [emEdicao, setEmEdicao] = useState<AssetView | 'novo' | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -52,9 +67,14 @@ export function Ativos() {
         q: busca || undefined,
         status: status || undefined,
         ...(empresa === 'casa' ? { semCliente: true } : empresa ? { clientId: empresa } : {}),
+        ...(inventario === 'sumidas'
+          ? { semReportarDias: DIAS_PARA_SUMIDO }
+          : inventario === 'nunca'
+            ? { nuncaVarridos: true }
+            : {}),
       }),
     );
-  }, [busca, status, empresa]);
+  }, [busca, status, empresa, inventario]);
 
   useEffect(() => {
     setAtivos(null);
@@ -65,6 +85,16 @@ export function Ativos() {
     void listarClientes()
       .then(setClientes)
       .catch(() => undefined);
+  }, []);
+
+  // A conta das sumidas é uma busca à parte, e é o ponto do aviso:
+  // ninguém vai atrás de máquina que parou de reportar por conta
+  // própria — o número na tela é o que faz alguém olhar. Ela ignora os
+  // filtros de cima de propósito: a pergunta é sobre o parque inteiro.
+  useEffect(() => {
+    void buscarAtivos({ semReportarDias: DIAS_PARA_SUMIDO, limit: TETO_DO_AVISO })
+      .then((lista) => setSumidas(lista.length))
+      .catch(() => setSumidas(null));
   }, []);
 
   return (
@@ -135,10 +165,42 @@ export function Ativos() {
           ))}
         </select>
 
+        <select
+          className="select -auto"
+          aria-label="Inventário"
+          value={inventario}
+          onChange={(e) => setInventario(e.target.value as '' | 'sumidas' | 'nunca')}
+        >
+          <option value="">Todo o inventário</option>
+          <option value="sumidas">Sem reportar há {DIAS_PARA_SUMIDO} dias</option>
+          <option value="nunca">Nunca varridas pelo agente</option>
+        </select>
+
         <button type="submit" className="btn -secundario">
           Buscar
         </button>
       </form>
+
+      {sumidas !== null && sumidas > 0 && inventario !== 'sumidas' ? (
+        <div className="alerta-bloco -aviso">
+          <span aria-hidden="true">!</span>
+          <span>
+            {sumidas >= TETO_DO_AVISO ? `${TETO_DO_AVISO}+ equipamentos` : null}
+            {sumidas === 1 ? '1 equipamento' : null}
+            {sumidas > 1 && sumidas < TETO_DO_AVISO ? `${sumidas} equipamentos` : null}{' '}
+            {sumidas === 1 ? 'já reportou' : 'já reportaram'} e{' '}
+            {sumidas === 1 ? 'parou' : 'pararam'} há mais de {DIAS_PARA_SUMIDO} dias. Pode ser
+            máquina desligada, trocada ou que saiu sem passar pela porta.{' '}
+            <button
+              type="button"
+              className="btn -fantasma -sm"
+              onClick={() => setInventario('sumidas')}
+            >
+              Ver quais
+            </button>
+          </span>
+        </div>
+      ) : null}
 
       {erro ? (
         <div className="alerta-bloco -erro">
@@ -168,6 +230,7 @@ export function Ativos() {
                   <th>Patrimônio</th>
                   <th>Quem usa</th>
                   <th>Local</th>
+                  <th>Visto</th>
                   <th>Situação</th>
                   <th className="-num">Chamados</th>
                   <th />
@@ -188,6 +251,12 @@ export function Ativos() {
                     <td className="mono">{ativo.tag ?? '—'}</td>
                     <td>{ativo.user?.name ?? '—'}</td>
                     <td>{ativo.location?.path ?? '—'}</td>
+                    <td>
+                      <VistoPeloAgente
+                        lastSeenAt={ativo.lastSeenAt}
+                        agentVersion={ativo.agentVersion}
+                      />
+                    </td>
                     <td>
                       <span className={`selo ${seloDoStatus(ativo.status)}`}>
                         {ROTULO_ATIVO_STATUS[ativo.status]}

@@ -42,6 +42,7 @@ import { dataCurta } from '../../lib/formato';
 import { SoftwareDoAtivoCard } from './SoftwareDoAtivo';
 import { SuprimentosDoAtivoCard } from './SuprimentosDoAtivo';
 import { RedeDoAtivoCard } from './RedeDoAtivo';
+import { VistoPeloAgente } from './VistoPeloAgente';
 
 /**
  * O equipamento por dentro.
@@ -169,9 +170,11 @@ function Identificacao({ ativo }: { ativo: AssetDetail }) {
       ? ([
           [
             'Visto pelo agente',
-            <span key="v" title={ativo.agentVersion ? `Agente ${ativo.agentVersion}` : undefined}>
-              {dataCurta(ativo.lastSeenAt)}
-            </span>,
+            <VistoPeloAgente
+              key="v"
+              lastSeenAt={ativo.lastSeenAt}
+              agentVersion={ativo.agentVersion}
+            />,
           ],
         ] as [string, React.ReactNode][])
       : []),

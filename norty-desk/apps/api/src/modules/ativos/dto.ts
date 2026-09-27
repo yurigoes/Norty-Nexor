@@ -91,6 +91,17 @@ export class BuscarAtivosDto {
   @IsOptional() @IsIn(ASSET_KINDS) kind?: (typeof ASSET_KINDS)[number];
   @IsOptional() @IsIn(ASSET_STATUSES) status?: (typeof ASSET_STATUSES)[number];
   @IsOptional() @IsUUID() userId?: string;
+  /**
+   * Só o que o agente parou de reportar, há mais de tantos dias.
+   *
+   * Exclui de propósito a máquina que **nunca** reportou: impressora e
+   * switch cadastrados à mão nunca vão reportar, e misturá-los aqui
+   * transformaria o filtro numa lista longa que ninguém olha. Para
+   * essas existe `nuncaVarridos`.
+   */
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(365) semReportarDias?: number;
+  /** Só o que nenhum agente jamais varreu. */
+  @IsOptional() @Transform(booleano) @IsBoolean() nuncaVarridos?: boolean;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200) limit?: number;
 }
 

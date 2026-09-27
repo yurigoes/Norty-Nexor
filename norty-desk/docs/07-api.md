@@ -823,6 +823,25 @@ A busca é `contains`, não busca de texto: o suporte procura por pedaço
 de patrimônio ("...4721") e por série incompleta, e nenhum dos dois é
 palavra que o `to_tsvector` reconheça.
 
+**Quem parou de reportar.** Dois filtros, e é de propósito que sejam
+dois:
+
+```
+GET /v1/assets?semReportarDias=7    → já reportou e parou há mais de 7 dias
+GET /v1/assets?nuncaVarridos=true   → agente nenhum jamais varreu
+```
+
+`semReportarDias` (1 a 365) exige `lastSeenAt` preenchido — o `lt` do
+Postgres já descarta o nulo, e é o que se quer. **Não junte os dois:**
+impressora e switch entram à mão e nunca vão reportar, então misturá-los
+em "sumidas" transformaria a lista em algo que ninguém abre — e um aviso
+ignorado é pior que aviso nenhum. O limite de sete dias vive em
+`DIAS_PARA_SUMIDO` (`packages/shared`), porque o notebook de quem está
+de férias fica desligado a semana inteira.
+
+Com `semReportarDias` a ordem muda para `lastSeenAt` crescente: quem
+abre essa lista está triando, e a triagem começa pela mais esquecida.
+
 `GET /assets/:id/chamados` respeita o escopo de leitura do perfil: o
 histórico do equipamento não é porta lateral para ler chamado alheio.
 **Vincular exige `ativo:ler`**, não `ativo:gerenciar` — quem atende

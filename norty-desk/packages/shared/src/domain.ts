@@ -2370,3 +2370,31 @@ export function tailscaleInvalido(ip: string): string | null {
 
   return null;
 }
+
+/**
+ * A partir de quantos dias sem reportar a máquina conta como parada.
+ *
+ * Sete, e não um: notebook de quem está de férias fica desligado a
+ * semana inteira, e chamar isso de "sumiu" ensina a ignorar o aviso —
+ * que é a única forma de um aviso ficar pior que não existir. Sete é
+ * mais que o feriado mais longo e menos que o tempo em que alguém leva
+ * o equipamento para casa e ninguém nota.
+ */
+export const DIAS_PARA_SUMIDO = 7;
+
+/**
+ * Quantos dias desde que o agente falou desta máquina.
+ *
+ * `null` é máquina que **nunca** foi varrida: cadastrada à mão, ou sem
+ * agente instalado. Não é o mesmo que ter parado de reportar, e juntar
+ * as duas coisas enche a lista de impressora e de switch — que nunca
+ * vão reportar — até ninguém mais olhar.
+ */
+export function diasSemReportar(lastSeenAt: string | null, agora = new Date()): number | null {
+  if (!lastSeenAt) return null;
+
+  const decorrido = agora.getTime() - new Date(lastSeenAt).getTime();
+  // Relógio da máquina adiantado devolveria dia negativo, e "visto há
+  // -1 dia" na tela é pior que arredondar para hoje.
+  return Math.max(0, Math.floor(decorrido / 86_400_000));
+}

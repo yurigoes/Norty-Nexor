@@ -277,6 +277,14 @@ O inventário que o chamado referencia.
   empresa-cliente — é a chave que diz de quem é o parque, e o corpo não
   tem como dizer outra coisa. O agente lê e manda; toda decisão é do
   servidor, que é onde ela se testa.
+  **O parque mostra quem parou de reportar** — feito em 27/09/2026. A
+  coluna e o filtro no parque, o aviso contável na abertura da tela e a
+  linha na ficha, todos em cima de `lastSeenAt`. Duas perguntas
+  separadas: "parou de reportar" (`semReportarDias`) e "nunca foi
+  varrida" (`nuncaVarridos`) — a segunda é impressora cadastrada à mão,
+  e juntá-las faria a lista encher de coisa normal até ninguém abrir.
+  Sem isto o campo existia e o parque só crescia: o que sumiu ficava
+  idêntico ao que está ligado agora.
   Falta a rede (portas, MAC, IP): a reconciliação de IP com DHCP tem
   modos de falhar que merecem passo próprio.
 

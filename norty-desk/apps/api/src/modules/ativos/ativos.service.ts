@@ -73,6 +73,16 @@ export class AtivosService {
           ? { clientId: null }
           : {}),
       ...(filtro.locationId ? { locationId: filtro.locationId } : {}),
+      // Duas perguntas diferentes: "o que parou de falar" e "o que
+      // nunca falou". A primeira precisa de `lastSeenAt` preenchido, e
+      // o `lt` já cuida disso — comparação com NULL no Postgres não dá
+      // verdadeiro, então a máquina nunca varrida fica de fora sem
+      // precisar de cláusula própria.
+      ...(filtro.semReportarDias
+        ? { lastSeenAt: { lt: new Date(Date.now() - filtro.semReportarDias * 86_400_000) } }
+        : filtro.nuncaVarridos
+          ? { lastSeenAt: null }
+          : {}),
       ...(termo
         ? {
             // `contains` e não busca de texto: o suporte procura por
@@ -101,7 +111,11 @@ export class AtivosService {
     const ativos = await this.prisma.asset.findMany({
       where: onde,
       include: INCLUDE,
-      orderBy: [{ status: 'asc' }, { name: 'asc' }],
+      // Quem procura o que parou de reportar quer a mais esquecida
+      // primeiro; nas outras listas a ordem útil é a situação e o nome.
+      orderBy: filtro.semReportarDias
+        ? [{ lastSeenAt: 'asc' }]
+        : [{ status: 'asc' }, { name: 'asc' }],
       take: limite,
     });
 
