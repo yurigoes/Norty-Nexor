@@ -42,6 +42,7 @@ import { dataCurta } from '../../lib/formato';
 import { SoftwareDoAtivoCard } from './SoftwareDoAtivo';
 import { SuprimentosDoAtivoCard } from './SuprimentosDoAtivo';
 import { RedeDoAtivoCard } from './RedeDoAtivo';
+import { ReservasDoAtivoCard } from './ReservasDoAtivo';
 import { VistoPeloAgente } from './VistoPeloAgente';
 
 /**
@@ -113,6 +114,7 @@ export function Ativo() {
         podeGerenciar={can('ativo:gerenciar')}
         aoMudar={() => void recarregar().catch(() => undefined)}
       />
+      <ReservasDoAtivoCard assetId={ativo.id} />
       <Perifericos ativo={ativo} />
       <Hardware ativo={ativo} podeEditar={can('ativo:gerenciar')} aoMudar={setAtivo} />
       <RedeDoAtivoCard assetId={ativo.id} />

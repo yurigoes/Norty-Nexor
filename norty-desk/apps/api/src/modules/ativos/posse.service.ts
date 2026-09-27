@@ -15,6 +15,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { PORTA_DE_ARMAZENAMENTO, type PortaDeArmazenamento } from '../attachments/armazenamento';
 import { escopoDeLeitura } from '../tickets/tickets.escopo';
 import type { DevolverAtivoDto, EntregarAtivoDto, TrocarAtivoDto } from './dto';
+import { ReservasService } from './reservas.service';
 import { SELECT_DO_ATIVO, TermosService, type DadosDoTermo } from './termos.service';
 
 const INCLUDE = {
@@ -61,6 +62,7 @@ export class PosseService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly termos: TermosService,
+    private readonly reservas: ReservasService,
     @Inject(PORTA_DE_ARMAZENAMENTO) private readonly armazenamento: PortaDeArmazenamento,
   ) {}
 
@@ -100,6 +102,20 @@ export class PosseService {
 
     if (aberta?.userId === dto.userId) {
       throw new ConflictException(`${pessoa.name} já está com este equipamento.`);
+    }
+
+    // Entregar por cima da reserva de outra pessoa é o que faz a
+    // reserva não valer nada: quem separou o projetor para a
+    // apresentação de sexta chega e ele já saiu. A recusa diz o nome,
+    // porque o caminho é falar com quem reservou — não com o sistema.
+    const reservada = await this.reservas.vigenteAgora(usuario.organizationId, assetId);
+
+    if (reservada && reservada.userId !== dto.userId) {
+      throw new ConflictException(
+        `Este equipamento está reservado para ${reservada.userName} agora` +
+          `${reservada.purpose ? ` (${reservada.purpose})` : ''}. ` +
+          'Cancele a reserva ou fale com quem reservou.',
+      );
     }
 
     const agora = new Date();
@@ -161,6 +177,18 @@ export class PosseService {
         data: { userId: dto.userId, status: 'EM_USO' },
       }),
     ]);
+
+    // Reservou e levou: o ciclo fecha. Sem o vínculo, a reserva
+    // cumprida e a esquecida ficam idênticas na lista, e ninguém sabe
+    // quanto do que se reserva é de fato retirado.
+    if (reservada) {
+      const nova = await this.prisma.assetHolding.findFirst({
+        where: { assetId, endedAt: null },
+        select: { id: true },
+      });
+
+      if (nova) await this.reservas.marcarRetirada(reservada.id, nova.id);
+    }
 
     return this.listar(usuario, assetId);
   }

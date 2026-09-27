@@ -105,6 +105,25 @@ export class BuscarAtivosDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200) limit?: number;
 }
 
+/** Separar o equipamento para alguém, numa janela. */
+export class ReservarAtivoDto {
+  @IsUUID() userId!: string;
+  @IsDateString() startsAt!: string;
+  @IsDateString() endsAt!: string;
+  @IsOptional() @IsString() @MaxLength(300) purpose?: string | null;
+}
+
+export class CancelarReservaDto {
+  @IsOptional() @IsString() @MaxLength(300) reason?: string | null;
+}
+
+export class BuscarReservasDto {
+  @IsOptional() @IsDateString() de?: string;
+  @IsOptional() @IsDateString() ate?: string;
+  @IsOptional() @IsUUID() userId?: string;
+  @IsOptional() @IsUUID() assetId?: string;
+}
+
 export class VincularAtivoDto {
   @IsUUID() assetId!: string;
 }

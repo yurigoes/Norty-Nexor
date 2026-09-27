@@ -22,6 +22,7 @@ import type {
   ComponenteView,
   ModeloDeTermoView,
   PosseView,
+  ReservaView,
   SenhaRevelada,
   TermKind,
   TrocaResponse,
@@ -35,6 +36,7 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { AcessoRemotoService } from './acesso-remoto.service';
 import { AtivosService } from './ativos.service';
 import { PosseService } from './posse.service';
+import { ReservasService } from './reservas.service';
 import { TermosService } from './termos.service';
 import { termoEmPdf } from './termo.pdf';
 import { EscreverAcessoRemotoDto } from './dto-acesso';
@@ -47,6 +49,9 @@ import {
   EntregarAtivoDto,
   EscreverAtivoDto,
   EscreverComponenteDto,
+  BuscarReservasDto,
+  CancelarReservaDto,
+  ReservarAtivoDto,
   TrocarAtivoDto,
   VincularAtivoDto,
 } from './dto';
@@ -59,6 +64,7 @@ export class AtivosController {
     private readonly acesso: AcessoRemotoService,
     private readonly posse: PosseService,
     private readonly termos: TermosService,
+    private readonly reservas: ReservasService,
   ) {}
 
   @Get('assets')
@@ -83,6 +89,56 @@ export class AtivosController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<AssetDetail> {
     return this.ativos.detalhe(usuario, id);
+  }
+
+  // -------------------------------------------------------------------
+  // Reserva
+  // -------------------------------------------------------------------
+
+  /**
+   * `ativo:reservar`, e não `ativo:gerenciar`.
+   *
+   * Separar o notebook de empréstimo para a visita de sexta é gesto de
+   * quem atende, e quem atende não mexe no cadastro do parque. Exigir a
+   * permissão de gerenciar aqui empurraria a reserva para o grupo do
+   * WhatsApp — que é de onde ela veio.
+   */
+  @Get('reservas')
+  @RequirePermission('ativo:ler')
+  agendaDeReservas(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Query() filtro: BuscarReservasDto,
+  ): Promise<ReservaView[]> {
+    return this.reservas.agenda(usuario, filtro);
+  }
+
+  @Get('assets/:id/reservas')
+  @RequirePermission('ativo:ler')
+  reservasDoAtivo(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<ReservaView[]> {
+    return this.reservas.listarDoAtivo(usuario, id);
+  }
+
+  @Post('assets/:id/reservas')
+  @RequirePermission('ativo:reservar')
+  reservar(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReservarAtivoDto,
+  ): Promise<ReservaView[]> {
+    return this.reservas.reservar(usuario, id, dto);
+  }
+
+  @Delete('reservas/:id')
+  @RequirePermission('ativo:reservar')
+  cancelarReserva(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CancelarReservaDto,
+  ): Promise<ReservaView[]> {
+    return this.reservas.cancelar(usuario, id, dto.reason);
   }
 
   @Get('assets/:id/components')

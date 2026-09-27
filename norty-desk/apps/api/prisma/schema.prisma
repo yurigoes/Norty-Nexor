@@ -68,6 +68,7 @@ model Organization {
   assetModels         AssetModel[]
   components          AssetComponent[]
   assetHoldings       AssetHolding[]
+  assetReservations   AssetReservation[]
   assetTerms          AssetTerm[]
   termTemplates       TermTemplate[]
   authSources         AuthSource[]
@@ -136,6 +137,8 @@ model User {
   articles               Article[]
   assets                 Asset[]                 @relation("AtivoDoUsuario")
   posses                 AssetHolding[]          @relation("PosseDoAtivo")
+  reservas               AssetReservation[]      @relation("ReservaDoAtivo")
+  reservasCriadas        AssetReservation[]      @relation("ReservaCriadaPor")
   problems               Problem[]               @relation("ResponsavelPeloProblema")
   changes                Change[]                @relation("ResponsavelPelaMudanca")
   recurrences            RecurringTicket[]       @relation("RequerenteDaRecorrencia")
@@ -1586,6 +1589,7 @@ model Asset {
   rackItem     RackItem?
   secrets      Secret[]
   holdings     AssetHolding[]
+  reservations AssetReservation[]
 
   /// Patrimônio e série não se repetem na organização: dois registros do
   /// mesmo equipamento são a origem de metade da sujeira de inventário.
@@ -1655,6 +1659,7 @@ model AssetHolding {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   asset        Asset        @relation(fields: [assetId], references: [id], onDelete: Cascade)
   terms        AssetTerm[]
+  reservation  AssetReservation?
   /// `Restrict`, e não cascata: apagar a pessoa não pode apagar a prova
   /// de quem estava com o equipamento. O caminho normal de saída é
   /// `isActive: false`; quem insiste em apagar devolve o que está na mão
@@ -1985,6 +1990,56 @@ model OutboundMessage {
 }
 
 /// Substitui RuleTicket / RuleMailCollector. Classificação na entrada.
+/// Equipamento separado para alguém, numa janela.
+///
+/// O notebook de empréstimo, o projetor, a máquina de teste: o que é
+/// pouco e disputado. Sem isto a reserva vive no grupo do WhatsApp, e
+/// duas pessoas levam o mesmo equipamento na mesma sexta — que é o
+/// defeito que ela existe para impedir.
+///
+/// **A sobreposição é barrada pelo banco**, e não por um `if`: um
+/// `EXCLUDE` por intervalo (`asset_reservations_sem_sobreposicao`).
+/// Duas requisições simultâneas passariam juntas por qualquer
+/// verificação feita antes de gravar, e é exatamente assim que duas
+/// pessoas reservam a mesma coisa — ao mesmo tempo, na segunda-feira de
+/// manhã. A restrição ignora a reserva cancelada, senão cancelar não
+/// liberaria a janela.
+model AssetReservation {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  assetId        String    @db.Uuid
+  /// Para quem o equipamento está separado.
+  userId         String    @db.Uuid
+  startsAt       DateTime
+  endsAt         DateTime
+  /// Para quê. Aparece na agenda do equipamento e na recusa da entrega.
+  purpose        String?
+  /// Quem separou — nem sempre é quem vai levar.
+  createdById    String    @db.Uuid
+  canceledAt     DateTime?
+  canceledReason String?
+  /// A posse que nasceu desta reserva, quando o equipamento saiu.
+  ///
+  /// É o que fecha o ciclo: reservou, levou. Sem o vínculo, a reserva
+  /// cumprida e a esquecida ficam idênticas na lista.
+  holdingId      String?   @unique @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  asset        Asset         @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  /// `Restrict` como na posse: apagar a pessoa não apaga o registro de
+  /// que o equipamento estava separado para ela.
+  user         User          @relation("ReservaDoAtivo", fields: [userId], references: [id], onDelete: Restrict)
+  createdBy    User          @relation("ReservaCriadaPor", fields: [createdById], references: [id], onDelete: Restrict)
+  holding      AssetHolding? @relation(fields: [holdingId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, startsAt])
+  @@index([assetId, startsAt])
+  @@index([userId, startsAt])
+  @@map("asset_reservations")
+}
+
 model IntakeRule {
   id             String  @id @default(uuid()) @db.Uuid
   organizationId String  @db.Uuid

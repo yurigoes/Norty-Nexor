@@ -125,6 +125,16 @@ export const PERMISSIONS = [
   'ativo:acesso-remoto',
   /** Registrar a saída de consumível (entregar toner, papel). Entrada e ajuste são de quem gerencia. */
   'consumivel:movimentar',
+  /**
+   * Separar equipamento para alguém numa janela.
+   *
+   * Separada de `ativo:gerenciar` porque reservar o notebook de
+   * empréstimo para a visita de sexta é gesto de quem atende, e quem
+   * atende não mexe no cadastro do parque. Exigir a permissão de
+   * gerenciar aqui empurraria a reserva para o grupo do WhatsApp — que
+   * é de onde ela veio.
+   */
+  'ativo:reservar',
 
   // --- Projetos e agenda ----------------------------------------------
   'projeto:ler',
@@ -209,7 +219,7 @@ const IMPLICA: Partial<Record<Permission, readonly Permission[]>> = {
   'artigo:ler:interno': ['artigo:ler'],
   'anexo:remover': ['anexo:remover:proprio'],
   'ordem:gerenciar': ['ordem:ler'],
-  'ativo:gerenciar': ['ativo:ler', 'ativo:catalogo', 'consumivel:movimentar'],
+  'ativo:gerenciar': ['ativo:ler', 'ativo:catalogo', 'consumivel:movimentar', 'ativo:reservar'],
   'ativo:catalogo': ['ativo:ler'],
   'problema:gerenciar': ['problema:ler'],
   'contrato:gerenciar': ['contrato:ler'],
@@ -316,6 +326,12 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
      * veio. Quem atende é quem tem essas senhas na mão.
      */
     'cofre:usar',
+    /**
+     * Separar o notebook de empréstimo para a visita de sexta. Sem
+     * isto a reserva vira mensagem no grupo, e duas pessoas levam o
+     * mesmo equipamento.
+     */
+    'ativo:reservar',
     /**
      * Entregar o toner é gesto de quem atende: sem isso o agente troca o
      * cartucho e o estoque só descobre no inventário. Receber compra e

@@ -1694,12 +1694,17 @@ do ativo, porque a peça é parte dele.
 
 ---
 
-## 19. Posse, termo e troca de equipamento
+## 19. Posse, reserva, termo e troca de equipamento
 
 ```
 GET    /v1/assets/:id/posses            → por quantas mãos passou
 POST   /v1/assets/:id/posse             → entregar a alguém
 POST   /v1/assets/:id/devolver          → o equipamento volta
+
+GET    /v1/reservas?de=&ate=&userId=&assetId=   → a agenda do que está separado
+GET    /v1/assets/:id/reservas
+POST   /v1/assets/:id/reservas          → { userId, startsAt, endsAt, purpose? }
+DELETE /v1/reservas/:id                 → cancela; o registro fica
 POST   /v1/tickets/:id/troca            → sai um, entra outro
 GET    /v1/termos/:termId/pdf           → o papel assinado
 
@@ -1707,6 +1712,39 @@ GET    /v1/config/termos                → a redação que a casa usa
 PUT    /v1/config/termos/:kind          { body }
 DELETE /v1/config/termos/:kind          → volta ao texto de fábrica
 ```
+
+### Reserva
+
+**A sobreposição é barrada pelo banco**, por um `EXCLUDE` de intervalo
+(`asset_reservations_sem_sobreposicao`), e não por um `if`. Verificar
+antes de gravar não resolve: duas requisições simultâneas leem "livre" e
+as duas gravam — que é exatamente como duas pessoas reservam a mesma
+coisa, ao mesmo tempo, na segunda-feira de manhã. A verificação prévia
+existe só para a recusa sair legível, dizendo **com quem falar** em vez
+do nome da restrição.
+
+O intervalo é `[início, fim)`: duas reservas que se encostam às 12h
+convivem, e uma hora para dentro já é conflito.
+
+**Cancelar libera a janela sem apagar o registro.** A restrição ignora a
+cancelada — senão a única saída seria apagar a linha, junto com a
+explicação de que alguém tinha separado aquilo.
+
+**A entrega respeita a reserva.** Entregar por cima da reserva de outra
+pessoa é o que faz a reserva não valer nada: quem separou o projetor
+para a apresentação de sexta chega e ele já saiu. Quando quem retira é
+quem reservou, a posse fica ligada à reserva (`holdingId`) — é o que
+separa a cumprida da esquecida, e o que responde quanto do que se
+reserva é de fato retirado.
+
+`ativo:reservar`, e não `ativo:gerenciar`: separar o notebook de
+empréstimo é gesto de quem atende, e quem atende não mexe no cadastro do
+parque. Exigir a permissão de gerenciar empurraria a reserva para o
+grupo do WhatsApp, que é de onde ela veio.
+
+A agenda recorta por **sobreposição**, não por início: a reserva que
+começou ontem e termina amanhã é o que interessa a quem pergunta "o que
+está separado hoje".
 
 Ler é `ativo:ler`; entregar, devolver e trocar são `ativo:gerenciar`. A
 redação dos termos é `config:modelos` — é política da casa, como o

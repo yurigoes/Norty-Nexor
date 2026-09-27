@@ -4,6 +4,8 @@ import type {
   DevolverAtivoRequest,
   EntregarAtivoRequest,
   PosseView,
+  ReservaView,
+  ReservarAtivoRequest,
   TrocaResponse,
   TrocarAtivoRequest,
   ComponenteView,
@@ -199,3 +201,16 @@ export const revelarSenhaRemota = (assetId: string) =>
     metodo: 'POST',
     corpo: {},
   });
+
+
+// --- Reservas ----------------------------------------------------------
+
+/** O que está separado para alguém, e quando. */
+export const reservasDoAtivo = (assetId: string) =>
+  chamar<ReservaView[]>(`/assets/${assetId}/reservas`);
+
+export const reservarAtivo = (assetId: string, dados: ReservarAtivoRequest) =>
+  chamar<ReservaView[]>(`/assets/${assetId}/reservas`, { metodo: 'POST', corpo: dados });
+
+export const cancelarReserva = (id: string, reason?: string | null) =>
+  chamar<ReservaView[]>(`/reservas/${id}`, { metodo: 'DELETE', corpo: { reason } });

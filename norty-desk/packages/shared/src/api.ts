@@ -2985,3 +2985,48 @@ export type SimulacaoDeEntradaView = {
   tipo?: TicketType;
   acordos?: CatalogoRef[];
 };
+
+
+// ---------------------------------------------------------------------
+// Reserva de equipamento
+// ---------------------------------------------------------------------
+
+/**
+ * Equipamento separado para alguém, numa janela.
+ *
+ * O notebook de empréstimo, o projetor, a máquina de teste: o que é
+ * pouco e disputado. Sem isto a reserva vive no grupo do WhatsApp, e
+ * duas pessoas levam o mesmo equipamento na mesma sexta.
+ */
+export type ReservaView = {
+  id: string;
+  asset: AtivoRef;
+  /** Para quem está separado. */
+  user: PartyRef;
+  /** Quem separou — nem sempre é quem vai levar. */
+  createdBy: PartyRef;
+  startsAt: string;
+  endsAt: string;
+  purpose: string | null;
+  canceledAt: string | null;
+  canceledReason: string | null;
+  /**
+   * A reserva virou entrega.
+   *
+   * É o que separa a reserva cumprida da esquecida: sem o vínculo, as
+   * duas ficam idênticas na lista, e ninguém sabe quanto do que se
+   * reserva é de fato retirado.
+   */
+  holdingId: string | null;
+  /** Derivado: onde esta reserva está em relação a agora. */
+  situacao: 'CANCELADA' | 'RETIRADA' | 'EM_CURSO' | 'FUTURA' | 'VENCIDA';
+};
+
+export type ReservarAtivoRequest = {
+  userId: string;
+  startsAt: string;
+  endsAt: string;
+  purpose?: string | null;
+};
+
+export type CancelarReservaRequest = { reason?: string | null };

@@ -317,7 +317,13 @@ O inventário que o chamado referencia.
 - **Agenda** da pessoa ou do time: compromissos avulsos, tarefas de chamado
   agendadas e tarefas de projeto, sem cópia; compromisso privado aparece
   como "Ocupado" para os outros. **Feito em 10/09/2026** (`72b25f9`).
-- **Reservas** de equipamento.
+- **Reservas** de equipamento. **Feito em 28/09/2026**: janela por
+  equipamento, com a sobreposição barrada por `EXCLUDE` de intervalo no
+  banco — duas requisições simultâneas passariam juntas por qualquer
+  `if`, e é assim que duas pessoas reservam a mesma coisa. A entrega
+  respeita a reserva e a marca como retirada; cancelar libera a janela
+  sem apagar o registro. Permissão própria (`ativo:reservar`), porque
+  separar o notebook de empréstimo é gesto de quem atende.
 - **Análise de impacto** em grafo.
 - Planejamento de capacidade e custo por chamado.
 
