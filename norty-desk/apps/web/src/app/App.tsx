@@ -26,6 +26,7 @@ import { Automacoes } from '../modules/configuracao/Automacoes';
 import { Copilot } from '../modules/configuracao/Copilot';
 import { Integracoes } from '../modules/configuracao/Integracoes';
 import { CatalogoDoAtivo } from '../modules/configuracao/CatalogoDoAtivo';
+import { RegrasDeEntrada } from '../modules/configuracao/RegrasDeEntrada';
 import { Contratos } from '../modules/configuracao/Contratos';
 import { Modelos } from '../modules/configuracao/Modelos';
 import { Termos } from '../modules/configuracao/Termos';
@@ -195,6 +196,7 @@ function Aplicativo() {
             <Route path="/config/termos" element={<Termos />} />
             <Route path="/config/contratos" element={<Contratos />} />
             <Route path="/config/catalogo-ativos" element={<CatalogoDoAtivo />} />
+            <Route path="/config/regras-entrada" element={<RegrasDeEntrada />} />
             <Route path="/config/canais" element={<Canais />} />
             <Route path="/config/canais/diagnostico" element={<Diagnostico />} />
             <Route path="/config/webhooks" element={<Webhooks />} />

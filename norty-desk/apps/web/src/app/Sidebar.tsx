@@ -78,6 +78,14 @@ export function Sidebar() {
     },
     { rotulo: 'Canais', para: '/config/canais', permissao: 'config:canais' as const },
     {
+      // Logo abaixo de Canais de propósito: a regra age sobre o que
+      // entra por eles, e quem vai configurar uma acabou de configurar
+      // o outro.
+      rotulo: 'Regras de entrada',
+      para: '/config/regras-entrada',
+      permissao: 'config:regras-entrada' as const,
+    },
+    {
       rotulo: 'Diagnóstico',
       para: '/config/canais/diagnostico',
       permissao: 'config:canais' as const,

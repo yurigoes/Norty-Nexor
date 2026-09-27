@@ -21,6 +21,8 @@ import type {
   ContractKind,
   CostKind,
   FormSchema,
+  IntakeAction,
+  IntakeCriterion,
   Recorrencia,
   TemplateKind,
   EventPayload,
@@ -2889,3 +2891,71 @@ export type EventoDoChat =
   | { tipo: 'mensagem'; evento: TicketEventView }
   | { tipo: 'presenca'; estado: EstadoDoChat }
   | { tipo: 'batida' };
+
+
+// ---------------------------------------------------------------------
+// Regras de entrada
+// ---------------------------------------------------------------------
+
+/**
+ * Uma regra de classificação, já normalizada.
+ *
+ * `criteria` e `actions` são `Json` no banco, e a coluna de critérios
+ * guarda duas formas que apareceram na prática: o objeto `{ match,
+ * criteria }` e a lista pura. A API normaliza na saída, e a tela nunca
+ * vê a forma antiga — quem lê Json cru acaba escrevendo a terceira.
+ */
+export type RegraDeEntradaView = {
+  id: string;
+  name: string;
+  /** Ordem de avaliação. Menor primeiro. */
+  position: number;
+  isActive: boolean;
+  /** Para de avaliar as regras seguintes quando esta casar. */
+  stopOnMatch: boolean;
+  match: 'E' | 'OU';
+  criteria: IntakeCriterion[];
+  actions: IntakeAction[];
+};
+
+export type EscreverRegraDeEntradaRequest = {
+  name: string;
+  match: 'E' | 'OU';
+  criteria: IntakeCriterion[];
+  actions: IntakeAction[];
+  stopOnMatch?: boolean;
+  isActive?: boolean;
+  position?: number;
+};
+
+/** A mensagem de mentira que a simulação avalia. */
+export type SimularEntradaRequest = {
+  assunto: string;
+  corpo: string;
+  /** E-mail ou telefone de quem escreveu. */
+  remetente: string;
+  canal: Channel;
+  categoriaId?: string | null;
+};
+
+/**
+ * O que aconteceria com essa mensagem agora.
+ *
+ * Roda o **mesmo motor** que o processamento roda, sobre as regras
+ * ativas que estão gravadas — inclusive o descarte de referência morta.
+ * Simular no navegador daria uma segunda implementação, e a segunda
+ * implementação é a que mente justamente quando alguém precisa dela.
+ *
+ * Os nomes vêm resolvidos porque a decisão carrega id: mostrar o UUID
+ * não responde "para onde foi meu chamado".
+ */
+export type SimulacaoDeEntradaView = {
+  /** Nomes das regras que casaram, na ordem em que foram avaliadas. */
+  regrasAplicadas: string[];
+  descartar?: string;
+  categoria?: CatalogoRef | null;
+  time?: CatalogoRef | null;
+  urgencia?: Scale;
+  tipo?: TicketType;
+  acordos?: CatalogoRef[];
+};

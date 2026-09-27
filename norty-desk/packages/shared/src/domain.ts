@@ -1158,6 +1158,100 @@ export type IntakeRuleDefinition = {
   actions: IntakeAction[];
 };
 
+export const CAMPOS_DE_CRITERIO = [
+  'assunto',
+  'corpo',
+  'remetente',
+  'canal',
+  'categoria',
+] as const;
+
+export const OPERADORES_DE_CRITERIO = ['contem', 'igual', 'regex'] as const;
+
+export const TIPOS_DE_ACAO_DE_ENTRADA = [
+  'DEFINIR_CATEGORIA',
+  'ATRIBUIR_TIME',
+  'DEFINIR_URGENCIA',
+  'DEFINIR_TIPO',
+  'APLICAR_ACORDO',
+  'DESCARTAR',
+] as const;
+
+export const ROTULO_CAMPO_DE_CRITERIO: Record<IntakeCriterion['campo'], string> = {
+  assunto: 'Assunto',
+  corpo: 'Corpo da mensagem',
+  remetente: 'Quem escreveu',
+  canal: 'Canal',
+  categoria: 'Categoria já informada',
+};
+
+export const ROTULO_OPERADOR: Record<(typeof OPERADORES_DE_CRITERIO)[number], string> = {
+  contem: 'contém',
+  igual: 'é igual a',
+  regex: 'casa com a expressão',
+};
+
+export const ROTULO_ACAO_DE_ENTRADA: Record<IntakeAction['tipo'], string> = {
+  DEFINIR_CATEGORIA: 'Classificar na categoria',
+  ATRIBUIR_TIME: 'Mandar para o time',
+  DEFINIR_URGENCIA: 'Definir a urgência',
+  DEFINIR_TIPO: 'Definir o tipo',
+  APLICAR_ACORDO: 'Aplicar os acordos de nível',
+  DESCARTAR: 'Descartar a mensagem',
+};
+
+/**
+ * Campos que só aceitam `igual`, porque o valor é um código.
+ *
+ * "Canal contém EMA" não quer dizer nada, e "categoria casa com a
+ * expressão" compara contra um UUID. Oferecer os três operadores em
+ * todo campo produziria regra que nunca casa e que ninguém entende por
+ * que não casa.
+ */
+export const CAMPOS_SO_IGUAL: readonly IntakeCriterion['campo'][] = ['canal', 'categoria'];
+
+/**
+ * O critério em português.
+ *
+ * Mora aqui porque a lista de regras e a simulação descrevem a mesma
+ * coisa, e dois textos para a mesma frase divergem na primeira
+ * correção. `nomeDaCategoria` existe porque o valor do campo
+ * `categoria` é um id: sem ele a tela mostraria o UUID.
+ */
+export function descreverCriterio(
+  criterio: IntakeCriterion,
+  nomeDaCategoria?: (id: string) => string | undefined,
+): string {
+  const campo = ROTULO_CAMPO_DE_CRITERIO[criterio.campo];
+
+  if (criterio.campo === 'canal') {
+    return `${campo} é ${ROTULO_CANAL[criterio.valor] ?? criterio.valor}`;
+  }
+
+  if (criterio.campo === 'categoria') {
+    return `${campo} é ${nomeDaCategoria?.(criterio.valor) ?? 'uma categoria que não existe mais'}`;
+  }
+
+  return `${campo} ${ROTULO_OPERADOR[criterio.operador]} "${criterio.valor}"`;
+}
+
+/**
+ * A expressão está bem formada?
+ *
+ * Devolve a frase que a pessoa lê, ou `null`. O motor engole a regex
+ * inválida de propósito — regra quebrada não pode derrubar a abertura
+ * do chamado —, e o preço disso é uma regra que nunca casa sem dizer
+ * por quê. A hora de dizer é aqui, na tela, antes de salvar.
+ */
+export function regexInvalida(expressao: string): string | null {
+  try {
+    new RegExp(expressao, 'i');
+    return null;
+  } catch (erro) {
+    return `Expressão inválida: ${(erro as Error).message}`;
+  }
+}
+
 // ---------------------------------------------------------------------
 // Escalonamento
 // ---------------------------------------------------------------------

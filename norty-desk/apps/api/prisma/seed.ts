@@ -364,6 +364,58 @@ async function main() {
     // agente nenhum roda nele.
     const DIA = 86_400_000;
 
+    // --- Duas regras de entrada ---------------------------------------
+    //
+    // Uma que classifica e uma que descarta: são os dois lados do
+    // motor, e sem elas a tela de regras abre vazia — com a explicação
+    // da ordem falando de um comportamento que não dá para ver.
+    const hardware = await prisma.category.findFirst({
+      where: { organizationId: organizacao.id, parentId: null, name: 'Hardware' },
+      select: { id: true },
+    });
+
+    const regras = [
+      {
+        name: 'Impressora é hardware',
+        position: 10,
+        criteria: {
+          match: 'OU',
+          criteria: [
+            { campo: 'assunto', operador: 'contem', valor: 'impressora' },
+            { campo: 'assunto', operador: 'contem', valor: 'toner' },
+          ],
+        },
+        actions: [
+          ...(hardware ? [{ tipo: 'DEFINIR_CATEGORIA', categoryId: hardware.id }] : []),
+          { tipo: 'ATRIBUIR_TIME', teamId: suporte.id },
+        ],
+        stopOnMatch: false,
+      },
+      {
+        name: 'Boletim não é chamado',
+        position: 20,
+        criteria: {
+          match: 'OU',
+          criteria: [
+            { campo: 'assunto', operador: 'contem', valor: 'boletim semanal' },
+            { campo: 'remetente', operador: 'contem', valor: 'newsletter@' },
+          ],
+        },
+        actions: [
+          { tipo: 'DESCARTAR', motivo: 'Boletim informativo, não é pedido de suporte.' },
+        ],
+        stopOnMatch: true,
+      },
+    ];
+
+    for (const regra of regras) {
+      await prisma.intakeRule.upsert({
+        where: { organizationId_name: { organizationId: organizacao.id, name: regra.name } },
+        update: {},
+        create: { organizationId: organizacao.id, ...regra },
+      });
+    }
+
     // Os fabricantes entram com os apelidos que o dicionário usa, como
     // entrariam por cadastro ou por varredura. Sem eles a aba de
     // fabricantes abre vazia e o dicionário não é demonstrável.

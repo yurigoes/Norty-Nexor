@@ -22,6 +22,7 @@ const TITULOS: { prefixo: string; titulo: string }[] = [
   { prefixo: '/config/modelos', titulo: 'Modelos de resposta' },
   { prefixo: '/config/contratos', titulo: 'Contratos e custo' },
   { prefixo: '/config/catalogo-ativos', titulo: 'Catálogo do ativo' },
+  { prefixo: '/config/regras-entrada', titulo: 'Regras de entrada' },
   { prefixo: '/config/marca', titulo: 'Marca' },
   { prefixo: '/config/webhooks', titulo: 'Webhooks' },
   { prefixo: '/config/integracoes', titulo: 'Integrações' },

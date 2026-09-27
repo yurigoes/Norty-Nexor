@@ -93,10 +93,15 @@ ou `false` — se existe, não qual é — e devolver o booleano ao salvar
 preserva o que já estava lá. Sem isso, renomear um canal apagaria a
 senha da caixa.
 
-**O que ficou de fora e por quê:** a tela de configuração de regras de
-entrada. O motor, a API e os testes existem; falta o construtor visual
-de critérios, que pertence à mesma tela de configuração de categorias da
-Fase 3. Até lá as regras se criam pela API.
+**O que ficou de fora, e entrou depois:** a tela de configuração de
+regras de entrada. O motor, a API e os testes existiam desde aqui e as
+regras se criavam pela API — o que na prática quer dizer que ninguém
+criava. **Feito em 27/09/2026**: construtor de critérios e ações com os
+seletores reais de categoria, time e acordo, ordem que se move, e um
+simulador que roda o mesmo motor sobre as regras ativas. A validação
+subiu junto para o servidor: campo, operador, ação e expressão regular
+malformados passam a ser 400 em vez de uma regra que nunca casa em
+silêncio.
 
 ---
 

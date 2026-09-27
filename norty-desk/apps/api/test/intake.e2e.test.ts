@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 
+import type {
+  ProblemDetails,
+  RegraDeEntradaView,
+  SimulacaoDeEntradaView,
+} from '@norty-desk/shared';
+
 import { Cliente, type Api, type Fixtura, limparBanco, prisma, semear, subirApi, protocoloDeTeste } from './apoio';
 import type { ProcessamentoService } from '../src/modules/channels/processamento.service';
 
@@ -605,5 +611,256 @@ describe('integrador por empresa', () => {
     const requerente = chamado.actors.find((a) => a.role === 'REQUERENTE');
     assert.ok(requerente?.contactId, 'segue como contato, como era antes');
     assert.equal(requerente.userId, null);
+  });
+});
+
+/**
+ * O que a tela de regras precisa da API.
+ *
+ * A regra é um par (critérios, ações) guardado em `Json`, e o DTO a
+ * deixa passar com `@Allow()` porque a forma não cabe num decorador.
+ * Isso quer dizer que **o servidor é a única proteção**: a tela oferece
+ * só o que é válido, mas a tela não é a proteção (CLAUDE.md, regra 2).
+ *
+ * O sintoma de uma regra malformada é cruel: o motor engole o critério
+ * desconhecido de propósito — regra quebrada não pode derrubar a
+ * abertura do chamado —, então ela simplesmente nunca casa, em
+ * silêncio. A hora de dizer é na hora de salvar.
+ */
+describe('a regra que a tela escreve', () => {
+  let curador: Cliente;
+
+  before(async () => {
+    curador = new Cliente(api.url);
+    assert.equal((await curador.entrar('supervisor@teste.dev')).status, 200);
+  });
+
+  // Os testes de recusa não deviam criar nada, e é justamente por isso
+  // que a limpeza importa: se a validação cair, as regras malformadas
+  // ficam ativas e quebram a classificação das suítes seguintes — que
+  // foi o que aconteceu ao conferir esta validação por mutação.
+  after(async () => {
+    await prisma.intakeRule.deleteMany({
+      where: { organizationId: f.organizacao.id, name: { startsWith: 'Regra ' } },
+    });
+  });
+
+  async function criar(corpo: Record<string, unknown>) {
+    return curador.post<ProblemDetails & { id?: string }>('/intake-rules', {
+      name: `Regra ${Math.random().toString(36).slice(2, 8)}`,
+      match: 'E',
+      criteria: [{ campo: 'assunto', operador: 'contem', valor: 'x' }],
+      actions: [{ tipo: 'DEFINIR_URGENCIA', urgency: 4 }],
+      ...corpo,
+    });
+  }
+
+  it('aceita a lista de critérios com o conectivo ao lado, e devolve normalizado', async () => {
+    const r = await criar({
+      match: 'OU',
+      criteria: [
+        { campo: 'assunto', operador: 'contem', valor: 'nota fiscal' },
+        { campo: 'canal', operador: 'igual', valor: 'EMAIL' },
+      ],
+    });
+    assert.equal(r.status, 201, JSON.stringify(r.corpo));
+
+    const lista = await curador.get<RegraDeEntradaView[]>('/intake-rules');
+    const salva = lista.corpo.find((x) => x.id === r.corpo.id)!;
+
+    // A tela nunca vê a forma antiga: a normalização acontece na
+    // escrita e na leitura, e a coluna volta a ter uma forma só.
+    assert.equal(salva.match, 'OU');
+    assert.equal(salva.criteria.length, 2);
+    assert.equal(salva.criteria[0]?.campo, 'assunto');
+    assert.equal(salva.isActive, true);
+
+    await curador.del(`/intake-rules/${r.corpo.id}`);
+  });
+
+  it('trocar só o conectivo é edição de critério, e vale', async () => {
+    const r = await criar({});
+    assert.equal(r.status, 201);
+
+    const editada = await curador.patch<RegraDeEntradaView>(`/intake-rules/${r.corpo.id}`, {
+      match: 'OU',
+    });
+    assert.equal(editada.status, 200, JSON.stringify(editada.corpo));
+    assert.equal(editada.corpo.match, 'OU', 'E e OU casam coisas diferentes');
+    assert.equal(editada.corpo.criteria.length, 1, 'os critérios sumiram na troca do conectivo');
+
+    await curador.del(`/intake-rules/${r.corpo.id}`);
+  });
+
+  it('recusa o critério malformado, dizendo qual e por quê', async () => {
+    const campo = await criar({ criteria: [{ campo: 'remetentte', operador: 'contem', valor: 'x' }] });
+    assert.equal(campo.status, 400);
+    assert.match(campo.corpo.detail ?? '', /Critério 1.*não é um campo/s);
+
+    const operador = await criar({
+      criteria: [{ campo: 'assunto', operador: 'parece', valor: 'x' }],
+    });
+    assert.equal(operador.status, 400);
+    assert.match(operador.corpo.detail ?? '', /não é um operador/);
+
+    const semValor = await criar({ criteria: [{ campo: 'assunto', operador: 'contem', valor: '' }] });
+    assert.equal(semValor.status, 400);
+
+    // "Canal contém EMA" não quer dizer nada.
+    const canalContem = await criar({
+      criteria: [{ campo: 'canal', operador: 'contem', valor: 'EMAIL' }],
+    });
+    assert.equal(canalContem.status, 400);
+    assert.match(canalContem.corpo.detail ?? '', /só aceita "igual"/);
+
+    const canalInventado = await criar({
+      criteria: [{ campo: 'canal', operador: 'igual', valor: 'POMBO_CORREIO' }],
+    });
+    assert.equal(canalInventado.status, 400);
+  });
+
+  it('recusa a expressão que não compila — o sintoma dela é não casar nunca', async () => {
+    const r = await criar({
+      criteria: [{ campo: 'assunto', operador: 'regex', valor: '[a-z' }],
+    });
+
+    assert.equal(r.status, 400);
+    assert.match(r.corpo.detail ?? '', /Expressão inválida/);
+  });
+
+  it('recusa a ação sem destino, e o descarte sem motivo', async () => {
+    assert.equal((await criar({ actions: [{ tipo: 'ATRIBUIR_TIME' }] })).status, 400);
+    assert.equal(
+      (await criar({ actions: [{ tipo: 'ATRIBUIR_TIME', teamId: 'o-time-legal' }] })).status,
+      400,
+    );
+    assert.equal((await criar({ actions: [{ tipo: 'DEFINIR_URGENCIA', urgency: 9 }] })).status, 400);
+    assert.equal((await criar({ actions: [{ tipo: 'EXPLODIR' }] })).status, 400);
+
+    const descarte = await criar({ actions: [{ tipo: 'DESCARTAR', motivo: '  ' }] });
+    assert.equal(descarte.status, 400);
+    // O motivo é a única explicação que sobra de um e-mail que não
+    // virou chamado.
+    assert.match(descarte.corpo.detail ?? '', /motivo/);
+  });
+});
+
+/**
+ * A simulação.
+ *
+ * O jeito de descobrir por que a fila saiu errada não pode ser mandar
+ * um e-mail de verdade e ver onde ele cai. Roda o mesmo motor sobre as
+ * mesmas regras ativas, e devolve os nomes resolvidos — o UUID não
+ * responde "para onde foi meu chamado".
+ */
+describe('simular a entrada', () => {
+  let curador: Cliente;
+
+  before(async () => {
+    curador = new Cliente(api.url);
+    assert.equal((await curador.entrar('supervisor@teste.dev')).status, 200);
+  });
+
+  it('diz qual regra casou e para onde o chamado iria', async () => {
+    const regra = await curador.post<{ id: string }>('/intake-rules', {
+      name: 'Simulação: impressora vai para o outro time',
+      match: 'E',
+      criteria: [{ campo: 'assunto', operador: 'contem', valor: 'impressora' }],
+      actions: [
+        { tipo: 'ATRIBUIR_TIME', teamId: f.outroTime.id },
+        { tipo: 'DEFINIR_URGENCIA', urgency: 4 },
+      ],
+    });
+    assert.equal(regra.status, 201, JSON.stringify(regra.corpo));
+
+    const casou = await curador.post<SimulacaoDeEntradaView>('/intake-rules/simular', {
+      assunto: 'A impressora do 3º andar parou',
+      corpo: 'Luz laranja piscando.',
+      remetente: 'marina@cliente.com.br',
+      canal: 'EMAIL',
+    });
+
+    assert.equal(casou.status, 200, JSON.stringify(casou.corpo));
+    assert.ok(casou.corpo.regrasAplicadas.includes('Simulação: impressora vai para o outro time'));
+    // O nome, não o id: o UUID não responde "para onde foi meu chamado".
+    assert.equal(casou.corpo.time?.name, f.outroTime.name);
+    assert.equal(casou.corpo.urgencia, 4);
+
+    const naoCasou = await curador.post<SimulacaoDeEntradaView>('/intake-rules/simular', {
+      assunto: 'Preciso de acesso ao sistema',
+      corpo: 'x',
+      remetente: 'marina@cliente.com.br',
+      canal: 'EMAIL',
+    });
+
+    assert.equal(naoCasou.status, 200);
+    assert.ok(
+      !naoCasou.corpo.regrasAplicadas.includes('Simulação: impressora vai para o outro time'),
+    );
+
+    await curador.del(`/intake-rules/${regra.corpo.id}`);
+  });
+
+  it('a regra desativada não entra na simulação, como não entra na fila', async () => {
+    const regra = await curador.post<{ id: string }>('/intake-rules', {
+      name: 'Simulação: regra dormindo',
+      match: 'E',
+      criteria: [{ campo: 'assunto', operador: 'contem', valor: 'xilofone' }],
+      actions: [{ tipo: 'DEFINIR_URGENCIA', urgency: 5 }],
+      isActive: false,
+    });
+    assert.equal(regra.status, 201, JSON.stringify(regra.corpo));
+
+    const r = await curador.post<SimulacaoDeEntradaView>('/intake-rules/simular', {
+      assunto: 'Comprei um xilofone',
+      corpo: 'x',
+      remetente: 'a@b.com.br',
+      canal: 'EMAIL',
+    });
+
+    assert.equal(r.status, 200);
+    assert.ok(
+      !r.corpo.regrasAplicadas.includes('Simulação: regra dormindo'),
+      'simular tem de mostrar o que acontece de verdade, não o que aconteceria se estivesse ativa',
+    );
+
+    await curador.del(`/intake-rules/${regra.corpo.id}`);
+  });
+
+  it('o descarte aparece com o motivo, que é o que sobra para explicar', async () => {
+    const regra = await curador.post<{ id: string }>('/intake-rules', {
+      name: 'Simulação: boletim não é chamado',
+      match: 'E',
+      criteria: [{ campo: 'assunto', operador: 'contem', valor: 'boletim semanal' }],
+      actions: [{ tipo: 'DESCARTAR', motivo: 'Boletim informativo, não é pedido de suporte.' }],
+    });
+    assert.equal(regra.status, 201);
+
+    const r = await curador.post<SimulacaoDeEntradaView>('/intake-rules/simular', {
+      assunto: 'Boletim semanal de novidades',
+      corpo: 'x',
+      remetente: 'news@fornecedor.com.br',
+      canal: 'EMAIL',
+    });
+
+    assert.equal(r.corpo.descartar, 'Boletim informativo, não é pedido de suporte.');
+
+    await curador.del(`/intake-rules/${regra.corpo.id}`);
+  });
+
+  it('quem não configura regra não simula', async () => {
+    const agente = new Cliente(api.url);
+    assert.equal((await agente.entrar('agente@teste.dev')).status, 200);
+
+    const r = await agente.post('/intake-rules/simular', {
+      assunto: 'x',
+      corpo: 'x',
+      remetente: 'a@b.com.br',
+      canal: 'EMAIL',
+    });
+
+    // A simulação lê a configuração inteira da organização: quem não
+    // pode ver as regras não pode vê-las pelo resultado delas.
+    assert.equal(r.status, 403);
   });
 });

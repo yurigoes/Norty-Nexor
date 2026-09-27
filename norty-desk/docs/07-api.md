@@ -487,6 +487,7 @@ GET|POST|PATCH        /v1/calendars
 POST|DELETE           /v1/calendars/:id/feriados
 GET|POST|PATCH|DELETE /v1/pending-reasons
 GET|POST|PATCH|DELETE /v1/intake-rules
+POST                  /v1/intake-rules/simular   → 200, o que aconteceria
 GET|POST|PATCH|DELETE /v1/teams
 GET|POST|PATCH|DELETE /v1/users            (POST aceita `semAcesso`)
 GET|POST|PATCH|DELETE /v1/webhooks
@@ -494,6 +495,71 @@ GET|POST|DELETE       /v1/api-keys
 GET                   /v1/audit-logs?entity=&entityId=&actorId=&limit=
 POST                  /v1/tickets/lote
 ```
+
+### 7.0-a Regras de entrada
+
+A regra é um par (critérios, ações) com posição:
+
+```jsonc
+{
+  "name": "Nota fiscal vai para o financeiro",
+  "match": "E",                  // "OU" exige só um dos critérios
+  "criteria": [
+    { "campo": "assunto", "operador": "contem", "valor": "nota fiscal" },
+    { "campo": "canal", "operador": "igual", "valor": "EMAIL" }
+  ],
+  "actions": [
+    { "tipo": "DEFINIR_CATEGORIA", "categoryId": "…" },
+    { "tipo": "ATRIBUIR_TIME", "teamId": "…" }
+  ],
+  "stopOnMatch": true
+}
+```
+
+`criteria` também aceita o objeto `{ match, criteria }` — era a forma
+antiga, e continua entrando. **A API guarda sempre `{ match, criteria }`
+e devolve sempre a forma acima**, com `criteria` como lista e `match` ao
+lado: foi gravar as duas formas que criou a normalização na leitura, e
+ela acontece agora uma vez, na escrita.
+
+**A ordem é a semântica.** As regras são avaliadas por `position`
+crescente, e a de baixo sobrescreve a de cima no mesmo campo.
+`stopOnMatch` interrompe a avaliação; `DESCARTAR` interrompe sempre —
+não faz sentido classificar o que não vai virar chamado.
+
+**A validação é do servidor, não da tela.** `criteria` chega como `Json`
+e o DTO o deixa passar com `@Allow()` porque a forma não cabe num
+decorador. Campo, operador e tipo de ação desconhecidos são 400, e a
+mensagem diz **qual** critério e por quê. A razão é o sintoma: o motor
+engole o critério desconhecido de propósito — regra quebrada não pode
+derrubar a abertura do chamado —, então uma regra malformada
+simplesmente nunca casa, em silêncio.
+
+Pelo mesmo motivo **a expressão que não compila é 400**, e não uma regra
+que nunca dispara. Canal e categoria só aceitam `igual`: "canal contém
+EMA" não quer dizer nada, e "categoria casa com a expressão" compara
+contra um UUID. O descarte exige motivo — é a única explicação que
+sobra de um e-mail que não virou chamado.
+
+### 7.0-b Simular a entrada
+
+```
+POST /v1/intake-rules/simular
+  { assunto, corpo, remetente, canal, categoriaId? }
+  → { regrasAplicadas[], descartar?, categoria?, time?, urgencia?, tipo?, acordos[] }
+```
+
+Roda o **mesmo motor** do processamento, sobre as mesmas regras
+**ativas**, incluindo o descarte de referência morta. Simular no
+navegador seria uma segunda implementação, e a segunda é a que mente
+justamente quando alguém precisa dela para entender por que a fila saiu
+errada.
+
+A regra desativada não aparece: a simulação mostra o que acontece, não o
+que aconteceria. Os nomes vêm resolvidos porque a decisão carrega id, e
+o UUID não responde "para onde foi meu chamado". Exige
+`config:regras-entrada` — quem não pode ver as regras não pode vê-las
+pelo resultado delas.
 
 ### 7.0 Configuração de SLA
 

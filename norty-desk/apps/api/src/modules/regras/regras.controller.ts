@@ -1,11 +1,14 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common';
+import { CHANNELS, type Channel } from '@norty-desk/shared';
 import {
   Allow,
   IsArray,
   IsBoolean,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   Min,
   MinLength,
@@ -21,24 +24,41 @@ export class CriarRegraDto {
   @IsString() @MinLength(2) @MaxLength(120) name!: string;
   @IsOptional() @IsInt() @Min(0) position?: number;
   /**
-   * `{ match, criteria }` — a forma é validada no serviço, que conhece
-   * o formato. `@Allow()` é obrigatório: com `whitelist: true`, campo
-   * sem decorador nenhum é **apagado** do corpo, e a regra chegaria
-   * vazia — que foi exatamente o defeito que a suíte pegou aqui.
+   * A lista de critérios, ou o objeto `{ match, criteria }`.
+   *
+   * As duas entram: a tela manda a lista com `match` ao lado, e a
+   * chamada antiga mandava o objeto. A forma é validada no serviço,
+   * que conhece o formato.
+   *
+   * `@Allow()` é obrigatório: com `whitelist: true`, campo sem
+   * decorador nenhum é **apagado** do corpo, e a regra chegaria vazia —
+   * que foi exatamente o defeito que a suíte pegou aqui.
    */
   @Allow()
   criteria!: unknown;
+  @IsOptional() @IsIn(['E', 'OU']) match?: 'E' | 'OU';
   @IsArray() actions!: unknown[];
   @IsOptional() @IsBoolean() stopOnMatch?: boolean;
+  @IsOptional() @IsBoolean() isActive?: boolean;
 }
 
 export class EditarRegraDto {
   @IsOptional() @IsString() @MinLength(2) @MaxLength(120) name?: string;
   @IsOptional() @IsInt() @Min(0) position?: number;
   @IsOptional() @Allow() criteria?: unknown;
+  @IsOptional() @IsIn(['E', 'OU']) match?: 'E' | 'OU';
   @IsOptional() @IsArray() actions?: unknown[];
   @IsOptional() @IsBoolean() stopOnMatch?: boolean;
   @IsOptional() @IsBoolean() isActive?: boolean;
+}
+
+/** A mensagem de mentira que a simulação avalia. */
+export class SimularEntradaDto {
+  @IsOptional() @IsString() @MaxLength(500) assunto?: string;
+  @IsOptional() @IsString() @MaxLength(20000) corpo?: string;
+  @IsOptional() @IsString() @MaxLength(320) remetente?: string;
+  @IsIn(CHANNELS) canal!: Channel;
+  @IsOptional() @IsUUID() categoriaId?: string;
 }
 
 @Controller('intake-rules')
@@ -56,6 +76,27 @@ export class RegrasController {
   @RequirePermission('config:regras-entrada')
   criar(@CurrentUser() usuario: UsuarioAutenticado, @Body() dto: CriarRegraDto) {
     return this.regras.criar(usuario, dto);
+  }
+
+  /**
+   * O que aconteceria com esta mensagem agora.
+   *
+   * `POST` e não `GET` porque o corpo do e-mail entra no pedido, e
+   * `HttpCode(200)` porque nada foi criado. Vale a rota própria: o
+   * jeito de descobrir por que a fila saiu errada não pode ser mandar
+   * um e-mail de verdade e ver onde ele cai.
+   */
+  @Post('simular')
+  @HttpCode(200)
+  @RequirePermission('config:regras-entrada')
+  simular(@CurrentUser() usuario: UsuarioAutenticado, @Body() dto: SimularEntradaDto) {
+    return this.regras.simular(usuario, {
+      assunto: dto.assunto ?? '',
+      corpo: dto.corpo ?? '',
+      remetente: dto.remetente ?? '',
+      canal: dto.canal,
+      categoriaId: dto.categoriaId ?? null,
+    });
   }
 
   @Patch(':id')
