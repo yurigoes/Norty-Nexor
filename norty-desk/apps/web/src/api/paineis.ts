@@ -1,4 +1,9 @@
-import type { FatiaDeContagem, PainelView, RelatorioSlaView } from '@norty-desk/shared';
+import type {
+  CapacidadeView,
+  FatiaDeContagem,
+  PainelView,
+  RelatorioSlaView,
+} from '@norty-desk/shared';
 
 import { baixar, chamar } from './cliente';
 
@@ -36,3 +41,17 @@ export const baixarCsvDeVolume = (periodo: Periodo, agrupar: string) =>
     `/reports/volume?formato=csv&periodo=${periodo}&agrupar=${agrupar}`,
     `volume-${agrupar}-${periodo}.csv`,
   );
+
+
+/**
+ * Quanto entra contra quanto o time dá conta.
+ *
+ * A ocupação é um piso: só conta o tempo que alguém apontou. Por isso a
+ * resposta traz `semApontamento` junto — quem lê precisa saber quanto
+ * do período não foi medido antes de decidir contratação.
+ */
+export const capacidade = (periodo: Periodo = '30d') =>
+  chamar<CapacidadeView>(`/reports/capacidade?periodo=${periodo}`);
+
+export const baixarCsvDeCapacidade = (periodo: Periodo = '30d') =>
+  baixar(`/reports/capacidade?formato=csv&periodo=${periodo}`, `capacidade-${periodo}.csv`);

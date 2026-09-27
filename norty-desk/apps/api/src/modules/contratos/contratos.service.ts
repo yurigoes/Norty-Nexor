@@ -18,6 +18,17 @@ import { Prisma } from '@prisma/client';
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditoriaService } from '../auditoria/auditoria.service';
+
+/** A linha como o Postgres a devolve: decimal em texto, contagem em bigint. */
+type LinhaBruta = {
+  chave: string | null;
+  rotulo: string | null;
+  chamados: bigint;
+  total: string;
+  tempo: string;
+  material: string;
+  fixo: string;
+};
 import { escopoDeLeitura } from '../tickets/tickets.escopo';
 import type {
   BuscarContratosDto,
@@ -459,56 +470,125 @@ export class ContratosService {
     const ate = filtro.ate ? new Date(filtro.ate) : new Date();
     const de = filtro.de ? new Date(filtro.de) : new Date(ate.getTime() - 90 * 86_400_000);
 
-    const porCategoria = await this.prisma.$queryRaw<
-      { chave: string | null; rotulo: string | null; chamados: bigint; total: string }[]
-    >`
-      SELECT c."id" AS chave,
-             c."name" AS rotulo,
+    // As quatro quebras saem do mesmo formato: chave, rótulo, e as
+    // somas abertas por tipo de lançamento. O que muda é o `GROUP BY`,
+    // e por isso o SQL é montado uma vez — quatro consultas quase
+    // iguais divergem na primeira correção que alguém esquece de
+    // repetir nas outras.
+    const quebra = (
+      chave: Prisma.Sql,
+      rotulo: Prisma.Sql,
+      juncao: Prisma.Sql,
+      semNome: string,
+    ) => this.prisma.$queryRaw<LinhaBruta[]>(Prisma.sql`
+      SELECT ${chave} AS chave,
+             COALESCE(${rotulo}, ${semNome}) AS rotulo,
              COUNT(DISTINCT t."id") AS chamados,
-             COALESCE(SUM(tc."amount"), 0)::text AS total
+             COALESCE(SUM(tc."amount"), 0)::text AS total,
+             COALESCE(SUM(tc."amount") FILTER (WHERE tc."kind" = 'TEMPO'), 0)::text AS tempo,
+             COALESCE(SUM(tc."amount") FILTER (WHERE tc."kind" = 'MATERIAL'), 0)::text AS material,
+             COALESCE(SUM(tc."amount") FILTER (WHERE tc."kind" = 'FIXO'), 0)::text AS fixo
       FROM "ticket_costs" tc
       JOIN "tickets" t ON t."id" = tc."ticketId"
-      LEFT JOIN "categories" c ON c."id" = t."categoryId"
+      ${juncao}
       WHERE t."organizationId" = ${usuario.organizationId}::uuid
         AND tc."createdAt" >= ${de} AND tc."createdAt" <= ${ate}
-      GROUP BY c."id", c."name"
+      GROUP BY ${chave}, ${rotulo}
       ORDER BY SUM(tc."amount") DESC
-    `;
+      LIMIT 50
+    `);
 
-    const porTipo = await this.prisma.$queryRaw<
-      { chave: string; rotulo: string; chamados: bigint; total: string }[]
-    >`
-      SELECT tc."kind"::text AS chave,
-             tc."kind"::text AS rotulo,
-             COUNT(DISTINCT t."id") AS chamados,
-             COALESCE(SUM(tc."amount"), 0)::text AS total
-      FROM "ticket_costs" tc
-      JOIN "tickets" t ON t."id" = tc."ticketId"
-      WHERE t."organizationId" = ${usuario.organizationId}::uuid
-        AND tc."createdAt" >= ${de} AND tc."createdAt" <= ${ate}
-      GROUP BY tc."kind"
-      ORDER BY SUM(tc."amount") DESC
-    `;
+    const [porCategoria, porTipo, porCliente, porTime, maisCaros, geral] = await Promise.all([
+      quebra(
+        Prisma.sql`c."id"::text`,
+        Prisma.sql`c."name"`,
+        Prisma.sql`LEFT JOIN "categories" c ON c."id" = t."categoryId"`,
+        'Sem categoria',
+      ),
+      quebra(Prisma.sql`tc."kind"::text`, Prisma.sql`tc."kind"::text`, Prisma.empty, 'Sem tipo'),
+      quebra(
+        Prisma.sql`cl."id"::text`,
+        Prisma.sql`cl."name"`,
+        Prisma.sql`LEFT JOIN "clients" cl ON cl."id" = t."clientId"`,
+        'Da casa',
+      ),
+      // O time vem do ator atribuído, que é onde o chamado guarda para
+      // quem ele foi. `DISTINCT` na contagem porque um chamado com dois
+      // atores de time contaria duas vezes.
+      quebra(
+        Prisma.sql`tm."id"::text`,
+        Prisma.sql`tm."name"`,
+        Prisma.sql`LEFT JOIN "ticket_actors" ta
+                     ON ta."ticketId" = t."id" AND ta."role" = 'ATRIBUIDO' AND ta."teamId" IS NOT NULL
+                   LEFT JOIN "teams" tm ON tm."id" = ta."teamId"`,
+        'Sem time',
+      ),
+      this.prisma.$queryRaw<{ id: string; number: number; subject: string; total: string }[]>`
+        SELECT t."id", t."number", t."subject",
+               COALESCE(SUM(tc."amount"), 0)::text AS total
+        FROM "ticket_costs" tc
+        JOIN "tickets" t ON t."id" = tc."ticketId"
+        WHERE t."organizationId" = ${usuario.organizationId}::uuid
+          AND tc."createdAt" >= ${de} AND tc."createdAt" <= ${ate}
+        GROUP BY t."id", t."number", t."subject"
+        ORDER BY SUM(tc."amount") DESC
+        LIMIT 10
+      `,
+      this.prisma.$queryRaw<LinhaBruta[]>`
+        SELECT 'geral' AS chave, 'Geral' AS rotulo,
+               COUNT(DISTINCT t."id") AS chamados,
+               COALESCE(SUM(tc."amount"), 0)::text AS total,
+               COALESCE(SUM(tc."amount") FILTER (WHERE tc."kind" = 'TEMPO'), 0)::text AS tempo,
+               COALESCE(SUM(tc."amount") FILTER (WHERE tc."kind" = 'MATERIAL'), 0)::text AS material,
+               COALESCE(SUM(tc."amount") FILTER (WHERE tc."kind" = 'FIXO'), 0)::text AS fixo
+        FROM "ticket_costs" tc
+        JOIN "tickets" t ON t."id" = tc."ticketId"
+        WHERE t."organizationId" = ${usuario.organizationId}::uuid
+          AND tc."createdAt" >= ${de} AND tc."createdAt" <= ${ate}
+      `,
+    ]);
 
-    const linhas = (
-      brutas: { chave: string | null; rotulo: string | null; chamados: bigint; total: string }[],
-    ): LinhaDeCusto[] =>
-      brutas.map((l) => ({
-        chave: l.chave ?? 'sem-categoria',
-        rotulo: l.rotulo ?? 'Sem categoria',
-        chamados: Number(l.chamados),
-        total: Number(l.total),
-      }));
-
-    const categorias = linhas(porCategoria);
+    const total = Number(geral[0]?.total ?? 0);
+    const chamados = Number(geral[0]?.chamados ?? 0);
 
     return {
       de: de.toISOString(),
       ate: ate.toISOString(),
-      total: categorias.reduce((soma, l) => soma + l.total, 0),
-      porCategoria: categorias,
-      porTipo: linhas(porTipo),
+      total,
+      chamados,
+      // Dividido pelos chamados **que tiveram custo lançado**: chamado
+      // sem lançamento não custou zero, ele não foi medido, e misturar
+      // os dois faria o médio cair sempre que alguém deixasse de lançar.
+      medioPorChamado: chamados > 0 ? total / chamados : 0,
+      porCategoria: ContratosService.linhas(porCategoria),
+      porTipo: ContratosService.linhas(porTipo),
+      porCliente: ContratosService.linhas(porCliente),
+      porTime: ContratosService.linhas(porTime),
+      maisCaros: maisCaros.map((m) => ({
+        id: m.id,
+        number: m.number,
+        subject: m.subject,
+        total: Number(m.total),
+      })),
     };
+  }
+
+  private static linhas(brutas: LinhaBruta[]): LinhaDeCusto[] {
+    return brutas.map((l) => {
+      const chamados = Number(l.chamados);
+      const total = Number(l.total);
+
+      return {
+        chave: l.chave ?? 'sem-chave',
+        rotulo: l.rotulo ?? 'Sem nome',
+        chamados,
+        total,
+        tempo: Number(l.tempo),
+        material: Number(l.material),
+        fixo: Number(l.fixo),
+        medioPorChamado: chamados > 0 ? total / chamados : 0,
+      };
+    });
   }
 
   // -------------------------------------------------------------------

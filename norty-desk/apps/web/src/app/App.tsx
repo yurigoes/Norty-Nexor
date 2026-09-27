@@ -48,6 +48,7 @@ import { NovoChamado } from '../modules/chamado/NovoChamado';
 import { MarcaConfig } from '../modules/config/MarcaConfig';
 import { Fila } from '../modules/fila/Fila';
 import { Painel } from '../modules/painel/Painel';
+import { Capacidade } from '../modules/painel/Capacidade';
 import { Mudanca } from '../modules/mudanca/Mudanca';
 import { Mudancas } from '../modules/mudanca/Mudancas';
 import { ErrosConhecidos } from '../modules/problema/ErrosConhecidos';
@@ -150,6 +151,7 @@ function Aplicativo() {
           <Routes>
             <Route path="/" element={<Fila />} />
             <Route path="/painel" element={<Painel />} />
+            <Route path="/painel/capacidade" element={<Capacidade />} />
             <Route path="/clientes" element={<Carteira />} />
             <Route path="/ativos" element={<Ativos />} />
             <Route path="/ativos/:id" element={<Ativo />} />

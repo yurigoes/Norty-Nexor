@@ -62,3 +62,12 @@ export function inicioDoPeriodo(periodo: Periodo = '30d', agora = new Date()): D
 
   return inicio;
 }
+
+
+/** Quanto trabalho entra contra quanto o time dá conta. */
+export class CapacidadeDto {
+  @IsOptional() @IsIn(PERIODOS) periodo?: Periodo;
+  /** Qual expediente conta como capacidade. Sem isto, o mais usado. */
+  @IsOptional() @IsUUID() calendarId?: string;
+  @IsOptional() @IsIn(['json', 'csv']) formato?: 'json' | 'csv';
+}

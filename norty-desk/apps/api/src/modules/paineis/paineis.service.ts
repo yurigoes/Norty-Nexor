@@ -1,7 +1,9 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import type {
+  CapacidadeView,
   Channel,
   FatiaDeContagem,
+  LinhaDeCapacidade,
   Indicador,
   LinhaDeSla,
   PainelView,
@@ -22,7 +24,8 @@ import { Prisma } from '@prisma/client';
 
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { inicioDoPeriodo, type PainelDto, type RelatorioSlaDto } from './dto';
+import { segundosDeExpediente } from '../sla/calendario';
+import { inicioDoPeriodo, type PainelDto, type Periodo, type RelatorioSlaDto } from './dto';
 
 /**
  * O fuso em que o dia do relatório começa.
@@ -558,4 +561,202 @@ export class PaineisService {
 
     return [cabecalho, ...linhas].map((l) => l.map(escapar).join(';')).join('\r\n');
   }
+  // -------------------------------------------------------------------
+  // Capacidade
+  // -------------------------------------------------------------------
+
+  /**
+   * Quanto trabalho entra contra quanto o time dá conta.
+   *
+   * A pergunta é a de antes de contratar: "o time está no limite?". Ela
+   * se responde por time, e com quatro números que dizem coisas
+   * diferentes — o que entrou, o que saiu, o que sobrou e quanto tempo
+   * foi apontado.
+   *
+   * **A ocupação é um piso, não a verdade.** Ela só conta o tempo que
+   * alguém apontou, e ninguém aponta tudo. Por isso a resposta carrega
+   * `semApontamento`: com metade dos chamados sem tempo lançado, a
+   * ocupação é ficção, e quem lê precisa saber disso **antes** de
+   * decidir contratação. Um relatório que esconde a própria margem de
+   * erro é pior que nenhum.
+   *
+   * As horas disponíveis saem do expediente do calendário, não de "8
+   * por dia": feriado e fim de semana não são capacidade. Férias e
+   * afastamento não entram — o sistema não os conhece, e chutar seria
+   * inventar precisão.
+   */
+  async capacidade(
+    usuario: UsuarioAutenticado,
+    dto: { periodo?: Periodo; calendarId?: string },
+  ): Promise<CapacidadeView> {
+    const organizationId = usuario.organizationId;
+    const ate = new Date();
+    const de = inicioDoPeriodo(dto.periodo, ate);
+
+    const calendario = await this.calendarioDoRelatorio(organizationId, dto.calendarId);
+
+    const horasDoExpediente = calendario
+      ? segundosDeExpediente(de, ate, {
+          timezone: calendario.timezone,
+          segments: calendario.segments,
+          holidays: calendario.holidays,
+        }) / 3600
+      : (ate.getTime() - de.getTime()) / 3_600_000;
+
+    const times = await this.prisma.team.findMany({
+      where: { organizationId, isActive: true },
+      select: { id: true, name: true, _count: { select: { members: true } } },
+      orderBy: { name: 'asc' },
+    });
+
+    const [abertos, fechados, backlog, apontado, semApontamento, totalNoPeriodo] =
+      await Promise.all([
+        this.porTime(organizationId, Prisma.sql`t."createdAt" >= ${de} AND t."createdAt" <= ${ate}`),
+        this.porTime(
+          organizationId,
+          Prisma.sql`COALESCE(t."closedAt", t."solvedAt") >= ${de} AND COALESCE(t."closedAt", t."solvedAt") <= ${ate}`,
+        ),
+        this.porTime(organizationId, Prisma.sql`t."status" NOT IN ('SOLUCIONADO', 'FECHADO')`),
+        this.horasApontadasPorTime(organizationId, de, ate),
+        this.chamadosSemApontamento(organizationId, de, ate),
+        this.prisma.ticket.count({
+          where: { organizationId, createdAt: { gte: de, lte: ate } },
+        }),
+      ]);
+
+    const linha = (id: string | null, nome: string, pessoas: number): LinhaDeCapacidade => {
+      const horasApontadas = apontado.get(id) ?? 0;
+      const horasDisponiveis = pessoas * horasDoExpediente;
+
+      return {
+        time: id ? { id, name: nome } : null,
+        pessoas,
+        abertos: abertos.get(id) ?? 0,
+        fechados: fechados.get(id) ?? 0,
+        backlog: backlog.get(id) ?? 0,
+        horasApontadas: Math.round(horasApontadas * 10) / 10,
+        horasDisponiveis: Math.round(horasDisponiveis * 10) / 10,
+        // Sem gente no time não há do que dividir, e infinito na tela
+        // não diz nada.
+        ocupacao: horasDisponiveis > 0 ? horasApontadas / horasDisponiveis : null,
+      };
+    };
+
+    const linhas = times.map((t) => linha(t.id, t.name, t._count.members));
+
+    // O que entrou e não foi para time nenhum é o número que ninguém
+    // olha e que explica a fila que não anda.
+    const semTime = linha(null, 'Sem time', 0);
+    if (semTime.abertos > 0 || semTime.backlog > 0) linhas.push(semTime);
+
+    return {
+      periodo: { de: de.toISOString(), ate: ate.toISOString() },
+      calendario: calendario ? { id: calendario.id, name: calendario.name } : null,
+      linhas,
+      semApontamento,
+      totalNoPeriodo,
+    };
+  }
+
+  /**
+   * O calendário que conta expediente no relatório.
+   *
+   * Sem pedido, o mais usado pelos acordos: é o que a casa de fato
+   * trabalha. Nenhum calendário cadastrado vira 24x7, que é o mesmo
+   * que o SLA faz — e é o único palpite honesto quando ninguém disse
+   * qual é o expediente.
+   */
+  private async calendarioDoRelatorio(organizationId: string, calendarId?: string) {
+    if (calendarId) {
+      return this.prisma.calendar.findFirst({
+        where: { id: calendarId, organizationId },
+        include: { segments: true, holidays: true },
+      });
+    }
+
+    const [maisUsado] = await this.prisma.calendar.findMany({
+      where: { organizationId },
+      include: {
+        segments: true,
+        holidays: true,
+        _count: { select: { agreements: true } },
+      },
+      orderBy: { agreements: { _count: 'desc' } },
+      take: 1,
+    });
+
+    return maisUsado ?? null;
+  }
+
+  /** Contagem de chamados por time atribuído, com o recorte dado. */
+  private async porTime(
+    organizationId: string,
+    recorte: Prisma.Sql,
+  ): Promise<Map<string | null, number>> {
+    const linhas = await this.prisma.$queryRaw<{ teamid: string | null; total: bigint }[]>(
+      Prisma.sql`
+        SELECT ta."teamId" AS teamid, COUNT(DISTINCT t."id") AS total
+        FROM "tickets" t
+        LEFT JOIN "ticket_actors" ta
+          ON ta."ticketId" = t."id" AND ta."role" = 'ATRIBUIDO' AND ta."teamId" IS NOT NULL
+        WHERE t."organizationId" = ${organizationId}::uuid AND ${recorte}
+        GROUP BY ta."teamId"
+      `,
+    );
+
+    return new Map(linhas.map((l) => [l.teamid, Number(l.total)]));
+  }
+
+  /**
+   * Horas apontadas por time no período.
+   *
+   * O tempo vive no `payload` do evento de tarefa, em segundos — a
+   * tarefa é um `TicketEvent` e não tabela própria (regra 8), então a
+   * soma sai do Json. Em segundos e não em horas fracionadas porque foi
+   * assim que ele foi gravado.
+   */
+  private async horasApontadasPorTime(
+    organizationId: string,
+    de: Date,
+    ate: Date,
+  ): Promise<Map<string | null, number>> {
+    const linhas = await this.prisma.$queryRaw<{ teamid: string | null; segundos: bigint }[]>`
+      SELECT ta."teamId" AS teamid,
+             COALESCE(SUM((e."payload"->>'spentSeconds')::bigint), 0) AS segundos
+      FROM "ticket_events" e
+      JOIN "tickets" t ON t."id" = e."ticketId"
+      LEFT JOIN "ticket_actors" ta
+        ON ta."ticketId" = t."id" AND ta."role" = 'ATRIBUIDO' AND ta."teamId" IS NOT NULL
+      WHERE t."organizationId" = ${organizationId}::uuid
+        AND e."type" = 'TAREFA'
+        AND e."createdAt" >= ${de} AND e."createdAt" <= ${ate}
+        AND (e."payload"->>'spentSeconds') IS NOT NULL
+      GROUP BY ta."teamId"
+    `;
+
+    return new Map(linhas.map((l) => [l.teamid, Number(l.segundos) / 3600]));
+  }
+
+  /** Quantos chamados do período não têm tempo apontado nenhum. */
+  private async chamadosSemApontamento(
+    organizationId: string,
+    de: Date,
+    ate: Date,
+  ): Promise<number> {
+    const [linha] = await this.prisma.$queryRaw<{ total: bigint }[]>`
+      SELECT COUNT(*) AS total
+      FROM "tickets" t
+      WHERE t."organizationId" = ${organizationId}::uuid
+        AND t."createdAt" >= ${de} AND t."createdAt" <= ${ate}
+        AND NOT EXISTS (
+          SELECT 1 FROM "ticket_events" e
+           WHERE e."ticketId" = t."id"
+             AND e."type" = 'TAREFA'
+             AND COALESCE((e."payload"->>'spentSeconds')::bigint, 0) > 0
+        )
+    `;
+
+    return Number(linha?.total ?? 0);
+  }
+
 }

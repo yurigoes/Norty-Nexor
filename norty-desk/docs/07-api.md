@@ -782,7 +782,34 @@ GET /v1/dashboards/time?teamId=...&periodo=30d
 GET /v1/dashboards/organizacao?periodo=30d
 GET /v1/reports/sla?periodo=30d&agrupar=categoria|time|prioridade|acordo&formato=json|csv
 GET /v1/reports/volume?periodo=30d&agrupar=categoria|canal|time|dia&formato=json|csv
+GET /v1/reports/capacidade?periodo=30d&calendarId=&formato=json|csv
 ```
+
+### Capacidade
+
+A pergunta é a de antes de contratar: "o time está no limite?". A
+resposta é por time, com quatro números que dizem coisas diferentes — o
+que entrou, o que saiu, o que sobrou, e quanto tempo foi apontado.
+
+**As horas disponíveis saem do expediente do calendário**, não de "8 por
+dia": feriado e fim de semana não são capacidade. Sem calendário
+cadastrado vira 24x7, que é o que o SLA também faz — é o único palpite
+honesto quando ninguém disse qual é o expediente. Férias e afastamento
+não entram: o sistema não os conhece, e chutar seria inventar precisão.
+
+**A ocupação é um piso, não a verdade**, e a resposta diz isso de duas
+formas. Ela só conta o tempo que alguém apontou, e por isso vem junto o
+`semApontamento`: com metade dos chamados sem tempo lançado, a ocupação
+é ficção. Um relatório que esconde a própria margem de erro é pior que
+relatório nenhum — e este número é lido para decidir contratação.
+
+Time sem gente devolve `ocupacao: null`, e não infinito: dividir por
+zero na tela não diz nada. Atenção a um detalhe do transporte —
+`NaN` e `Infinity` viram `null` no JSON, então a resposta não denuncia
+a divisão por zero; **o CSV denuncia**, e é lá que a suíte confere.
+
+O tempo apontado sai do `payload` do evento de tarefa, em segundos: a
+tarefa é um `TicketEvent` e não tabela própria (regra 8).
 
 **Todo indicador carrega o filtro que o reproduz.** `Em aberto agora`
 volta com `filtro: "?assignedUserId=..."`, e a tela transforma o número
@@ -1499,10 +1526,16 @@ amortização — virou cinco colunas em `Asset`. Lá é tabela à parte porque
 e cinco colunas custam menos que uma tabela 1-1 que todo `include` teria
 de lembrar.
 
-`GET /reports/custo` responde "quanto custou atender", por categoria e
-por tipo de lançamento. É o número que faz o resto disto valer a pena — e
-o que o GLPI só entrega a quem exportar `glpi_ticketcosts` para uma
-planilha.
+`GET /reports/custo` responde "quanto custou atender": por categoria,
+por tipo de lançamento, **por empresa-cliente** e por time, mais os dez
+chamados mais caros do período. É o número que faz o resto disto valer a
+pena — e o que o GLPI só entrega a quem exportar `glpi_ticketcosts` para
+uma planilha.
+
+**O médio divide pelos chamados que tiveram custo lançado**, não por
+todos os do período. Chamado sem lançamento não custou zero: ele não foi
+medido, e misturar os dois faria o custo médio cair sempre que alguém
+deixasse de lançar — exatamente o contrário do que o número quer dizer.
 
 Permissões: `contrato:ler` / `contrato:gerenciar` para a carteira;
 `custo:ler` / `custo:lancar` para o dinheiro do chamado. O agente lança

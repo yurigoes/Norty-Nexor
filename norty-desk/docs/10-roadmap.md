@@ -297,7 +297,7 @@ O inventário que o chamado referencia.
   e juntá-las faria a lista encher de coisa normal até ninguém abrir.
   Sem isto o campo existia e o parque só crescia: o que sumiu ficava
   idêntico ao que está ligado agora.
-  **A rede entrou em 28/09/2026**: placas com MAC, velocidade e
+  **A rede entrou em 27/09/2026**: placas com MAC, velocidade e
   endereço. A reconciliação com DHCP, que era o que fazia isso merecer
   passo próprio, se resolve por uma separação — concessão é instantâneo
   na porta, endereço fixo é cadastro no IPAM. A identidade da porta é o
@@ -317,20 +317,28 @@ O inventário que o chamado referencia.
 - **Agenda** da pessoa ou do time: compromissos avulsos, tarefas de chamado
   agendadas e tarefas de projeto, sem cópia; compromisso privado aparece
   como "Ocupado" para os outros. **Feito em 10/09/2026** (`72b25f9`).
-- **Reservas** de equipamento. **Feito em 28/09/2026**: janela por
+- **Reservas** de equipamento. **Feito em 27/09/2026**: janela por
   equipamento, com a sobreposição barrada por `EXCLUDE` de intervalo no
   banco — duas requisições simultâneas passariam juntas por qualquer
   `if`, e é assim que duas pessoas reservam a mesma coisa. A entrega
   respeita a reserva e a marca como retirada; cancelar libera a janela
   sem apagar o registro. Permissão própria (`ativo:reservar`), porque
   separar o notebook de empréstimo é gesto de quem atende.
-- **Análise de impacto** em grafo. **Feito em 28/09/2026**: travessia em
+- **Análise de impacto** em grafo. **Feito em 27/09/2026**: travessia em
   largura por duas arestas — periférico pendurado e cabo —, com
   profundidade e teto, e o caminho de cada linha como explicação. Junto
   vêm as consequências: chamado aberto, mudança marcada, reserva e quem
   avisar. Mesmo rack ficou de fora de propósito: proximidade não é
   dependência.
-- Planejamento de capacidade e custo por chamado.
+- Planejamento de capacidade e custo por chamado. **Feito em
+  27/09/2026**: capacidade por time contra o expediente do calendário —
+  feriado e fim de semana não são capacidade —, sempre ao lado de
+  quantos chamados não têm tempo apontado, porque a ocupação é um piso
+  e um relatório que esconde a própria margem de erro é pior que
+  nenhum. O relatório de custo que já existia ganhou a quebra por
+  empresa-cliente e por time, a abertura por tipo de lançamento, os
+  mais caros do período e o médio por chamado — dividido pelos que
+  tiveram custo lançado, não por todos.
 
 ---
 

@@ -1,11 +1,12 @@
 import { Controller, Get, Header, Query, UseGuards } from '@nestjs/common';
-import type { FatiaDeContagem, PainelView, RelatorioSlaView } from '@norty-desk/shared';
+import type {
+  CapacidadeView, FatiaDeContagem, PainelView, RelatorioSlaView } from '@norty-desk/shared';
 
 import { CurrentUser, type UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
-import { PainelDto, RelatorioSlaDto, RelatorioVolumeDto } from './dto';
+import { CapacidadeDto, PainelDto, RelatorioSlaDto, RelatorioVolumeDto } from './dto';
 import { PaineisService } from './paineis.service';
 
 @Controller()
@@ -60,6 +61,38 @@ export class PaineisController {
         ]),
         ['GERAL', relatorio.geral.total, relatorio.geral.cumpridos, relatorio.geral.violados, relatorio.geral.emAberto, relatorio.geral.percentual],
       ],
+    );
+  }
+
+  /**
+   * Quanto entra contra quanto o time dá conta.
+   *
+   * `relatorio:exportar` como os outros: é leitura agregada da
+   * organização inteira, e quem vê o próprio painel não vê a casa.
+   */
+  @Get('reports/capacidade')
+  @RequirePermission('relatorio:exportar')
+  @Header('Cache-Control', 'no-store')
+  async capacidade(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Query() dto: CapacidadeDto,
+  ): Promise<CapacidadeView | string> {
+    const relatorio = await this.paineis.capacidade(usuario, dto);
+
+    if (dto.formato !== 'csv') return relatorio;
+
+    return PaineisService.paraCsv(
+      ['time', 'pessoas', 'entraram', 'saíram', 'em aberto', 'horas apontadas', 'horas disponíveis', 'ocupação'],
+      relatorio.linhas.map((l) => [
+        l.time?.name ?? 'Sem time',
+        l.pessoas,
+        l.abertos,
+        l.fechados,
+        l.backlog,
+        l.horasApontadas,
+        l.horasDisponiveis,
+        l.ocupacao === null ? '' : `${Math.round(l.ocupacao * 100)}%`,
+      ]),
     );
   }
 

@@ -1433,14 +1433,35 @@ export type LinhaDeCusto = {
   rotulo: string;
   chamados: number;
   total: number;
+  /** O total aberto por tipo de lançamento. */
+  tempo: number;
+  material: number;
+  fixo: number;
+  /**
+   * Total dividido pelos chamados **que tiveram custo lançado**.
+   *
+   * Dividir pelo total de chamados do período daria um número menor e
+   * sem sentido: chamado sem lançamento não custou zero, ele não foi
+   * medido. Misturar os dois faria o custo médio cair sempre que
+   * alguém deixasse de lançar.
+   */
+  medioPorChamado: number;
 };
 
 export type RelatorioDeCusto = {
   de: string;
   ate: string;
   total: number;
+  /** Chamados com custo lançado no período. */
+  chamados: number;
+  medioPorChamado: number;
   porCategoria: LinhaDeCusto[];
   porTipo: LinhaDeCusto[];
+  /** Quanto cada empresa-cliente custou. É a conta que paga a conta. */
+  porCliente: LinhaDeCusto[];
+  porTime: LinhaDeCusto[];
+  /** Os chamados mais caros do período. */
+  maisCaros: { id: string; number: number; subject: string; total: number }[];
 };
 
 // ---------------------------------------------------------------------
@@ -3087,3 +3108,48 @@ export type ImpactoView = {
   /** A travessia parou no teto, e há mais além dele. */
   truncado: boolean;
 };
+
+
+// ---------------------------------------------------------------------
+// Capacidade e custo
+// ---------------------------------------------------------------------
+
+export type LinhaDeCapacidade = {
+  /** `null` é o que entrou e não foi para time nenhum. */
+  time: CatalogoRef | null;
+  pessoas: number;
+  /** Chamados que entraram no período. */
+  abertos: number;
+  /** Solucionados ou fechados no período. */
+  fechados: number;
+  /** O que está aberto agora, independentemente de quando entrou. */
+  backlog: number;
+  horasApontadas: number;
+  horasDisponiveis: number;
+  /**
+   * Apontado sobre disponível.
+   *
+   * `null` quando o time não tem ninguém — dividir por zero daria
+   * infinito, e infinito na tela não diz nada. **É um piso, não a
+   * verdade**: só conta o tempo que alguém apontou.
+   */
+  ocupacao: number | null;
+};
+
+export type CapacidadeView = {
+  periodo: { de: string; ate: string };
+  /** O calendário usado para contar expediente. */
+  calendario: CatalogoRef | null;
+  linhas: LinhaDeCapacidade[];
+  /**
+   * Quantos chamados do período não têm tempo apontado.
+   *
+   * É a medida da confiança do resto: com metade dos chamados sem
+   * apontamento, a ocupação é ficção, e quem lê precisa saber disso
+   * antes de decidir contratação.
+   */
+  semApontamento: number;
+  totalNoPeriodo: number;
+};
+
+
