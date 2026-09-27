@@ -4,6 +4,7 @@ import { serieUtil, validarAtributos } from '@norty-desk/shared';
 import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { DicionarioDeFabricante } from '../catalogo-ativo/fabricantes.dicionario';
 import type { InventarioDto } from './inventario.dto';
 
 /**
@@ -59,7 +60,10 @@ type PecaDesejada = {
 export class InventarioService {
   private readonly logger = new Logger(InventarioService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly fabricantes: DicionarioDeFabricante,
+  ) {}
 
   async receber(
     aplicacao: { organizationId: string; clientId: string | null },
@@ -102,8 +106,8 @@ export class InventarioService {
     };
 
     const [manufacturerId, assetModelId] = await Promise.all([
-      this.doCatalogo('manufacturer', organizationId, dto.manufacturer),
-      this.doCatalogo('assetModel', organizationId, dto.model),
+      this.fabricantes.resolver(organizationId, dto.manufacturer),
+      this.doCatalogo(organizationId, dto.model),
     ]);
 
     let assetId: string;
@@ -402,45 +406,32 @@ export class InventarioService {
   // -------------------------------------------------------------------
 
   /**
-   * O fabricante ou o modelo, do catálogo.
+   * O modelo de equipamento, do catálogo.
    *
-   * Procura **sem diferenciar caixa** antes de criar: "HP", "hp" e "Hp"
-   * são três linhas para quem conta e um só fabricante para quem olha,
-   * e é essa multiplicação que o catálogo existe para impedir. O agente
-   * é justamente quem a produziria mais rápido, uma por máquina.
+   * Procura **sem diferenciar caixa** antes de criar: "Latitude 5420" e
+   * "LATITUDE 5420" são duas linhas para quem conta e um só modelo para
+   * quem olha, e é essa multiplicação que o catálogo existe para
+   * impedir. O agente é justamente quem a produziria mais rápido, uma
+   * por máquina.
+   *
+   * O fabricante não passa por aqui: ele tem dicionário próprio
+   * (`DicionarioDeFabricante`), porque "Hewlett-Packard" e "HP" são o
+   * mesmo e nenhuma comparação de texto descobre isso. Modelo não tem o
+   * problema equivalente — quem escreve "Latitude 5420" não escreve
+   * "L5420" na outra máquina, é o SMBIOS que responde nas duas.
    */
   private async doCatalogo(
-    tabela: 'manufacturer' | 'assetModel',
     organizationId: string,
     nome: string | null | undefined,
   ): Promise<string | null> {
     const limpo = (nome ?? '').trim().replace(/\s+/g, ' ');
     if (!limpo) return null;
 
-    // As duas tabelas têm o mesmo formato, mas os tipos do Prisma não se
-    // unem: o delegate é uma união e a união não é chamável. Duas
-    // funções de uma linha custam menos que um `as any`.
     const procurar = () =>
-      tabela === 'manufacturer'
-        ? this.prisma.manufacturer.findFirst({
-            where: { organizationId, name: { equals: limpo, mode: 'insensitive' } },
-            select: { id: true },
-          })
-        : this.prisma.assetModel.findFirst({
-            where: { organizationId, name: { equals: limpo, mode: 'insensitive' } },
-            select: { id: true },
-          });
-
-    const criar = () =>
-      tabela === 'manufacturer'
-        ? this.prisma.manufacturer.create({
-            data: { organizationId, name: limpo },
-            select: { id: true },
-          })
-        : this.prisma.assetModel.create({
-            data: { organizationId, name: limpo },
-            select: { id: true },
-          });
+      this.prisma.assetModel.findFirst({
+        where: { organizationId, name: { equals: limpo, mode: 'insensitive' } },
+        select: { id: true },
+      });
 
     const existente = await procurar();
     if (existente) return existente.id;
@@ -448,9 +439,14 @@ export class InventarioService {
     // Corrida entre duas máquinas varrendo ao mesmo tempo: as duas leem
     // "não existe" e as duas criam. A segunda bate no índice único, e
     // aí a resposta certa é procurar de novo — não falhar a varredura
-    // por causa do nome de um fabricante.
+    // por causa do nome de um modelo.
     try {
-      return (await criar()).id;
+      return (
+        await this.prisma.assetModel.create({
+          data: { organizationId, name: limpo },
+          select: { id: true },
+        })
+      ).id;
     } catch {
       return (await procurar())?.id ?? null;
     }

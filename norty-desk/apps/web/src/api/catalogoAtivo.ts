@@ -35,6 +35,20 @@ export const editarFabricante = (id: string, name: string) =>
 export const removerFabricante = (id: string) =>
   chamar<FabricanteView[]>(`/manufacturers/${id}`, { metodo: 'DELETE' });
 
+/** Um nome a mais pelo qual o fabricante atende na varredura. */
+export const apelidarFabricante = (id: string, alias: string) =>
+  chamar<FabricanteView[]>(`/manufacturers/${id}/apelidos`, { metodo: 'POST', corpo: { alias } });
+
+export const removerApelidoDeFabricante = (id: string, aliasId: string) =>
+  chamar<FabricanteView[]>(`/manufacturers/${id}/apelidos/${aliasId}`, { metodo: 'DELETE' });
+
+/** O `absorvidoId` some dentro do `id`, levando modelos e ativos junto. */
+export const juntarFabricantes = (id: string, absorvidoId: string) =>
+  chamar<FabricanteView[]>(`/manufacturers/${id}/juntar`, {
+    metodo: 'POST',
+    corpo: { absorvidoId },
+  });
+
 export const editarModeloDeAtivo = (id: string, dados: EscreverModeloDeAtivoRequest) =>
   chamar<ModeloDeAtivoView[]>(`/asset-models/${id}`, { metodo: 'PATCH', corpo: dados });
 

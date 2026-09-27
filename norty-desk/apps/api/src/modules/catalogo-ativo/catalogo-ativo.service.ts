@@ -14,6 +14,7 @@ import { Prisma } from '@prisma/client';
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditoriaService } from '../auditoria/auditoria.service';
+import { DicionarioDeFabricante } from './fabricantes.dicionario';
 import type {
   EscreverFabricanteDto,
   EscreverLocalizacaoDto,
@@ -43,6 +44,7 @@ export class CatalogoDoAtivoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditoria: AuditoriaService,
+    private readonly dicionario: DicionarioDeFabricante,
   ) {}
 
   // -------------------------------------------------------------------
@@ -181,16 +183,29 @@ export class CatalogoDoAtivoService {
   async fabricantes(usuario: UsuarioAutenticado): Promise<FabricanteView[]> {
     const fabricantes = await this.prisma.manufacturer.findMany({
       where: { organizationId: usuario.organizationId },
-      include: { _count: { select: { models: true, assets: true } } },
+      include: {
+        _count: { select: { models: true, assets: true } },
+        aliases: { orderBy: { alias: 'asc' }, select: { id: true, alias: true } },
+      },
       orderBy: { name: 'asc' },
     });
 
-    return fabricantes.map((f) => ({
-      id: f.id,
-      name: f.name,
-      modelCount: f._count.models,
-      assetCount: f._count.assets,
-    }));
+    return fabricantes.map((f) => {
+      // O apelido que é a chave do próprio nome não é informação: todo
+      // fabricante tem o seu, e listá-lo faria a tela repetir o nome
+      // que está ao lado. Interessa o que ele responde **além** dele.
+      const proprias = new Set(DicionarioDeFabricante.chavesDe(f.name));
+
+      return {
+        id: f.id,
+        name: f.name,
+        modelCount: f._count.models,
+        assetCount: f._count.assets,
+        aliases: f.aliases
+          .filter((a) => !proprias.has(a.alias))
+          .map((a) => ({ id: a.id, alias: a.alias })),
+      };
+    });
   }
 
   async criarFabricante(
@@ -198,11 +213,19 @@ export class CatalogoDoAtivoService {
     dto: EscreverFabricanteDto,
   ): Promise<FabricanteView[]> {
     await this.exigirNomeLivre('manufacturer', usuario, dto.name, {});
+    await this.exigirChaveLivre(usuario, dto.name);
 
     try {
-      await this.prisma.manufacturer.create({
+      const criado = await this.prisma.manufacturer.create({
         data: { organizationId: usuario.organizationId, name: dto.name },
+        select: { id: true },
       });
+
+      await this.dicionario.ensinar(
+        usuario.organizationId,
+        criado.id,
+        DicionarioDeFabricante.chavesDe(dto.name),
+      );
     } catch (erro) {
       throw CatalogoDoAtivoService.traduzirDuplicidade(erro, `fabricante "${dto.name}"`);
     }
@@ -221,6 +244,7 @@ export class CatalogoDoAtivoService {
     if (!atual) throw new NotFoundException('Fabricante não encontrado.');
 
     await this.exigirNomeLivre('manufacturer', usuario, dto.name, {}, id);
+    await this.exigirChaveLivre(usuario, dto.name, id);
 
     try {
       await this.prisma.manufacturer.update({ where: { id }, data: { name: dto.name } });
@@ -228,7 +252,242 @@ export class CatalogoDoAtivoService {
       throw CatalogoDoAtivoService.traduzirDuplicidade(erro, `fabricante "${dto.name}"`);
     }
 
+    // O nome velho **continua** valendo como apelido. Renomear
+    // "Hewlett-Packard" para "HP" não faz as máquinas já varridas
+    // mudarem o que mandam, e sem isto a próxima varredura recriaria o
+    // cadastro que acabou de ser corrigido.
+    await this.dicionario.ensinar(usuario.organizationId, id, [
+      ...DicionarioDeFabricante.chavesDe(atual.name),
+      ...DicionarioDeFabricante.chavesDe(dto.name),
+    ]);
+
     return this.fabricantes(usuario);
+  }
+
+  /**
+   * Um nome a mais pelo qual este fabricante atende.
+   *
+   * Existe porque a lista de fabricantes conhecidos não tem como cobrir
+   * o fornecedor da esquina, e é o agente de inventário quem descobre a
+   * grafia que ninguém previu.
+   */
+  async apelidar(
+    usuario: UsuarioAutenticado,
+    id: string,
+    texto: string,
+  ): Promise<FabricanteView[]> {
+    const fabricante = await this.prisma.manufacturer.findFirst({
+      where: { id, organizationId: usuario.organizationId },
+      select: { id: true, name: true },
+    });
+    if (!fabricante) throw new NotFoundException('Fabricante não encontrado.');
+
+    const chaves = DicionarioDeFabricante.chavesDe(texto);
+    if (chaves.length === 0) {
+      throw new BadRequestException('Este apelido não tem letra nem número que o identifique.');
+    }
+
+    const dono = await this.dicionario.procurarPorTexto(usuario.organizationId, texto);
+    if (dono && dono !== id) {
+      const outro = await this.prisma.manufacturer.findUnique({
+        where: { id: dono },
+        select: { name: true },
+      });
+
+      throw new ConflictException(
+        `"${texto}" já responde pelo fabricante "${outro?.name}". ` +
+          'Se forem o mesmo, junte os dois cadastros em vez de apelidar.',
+      );
+    }
+
+    await this.dicionario.ensinar(usuario.organizationId, id, chaves);
+
+    await this.auditoria.registrar(usuario, {
+      action: 'fabricante.apelidado',
+      entity: 'Manufacturer',
+      entityId: id,
+      depois: { name: fabricante.name, apelidos: chaves },
+    });
+
+    return this.fabricantes(usuario);
+  }
+
+  async removerApelido(
+    usuario: UsuarioAutenticado,
+    id: string,
+    aliasId: string,
+  ): Promise<FabricanteView[]> {
+    const apelido = await this.prisma.manufacturerAlias.findFirst({
+      where: { id: aliasId, manufacturerId: id, organizationId: usuario.organizationId },
+      include: { manufacturer: { select: { name: true } } },
+    });
+    if (!apelido) throw new NotFoundException('Apelido não encontrado.');
+
+    // A chave do próprio nome não se apaga: sem ela o fabricante deixa
+    // de ser encontrável pelo nome dele mesmo, e a próxima varredura
+    // cria um segundo cadastro idêntico.
+    if (DicionarioDeFabricante.chavesDe(apelido.manufacturer.name).includes(apelido.alias)) {
+      throw new ConflictException(
+        'Este é o nome do próprio fabricante, não um apelido. Renomeie o fabricante.',
+      );
+    }
+
+    await this.prisma.manufacturerAlias.delete({ where: { id: aliasId } });
+
+    await this.auditoria.registrar(usuario, {
+      action: 'fabricante.apelido-removido',
+      entity: 'Manufacturer',
+      entityId: id,
+      antes: { apelido: apelido.alias },
+    });
+
+    return this.fabricantes(usuario);
+  }
+
+  /**
+   * Junta dois cadastros que são a mesma empresa.
+   *
+   * É o caminho de saída da sujeira que já está no banco: o dicionário
+   * impede a duplicata nova, mas quem já tem "HP" e "Hewlett-Packard"
+   * precisa de uma porta. Tudo o que apontava para o absorvido passa a
+   * apontar para o que fica, e o **nome dele vira apelido** — senão a
+   * próxima varredura da máquina que dizia "Hewlett-Packard" recriaria
+   * o cadastro na hora.
+   *
+   * Uma transação só: metade da junção deixa modelo apontando para um
+   * fabricante que não existe mais.
+   */
+  async juntarFabricantes(
+    usuario: UsuarioAutenticado,
+    id: string,
+    absorvidoId: string,
+  ): Promise<FabricanteView[]> {
+    if (id === absorvidoId) {
+      throw new BadRequestException('Um fabricante não se junta com ele mesmo.');
+    }
+
+    const [fica, sai] = await Promise.all([
+      this.prisma.manufacturer.findFirst({
+        where: { id, organizationId: usuario.organizationId },
+        select: { id: true, name: true },
+      }),
+      this.prisma.manufacturer.findFirst({
+        where: { id: absorvidoId, organizationId: usuario.organizationId },
+        select: { id: true, name: true, _count: { select: { models: true, assets: true } } },
+      }),
+    ]);
+
+    if (!fica || !sai) throw new NotFoundException('Fabricante não encontrado.');
+
+    const organizationId = usuario.organizationId;
+    const apelidosQueSobem = [
+      ...DicionarioDeFabricante.chavesDe(sai.name),
+      ...DicionarioDeFabricante.chavesDe(fica.name),
+    ];
+
+    await this.prisma.$transaction(async (tx) => {
+      // O modelo é o único caso com unicidade composta: "Latitude 5420"
+      // dos dois lados viraria duas linhas iguais sob o mesmo
+      // fabricante, e o índice recusa. O que colide é apagado, e os
+      // ativos dele vão para o modelo que fica.
+      const [meus, dele] = await Promise.all([
+        tx.assetModel.findMany({ where: { organizationId, manufacturerId: id } }),
+        tx.assetModel.findMany({ where: { organizationId, manufacturerId: absorvidoId } }),
+      ]);
+
+      const porNome = new Map(meus.map((m) => [m.name.trim().toLocaleLowerCase('pt-BR'), m.id]));
+
+      for (const modelo of dele) {
+        const gemeo = porNome.get(modelo.name.trim().toLocaleLowerCase('pt-BR'));
+
+        if (gemeo) {
+          await tx.asset.updateMany({
+            where: { organizationId, assetModelId: modelo.id },
+            data: { assetModelId: gemeo },
+          });
+          await tx.consumableItemModel.deleteMany({ where: { assetModelId: modelo.id } });
+          await tx.assetModel.delete({ where: { id: modelo.id } });
+        } else {
+          await tx.assetModel.update({ where: { id: modelo.id }, data: { manufacturerId: id } });
+        }
+      }
+
+      // As outras cinco pontas não têm unicidade por fabricante: é só
+      // trocar o dono.
+      await tx.asset.updateMany({
+        where: { organizationId, manufacturerId: absorvidoId },
+        data: { manufacturerId: id },
+      });
+      await tx.assetComponent.updateMany({
+        where: { manufacturerId: absorvidoId },
+        data: { manufacturerId: id },
+      });
+      await tx.software.updateMany({
+        where: { organizationId, manufacturerId: absorvidoId },
+        data: { manufacturerId: id },
+      });
+      await tx.consumableItem.updateMany({
+        where: { organizationId, manufacturerId: absorvidoId },
+        data: { manufacturerId: id },
+      });
+
+      // Os apelidos do absorvido passam a ser do que fica, inclusive a
+      // chave do nome dele. `ON CONFLICT` não cabe num `updateMany`, e
+      // duas linhas com a mesma chave não existem — o índice único
+      // garante —, então mover é seguro.
+      await tx.manufacturerAlias.updateMany({
+        where: { organizationId, manufacturerId: absorvidoId },
+        data: { manufacturerId: id },
+      });
+
+      await tx.manufacturer.delete({ where: { id: absorvidoId } });
+
+      await tx.manufacturerAlias.createMany({
+        data: apelidosQueSobem.map((alias) => ({ organizationId, manufacturerId: id, alias })),
+        skipDuplicates: true,
+      });
+    });
+
+    await this.auditoria.registrar(usuario, {
+      action: 'fabricante.juntado',
+      entity: 'Manufacturer',
+      entityId: id,
+      antes: {
+        absorvido: sai.name,
+        modelos: sai._count.models,
+        ativos: sai._count.assets,
+      },
+      depois: { name: fica.name },
+    });
+
+    return this.fabricantes(usuario);
+  }
+
+  /**
+   * Recusa o cadastro cujo nome já é de outro fabricante.
+   *
+   * Diferente de `exigirNomeLivre`, que compara texto: aqui a pergunta
+   * é se o **dicionário** já responde por este nome. É o que impede
+   * cadastrar "Hewlett-Packard" numa casa que já tem HP — e a mensagem
+   * diz qual é, porque "já existe" sem dizer onde manda a pessoa
+   * procurar na lista inteira.
+   */
+  private async exigirChaveLivre(
+    usuario: UsuarioAutenticado,
+    name: string,
+    ignorarId?: string,
+  ): Promise<void> {
+    const dono = await this.dicionario.procurarPorTexto(usuario.organizationId, name);
+    if (!dono || dono === ignorarId) return;
+
+    const outro = await this.prisma.manufacturer.findUnique({
+      where: { id: dono },
+      select: { name: true },
+    });
+
+    throw new ConflictException(
+      `"${name}" já está cadastrado como "${outro?.name}" nesta organização.`,
+    );
   }
 
   async removerFabricante(usuario: UsuarioAutenticado, id: string): Promise<FabricanteView[]> {

@@ -394,3 +394,274 @@ describe('o ativo referencia o catálogo', () => {
     assert.equal((await agente.post('/manufacturers', { name: 'Acer' })).status, 403);
   });
 });
+
+/**
+ * O dicionário de apelidos.
+ *
+ * O ativo referenciar catálogo resolveu o texto livre, mas não resolveu
+ * o texto **certo escrito de outro jeito**: o agente de inventário
+ * manda o que o SMBIOS tiver, e "Dell Inc.", "DELL", "Hewlett-Packard"
+ * e "HP" chegam de máquinas diferentes da mesma frota. Sem dicionário
+ * cada grafia vira uma linha, e o relatório de parque por fabricante —
+ * que é a razão de o campo existir — conta a mesma empresa quatro
+ * vezes.
+ *
+ * Três camadas, e cada uma tem prova própria aqui: a chave do texto, a
+ * lista de fabricantes conhecidos, e o que a casa ensinou.
+ */
+describe('o dicionário de fabricante', () => {
+  let curador: Cliente;
+
+  before(async () => {
+    curador = await entrar('supervisor@teste.dev');
+  });
+
+  async function cadastrar(name: string) {
+    return curador.post<FabricanteView[] & { detail?: string }>('/manufacturers', { name });
+  }
+
+  function achar(lista: FabricanteView[], nome: string) {
+    return lista.find((x) => x.name === nome);
+  }
+
+  it('a forma jurídica não distingue fabricante: "Acme Ltda" já é "Acme"', async () => {
+    const primeiro = await cadastrar('Vertex Componentes Ltda');
+    assert.equal(primeiro.status, 201, JSON.stringify(primeiro.corpo));
+
+    const repetido = await cadastrar('VERTEX COMPONENTES');
+    assert.equal(repetido.status, 409, 'o mesmo fabricante entrou duas vezes');
+    assert.match(
+      (repetido.corpo as unknown as ProblemDetails).detail ?? '',
+      /Vertex Componentes Ltda/,
+      'a recusa precisa dizer qual cadastro já responde por esse nome',
+    );
+  });
+
+  it('"Hewlett-Packard" e "HP Inc." não viram cadastros novos ao lado da HP', async () => {
+    // Os testes acima desta suíte já cadastraram HP e HPE; o que se
+    // prova aqui não é quem chegou primeiro, e sim que as grafias não
+    // multiplicam a linha. Nenhuma regra de texto descobre sozinha que
+    // "Hewlett-Packard" é HP: isso vem da lista de conhecidos.
+    assert.equal((await cadastrar('Hewlett-Packard')).status, 409);
+    assert.equal((await cadastrar('HP Inc.')).status, 409);
+    assert.equal((await cadastrar('hewlett packard company')).status, 409);
+
+    const lista = await curador.get<FabricanteView[]>('/manufacturers');
+    const daFamilia = lista.corpo.filter((x) => /^(hp|hewlett)/i.test(x.name));
+
+    // HP e HPE são duas empresas desde 2015, e quem tem servidor e
+    // desktop da antiga HP precisa das duas separadas. Duas linhas é o
+    // certo aqui; três seria a sujeira de volta.
+    assert.deepEqual(
+      daFamilia.map((x) => x.name).sort(),
+      ['HP', 'HPE'],
+      JSON.stringify(lista.corpo.map((x) => x.name)),
+    );
+  });
+
+  it('a HPE não é alcançada pelas grafias da HP', async () => {
+    assert.equal(
+      (await cadastrar('Hewlett Packard Enterprise Company')).status,
+      409,
+      'a grafia longa da HPE tem de cair na HPE que já existe',
+    );
+  });
+
+  it('o apelido que a casa ensina passa a valer', async () => {
+    const criado = await cadastrar('Quasar Distribuidora');
+    const quasar = achar(criado.corpo, 'Quasar Distribuidora')!;
+
+    const apelidado = await curador.post<FabricanteView[]>(
+      `/manufacturers/${quasar.id}/apelidos`,
+      { alias: 'QSR Comercial' },
+    );
+    assert.equal(apelidado.status, 201, JSON.stringify(apelidado.corpo));
+    assert.deepEqual(
+      achar(apelidado.corpo, 'Quasar Distribuidora')?.aliases.map((a) => a.alias),
+      ['qsr comercial'],
+    );
+
+    // E agora "QSR Comercial" não entra como cadastro novo.
+    const tentativa = await cadastrar('QSR Comercial S/A');
+    assert.equal(tentativa.status, 409, 'o apelido não estava sendo consultado no cadastro');
+  });
+
+  it('apelido que já é de outro fabricante é recusado, e diz de quem', async () => {
+    const lista = await curador.get<FabricanteView[]>('/manufacturers');
+    const quasar = achar(lista.corpo, 'Quasar Distribuidora')!;
+    const vertex = achar(lista.corpo, 'Vertex Componentes Ltda')!;
+
+    const r = await curador.post<ProblemDetails>(`/manufacturers/${vertex.id}/apelidos`, {
+      alias: 'QSR',
+    });
+    assert.equal(r.status, 201, 'QSR sozinho ainda é livre');
+
+    const colisao = await curador.post<ProblemDetails>(`/manufacturers/${vertex.id}/apelidos`, {
+      alias: 'Quasar Distribuidora',
+    });
+    assert.equal(colisao.status, 409);
+    assert.match(colisao.corpo.detail ?? '', /Quasar Distribuidora/);
+    assert.ok(quasar);
+  });
+
+  it('o nome do próprio fabricante não se apaga como se fosse apelido', async () => {
+    const lista = await curador.get<FabricanteView[]>('/manufacturers');
+    const quasar = achar(lista.corpo, 'Quasar Distribuidora')!;
+
+    const proprio = await prisma.manufacturerAlias.findFirstOrThrow({
+      where: { manufacturerId: quasar.id, alias: 'quasar distribuidora' },
+    });
+
+    const r = await curador.del<ProblemDetails>(
+      `/manufacturers/${quasar.id}/apelidos/${proprio.id}`,
+    );
+    assert.equal(r.status, 409, 'apagar a chave do próprio nome recria o cadastro na varredura');
+  });
+
+  it('renomear guarda o nome velho: a máquina varrida não recria o cadastro', async () => {
+    const criado = await cadastrar('Zeta Informatica');
+    const zeta = achar(criado.corpo, 'Zeta Informatica')!;
+
+    const renomeado = await curador.patch<FabricanteView[]>(`/manufacturers/${zeta.id}`, {
+      name: 'Zeta',
+    });
+    assert.equal(renomeado.status, 200, JSON.stringify(renomeado.corpo));
+
+    const depois = achar(renomeado.corpo, 'Zeta')!;
+    assert.ok(
+      depois.aliases.some((a) => a.alias === 'zeta informatica'),
+      'o nome velho tem de continuar valendo — as máquinas não sabem que houve renomeação',
+    );
+  });
+});
+
+/**
+ * Juntar dois cadastros que são a mesma empresa.
+ *
+ * É o caminho de saída da sujeira que **já está** no banco: o dicionário
+ * impede a duplicata nova, e quem já tem "HP" e "Hewlett-Packard"
+ * precisa de uma porta. Sem ela o dicionário só serviria para instalação
+ * nova.
+ */
+describe('juntar fabricantes duplicados', () => {
+  let curador: Cliente;
+
+  before(async () => {
+    curador = await entrar('supervisor@teste.dev');
+  });
+
+  it('tudo o que era do absorvido passa a ser do que fica, e o nome dele vira apelido', async () => {
+    // Cadastrados por baixo, como estariam num banco anterior ao
+    // dicionário: sem apelido nenhum.
+    const fica = await prisma.manufacturer.create({
+      data: { organizationId: f.organizacao.id, name: 'Órion' },
+    });
+    const sai = await prisma.manufacturer.create({
+      data: { organizationId: f.organizacao.id, name: 'Orion Eletronica' },
+    });
+
+    const modeloDele = await prisma.assetModel.create({
+      data: { organizationId: f.organizacao.id, manufacturerId: sai.id, name: 'OE-200' },
+    });
+    const ativo = await prisma.asset.create({
+      data: {
+        organizationId: f.organizacao.id,
+        name: 'Máquina do absorvido',
+        kind: 'COMPUTADOR',
+        manufacturerId: sai.id,
+        assetModelId: modeloDele.id,
+      },
+    });
+
+    const r = await curador.post<FabricanteView[]>(`/manufacturers/${fica.id}/juntar`, {
+      absorvidoId: sai.id,
+    });
+    assert.equal(r.status, 201, JSON.stringify(r.corpo));
+
+    assert.equal(
+      await prisma.manufacturer.count({ where: { id: sai.id } }),
+      0,
+      'o absorvido continua no catálogo',
+    );
+
+    const depoisDoAtivo = await prisma.asset.findUniqueOrThrow({ where: { id: ativo.id } });
+    assert.equal(depoisDoAtivo.manufacturerId, fica.id, 'o ativo ficou apontando para o nada');
+
+    const depoisDoModelo = await prisma.assetModel.findUniqueOrThrow({
+      where: { id: modeloDele.id },
+    });
+    assert.equal(depoisDoModelo.manufacturerId, fica.id, 'o modelo ficou órfão');
+
+    // E o nome do absorvido continua respondendo: a máquina que dizia
+    // "Orion Eletronica" não pode recriar o cadastro na próxima
+    // varredura.
+    const apelidos = await prisma.manufacturerAlias.findMany({
+      where: { manufacturerId: fica.id },
+      select: { alias: true },
+    });
+    const chaves = apelidos.map((a) => a.alias);
+    assert.ok(chaves.includes('orion eletronica'), JSON.stringify(chaves));
+    assert.ok(chaves.includes('orion'), 'a chave do que fica também precisa estar gravada');
+  });
+
+  it('modelo repetido dos dois lados vira um, e os ativos seguem para ele', async () => {
+    const fica = await prisma.manufacturer.create({
+      data: { organizationId: f.organizacao.id, name: 'Nadir' },
+    });
+    const sai = await prisma.manufacturer.create({
+      data: { organizationId: f.organizacao.id, name: 'Nadir Industria' },
+    });
+
+    const meu = await prisma.assetModel.create({
+      data: { organizationId: f.organizacao.id, manufacturerId: fica.id, name: 'ND-10' },
+    });
+    const dele = await prisma.assetModel.create({
+      data: { organizationId: f.organizacao.id, manufacturerId: sai.id, name: 'nd-10' },
+    });
+
+    const ativo = await prisma.asset.create({
+      data: {
+        organizationId: f.organizacao.id,
+        name: 'Máquina do modelo repetido',
+        kind: 'COMPUTADOR',
+        manufacturerId: sai.id,
+        assetModelId: dele.id,
+      },
+    });
+
+    const r = await curador.post<FabricanteView[]>(`/manufacturers/${fica.id}/juntar`, {
+      absorvidoId: sai.id,
+    });
+    assert.equal(r.status, 201, JSON.stringify(r.corpo));
+
+    // "ND-10" e "nd-10" sob o mesmo fabricante seriam duas linhas
+    // iguais, e o índice único recusaria a junção inteira.
+    assert.equal(await prisma.assetModel.count({ where: { id: dele.id } }), 0);
+
+    const depois = await prisma.asset.findUniqueOrThrow({ where: { id: ativo.id } });
+    assert.equal(depois.assetModelId, meu.id, 'o ativo perdeu o modelo na junção');
+  });
+
+  it('não junta consigo mesmo nem com fabricante de outra organização', async () => {
+    const lista = await curador.get<FabricanteView[]>('/manufacturers');
+    const algum = lista.corpo[0]!;
+
+    assert.equal(
+      (await curador.post(`/manufacturers/${algum.id}/juntar`, { absorvidoId: algum.id })).status,
+      400,
+    );
+
+    const outraOrg = await prisma.organization.create({
+      data: { name: 'Outra casa', slug: `outra-${Date.now()}` },
+    });
+    const alheio = await prisma.manufacturer.create({
+      data: { organizationId: outraOrg.id, name: 'Fabricante alheio' },
+    });
+
+    assert.equal(
+      (await curador.post(`/manufacturers/${algum.id}/juntar`, { absorvidoId: alheio.id })).status,
+      404,
+      'juntar com o catálogo de outra organização é vazamento entre casas',
+    );
+  });
+});

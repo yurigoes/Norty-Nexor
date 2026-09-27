@@ -151,7 +151,10 @@ describe('a primeira varredura', () => {
     assert.equal(ativo.agentVersion, '1.0.0');
     assert.ok(ativo.lastSeenAt, 'sem isto o parque só cresce');
     assert.equal(ativo.status, 'EM_USO');
-    assert.equal(ativo.manufacturer?.name, 'Dell Inc.');
+    // "Dell Inc." é o que o SMBIOS diz; "Dell" é o que fica no catálogo.
+    // O nome de exibição vem da lista de fabricantes conhecidos, para o
+    // relatório de parque não ter uma linha por grafia de firmware.
+    assert.equal(ativo.manufacturer?.name, 'Dell');
     assert.equal(ativo.assetModel?.name, 'Latitude 5420');
 
     // A ficha do componente é a mesma do cadastro à mão.
@@ -409,6 +412,58 @@ describe('o catálogo não incha', () => {
     assert.equal(fabricantes.length, 1, `o catálogo inchou: ${JSON.stringify(fabricantes)}`);
   });
 
+  it('a frota inteira cai num fabricante só, escreva o SMBIOS como escrever', async () => {
+    // Estas quatro grafias saem de máquinas Dell reais: o SMBIOS de
+    // cada geração responde de um jeito. Sem dicionário isso vira
+    // quatro linhas de fabricante, e o relatório de parque por
+    // fabricante — que é a razão de o campo existir — conta a mesma
+    // empresa quatro vezes.
+    for (const grafia of ['Dell Inc.', 'DELL INC', 'Dell Computer Corporation', ' dell ']) {
+      const r = await varrer({ ...varredura(), manufacturer: grafia });
+      assert.equal(r.status, 201, `${grafia}: ${JSON.stringify(r.corpo)}`);
+    }
+
+    const dell = await prisma.manufacturer.findMany({
+      where: { organizationId: f.organizacao.id, name: { contains: 'dell', mode: 'insensitive' } },
+    });
+
+    assert.equal(dell.length, 1, `o catálogo inchou: ${JSON.stringify(dell.map((x) => x.name))}`);
+    // O nome de exibição vem da lista de conhecidos, não da primeira
+    // máquina que chegou: "Dell Inc." é o que o SMBIOS diz, "Dell" é o
+    // que se lê num relatório.
+    assert.equal(dell[0]!.name, 'Dell');
+  });
+
+  it('o agente adota o fabricante que já estava no catálogo com outra grafia', async () => {
+    // Cadastro anterior ao dicionário: sem apelido nenhum, como estaria
+    // num banco que já existia antes desta migração.
+    const antigo = await prisma.manufacturer.create({
+      data: { organizationId: f.organizacao.id, name: 'Lenovo Group Limited' },
+    });
+
+    const r = await varrer({ ...varredura(), manufacturer: 'LENOVO' });
+    assert.equal(r.status, 201);
+
+    const ativo = await prisma.asset.findUniqueOrThrow({ where: { id: r.corpo.assetId } });
+    assert.equal(
+      ativo.manufacturerId,
+      antigo.id,
+      'a varredura criou um segundo cadastro em vez de adotar o que existia',
+    );
+
+    // E sai daqui com os apelidos gravados: a adoção é uma vez por
+    // fabricante, não uma por máquina varrida.
+    const chaves = (
+      await prisma.manufacturerAlias.findMany({
+        where: { manufacturerId: antigo.id },
+        select: { alias: true },
+      })
+    ).map((a) => a.alias);
+
+    assert.ok(chaves.includes('lenovo'), JSON.stringify(chaves));
+    assert.ok(chaves.includes('lenovo group'), JSON.stringify(chaves));
+  });
+
   it('o fabricante que a casa curou não é trocado pelo da varredura', async () => {
     const curado = await prisma.manufacturer.create({
       data: { organizationId: f.organizacao.id, name: 'HP' },
@@ -462,7 +517,10 @@ describe('o que o agente de verdade manda', () => {
 
     assert.equal(ativo.hostname, 'NB-FIN-03');
     assert.equal(ativo.osName, 'Microsoft Windows 11 Pro');
-    assert.equal(ativo.manufacturer?.name, 'Dell Inc.');
+    // "Dell Inc." é o que o SMBIOS diz; "Dell" é o que fica no catálogo.
+    // O nome de exibição vem da lista de fabricantes conhecidos, para o
+    // relatório de parque não ter uma linha por grafia de firmware.
+    assert.equal(ativo.manufacturer?.name, 'Dell');
     assert.equal(ativo.serialNumber, '9SR0123');
 
     // Dois pentes, um processador, um disco — e o pendrive de fora,

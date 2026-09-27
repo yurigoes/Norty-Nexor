@@ -2398,3 +2398,196 @@ export function diasSemReportar(lastSeenAt: string | null, agora = new Date()): 
   // -1 dia" na tela é pior que arredondar para hoje.
   return Math.max(0, Math.floor(decorrido / 86_400_000));
 }
+
+// ---------------------------------------------------------------------
+// Fabricante: um nome, escrito de dez jeitos
+// ---------------------------------------------------------------------
+
+/**
+ * Formas jurídicas que não distinguem fabricante nenhum.
+ *
+ * "Dell" e "Dell Inc." são a mesma empresa, e quem digita não vai
+ * lembrar qual das duas o resto do cadastro usou. A lista é curta de
+ * propósito: só forma jurídica. Cortar "Electronics" ou "Tecnologia"
+ * juntaria empresas homônimas de ramos diferentes, e um cadastro
+ * juntado errado não se separa sozinho depois — o oposto de um
+ * duplicado, que só incomoda.
+ */
+const FORMAS_JURIDICAS = new Set([
+  'inc',
+  'incorporated',
+  'corp',
+  'corporation',
+  'co',
+  'company',
+  'ltd',
+  'ltda',
+  'limited',
+  'llc',
+  'gmbh',
+  'sa',
+  'ag',
+  'bv',
+  'nv',
+  'plc',
+  'kk',
+  'pte',
+  'pty',
+  'srl',
+  'spa',
+  'oy',
+  'ab',
+  'as',
+  'me',
+  'epp',
+  'eireli',
+]);
+
+/**
+ * O nome do fabricante reduzido ao que o identifica.
+ *
+ * Minúsculas, sem acento, sem pontuação, sem forma jurídica, com os
+ * espaços colapsados. `"Dell Inc."`, `"DELL"` e `"Dell  Inc"` viram
+ * `"dell"` — e é essa chave, não o texto, que decide se já existe.
+ *
+ * Devolve `''` quando não sobra nada: nome que era só pontuação não é
+ * fabricante, e criar uma linha para ele seria sujeira com outro nome.
+ */
+export function chaveDeFabricante(nome: string): string {
+  const semAcento = nome.normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+  const palavras = semAcento
+    .toLowerCase()
+    // `&` vira "and" antes de a pontuação sumir: "AT&T" e "AT and T"
+    // são a mesma empresa, "att" e "at t" não seriam a mesma chave.
+    .replace(/&/g, ' and ')
+    // Ponto e apóstrofo somem **sem** virar espaço, ao contrário do
+    // resto da pontuação: "S.A." precisa virar a palavra "sa" para o
+    // corte de forma jurídica reconhecê-la. Se virasse "s a", ficaria
+    // como duas letras soltas dentro da chave e "Positivo Informática
+    // S.A." nunca casaria com "Positivo Informática".
+    .replace(/[.'\u2019]/g, '')
+    // "S/A" é como meia empresa brasileira se escreve, e a barra vira
+    // espaço no passo seguinte — o que partiria a forma jurídica em duas
+    // letras soltas e a esconderia do corte. Colar só esta, e não toda
+    // barra: "Vertex/Acme" são dois nomes, não um.
+    .replace(/\bs\s*\/\s*[as]\b/g, 'sa')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean);
+
+  // A forma jurídica só é ruído no fim. "Co" no meio pode ser nome
+  // ("Co Electronics"), e o corte cego encurtaria empresa errada.
+  while (palavras.length > 1 && FORMAS_JURIDICAS.has(palavras[palavras.length - 1]!)) {
+    palavras.pop();
+  }
+
+  return palavras.join(' ');
+}
+
+/**
+ * Fabricantes cujo nome muda de máquina para máquina.
+ *
+ * O que está aqui é só o que a normalização **não** alcança: `"Dell
+ * Inc."` já vira `"dell"` sozinho, mas nenhuma regra de texto descobre
+ * que "Hewlett-Packard" é HP. Cada entrada é um nome de exibição e as
+ * chaves que caem nele.
+ *
+ * Duas coisas que a lista deliberadamente **não** faz:
+ *
+ * - **Não junta HP e HPE.** São duas empresas desde 2015, e quem tem
+ *   servidor e desktop da antiga HP precisa dos dois separados.
+ * - **Não junta marca comprada com compradora** (Compaq em HP, Crucial
+ *   em Micron). Historicamente correto e praticamente errado: o parque
+ *   diz o que está escrito na etiqueta da máquina.
+ */
+const FABRICANTES_CONHECIDOS: { nome: string; chaves: string[] }[] = [
+  { nome: 'HP', chaves: ['hp', 'hewlett packard', 'hewlett packard development'] },
+  { nome: 'HPE', chaves: ['hpe', 'hewlett packard enterprise'] },
+  { nome: 'Dell', chaves: ['dell', 'dell computer'] },
+  { nome: 'Lenovo', chaves: ['lenovo', 'lenovo group'] },
+  { nome: 'ASUS', chaves: ['asus', 'asustek', 'asustek computer'] },
+  { nome: 'Acer', chaves: ['acer'] },
+  { nome: 'Apple', chaves: ['apple', 'apple computer'] },
+  { nome: 'Intel', chaves: ['intel'] },
+  { nome: 'AMD', chaves: ['amd', 'advanced micro devices'] },
+  { nome: 'MSI', chaves: ['msi', 'micro star international', 'micro star'] },
+  { nome: 'Gigabyte', chaves: ['gigabyte', 'gigabyte technology'] },
+  { nome: 'ASRock', chaves: ['asrock'] },
+  { nome: 'Supermicro', chaves: ['supermicro', 'super micro computer'] },
+  { nome: 'Samsung', chaves: ['samsung', 'samsung electronics'] },
+  { nome: 'LG', chaves: ['lg', 'lg electronics'] },
+  { nome: 'Sony', chaves: ['sony', 'sony electronics'] },
+  { nome: 'Toshiba', chaves: ['toshiba'] },
+  { nome: 'Fujitsu', chaves: ['fujitsu', 'fujitsu technology solutions'] },
+  { nome: 'Microsoft', chaves: ['microsoft'] },
+  { nome: 'Huawei', chaves: ['huawei', 'huawei technologies'] },
+  { nome: 'Positivo', chaves: ['positivo', 'positivo informatica', 'positivo tecnologia'] },
+  { nome: 'Multilaser', chaves: ['multilaser', 'multilaser industrial'] },
+  { nome: 'Itautec', chaves: ['itautec'] },
+  { nome: 'Kingston', chaves: ['kingston', 'kingston technology'] },
+  { nome: 'Seagate', chaves: ['seagate', 'seagate technology'] },
+  { nome: 'Western Digital', chaves: ['western digital', 'wdc', 'wd'] },
+  { nome: 'SanDisk', chaves: ['sandisk'] },
+  { nome: 'Micron', chaves: ['micron', 'micron technology'] },
+  { nome: 'Epson', chaves: ['epson', 'seiko epson'] },
+  { nome: 'Brother', chaves: ['brother', 'brother industries'] },
+  { nome: 'Canon', chaves: ['canon'] },
+  { nome: 'Ricoh', chaves: ['ricoh'] },
+  { nome: 'Xerox', chaves: ['xerox'] },
+  { nome: 'Kyocera', chaves: ['kyocera', 'kyocera document solutions'] },
+  { nome: 'Lexmark', chaves: ['lexmark', 'lexmark international'] },
+  { nome: 'Zebra', chaves: ['zebra', 'zebra technologies'] },
+  { nome: 'Cisco', chaves: ['cisco', 'cisco systems'] },
+  { nome: 'TP-Link', chaves: ['tp link', 'tplink', 'tp link technologies'] },
+  { nome: 'D-Link', chaves: ['d link', 'dlink'] },
+  { nome: 'Ubiquiti', chaves: ['ubiquiti', 'ubiquiti networks'] },
+  { nome: 'MikroTik', chaves: ['mikrotik', 'mikrotikls'] },
+  { nome: 'Intelbras', chaves: ['intelbras'] },
+  { nome: 'Aruba', chaves: ['aruba', 'aruba networks'] },
+  { nome: 'APC', chaves: ['apc', 'american power conversion'] },
+  { nome: 'SMS', chaves: ['sms'] },
+  { nome: 'VMware', chaves: ['vmware'] },
+  { nome: 'QEMU', chaves: ['qemu'] },
+  { nome: 'Oracle', chaves: ['oracle', 'oracle corporation', 'innotek'] },
+];
+
+/**
+ * As variantes acima estão escritas já normalizadas, mas passam pela
+ * normalização mesmo assim: quem acrescentar uma entrada vai escrever
+ * "Hewlett-Packard" com o hífen, e uma chave que não bate com nada
+ * falha em silêncio — o pior jeito de uma tabela de tradução falhar.
+ */
+const POR_CHAVE = new Map<string, { nome: string; chave: string }>(
+  FABRICANTES_CONHECIDOS.flatMap((f) =>
+    f.chaves.map(
+      (c) => [chaveDeFabricante(c), { nome: f.nome, chave: chaveDeFabricante(f.nome) }] as const,
+    ),
+  ),
+);
+
+/**
+ * O fabricante que este texto quer dizer.
+ *
+ * Devolve a chave pela qual procurá-lo e o nome com que criá-lo se não
+ * existir. Para quem não está na lista conhecida, a chave é a do
+ * próprio texto e o nome é o texto limpo — a lista é um atalho para os
+ * casos famosos, não a condição para o cadastro funcionar.
+ *
+ * `null` quando não sobra chave nenhuma.
+ */
+export function canonizarFabricante(
+  texto: string,
+): { chave: string; chaveCanonica: string; nome: string } | null {
+  const chave = chaveDeFabricante(texto);
+  if (!chave) return null;
+
+  const conhecido = POR_CHAVE.get(chave);
+
+  return {
+    chave,
+    chaveCanonica: conhecido?.chave ?? chave,
+    nome: conhecido?.nome ?? texto.trim().replace(/\s+/g, ' '),
+  };
+}

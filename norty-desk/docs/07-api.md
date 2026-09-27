@@ -1454,10 +1454,14 @@ POST   /v1/locations                → { name, parentId?, notes?, isActive? }
 PATCH  /v1/locations/:id
 DELETE /v1/locations/:id
 
-GET    /v1/manufacturers            → { id, name, modelCount, assetCount }
+GET    /v1/manufacturers            → { id, name, modelCount, assetCount, aliases }
 POST   /v1/manufacturers            → { name }
 PATCH  /v1/manufacturers/:id        → { name }
 DELETE /v1/manufacturers/:id
+
+POST   /v1/manufacturers/:id/apelidos            → { alias }
+DELETE /v1/manufacturers/:id/apelidos/:aliasId
+POST   /v1/manufacturers/:id/juntar              → { absorvidoId }
 
 GET    /v1/asset-models             → { id, name, kind, manufacturer, assetCount }
 POST   /v1/asset-models             → { name, kind?, manufacturerId? }
@@ -1471,6 +1475,60 @@ livre é a origem da sujeira de inventário: "HP", "hp" e
 olha. A migração `20260909230000_catalogo_do_ativo` agrupa o que já
 existia por `lower(trim(...))`, cria uma linha por grupo e liga os
 ativos — sem `initcap`, que transformaria "HP" em "Hp" e "IBM" em "Ibm".
+
+### O dicionário de fabricante
+
+Agrupar por `lower(trim(...))` resolveu o texto livre, mas não resolve o
+texto **certo escrito de outro jeito**. O agente de inventário manda o
+que o SMBIOS tiver, e da mesma frota chegam "Dell Inc.", "DELL", "Dell
+Computer Corporation" — e "Hewlett-Packard" na máquina de 2014 ao lado
+de "HP" na de 2020. Nenhuma comparação de texto descobre a última.
+
+Três camadas, nesta ordem:
+
+1. **A chave do texto** (`chaveDeFabricante`, em `packages/shared`):
+   minúsculas, sem acento, sem pontuação, sem forma jurídica. `"Dell
+   Inc."`, `"DELL"` e `"Positivo Informática S.A."` viram `"dell"`,
+   `"dell"` e `"positivo informatica"`. A lista de formas jurídicas é
+   curta de propósito — cortar "Electronics" ou "Tecnologia" juntaria
+   homônimas de ramos diferentes, e cadastro juntado errado não se
+   separa sozinho depois.
+2. **A lista de fabricantes conhecidos**, também em `shared`. Só o que a
+   normalização não alcança: que "Hewlett-Packard" é HP, que "ASUSTeK" é
+   ASUS, que "Micro-Star International" é MSI. Ela **não** junta HP com
+   HPE (duas empresas desde 2015) nem marca comprada com compradora
+   (Compaq em HP, Crucial em Micron) — historicamente correto e
+   praticamente errado: o parque diz o que está na etiqueta.
+3. **O que a casa ensinou**, na tabela `manufacturer_aliases`. Entra
+   pelo `POST .../apelidos` e pela junção de duplicados.
+
+O `@@unique([organizationId, alias])` é a regra, não a conveniência:
+dois fabricantes não podem reivindicar a mesma chave, e é isso — não o
+`if` de quem consulta antes de criar — que impede a duplicata de nascer.
+Por isso `POST /manufacturers` responde **409 dizendo qual cadastro já
+responde por aquele nome**, em vez de um "já existe" que manda a pessoa
+procurar na lista inteira.
+
+Cada fabricante ensina ao dicionário a chave do próprio nome e a
+canônica. Renomear **guarda o nome velho como apelido**: as máquinas já
+varridas não sabem que houve renomeação, e sem isso a próxima varredura
+recriaria o cadastro que acabou de ser corrigido.
+
+`POST /manufacturers/:id/juntar` é o caminho de saída da sujeira que já
+está no banco. Tudo o que apontava para o absorvido — modelo, ativo,
+componente, software, consumível — passa a apontar para o que fica, numa
+transação só; metade da junção deixaria modelo apontando para um
+fabricante que não existe mais. Modelo repetido dos dois lados vira um,
+e os ativos seguem para ele, porque `@@unique([organizationId,
+manufacturerId, name])` recusaria as duas linhas iguais. E o nome do
+absorvido vira apelido, senão a varredura o recria na hora.
+
+**A migração não carrega dado nenhum, de propósito.** Reduzir nome a
+chave é função de `shared`, e reescrevê-la em SQL daria uma segunda
+verdade que envelhece sozinha. O cadastro anterior ao dicionário é
+adotado na primeira consulta que o encontrar, e sai dela com os apelidos
+gravados — a varredura da lista acontece uma vez por fabricante, não uma
+por máquina.
 
 **Toda resposta de escrita devolve a coleção inteira, não o item.** A
 tela de configuração é uma lista pequena que se relê a cada mudança; um

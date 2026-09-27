@@ -268,8 +268,15 @@ O inventário que o chamado referencia.
   feitos em 10/09/2026**: posição em U com face (frente, trás, profundidade
   inteira), sem sobreposição (rack travado na gravação), desenho de pé na tela.
   PDU e gabinete entram como equipamentos no rack; cabo é a conexão de portas.
-- **Dicionários de regra** — o mesmo motor da Fase 2, com o catálogo de
-  alvos que normaliza fabricante, modelo e sistema operacional.
+- **Dicionário de fabricante** — **feito em 27/09/2026**. Três camadas: a
+  chave do nome (sem caixa, acento, pontuação nem forma jurídica), a
+  lista de fabricantes conhecidos em `packages/shared` (o que nenhuma
+  regra de texto descobre: que "Hewlett-Packard" é HP), e os apelidos
+  que a casa ensina. O índice único por chave é o que impede a duplicata
+  de nascer; `POST /manufacturers/:id/juntar` é a saída para a que já
+  nasceu. Modelo e sistema operacional ainda não têm o equivalente — o
+  SMBIOS responde a mesma coisa nas duas máquinas para modelo, então o
+  problema é menor e ainda não apareceu.
 - **Inventário automático** — **feito em 24/09/2026**, e não como o
   GLPI faz: em vez de receber o que o agente dele coleta, o Desk tem
   agente próprio (`agente/`, PowerShell, Windows). `POST

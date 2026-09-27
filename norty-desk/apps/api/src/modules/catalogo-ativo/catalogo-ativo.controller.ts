@@ -17,7 +17,9 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { CatalogoDoAtivoService } from './catalogo-ativo.service';
 import {
+  ApelidarFabricanteDto,
   EscreverFabricanteDto,
+  JuntarFabricantesDto,
   EscreverLocalizacaoDto,
   EscreverModeloDeAtivoDto,
 } from './dto';
@@ -97,6 +99,44 @@ export class CatalogoDoAtivoController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<FabricanteView[]> {
     return this.catalogo.removerFabricante(usuario, id);
+  }
+
+  /**
+   * O apelido, a remoção dele e a junção de dois cadastros.
+   *
+   * Os três vivem sob `ativo:catalogo` e não sob `ativo:gerenciar`:
+   * quem mexe no dicionário está editando o catálogo da casa, não o
+   * equipamento de alguém. A junção em especial mexe em tudo o que
+   * apontava para o cadastro absorvido — é operação de curadoria.
+   */
+  @Post('manufacturers/:id/apelidos')
+  @RequirePermission('ativo:catalogo')
+  apelidar(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ApelidarFabricanteDto,
+  ): Promise<FabricanteView[]> {
+    return this.catalogo.apelidar(usuario, id, dto.alias);
+  }
+
+  @Delete('manufacturers/:id/apelidos/:aliasId')
+  @RequirePermission('ativo:catalogo')
+  removerApelido(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('aliasId', ParseUUIDPipe) aliasId: string,
+  ): Promise<FabricanteView[]> {
+    return this.catalogo.removerApelido(usuario, id, aliasId);
+  }
+
+  @Post('manufacturers/:id/juntar')
+  @RequirePermission('ativo:catalogo')
+  juntar(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: JuntarFabricantesDto,
+  ): Promise<FabricanteView[]> {
+    return this.catalogo.juntarFabricantes(usuario, id, dto.absorvidoId);
   }
 
   @Get('asset-models')

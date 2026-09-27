@@ -1154,6 +1154,15 @@ export type FabricanteView = {
   name: string;
   modelCount: number;
   assetCount: number;
+  /**
+   * Os outros nomes pelos quais ele atende, já normalizados.
+   *
+   * Não inclui a chave do próprio nome: todo fabricante tem a sua, e
+   * listá-la faria a tela repetir o nome que está ao lado. O que está
+   * aqui é o que a casa ensinou — por junção de cadastros duplicados ou
+   * porque alguém acrescentou.
+   */
+  aliases: { id: string; alias: string }[];
 };
 
 export type ModeloDeAtivoView = {

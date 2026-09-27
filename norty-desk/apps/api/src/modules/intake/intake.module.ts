@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { CatalogoDoAtivoModule } from '../catalogo-ativo/catalogo-ativo.module';
 import { RegrasModule } from '../regras/regras.module';
 import { TicketsModule } from '../tickets/tickets.module';
 import { ApiKeyGuard } from './api-key.guard';
@@ -18,7 +19,7 @@ import { InventarioService } from './inventario.service';
  * varre parque.
  */
 @Module({
-  imports: [TicketsModule, RegrasModule],
+  imports: [TicketsModule, RegrasModule, CatalogoDoAtivoModule],
   controllers: [IntakeController],
   providers: [ApiKeyGuard, InventarioService],
 })

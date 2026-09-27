@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   EscreverLocalizacaoRequest,
   EscreverModeloDeAtivoRequest,
@@ -6,7 +6,7 @@ import type {
   LocalizacaoView,
   ModeloDeAtivoView,
 } from '@norty-desk/shared';
-import { ASSET_KINDS, ROTULO_ATIVO } from '@norty-desk/shared';
+import { ASSET_KINDS, ROTULO_ATIVO, canonizarFabricante } from '@norty-desk/shared';
 
 import { ErroDaApi } from '../../api/cliente';
 import {
@@ -19,6 +19,9 @@ import {
   listarFabricantes,
   listarLocalizacoes,
   listarModelosDeAtivo,
+  apelidarFabricante,
+  juntarFabricantes,
+  removerApelidoDeFabricante,
   removerFabricante,
   removerLocalizacao,
   removerModeloDeAtivo,
@@ -352,10 +355,65 @@ function FormularioDeLocalizacao({
 // Fabricantes
 // ---------------------------------------------------------------------
 
+/**
+ * Por quais outros nomes este fabricante atende.
+ *
+ * São chaves, não texto de tela: o agente de inventário manda o que o
+ * SMBIOS tiver, e o que fica gravado é a forma reduzida — minúsculas,
+ * sem pontuação, sem forma jurídica. Mostrar assim é honesto: é o que o
+ * dicionário compara, e maquiar faria a pessoa achar que a grafia
+ * importa.
+ *
+ * O aviso de gêmeo aparece quando dois cadastros seriam o mesmo nome
+ * para o dicionário. De hoje em diante isso não nasce — o cadastro novo
+ * é recusado —, mas é o que sobrou de antes, e é a fila da junção.
+ */
+function Apelidos({
+  fabricante,
+  gemeo,
+  aoRemover,
+}: {
+  fabricante: FabricanteView;
+  gemeo: string | undefined;
+  aoRemover: (aliasId: string) => void;
+}) {
+  return (
+    <div className="pilha-sm">
+      {fabricante.aliases.length === 0 ? (
+        <span className="campo-ajuda">Só pelo próprio nome.</span>
+      ) : (
+        <div className="linha" style={{ gap: 'var(--e-1)', flexWrap: 'wrap' }}>
+          {fabricante.aliases.map((a) => (
+            <span key={a.id} className="selo -contorno mono">
+              {a.alias}
+              <button
+                type="button"
+                className="selo-x"
+                aria-label={`Tirar o apelido ${a.alias}`}
+                onClick={() => aoRemover(a.id)}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {gemeo ? (
+        <span className="campo-ajuda">
+          Parece ser o mesmo que <strong>{gemeo}</strong>. Se for, junte os dois.
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function ListaDeFabricantes() {
   const [fabricantes, setFabricantes] = useState<FabricanteView[] | null>(null);
   const [name, setName] = useState('');
   const [renomeando, setRenomeando] = useState<{ id: string; name: string } | null>(null);
+  const [apelidando, setApelidando] = useState<{ id: string; alias: string } | null>(null);
+  const [juntando, setJuntando] = useState<{ id: string; absorvidoId: string } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
@@ -366,6 +424,30 @@ function ListaDeFabricantes() {
 
   const falhar = (e: unknown) =>
     setErro(e instanceof ErroDaApi ? e.message : 'Não foi possível salvar.');
+
+  // Dois cadastros que o dicionário leria como o mesmo nome. Não dá
+  // para isso nascer daqui em diante — o cadastro novo é recusado —,
+  // mas é exatamente o que fica num banco anterior ao dicionário. Sem
+  // apontar, ninguém junta: quem olha a lista vê dois nomes diferentes.
+  const gemeos = useMemo(() => {
+    const porChave = new Map<string, FabricanteView[]>();
+
+    for (const f of fabricantes ?? []) {
+      const chave = canonizarFabricante(f.name)?.chaveCanonica;
+      if (!chave) continue;
+      porChave.set(chave, [...(porChave.get(chave) ?? []), f]);
+    }
+
+    const pares = new Map<string, string>();
+    for (const iguais of porChave.values()) {
+      if (iguais.length < 2) continue;
+      for (const f of iguais) {
+        pares.set(f.id, iguais.filter((o) => o.id !== f.id).map((o) => o.name).join(', '));
+      }
+    }
+
+    return pares;
+  }, [fabricantes]);
 
   return (
     <div className="pilha">
@@ -422,6 +504,7 @@ function ListaDeFabricantes() {
               <thead>
                 <tr>
                   <th>Fabricante</th>
+                  <th>Também atende por</th>
                   <th className="-num">Modelos</th>
                   <th className="-num">Ativos</th>
                   <th />
@@ -474,10 +557,109 @@ function ListaDeFabricantes() {
                         f.name
                       )}
                     </td>
+                    <td>
+                      {apelidando?.id === f.id ? (
+                        <form
+                          className="linha"
+                          style={{ gap: 'var(--e-2)' }}
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            setErro(null);
+                            void apelidarFabricante(f.id, apelidando.alias)
+                              .then((lista) => {
+                                setFabricantes(lista);
+                                setApelidando(null);
+                              })
+                              .catch(falhar);
+                          }}
+                        >
+                          <label className="so-leitor" htmlFor={`apelido-${f.id}`}>
+                            Nome que a varredura manda
+                          </label>
+                          <input
+                            id={`apelido-${f.id}`}
+                            className="input"
+                            required
+                            autoFocus
+                            placeholder="Como a máquina escreve"
+                            value={apelidando.alias}
+                            onChange={(e) => setApelidando({ id: f.id, alias: e.target.value })}
+                          />
+                          <button type="submit" className="btn -primario -sm">
+                            Salvar
+                          </button>
+                          <button
+                            type="button"
+                            className="btn -fantasma -sm"
+                            onClick={() => setApelidando(null)}
+                          >
+                            Cancelar
+                          </button>
+                        </form>
+                      ) : juntando?.id === f.id ? (
+                        <form
+                          className="linha"
+                          style={{ gap: 'var(--e-2)' }}
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            setErro(null);
+                            void juntarFabricantes(f.id, juntando.absorvidoId)
+                              .then((lista) => {
+                                setFabricantes(lista);
+                                setJuntando(null);
+                              })
+                              .catch(falhar);
+                          }}
+                        >
+                          <label className="so-leitor" htmlFor={`juntar-${f.id}`}>
+                            Cadastro que some dentro deste
+                          </label>
+                          <select
+                            id={`juntar-${f.id}`}
+                            className="select -auto"
+                            required
+                            value={juntando.absorvidoId}
+                            onChange={(e) =>
+                              setJuntando({ id: f.id, absorvidoId: e.target.value })
+                            }
+                          >
+                            <option value="">Qual é o mesmo que este?</option>
+                            {(fabricantes ?? [])
+                              .filter((o) => o.id !== f.id)
+                              .map((o) => (
+                                <option key={o.id} value={o.id}>
+                                  {o.name}
+                                </option>
+                              ))}
+                          </select>
+                          <button type="submit" className="btn -perigo -sm">
+                            Juntar os dois
+                          </button>
+                          <button
+                            type="button"
+                            className="btn -fantasma -sm"
+                            onClick={() => setJuntando(null)}
+                          >
+                            Cancelar
+                          </button>
+                        </form>
+                      ) : (
+                        <Apelidos
+                          fabricante={f}
+                          gemeo={gemeos.get(f.id)}
+                          aoRemover={(aliasId) => {
+                            setErro(null);
+                            void removerApelidoDeFabricante(f.id, aliasId)
+                              .then(setFabricantes)
+                              .catch(falhar);
+                          }}
+                        />
+                      )}
+                    </td>
                     <td className="-num">{f.modelCount}</td>
                     <td className="-num">{f.assetCount}</td>
                     <td className="-num">
-                      {renomeando?.id === f.id ? null : (
+                      {renomeando?.id === f.id || apelidando?.id === f.id || juntando?.id === f.id ? null : (
                         <>
                           <button
                             type="button"
@@ -485,6 +667,20 @@ function ListaDeFabricantes() {
                             onClick={() => setRenomeando({ id: f.id, name: f.name })}
                           >
                             Renomear
+                          </button>
+                          <button
+                            type="button"
+                            className="btn -fantasma -sm"
+                            onClick={() => setApelidando({ id: f.id, alias: '' })}
+                          >
+                            Apelidar
+                          </button>
+                          <button
+                            type="button"
+                            className="btn -fantasma -sm"
+                            onClick={() => setJuntando({ id: f.id, absorvidoId: '' })}
+                          >
+                            Juntar com…
                           </button>
                           <button
                             type="button"

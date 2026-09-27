@@ -6,7 +6,12 @@
  * Fora do modo de demonstração as contas nascem com troca de senha
  * obrigatória — aqui também, exceto se DEMO=1.
  */
-import { DEFAULT_BUSINESS_HOURS, DEFAULT_PRIORITY_MATRIX, loginDoCliente } from '@norty-desk/shared';
+import {
+  DEFAULT_BUSINESS_HOURS,
+  DEFAULT_PRIORITY_MATRIX,
+  canonizarFabricante,
+  loginDoCliente,
+} from '@norty-desk/shared';
 import { PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
 
@@ -359,13 +364,52 @@ async function main() {
     // agente nenhum roda nele.
     const DIA = 86_400_000;
 
+    // Os fabricantes entram com os apelidos que o dicionário usa, como
+    // entrariam por cadastro ou por varredura. Sem eles a aba de
+    // fabricantes abre vazia e o dicionário não é demonstrável.
+    const fabricantes = new Map<string, string>();
+
+    for (const nome of ['Dell', 'HP', 'Lenovo', 'Epson', 'TP-Link']) {
+      const fabricante = await prisma.manufacturer.upsert({
+        where: { organizationId_name: { organizationId: organizacao.id, name: nome } },
+        update: {},
+        create: { organizationId: organizacao.id, name: nome },
+      });
+
+      const canonico = canonizarFabricante(nome);
+      await prisma.manufacturerAlias.createMany({
+        data: [...new Set([canonico?.chave, canonico?.chaveCanonica])]
+          .filter((c): c is string => Boolean(c))
+          .map((alias) => ({
+            organizationId: organizacao.id,
+            manufacturerId: fabricante.id,
+            alias,
+          })),
+        skipDuplicates: true,
+      });
+
+      fabricantes.set(nome, fabricante.id);
+    }
+
     const parque = [
-      { tag: 'PAT-1001', name: 'NB-MARINA', visto: 2 * 3600e3, cliente: false },
-      { tag: 'PAT-1002', name: 'NB-JOAO', visto: 1 * DIA, cliente: true },
-      { tag: 'PAT-1003', name: 'NB-FERIAS', visto: 22 * DIA, cliente: false },
-      { tag: 'PAT-1004', name: 'DESK-RECEPCAO', visto: 96 * DIA, cliente: true },
-      { tag: 'PAT-2001', name: 'Impressora do balcão', visto: null, kind: 'IMPRESSORA' as const },
-      { tag: 'PAT-2002', name: 'Switch do rack', visto: null, kind: 'REDE' as const },
+      { tag: 'PAT-1001', name: 'NB-MARINA', visto: 2 * 3600e3, cliente: false, marca: 'Dell' },
+      { tag: 'PAT-1002', name: 'NB-JOAO', visto: 1 * DIA, cliente: true, marca: 'Lenovo' },
+      { tag: 'PAT-1003', name: 'NB-FERIAS', visto: 22 * DIA, cliente: false, marca: 'Dell' },
+      { tag: 'PAT-1004', name: 'DESK-RECEPCAO', visto: 96 * DIA, cliente: true, marca: 'HP' },
+      {
+        tag: 'PAT-2001',
+        name: 'Impressora do balcão',
+        visto: null,
+        kind: 'IMPRESSORA' as const,
+        marca: 'Epson',
+      },
+      {
+        tag: 'PAT-2002',
+        name: 'Switch do rack',
+        visto: null,
+        kind: 'REDE' as const,
+        marca: 'TP-Link',
+      },
     ];
 
     for (const maquina of parque) {
@@ -376,6 +420,7 @@ async function main() {
           organizationId: organizacao.id,
           clientId: 'cliente' in maquina && maquina.cliente ? empresa.id : null,
           kind: 'kind' in maquina ? maquina.kind : 'COMPUTADOR',
+          manufacturerId: fabricantes.get(maquina.marca) ?? null,
           status: 'EM_USO',
           name: maquina.name,
           tag: maquina.tag,

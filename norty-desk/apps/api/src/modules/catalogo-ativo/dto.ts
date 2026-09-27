@@ -24,6 +24,16 @@ export class EscreverFabricanteDto {
   @IsString() @MinLength(1) @MaxLength(120) name!: string;
 }
 
+/** Um nome a mais pelo qual o fabricante atende. */
+export class ApelidarFabricanteDto {
+  @IsString() @MinLength(1) @MaxLength(120) alias!: string;
+}
+
+/** Qual cadastro duplicado some dentro deste. */
+export class JuntarFabricantesDto {
+  @IsUUID() absorvidoId!: string;
+}
+
 export class EscreverModeloDeAtivoDto {
   @IsString() @MinLength(1) @MaxLength(120) name!: string;
   @IsOptional() @IsIn(ASSET_KINDS) kind?: AssetKind;

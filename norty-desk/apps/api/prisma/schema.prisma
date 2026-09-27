@@ -2443,9 +2443,44 @@ model Manufacturer {
   components   AssetComponent[]
   software     Software[]
   consumables  ConsumableItem[]
+  aliases      ManufacturerAlias[]
 
   @@unique([organizationId, name])
   @@map("manufacturers")
+}
+
+/// Os nomes pelos quais este fabricante também atende.
+///
+/// O agente de inventário manda o que o SMBIOS tiver: "Dell Inc." numa
+/// máquina, "DELL" na outra, "Hewlett-Packard" na de 2014 e "HP" na de
+/// 2020. Sem dicionário isso vira uma linha de fabricante por grafia —
+/// e o relatório de parque por fabricante, que é a razão de o campo
+/// existir, passa a contar a mesma empresa quatro vezes.
+///
+/// Cada fabricante ensina ao dicionário a **chave** do próprio nome
+/// (`chaveDeFabricante` em `packages/shared`) e a chave canônica dele,
+/// quando a lista de fabricantes conhecidos souber que são o mesmo. O
+/// resto das linhas é o que a casa ensinou: ao juntar dois cadastros
+/// duplicados, o nome do que sumiu fica aqui.
+///
+/// O `@@unique` é a regra, não a conveniência: dois fabricantes não
+/// podem reivindicar a mesma chave, e é isso que impede a duplicata de
+/// nascer — não o `if` de quem consulta antes de criar.
+model ManufacturerAlias {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  manufacturerId String @db.Uuid
+  /// Já normalizado: minúsculas, sem acento, sem pontuação, sem forma
+  /// jurídica. É chave de busca, não texto de tela.
+  alias          String
+
+  createdAt DateTime @default(now())
+
+  manufacturer Manufacturer @relation(fields: [manufacturerId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, alias])
+  @@index([manufacturerId])
+  @@map("manufacturer_aliases")
 }
 
 /// Modelo de equipamento.
