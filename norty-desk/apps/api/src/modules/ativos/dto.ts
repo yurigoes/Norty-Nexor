@@ -124,6 +124,12 @@ export class BuscarReservasDto {
   @IsOptional() @IsUUID() assetId?: string;
 }
 
+/** Até onde olhar, e quanto trazer. */
+export class ImpactoDto {
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(5) profundidade?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200) limite?: number;
+}
+
 export class VincularAtivoDto {
   @IsUUID() assetId!: string;
 }

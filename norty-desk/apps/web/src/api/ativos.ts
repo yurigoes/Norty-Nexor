@@ -4,6 +4,7 @@ import type {
   DevolverAtivoRequest,
   EntregarAtivoRequest,
   PosseView,
+  ImpactoView,
   ReservaView,
   ReservarAtivoRequest,
   TrocaResponse,
@@ -214,3 +215,15 @@ export const reservarAtivo = (assetId: string, dados: ReservarAtivoRequest) =>
 
 export const cancelarReserva = (id: string, reason?: string | null) =>
   chamar<ReservaView[]>(`/reservas/${id}`, { metodo: 'DELETE', corpo: { reason } });
+
+
+/**
+ * O que cai junto com este equipamento.
+ *
+ * `profundidade` é quantos saltos seguir; `limite`, quantos
+ * equipamentos trazer. Os dois têm teto no servidor.
+ */
+export const impactoDoAtivo = (
+  assetId: string,
+  opcoes: { profundidade?: number; limite?: number } = {},
+) => chamar<ImpactoView>(`/assets/${assetId}/impacto${query(opcoes)}`);

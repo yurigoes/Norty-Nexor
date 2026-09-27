@@ -1701,6 +1701,8 @@ GET    /v1/assets/:id/posses            → por quantas mãos passou
 POST   /v1/assets/:id/posse             → entregar a alguém
 POST   /v1/assets/:id/devolver          → o equipamento volta
 
+GET    /v1/assets/:id/impacto?profundidade=&limite=  → o que cai junto
+
 GET    /v1/reservas?de=&ate=&userId=&assetId=   → a agenda do que está separado
 GET    /v1/assets/:id/reservas
 POST   /v1/assets/:id/reservas          → { userId, startsAt, endsAt, purpose? }
@@ -1712,6 +1714,37 @@ GET    /v1/config/termos                → a redação que a casa usa
 PUT    /v1/config/termos/:kind          { body }
 DELETE /v1/config/termos/:kind          → volta ao texto de fábrica
 ```
+
+### Análise de impacto
+
+A pergunta é a de antes da manutenção: "posso desligar isto agora?". A
+resposta tem duas metades, e a rota devolve as duas — os **equipamentos**
+que a queda alcança e as **consequências** (chamado aberto, mudança
+marcada, reserva de alguém, gente para avisar). Separá-las em duas
+chamadas faria a segunda nunca ser feita.
+
+**Duas arestas, e só duas.** Periférico pendurado cai com a máquina; o
+que está do outro lado do cabo perde rede. **Estar no mesmo rack não
+entra**: proximidade não é dependência, e tratá-la como tal encheria a
+lista de equipamento que continua de pé — que é o jeito mais rápido de
+a análise virar ruído e ninguém mais abrir.
+
+A aresta do periférico tem **sentido**: a máquina puxa o teclado, o
+teclado não puxa a máquina. Já o cabo vale **nos dois sentidos**, porque
+o inventário não sabe qual ponta é a de cima: a conexão é simétrica no
+banco, e a assimetria (uplink e acesso) é semântica que ninguém
+cadastra. Fingir que sabe tiraria o switch da análise do desktop — e é
+justamente o switch que derruba o andar.
+
+A travessia é **em largura**, com `profundidade` (1 a 5, padrão 2) e
+`limite` (1 a 200, padrão 60). Em largura e não em profundidade porque
+o teto corta pelo fim: em profundidade, um ramo comprido consumiria o
+orçamento inteiro e o vizinho imediato ficaria de fora. Quando o teto
+corta, `truncado` diz — cortar em silêncio faz a análise mentir por
+omissão.
+
+Cada equipamento vem com o `caminho` pelos nomes. É o "por quê" da
+linha: sem ele a lista é um monte de nomes sem explicação.
 
 ### Reserva
 

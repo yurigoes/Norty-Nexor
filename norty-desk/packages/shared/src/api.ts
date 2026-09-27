@@ -3030,3 +3030,60 @@ export type ReservarAtivoRequest = {
 };
 
 export type CancelarReservaRequest = { reason?: string | null };
+
+
+// ---------------------------------------------------------------------
+// Análise de impacto
+// ---------------------------------------------------------------------
+
+/**
+ * Por que este equipamento entra na conta.
+ *
+ * São as duas dependências que o inventário de fato conhece. Estar no
+ * mesmo rack **não** é uma delas: proximidade não é dependência, e
+ * tratá-la como tal encheria a lista de equipamento que continua de pé.
+ */
+export type MotivoDeImpacto = 'PERIFERICO' | 'CABO';
+
+export type NoDeImpacto = {
+  asset: AtivoRef;
+  /** Quantos saltos do equipamento analisado. */
+  profundidade: number;
+  motivo: MotivoDeImpacto;
+  /** O caminho até aqui, pelos nomes — é o "por quê" da linha. */
+  caminho: string[];
+  status: AssetStatus;
+  /** Com quem está: é quem avisar. */
+  user: PartyRef | null;
+  client: CatalogoRef | null;
+};
+
+/**
+ * O que cai junto com este equipamento.
+ *
+ * Duas coisas diferentes na mesma resposta, e é de propósito: os
+ * **equipamentos** que a queda alcança, e as **consequências** —
+ * chamado aberto, mudança marcada, reserva de alguém, gente para
+ * avisar. Quem pergunta "posso desligar isto agora?" precisa das duas,
+ * e separá-las em duas telas faria a segunda nunca ser aberta.
+ */
+export type ImpactoView = {
+  raiz: AtivoRef;
+  nos: NoDeImpacto[];
+  /** Chamado aberto em qualquer equipamento atingido. */
+  chamadosAbertos: { id: string; number: number; subject: string; asset: AtivoRef }[];
+  /** Mudança marcada que envolve algum deles. */
+  mudancasPlanejadas: {
+    id: string;
+    title: string;
+    status: ChangeStatus;
+    windowStart: string | null;
+    windowEnd: string | null;
+  }[];
+  /** Reserva vigente ou futura em algum deles: derrubar atropela alguém. */
+  reservas: ReservaView[];
+  /** Quem está com os equipamentos atingidos. */
+  pessoas: PartyRef[];
+  /** A travessia parou no teto, e há mais além dele. */
+  truncado: boolean;
+};

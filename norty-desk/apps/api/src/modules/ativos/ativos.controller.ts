@@ -20,6 +20,7 @@ import type {
   AssetDetail,
   AssetView,
   ComponenteView,
+  ImpactoView,
   ModeloDeTermoView,
   PosseView,
   ReservaView,
@@ -36,6 +37,7 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { AcessoRemotoService } from './acesso-remoto.service';
 import { AtivosService } from './ativos.service';
 import { PosseService } from './posse.service';
+import { ImpactoService } from './impacto.service';
 import { ReservasService } from './reservas.service';
 import { TermosService } from './termos.service';
 import { termoEmPdf } from './termo.pdf';
@@ -51,6 +53,7 @@ import {
   EscreverComponenteDto,
   BuscarReservasDto,
   CancelarReservaDto,
+  ImpactoDto,
   ReservarAtivoDto,
   TrocarAtivoDto,
   VincularAtivoDto,
@@ -65,6 +68,7 @@ export class AtivosController {
     private readonly posse: PosseService,
     private readonly termos: TermosService,
     private readonly reservas: ReservasService,
+    private readonly impactoService: ImpactoService,
   ) {}
 
   @Get('assets')
@@ -139,6 +143,22 @@ export class AtivosController {
     @Body() dto: CancelarReservaDto,
   ): Promise<ReservaView[]> {
     return this.reservas.cancelar(usuario, id, dto.reason);
+  }
+
+  /**
+   * O que cai junto com este equipamento.
+   *
+   * `ativo:ler`: é leitura do inventário, e quem não pode ver o parque
+   * não pode vê-lo pelo grafo.
+   */
+  @Get('assets/:id/impacto')
+  @RequirePermission('ativo:ler')
+  impacto(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() dto: ImpactoDto,
+  ): Promise<ImpactoView> {
+    return this.impactoService.analisar(usuario, id, dto);
   }
 
   @Get('assets/:id/components')

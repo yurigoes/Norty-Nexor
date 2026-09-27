@@ -324,7 +324,12 @@ O inventário que o chamado referencia.
   respeita a reserva e a marca como retirada; cancelar libera a janela
   sem apagar o registro. Permissão própria (`ativo:reservar`), porque
   separar o notebook de empréstimo é gesto de quem atende.
-- **Análise de impacto** em grafo.
+- **Análise de impacto** em grafo. **Feito em 28/09/2026**: travessia em
+  largura por duas arestas — periférico pendurado e cabo —, com
+  profundidade e teto, e o caminho de cada linha como explicação. Junto
+  vêm as consequências: chamado aberto, mudança marcada, reserva e quem
+  avisar. Mesmo rack ficou de fora de propósito: proximidade não é
+  dependência.
 - Planejamento de capacidade e custo por chamado.
 
 ---

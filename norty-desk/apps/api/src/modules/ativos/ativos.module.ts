@@ -6,6 +6,7 @@ import { AcessoRemotoService } from './acesso-remoto.service';
 import { AtivosController } from './ativos.controller';
 import { AtivosService } from './ativos.service';
 import { PosseService } from './posse.service';
+import { ImpactoService } from './impacto.service';
 import { ReservasService } from './reservas.service';
 import { TermosService } from './termos.service';
 
@@ -14,7 +15,7 @@ import { TermosService } from './termos.service';
   // termo de compromisso é guardado — como na ordem de serviço.
   imports: [AuditoriaModule, AttachmentsModule],
   controllers: [AtivosController],
-  providers: [AtivosService, AcessoRemotoService, PosseService, TermosService, ReservasService],
+  providers: [AtivosService, AcessoRemotoService, PosseService, TermosService, ReservasService, ImpactoService],
   exports: [AtivosService, AcessoRemotoService, PosseService, TermosService],
 })
 export class AtivosModule {}
