@@ -16,6 +16,7 @@ import {
   removerPorta,
 } from '../../api/rede';
 import { useAutenticacao } from '../../auth/Autenticacao';
+import { dataCurta } from '../../lib/formato';
 
 type NovaPorta = { name: string; kind: PortKind; mac: string; speedMbps: string; vlanId: string };
 
@@ -145,6 +146,19 @@ export function RedeDoAtivoCard({ assetId }: { assetId: string }) {
                     {ROTULO_PORTA[p.kind]}{p.speedMbps ? ` · ${p.speedMbps >= 1000 ? `${p.speedMbps / 1000} Gbps` : `${p.speedMbps} Mbps`}` : ''}
                     {p.mac ? ` · ${p.mac}` : ''}{p.vlan ? ` · VLAN ${p.vlan.tag}` : ''}
                   </span>
+                  {p.managedByAgent ? <span className="selo -neutro">do agente</span> : null}
+                  {/*
+                    O endereço emprestado aparece, mas com a data e
+                    marcado: ele responde "quem estava aqui" e não
+                    promete que ainda está. Mostrá-lo como se fosse
+                    cadastro é o engano que este campo existe para não
+                    cometer.
+                  */}
+                  {p.dhcp && p.currentIp ? (
+                    <span className="selo -contorno mono" title={p.currentIpAt ? `Visto em ${dataCurta(p.currentIpAt)}` : undefined}>
+                      {p.currentIp} · DHCP
+                    </span>
+                  ) : null}
                   {p.connectedTo ? (
                     <span>↔ <Link to={`/ativos/${p.connectedTo.asset.id}`}>{p.connectedTo.asset.name}</Link> <span className="mono">{p.connectedTo.name}</span></span>
                   ) : <span className="suave">sem cabo registrado</span>}

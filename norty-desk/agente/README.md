@@ -7,8 +7,19 @@ que alguém digitou.
 ## O que ele lê
 
 Identificação da máquina (UUID do SMBIOS, nome de rede, série,
-fabricante, modelo), o sistema operacional, e três tipos de peça:
-processador, memória e disco.
+fabricante, modelo), o sistema operacional, três tipos de peça
+(processador, memória e disco) e as **placas de rede**: nome, MAC,
+velocidade e os endereços IPv4, dizendo de cada um se veio de DHCP.
+
+Só placa física (`Get-NetAdapter -Physical`): uma máquina comum tem
+trinta adaptadores entre laço, Bluetooth, WSL, Hyper-V e VPN, e mandar
+todos encheria o inventário de placa que não existe. Fora também o
+`169.254.x.x`, que é a placa inventando endereço porque o DHCP não
+respondeu, e o laço.
+
+O `dhcp` de cada endereço importa do outro lado: concessão vence e vira
+instantâneo, endereço fixo vira cadastro no IPAM. O agente só responde
+o que o Windows diz; quem separa é o servidor.
 
 ## O que ele **não** faz
 

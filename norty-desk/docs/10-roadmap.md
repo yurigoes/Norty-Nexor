@@ -297,8 +297,12 @@ O inventário que o chamado referencia.
   e juntá-las faria a lista encher de coisa normal até ninguém abrir.
   Sem isto o campo existia e o parque só crescia: o que sumiu ficava
   idêntico ao que está ligado agora.
-  Falta a rede (portas, MAC, IP): a reconciliação de IP com DHCP tem
-  modos de falhar que merecem passo próprio.
+  **A rede entrou em 28/09/2026**: placas com MAC, velocidade e
+  endereço. A reconciliação com DHCP, que era o que fazia isso merecer
+  passo próprio, se resolve por uma separação — concessão é instantâneo
+  na porta, endereço fixo é cadastro no IPAM. A identidade da porta é o
+  MAC, e `managedByAgent` mantém a regra dos componentes: o agente só
+  mexe no que é dele.
 
 ---
 

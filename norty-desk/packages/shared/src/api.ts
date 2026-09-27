@@ -949,6 +949,20 @@ export type InventarioResponse = {
   /** Como a máquina foi reconhecida, para o diagnóstico de quem instala. */
   reconhecidoPor: 'UUID' | 'SERIE' | 'NOVO';
   componentes: { criados: number; atualizados: number; removidos: number };
+  rede: {
+    portas: { criadas: number; atualizadas: number; removidas: number };
+    /** Endereços fixos que entraram no IPAM nesta varredura. */
+    enderecos: number;
+    /**
+     * Endereço fixo que outra máquina já reivindicava.
+     *
+     * Não é erro da varredura: são duas máquinas no mesmo endereço, que
+     * é incidente de rede de verdade. O agente **não** rouba o
+     * registro — roubar trocaria o sintoma por um cadastro errado e
+     * calado. A varredura passa, e a frase sai aqui e no log.
+     */
+    conflitos: string[];
+  };
 };
 
 // ---------------------------------------------------------------------
@@ -2491,6 +2505,18 @@ export type PortaView = {
   /** A porta do outro lado do cabo, e o equipamento dela. */
   connectedTo: { id: string; name: string; asset: AtivoRef } | null;
   ips: IpView[];
+  /** A porta veio da varredura; é o agente quem a mantém. */
+  managedByAgent: boolean;
+  dhcp: boolean | null;
+  /**
+   * O endereço da última varredura, e quando.
+   *
+   * É instantâneo, não cadastro: endereço de DHCP vence. Existe para
+   * responder "que máquina estava em 192.168.1.50" sem prometer que
+   * ainda está — por isso a data anda junto.
+   */
+  currentIp: string | null;
+  currentIpAt: string | null;
 };
 
 export type RedeDoAtivo = {

@@ -1845,14 +1845,20 @@ POST /v1/intake/inventario        → chave de aplicação, escopo inventario:en
   "memorias": [{ "name": "Kingston", "serialNumber": "E1A2B3C4",
                  "capacidade": 8192, "tecnologia": "DDR4", "slot": "DIMM A" }],
   "discos": [{ "name": "Samsung 980", "serialNumber": "S64...",
-               "capacidade": 512, "tecnologia": "NVMe", "interface": "NVMe" }] }
+               "capacidade": 512, "tecnologia": "NVMe", "interface": "NVMe" }],
+  "portas": [{ "name": "Ethernet", "mac": "A4-BB-6D-1F-22-90",
+               "velocidadeMbps": 1000,
+               "enderecos": [{ "endereco": "10.20.1.40", "dhcp": false },
+                             { "endereco": "10.20.1.41", "dhcp": true }] }] }
 ```
 
 Resposta:
 
 ```json
 { "assetId": "...", "criado": true, "reconhecidoPor": "NOVO",
-  "componentes": { "criados": 3, "atualizados": 0, "removidos": 0 } }
+  "componentes": { "criados": 3, "atualizados": 0, "removidos": 0 },
+  "rede": { "portas": { "criadas": 1, "atualizadas": 0, "removidas": 0 },
+            "enderecos": 1, "conflitos": [] } }
 ```
 
 **O agente lê e manda; toda decisão é do servidor.** Ele não sabe se a
@@ -1860,6 +1866,56 @@ máquina já existe, não escolhe a empresa, não apaga nada. Código rodando
 em duzentas máquinas de cliente não se corrige numa tarde — a regra que
 vai mudar tem de ficar do lado que se testa. O agente é `agente/`, em
 PowerShell, com o próprio README.
+
+### A rede: concessão não é cadastro
+
+É a parte com mais jeito de dar errado, e o desenho inteiro sai de uma
+separação:
+
+- **Endereço de DHCP é instantâneo.** Fica em `currentIp` na porta, com
+  a data. Responde "que máquina estava em 192.168.1.50" e não promete
+  mais que isso. Guardá-lo em `ip_addresses` produziria um IPAM que
+  mente no dia seguinte — e, pior, a próxima máquina a receber o mesmo
+  endereço colidiria com o registro da anterior e passaria a falhar a
+  varredura.
+- **Endereço fixo é cadastro.** Vira linha em `ip_addresses`, porque
+  alguém digitou aquilo na máquina de propósito e o IPAM existe para
+  planejar exatamente isso.
+
+**A identidade da porta é o MAC**, não o nome: "Ethernet" é o nome de
+metade das placas do parque, e a mesma placa USB passa de máquina em
+máquina levando o MAC junto — então ela **muda de dono**, não duplica.
+Placa sem MAC entra pelo nome, dentro da máquina.
+
+**`managedByAgent` é a mesma regra dos componentes**, nas portas e nos
+endereços: o agente só mexe no que é dele. A porta que alguém cadastrou
+à mão no switch e o "10.0.0.6 é o servidor de arquivos" que alguém
+escreveu não somem porque uma varredura deixou de vê-los.
+
+**Endereço fixo que some da placa solta a máquina, mas fica no IPAM.** O
+endereço continua planejado; o que ele deixa de dizer é que aquela
+máquina atende ali — que é o que mandaria o próximo técnico a um
+endereço morto.
+
+**Endereço fixo que outra máquina já reivindica não é roubado.** São
+duas máquinas no mesmo endereço, que é incidente de rede de verdade;
+trocar o dono do registro trocaria o sintoma por um cadastro errado e
+calado. A varredura passa (recusá-la deixaria a máquina inteira fora do
+inventário por causa de um endereço) e a frase sai em `rede.conflitos` e
+no log.
+
+**`portas` ausente é diferente de `portas: []`.** Ausente é "o agente
+não olhou" — agente velho, ou Windows 7 sem `Get-NetAdapter` — e não
+remove nada. Lista vazia é "olhou e não achou placa nenhuma". Sem essa
+distinção, um agente desatualizado limparia a rede do parque inteiro na
+primeira varredura.
+
+Do lado do agente, `Get-NetAdapter -Physical` é o que evita mandar as
+trinta linhas de laço, Bluetooth, WSL, Hyper-V e VPN que uma máquina
+comum tem. Não é decisão movida para o cliente: é o Windows respondendo
+o que é placa de verdade. `169.254.x.x` e `127.0.0.1` ficam de fora pelo
+mesmo motivo — o primeiro é a placa inventando endereço porque o DHCP
+não respondeu, e nenhum dos dois é a máquina.
 
 ### Como a máquina é reconhecida
 

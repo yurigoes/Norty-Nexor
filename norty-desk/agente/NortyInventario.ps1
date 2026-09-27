@@ -209,6 +209,81 @@ function DadosDosDiscos {
 }
 
 <#
+    As placas de rede da máquina, com o que cada uma responde.
+
+    **Só as físicas.** `Win32_NetworkAdapter` devolve trinta linhas numa
+    máquina comum: laço, Bluetooth, WSL, Hyper-V, VPN, "Adaptador de
+    Agendamento de Pacotes". Mandar tudo encheria o inventário de placa
+    que não existe, e a contagem de portas do parque viraria ficção.
+    `PhysicalAdapter` é o Windows respondendo o que é placa de verdade —
+    é pergunta ao sistema, não decisão do agente.
+
+    **`PrefixOrigin` decide o destino do endereço.** O que veio de DHCP
+    é concessão: vence, muda, e amanhã é de outra máquina. Quem separa é
+    o servidor, mas quem sabe é aqui — o Windows diz endereço a
+    endereço, e uma placa pode ter um fixo e um emprestado ao mesmo
+    tempo.
+
+    `Get-NetAdapter` e `Get-NetIPAddress` não existem no Windows 7, e o
+    `catch` devolve lista vazia — que a API lê como "o agente não achou
+    placa nenhuma", e não como "não olhei". Por isso o campo inteiro só
+    vai quando a consulta respondeu: `$null` é "não olhei".
+#>
+function DadosDaRede {
+    $adaptadores = @()
+
+    try {
+        $adaptadores = @(Get-NetAdapter -Physical -ErrorAction Stop |
+            Where-Object { $_.Status -ne 'Disabled' })
+    } catch {
+        Registrar "Sem Get-NetAdapter nesta máquina: a rede não vai nesta varredura."
+        return $null
+    }
+
+    $enderecos = @{}
+
+    try {
+        foreach ($ip in (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop)) {
+            # 169.254.x.x é o que a placa inventa quando o DHCP não
+            # respondeu. Não é endereço da máquina: é a falta de um.
+            if (([string] $ip.IPAddress).StartsWith('169.254.')) { continue }
+            if (([string] $ip.IPAddress) -eq '127.0.0.1') { continue }
+
+            $indice = [int] $ip.InterfaceIndex
+            if (-not $enderecos.ContainsKey($indice)) { $enderecos[$indice] = @() }
+
+            $enderecos[$indice] += @{
+                endereco = ([string] $ip.IPAddress).Trim()
+                dhcp     = (([string] $ip.PrefixOrigin) -eq 'Dhcp')
+            }
+        }
+    } catch {
+        # Sem endereço ainda vale mandar a placa: MAC e velocidade são
+        # metade da resposta de "onde esta máquina está na rede".
+        Registrar "Sem Get-NetIPAddress nesta máquina: as placas vão sem endereço."
+    }
+
+    return @(
+        foreach ($placa in $adaptadores) {
+            $indice = [int] $placa.ifIndex
+
+            @{
+                name           = ([string] $placa.Name).Trim()
+                mac            = ([string] $placa.MacAddress).Trim()
+                velocidadeMbps = if ($placa.LinkSpeed -and $placa.Speed) {
+                    [int] ([math]::Round([double] $placa.Speed / 1000000))
+                } else { $null }
+                # `@(...)` é obrigatório: o PowerShell desembrulha lista
+                # de um item só, e a placa com um endereço sairia no JSON
+                # como objeto em vez de lista — que a API recusa. Só se
+                # descobre rodando, e foi assim que apareceu.
+                enderecos      = @(if ($enderecos.ContainsKey($indice)) { $enderecos[$indice] } else { @() })
+            }
+        }
+    )
+}
+
+<#
     O primeiro item, ou nada.
 
     `@(...)[0]` numa lista vazia **lança** sob `Set-StrictMode`, e é
@@ -311,6 +386,7 @@ function LerMaquina {
         processadores = $processadores
         memorias      = $memorias
         discos        = $discos
+        portas        = DadosDaRede
     }
 }
 
@@ -359,8 +435,11 @@ try {
     Escrever "Varrendo $env:COMPUTERNAME (agente $VERSAO_DO_AGENTE)."
     $inventario = LerMaquina
 
-    Escrever ("Achei {0} processador(es), {1} pente(s) e {2} disco(s)." -f `
-        $inventario.processadores.Count, $inventario.memorias.Count, $inventario.discos.Count)
+    # `@()` porque `portas` é `$null` quando a máquina não tem
+    # `Get-NetAdapter`, e `$null.Count` derruba sob `Set-StrictMode`.
+    Escrever ("Achei {0} processador(es), {1} pente(s), {2} disco(s) e {3} placa(s) de rede." -f `
+        $inventario.processadores.Count, $inventario.memorias.Count, $inventario.discos.Count, `
+        @($inventario.portas).Count)
 
     if ($Simular) {
         Escrever 'Simulação: nada foi enviado. O que iria:'

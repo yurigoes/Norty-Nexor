@@ -110,6 +110,43 @@ function Get-CimInstance {
     }
 }
 
+<#
+    As placas de mentira.
+
+    Uma placa com fio e um Wi-Fi, com as esquisitices que interessam: o
+    MAC como o Windows escreve (maiúscula e hífen), a velocidade em
+    bits por segundo, e uma placa com dois endereços — um fixo e um
+    emprestado — que é o caso que separa cadastro de instantâneo.
+#>
+function Get-NetAdapter {
+    param([switch] $Physical, [string] $ErrorAction)
+
+    return @(
+        [pscustomobject] @{
+            Name = 'Ethernet'; ifIndex = 12; Status = 'Up'
+            MacAddress = 'A4-BB-6D-1F-22-90'; LinkSpeed = '1 Gbps'; Speed = 1000000000
+        },
+        [pscustomobject] @{
+            Name = 'Wi-Fi'; ifIndex = 15; Status = 'Up'
+            MacAddress = '8C-16-45-9A-03-7E'; LinkSpeed = '866.7 Mbps'; Speed = 866700000
+        }
+    )
+}
+
+function Get-NetIPAddress {
+    param([string] $AddressFamily, [string] $ErrorAction)
+
+    return @(
+        [pscustomobject] @{ IPAddress = '10.20.1.40'; InterfaceIndex = 12; PrefixOrigin = 'Manual' },
+        [pscustomobject] @{ IPAddress = '10.20.1.41'; InterfaceIndex = 12; PrefixOrigin = 'Dhcp' },
+        [pscustomobject] @{ IPAddress = '192.168.0.77'; InterfaceIndex = 15; PrefixOrigin = 'Dhcp' },
+        # O endereço que a placa inventa quando o DHCP não respondeu, e
+        # o laço: nenhum dos dois é endereço da máquina.
+        [pscustomobject] @{ IPAddress = '169.254.3.9'; InterfaceIndex = 15; PrefixOrigin = 'WellKnown' },
+        [pscustomobject] @{ IPAddress = '127.0.0.1'; InterfaceIndex = 1; PrefixOrigin = 'WellKnown' }
+    )
+}
+
 $env:COMPUTERNAME = 'NB-FIN-03'
 
 $configuracao = Join-Path ([IO.Path]::GetTempPath()) 'agente-teste.json'

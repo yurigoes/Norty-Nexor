@@ -3019,6 +3019,25 @@ model NetworkPort {
   /// A porta do outro lado do cabo. Gravada dos dois lados.
   connectedToId  String?  @unique @db.Uuid
   notes          String?
+  /// A porta nasceu da varredura, e é ela quem a mantém.
+  ///
+  /// Sem esta marca o agente não teria como saber o que pode apagar: a
+  /// porta "Gi1/0/12" que alguém cadastrou no switch à mão e a
+  /// "Ethernet" que a varredura criou são a mesma linha, e uma
+  /// varredura que removesse "o que sumiu" levaria as duas. É a mesma
+  /// regra dos componentes — o agente só mexe no que é dele.
+  managedByAgent Boolean  @default(false)
+  /// Esta placa pega endereço emprestado.
+  dhcp           Boolean?
+  /// O endereço que a placa tinha na última varredura.
+  ///
+  /// É instantâneo, não propriedade. Endereço de DHCP é concessão e
+  /// vence: guardá-lo em `ip_addresses` encheria o IPAM de linhas que
+  /// mentem no dia seguinte, e a primeira máquina a receber o endereço
+  /// de volta colidiria com o registro da anterior. Aqui ele responde
+  /// "que máquina estava em 192.168.1.50" sem prometer que ainda está.
+  currentIp      String?  @db.Inet
+  currentIpAt    DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -3031,6 +3050,9 @@ model NetworkPort {
 
   @@unique([assetId, name])
   @@unique([organizationId, mac])
+  /// "Que máquina está neste endereço agora?" é pergunta de plantão, e
+  /// o instantâneo é onde ela se responde quando o endereço é de DHCP.
+  @@index([organizationId, currentIp])
   @@map("network_ports")
 }
 
@@ -3045,6 +3067,18 @@ model IpAddress {
   portId         String?  @db.Uuid
   fqdn           String?
   notes          String?
+  /// O endereço foi reivindicado pela varredura.
+  ///
+  /// Só entra assim o endereço **fixo** que o agente encontrou na
+  /// placa. Quando ele some da placa, o vínculo com a máquina é
+  /// desfeito — a linha fica (o endereço continua planejado), mas
+  /// deixa de dizer que aquela máquina atende ali, que é o que faria o
+  /// próximo técnico tentar alcançá-la num endereço morto.
+  ///
+  /// O que alguém digitou à mão a varredura não desfaz: "10.0.0.6 é o
+  /// servidor de arquivos" é afirmação de gente, e some só se a gente
+  /// apagar.
+  managedByAgent Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

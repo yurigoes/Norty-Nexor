@@ -1,10 +1,12 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
   MinLength,
@@ -60,6 +62,34 @@ class DiscoDto {
   @IsOptional() @IsString() @MaxLength(40) interface?: string | null;
 }
 
+/**
+ * Um endereço encontrado na placa.
+ *
+ * `dhcp` decide o destino dele, e é a única coisa que importa aqui:
+ * endereço emprestado é instantâneo, endereço fixo é cadastro.
+ */
+class EnderecoDeRedeDto {
+  @IsString() @MinLength(7) @MaxLength(45) endereco!: string;
+  @IsOptional() @IsBoolean() dhcp?: boolean;
+}
+
+/**
+ * Uma placa de rede da máquina.
+ *
+ * O MAC é a identidade, e não o nome: "Ethernet" é o nome de metade das
+ * placas do parque, e a mesma placa USB passa de máquina em máquina com
+ * o mesmo MAC. Placa sem MAC ainda entra — pelo nome, dentro da
+ * máquina —, porque máquina virtual e placa velha nem sempre respondem.
+ */
+class PortaDeRedeDto {
+  @IsString() @MinLength(1) @MaxLength(120) name!: string;
+  @IsOptional() @IsString() @MaxLength(40) mac?: string | null;
+  /** Mbps. 400 Gb/s é o teto de placa que existe para comprar. */
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(400_000) velocidadeMbps?: number | null;
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => EnderecoDeRedeDto)
+  enderecos?: EnderecoDeRedeDto[];
+}
+
 export class InventarioDto {
   @IsString() @MinLength(8) @MaxLength(120) uuid!: string;
   @IsString() @MinLength(1) @MaxLength(120) hostname!: string;
@@ -80,4 +110,7 @@ export class InventarioDto {
 
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => DiscoDto)
   discos?: DiscoDto[];
+
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => PortaDeRedeDto)
+  portas?: PortaDeRedeDto[];
 }

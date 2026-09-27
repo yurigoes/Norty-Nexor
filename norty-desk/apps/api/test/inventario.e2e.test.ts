@@ -540,6 +540,31 @@ describe('o que o agente de verdade manda', () => {
       'DIMM B',
       'sem o slot, a segunda varredura acharia que este pente sumiu',
     );
+
+    // A rede da amostra: duas placas, e o endereço fixo da Ethernet no
+    // IPAM. O Wi-Fi só tem concessão, e concessão não vira cadastro.
+    const portas = await prisma.networkPort.findMany({
+      where: { assetId: r.corpo.assetId },
+      orderBy: { name: 'asc' },
+    });
+
+    assert.equal(portas.length, 2, JSON.stringify(portas.map((p) => p.name)));
+    assert.equal(portas[0]!.name, 'Ethernet');
+    assert.equal(portas[0]!.mac, 'a4:bb:6d:1f:22:90');
+    assert.equal(portas[0]!.speedMbps, 1000);
+
+    const fixos = await prisma.ipAddress.findMany({ where: { assetId: r.corpo.assetId } });
+    assert.deepEqual(
+      fixos.map((i) => String(i.address)),
+      ['10.20.1.40'],
+      'só o fixo entra; a concessão fica como instantâneo na porta',
+    );
+
+    // 169.254.x.x é a placa inventando endereço porque o DHCP não
+    // respondeu, e 127.0.0.1 é o laço. Nenhum dos dois é a máquina, e
+    // o agente não os manda.
+    const wifi = portas.find((p) => p.name === 'Wi-Fi')!;
+    assert.equal(String(wifi.currentIp), '192.168.0.77');
   });
 
   it('varrer a mesma amostra de novo não muda nada', async () => {
@@ -659,5 +684,218 @@ describe('quem parou de reportar', () => {
     assert.equal((await admin.get('/assets?semReportarDias=0')).status, 400);
     assert.equal((await admin.get('/assets?semReportarDias=999')).status, 400);
     assert.equal((await admin.get('/assets?semReportarDias=abacaxi')).status, 400);
+  });
+});
+
+/**
+ * A rede que o agente enxerga.
+ *
+ * O difícil aqui não é gravar porta — é o endereço. Máquina com DHCP
+ * pega 192.168.1.50 hoje e .87 amanhã; gravar isso como cadastro
+ * produz um IPAM que mente no dia seguinte, e a próxima máquina a
+ * receber .50 colide com o registro da anterior e passa a falhar a
+ * varredura. Por isso emprestado é instantâneo e fixo é cadastro, e é
+ * essa separação que se prova aqui.
+ */
+describe('a rede da máquina', () => {
+  function comRede(portas: unknown[], extra: Partial<InventarioRequest> = {}) {
+    return { ...varredura(), ...extra, portas } as InventarioRequest;
+  }
+
+  it('a placa entra com MAC, velocidade e o endereço do momento', async () => {
+    const r = await varrer(
+      comRede([
+        {
+          name: 'Ethernet',
+          // Próprio deste teste: o MAC é único na organização, e a
+          // amostra do agente já reivindica o dela.
+          mac: 'A4-BB-6D-1F-22-01',
+          velocidadeMbps: 1000,
+          enderecos: [{ endereco: '192.168.1.50', dhcp: true }],
+        },
+      ]),
+    );
+
+    assert.equal(r.status, 201, JSON.stringify(r.corpo));
+    assert.equal(r.corpo.rede.portas.criadas, 1);
+
+    const porta = await prisma.networkPort.findFirstOrThrow({
+      where: { assetId: r.corpo.assetId },
+    });
+
+    // O MAC é normalizado na gravação: o agente manda como o Windows
+    // escreve, com hífen e maiúscula.
+    assert.equal(porta.mac, 'a4:bb:6d:1f:22:01');
+    assert.equal(porta.speedMbps, 1000);
+    assert.equal(porta.dhcp, true);
+    assert.equal(String(porta.currentIp), '192.168.1.50');
+    assert.ok(porta.currentIpAt);
+  });
+
+  it('endereço de DHCP não entra no IPAM, e o fixo entra', async () => {
+    const dados = varredura();
+
+    await varrer(
+      comRede(
+        [
+          {
+            name: 'Wi-Fi',
+            mac: '00-11-22-33-44-55',
+            enderecos: [{ endereco: '10.9.9.9', dhcp: true }],
+          },
+          {
+            name: 'Ethernet',
+            mac: '00-11-22-33-44-66',
+            enderecos: [{ endereco: '10.9.9.10', dhcp: false }],
+          },
+        ],
+        dados,
+      ),
+    );
+
+    // Concessão vence. Guardá-la aqui encheria o IPAM de linha que
+    // mente no dia seguinte.
+    assert.equal(
+      await prisma.ipAddress.count({ where: { address: '10.9.9.9' } }),
+      0,
+      'endereço de DHCP virou cadastro',
+    );
+
+    const fixo = await prisma.ipAddress.findFirstOrThrow({ where: { address: '10.9.9.10' } });
+    assert.ok(fixo.assetId, 'o endereço fixo tem de dizer de quem é');
+    assert.equal(fixo.managedByAgent, true);
+  });
+
+  it('a mesma placa em outra máquina muda de dono, e não duplica', async () => {
+    // Escrito como o Windows escreve; gravado normalizado.
+    const mac = 'DE-AD-BE-EF-00-01';
+    const gravado = 'de:ad:be:ef:00:01';
+
+    const primeira = await varrer(comRede([{ name: 'Ethernet', mac }]));
+    const segunda = await varrer(comRede([{ name: 'Ethernet 2', mac }]));
+
+    assert.notEqual(primeira.corpo.assetId, segunda.corpo.assetId);
+
+    const portas = await prisma.networkPort.findMany({ where: { mac: gravado } });
+    assert.equal(portas.length, 1, 'a placa USB virou duas linhas');
+    assert.equal(portas[0]!.assetId, segunda.corpo.assetId, 'a placa não seguiu a máquina');
+  });
+
+  it('placa que sumiu sai; porta cadastrada à mão fica', async () => {
+    const dados = varredura();
+    const r = await varrer(comRede([{ name: 'Ethernet', mac: 'aa-aa-aa-00-00-01' }], dados));
+
+    const aMao = await prisma.networkPort.create({
+      data: {
+        organizationId: f.organizacao.id,
+        assetId: r.corpo.assetId,
+        name: 'Porta do patch panel',
+      },
+    });
+
+    // Segunda varredura sem a placa: ela foi removida da máquina.
+    const depois = await varrer(comRede([], dados));
+    assert.equal(depois.corpo.rede.portas.removidas, 1);
+
+    assert.equal(
+      await prisma.networkPort.count({ where: { mac: 'aa:aa:aa:00:00:01' } }),
+      0,
+      'placa retirada tem de sair, senão a contagem de portas cresce sozinha',
+    );
+
+    assert.equal(
+      await prisma.networkPort.count({ where: { id: aMao.id } }),
+      1,
+      'o agente levou junto a porta que alguém cadastrou à mão',
+    );
+  });
+
+  it('agente que não manda rede não apaga a rede que já existe', async () => {
+    const dados = varredura();
+    const r = await varrer(comRede([{ name: 'Ethernet', mac: 'bb-bb-bb-00-00-01' }], dados));
+    assert.equal(r.corpo.rede.portas.criadas, 1);
+
+    // Sem o campo `portas`: agente velho, que não conhece rede. Ausente
+    // é "não olhei", e não "olhei e não achei nada".
+    const semRede = await varrer({ ...dados });
+    assert.equal(semRede.corpo.rede.portas.removidas, 0);
+
+    assert.equal(
+      await prisma.networkPort.count({ where: { assetId: r.corpo.assetId } }),
+      1,
+      'um agente desatualizado limparia a rede do parque inteiro',
+    );
+  });
+
+  it('endereço fixo de outra máquina não é roubado: o conflito é dito', async () => {
+    const dono = await varrer(
+      comRede([
+        { name: 'Ethernet', mac: 'cc-cc-cc-00-00-01', enderecos: [{ endereco: '10.8.8.8' }] },
+      ]),
+    );
+    assert.equal(dono.corpo.rede.enderecos, 1);
+
+    const invasor = await varrer(
+      comRede([
+        { name: 'Ethernet', mac: 'cc-cc-cc-00-00-02', enderecos: [{ endereco: '10.8.8.8' }] },
+      ]),
+    );
+
+    // A varredura passa: recusá-la deixaria a máquina inteira fora do
+    // inventário por causa de um endereço.
+    assert.equal(invasor.status, 201);
+    assert.equal(invasor.corpo.rede.enderecos, 0);
+    assert.equal(invasor.corpo.rede.conflitos.length, 1);
+    assert.match(invasor.corpo.rede.conflitos[0]!, /10\.8\.8\.8/);
+
+    const endereco = await prisma.ipAddress.findFirstOrThrow({ where: { address: '10.8.8.8' } });
+    assert.equal(
+      endereco.assetId,
+      dono.corpo.assetId,
+      'roubar o registro trocaria o sintoma por um cadastro errado e calado',
+    );
+  });
+
+  it('endereço fixo que sumiu solta a máquina, mas o que é da casa fica', async () => {
+    const dados = varredura();
+    const r = await varrer(
+      comRede(
+        [{ name: 'Ethernet', mac: 'dd-dd-dd-00-00-01', enderecos: [{ endereco: '10.7.7.7' }] }],
+        dados,
+      ),
+    );
+
+    const daCasa = await prisma.ipAddress.create({
+      data: {
+        organizationId: f.organizacao.id,
+        address: '10.7.7.100',
+        assetId: r.corpo.assetId,
+        fqdn: 'srv-arquivos.interno',
+      },
+    });
+
+    // A máquina trocou de endereço fixo.
+    await varrer(
+      comRede(
+        [{ name: 'Ethernet', mac: 'dd-dd-dd-00-00-01', enderecos: [{ endereco: '10.7.7.8' }] }],
+        dados,
+      ),
+    );
+
+    const velho = await prisma.ipAddress.findFirstOrThrow({ where: { address: '10.7.7.7' } });
+    assert.equal(velho.assetId, null, 'o IPAM continuaria mandando o técnico no endereço morto');
+    assert.equal(
+      await prisma.ipAddress.count({ where: { address: '10.7.7.7' } }),
+      1,
+      'o endereço continua planejado; some só se alguém apagar',
+    );
+
+    const novo = await prisma.ipAddress.findFirstOrThrow({ where: { address: '10.7.7.8' } });
+    assert.equal(novo.assetId, r.corpo.assetId);
+
+    // "10.7.7.100 é o servidor de arquivos" é afirmação de gente.
+    const curado = await prisma.ipAddress.findUniqueOrThrow({ where: { id: daCasa.id } });
+    assert.equal(curado.assetId, r.corpo.assetId, 'a varredura desfez o que alguém digitou');
+    assert.equal(curado.fqdn, 'srv-arquivos.interno');
   });
 });
