@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import type { BuscaSalvaView, FiltroSalvavel, TicketQuery, TicketStatus } from '@norty-desk/shared';
+import type {
+  BuscaSalvaView,
+  Compartilhamento,
+  FiltroSalvavel,
+  TicketQuery,
+  TicketStatus,
+  TimeView,
+} from '@norty-desk/shared';
 import {
+  ROTULO_COMPARTILHAMENTO,
   camposUsados,
   descreverFiltro,
   filtroParaParametros,
@@ -48,7 +56,7 @@ const VISOES: Visao[] = [
  */
 export function Fila() {
   const navegar = useNavigate();
-  const { can, revalidar } = useAutenticacao();
+  const { can, revalidar, perfil } = useAutenticacao();
   const [parametros, definirParametros] = useSearchParams();
   const [selecionados, setSelecionados] = useState<string[]>([]);
 
@@ -56,6 +64,7 @@ export function Fila() {
   const [mostrarFiltro, setMostrarFiltro] = useState(false);
   const [nomeando, setNomeando] = useState<string | null>(null);
   const [erroDaBusca, setErroDaBusca] = useState<string | null>(null);
+  const [meusTimes, setMeusTimes] = useState<TimeView[]>([]);
 
   const filtro = useMemo<TicketQuery & { semAtribuicao?: boolean }>(() => {
     const f: Record<string, unknown> = {};
@@ -89,6 +98,11 @@ export function Fila() {
         }
       })
       .catch(() => undefined);
+    void api
+      .listarTimes()
+      .then(setMeusTimes)
+      .catch(() => undefined);
+
     // Só na montagem: relê a cada mudança de filtro seria uma consulta
     // por clique de aba, e a padrão brigaria com a escolha da pessoa.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -152,10 +166,30 @@ export function Fila() {
             role="tab"
             className="aba"
             aria-selected={busca.id === buscaAtual?.id}
-            title={descreverFiltro(busca.filtro)}
+            title={`${descreverFiltro(busca.filtro)}${
+              busca.isMine
+                ? ''
+                : ` — ${busca.shareKind === 'TIME' ? `do time ${busca.team?.name}` : 'da casa'}, de ${busca.owner.name}`
+            }`}
             onClick={() => abrir(busca)}
           >
             {busca.name}
+            {busca.shareKind === 'PRIVADA' ? null : (
+              // A aba que não é só minha diz isso à primeira vista: sem
+              // marca, renomear a própria e a do time parecem a mesma
+              // coisa até o 403 chegar.
+              <span
+                aria-label={busca.shareKind === 'TIME' ? 'do time' : 'da casa'}
+                title={
+                  busca.shareKind === 'TIME'
+                    ? `Do time ${busca.team?.name}, de ${busca.owner.name}`
+                    : `Da casa, de ${busca.owner.name}`
+                }
+              >
+                {' '}
+                {busca.shareKind === 'TIME' ? '👥' : '🏠'}
+              </span>
+            )}
             {busca.isDefault ? (
               <span aria-label="abre por padrão" title="Abre por padrão">
                 {' '}
@@ -204,6 +238,25 @@ export function Fila() {
         aoMarcarPadrao={(id, isDefault) => {
           setErroDaBusca(null);
           void buscasApi.atualizarBusca(id, { isDefault }).then(setBuscas).catch(falhar);
+        }}
+        // Só os times que esta pessoa gerencia. Oferecer os outros seria
+        // oferecer um botão que sempre responde 403 — e quem tem a
+        // permissão da casa pode com qualquer um, então recebe a lista
+        // inteira.
+        times={
+          can('chamado:busca-compartilhada')
+            ? meusTimes
+            : meusTimes.filter((t) =>
+                t.members.some((m) => m.id === perfil?.user.id && m.isManager),
+              )
+        }
+        podeCompartilharComACasa={can('chamado:busca-compartilhada')}
+        aoCompartilhar={(id, shareKind, teamId) => {
+          setErroDaBusca(null);
+          void buscasApi
+            .atualizarBusca(id, { shareKind, teamId: shareKind === 'TIME' ? teamId : null })
+            .then(setBuscas)
+            .catch(falhar);
         }}
         aoMover={(id, direcao) => {
           const ordem = buscas.map((b) => b.id);
@@ -467,6 +520,9 @@ function BarraDoFiltro({
   aoMarcarPadrao,
   aoMover,
   aoApagar,
+  times,
+  podeCompartilharComACasa,
+  aoCompartilhar,
 }: {
   filtro: FiltroSalvavel;
   buscaAtual: BuscaSalvaView | undefined;
@@ -481,6 +537,9 @@ function BarraDoFiltro({
   aoMarcarPadrao: (id: string, isDefault: boolean) => void;
   aoMover: (id: string, direcao: -1 | 1) => void;
   aoApagar: (id: string) => void;
+  times: TimeView[];
+  podeCompartilharComACasa: boolean;
+  aoCompartilhar: (id: string, shareKind: Compartilhamento, teamId: string | null) => void;
 }) {
   const usados = camposUsados(filtro);
   const posicao = buscaAtual ? buscas.findIndex((b) => b.id === buscaAtual.id) : -1;
@@ -531,8 +590,55 @@ function BarraDoFiltro({
               Cancelar
             </button>
           </form>
+        ) : buscaAtual && !buscaAtual.isMine ? (
+          // A busca de outro: dá para usar e para marcar como padrão —
+          // que é preferência de quem olha —, não para reescrever. O
+          // caminho de quem quer uma variação é mexer no filtro e
+          // "Salvar esta busca", que cria uma cópia sua.
+          <>
+            <span className="selo -contorno">
+              {buscaAtual.shareKind === 'TIME'
+                ? `Do time ${buscaAtual.team?.name ?? ''}`
+                : 'Da casa'}
+              {' · '}
+              {buscaAtual.owner.name}
+            </span>
+            <button
+              type="button"
+              className="btn -fantasma -sm"
+              onClick={() => aoMarcarPadrao(buscaAtual.id, !buscaAtual.isDefault)}
+            >
+              {buscaAtual.isDefault ? 'Não abrir por padrão' : 'Abrir por padrão'}
+            </button>
+          </>
         ) : buscaAtual ? (
           <>
+            <label className="so-leitor" htmlFor="alcance-da-busca">
+              Com quem compartilhar
+            </label>
+            <select
+              id="alcance-da-busca"
+              className="select -auto -sm"
+              value={
+                buscaAtual.shareKind === 'TIME'
+                  ? `TIME:${buscaAtual.team?.id ?? ''}`
+                  : buscaAtual.shareKind
+              }
+              onChange={(e) => {
+                const [tipo, time] = e.target.value.split(':');
+                aoCompartilhar(buscaAtual.id, tipo as Compartilhamento, time ?? null);
+              }}
+            >
+              <option value="PRIVADA">{ROTULO_COMPARTILHAMENTO.PRIVADA}</option>
+              {times.map((t) => (
+                <option key={t.id} value={`TIME:${t.id}`}>
+                  Do time {t.name}
+                </option>
+              ))}
+              {podeCompartilharComACasa ? (
+                <option value="ORGANIZACAO">{ROTULO_COMPARTILHAMENTO.ORGANIZACAO}</option>
+              ) : null}
+            </select>
             <button
               type="button"
               className="btn -fantasma -sm"

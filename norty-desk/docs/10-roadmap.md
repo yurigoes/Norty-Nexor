@@ -115,7 +115,7 @@ O que faz a operação escalar.
 | Base de conhecimento | artigos, revisões, sugestão por similaridade | pronto |
 | Painéis | agente, time, organização | pronto |
 | Relatório de SLA | cumprimento por período, categoria, time, acordo | pronto |
-| Busca salva | filtro nomeado por pessoa, com ordem e padrão | pronto (28/09/2026) |
+| Busca salva | filtro nomeado, privado ou compartilhado com o time | pronto (28/09/2026) |
 | Ativo simples | equipamento vinculável a chamado (sem CMDB) | pronto |
 | Satisfação | pesquisa pós-fechamento, pelo canal de origem | pronto |
 | Webhooks de saída | assinatura HMAC, retentativa, log | pronto |
@@ -155,6 +155,20 @@ onze campos de filtro desde a Fase 1 e a tela oferecia cinco combinações
 fixas mais a busca do cabeçalho — o resto só se alcançava editando a
 barra de endereços. Salvar uma busca sem ter filtro para salvar seria
 salvar uma das cinco.
+
+**A compartilhada entrou junto**, e o desenho dela obrigou a mudar uma
+decisão da véspera. Compartilhar com o time é `is_private` do GLPI com um
+degrau a mais — lá a busca pública aparece para a entidade inteira, que
+numa central de vinte pessoas é o mesmo que aparecer para quem não
+trabalha naquilo. Quem compartilha com um time é quem o **gerencia**; com
+a organização, quem tem `chamado:busca-compartilhada`.
+
+A consequência: assim que a busca passa a ser vista por várias pessoas,
+"é a minha padrão" vira fato de cada uma, não da busca. `isDefault` saiu
+da coluna e virou tabela (`glpi_savedsearches_users`) — e de quebra a
+chave primária `(organização, pessoa)` **é** a regra "uma padrão por
+pessoa", que na véspera ficara só numa transação do serviço por não valer
+uma quinta coluna gerada.
 
 O filtro é gravado como objeto e validado pelo **mesmo DTO da fila**:
 string de consulta ninguém valida, e um `status` inventado só apareceria

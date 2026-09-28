@@ -1,5 +1,12 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import type { BuscaSalvaView, FiltroSalvavel } from '@norty-desk/shared';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import type { BuscaSalvaView, Compartilhamento, FiltroSalvavel } from '@norty-desk/shared';
+import { can } from '@norty-desk/shared';
 import { Prisma } from '@prisma/client';
 
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
@@ -9,49 +16,84 @@ import type { AtualizarBuscaSalvaDto, CriarBuscaSalvaDto } from './dto';
 /**
  * Quantas buscas salvas uma pessoa pode ter.
  *
- * Teto porque elas são abas: trinta já não cabem na tela, e a lista é
- * relida a cada abertura da fila. Não é limite de banco, é limite de
- * coisa que serve — quem precisa de cem filtros nomeados precisa de
- * relatório, não de aba.
+ * Conta só as **próprias**: as do time e as da casa não são dela, e
+ * deixá-las no teto faria o gerente que compartilhou cinco visões
+ * consumir a cota de quem só as recebe.
+ *
+ * Teto porque são abas: trinta já não cabem na tela. Quem precisa de cem
+ * filtros nomeados precisa de relatório, não de aba.
  */
 const MAX_POR_PESSOA = 30;
 
+/** O que a listagem precisa carregar para montar a view. */
+const COM_DONO = {
+  team: { select: { id: true, name: true } },
+  user: { select: { id: true, name: true } },
+} as const;
+
 /**
- * As buscas salvas de cada pessoa.
+ * As buscas salvas que cada pessoa vê.
  *
- * O que o GLPI chama de *saved search* e aqui é só isto: um nome, um
- * filtro da fila, uma ordem, e a marca de qual abre por padrão.
+ * O que o GLPI chama de *saved search*: um nome, um filtro da fila, uma
+ * ordem, e com quem ela é compartilhada.
  *
  * **A busca salva não dá acesso a nada.** Ela é um filtro; quem decide
  * quais chamados a pessoa vê é o escopo de leitura da fila
- * (`chamado:ler:proprios` / `:time` / `:todos`), aplicado depois. Uma
- * busca copiada de alguém com mais alcance mostra menos linhas para quem
- * tem menos — e não as linhas do outro.
+ * (`chamado:ler:proprios` / `:time` / `:todos`), aplicado depois. A busca
+ * do time mostra, para cada um, o que aquele um já podia ver — e é por
+ * isso que compartilhá-la é seguro mesmo entre papéis diferentes.
  */
 @Injectable()
 export class BuscasSalvasService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * As que esta pessoa enxerga: as dela, as dos times dela, as da casa.
+   *
+   * As próprias vêm primeiro. A aba que a pessoa criou é a que ela
+   * procura com o olho, e empurrá-la para depois das cinco da casa seria
+   * punir quem organiza o próprio dia.
+   */
   async listar(usuario: UsuarioAutenticado): Promise<BuscaSalvaView[]> {
-    const buscas = await this.prisma.savedSearch.findMany({
-      where: { organizationId: usuario.organizationId, userId: usuario.userId },
-      orderBy: [{ position: 'asc' }, { name: 'asc' }],
-    });
+    const [buscas, padrao] = await Promise.all([
+      this.prisma.savedSearch.findMany({
+        where: BuscasSalvasService.visiveis(usuario),
+        include: COM_DONO,
+        orderBy: [{ position: 'asc' }, { name: 'asc' }],
+      }),
+      this.prisma.savedSearchDefault.findUnique({
+        where: {
+          organizationId_userId: {
+            organizationId: usuario.organizationId,
+            userId: usuario.userId,
+          },
+        },
+        select: { savedSearchId: true },
+      }),
+    ]);
 
-    return buscas.map((b) => BuscasSalvasService.paraView(b));
+    const minhas = buscas.filter((b) => b.userId === usuario.userId);
+    const dosOutros = buscas.filter((b) => b.userId !== usuario.userId);
+
+    return [...minhas, ...dosOutros].map((b) =>
+      BuscasSalvasService.paraView(b, usuario, padrao?.savedSearchId),
+    );
   }
 
   async criar(usuario: UsuarioAutenticado, dto: CriarBuscaSalvaDto): Promise<BuscaSalvaView[]> {
-    const quantas = await this.prisma.savedSearch.count({
+    const minhas = await this.prisma.savedSearch.count({
       where: { organizationId: usuario.organizationId, userId: usuario.userId },
     });
 
-    if (quantas >= MAX_POR_PESSOA) {
+    if (minhas >= MAX_POR_PESSOA) {
       throw new BadRequestException(
         `Você já tem ${MAX_POR_PESSOA} buscas salvas, que é o limite. ` +
           'Apague uma que não usa mais para salvar esta.',
       );
     }
+
+    const alcance = dto.shareKind ?? 'PRIVADA';
+    await this.exigirAlcancePermitido(usuario, alcance, dto.teamId ?? null);
 
     // A nova entra no fim. Quem quiser outra ordem arrasta depois — e
     // colocá-la no começo empurraria a aba em que a pessoa estava.
@@ -64,18 +106,20 @@ export class BuscasSalvasService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
-        if (dto.isDefault) await BuscasSalvasService.limparPadrao(tx, usuario);
-
-        await tx.savedSearch.create({
+        const criada = await tx.savedSearch.create({
           data: {
             organizationId: usuario.organizationId,
             userId: usuario.userId,
             name: nome,
             query: BuscasSalvasService.paraJson(dto.filtro),
             position: (ultima._max.position ?? -1) + 1,
-            isDefault: dto.isDefault ?? false,
+            shareKind: alcance,
+            teamId: alcance === 'TIME' ? dto.teamId! : null,
           },
+          select: { id: true },
         });
+
+        if (dto.isDefault) await BuscasSalvasService.marcarPadrao(tx, usuario, criada.id);
       });
     } catch (erro) {
       throw BuscasSalvasService.traduzir(erro, nome);
@@ -84,32 +128,59 @@ export class BuscasSalvasService {
     return this.listar(usuario);
   }
 
+  /**
+   * Muda a busca.
+   *
+   * Duas autorizações diferentes, e a diferença é o ponto:
+   *
+   * - **`isDefault` é de quem pede.** Marcar a busca do time como a que
+   *   abre a minha fila é preferência minha, e não mexe na busca.
+   * - **Nome, filtro e alcance são do dono.** A busca do time é do
+   *   gerente que a criou; quem a recebe usa, não reescreve.
+   */
   async atualizar(
     usuario: UsuarioAutenticado,
     id: string,
     dto: AtualizarBuscaSalvaDto,
   ): Promise<BuscaSalvaView[]> {
-    await this.minha(usuario, id);
+    const busca = await this.aoAlcance(usuario, id);
+
+    const mudaABusca =
+      dto.name !== undefined || dto.filtro !== undefined || dto.shareKind !== undefined;
+
+    if (mudaABusca && busca.userId !== usuario.userId) {
+      throw new ForbiddenException(
+        'Esta busca é de quem a compartilhou. Você pode usá-la e marcá-la como padrão, ' +
+          'mas para mudá-la salve uma cópia sua.',
+      );
+    }
+
+    const alcance = dto.shareKind ?? (busca.shareKind as Compartilhamento);
+    const time = dto.shareKind === undefined && dto.teamId === undefined ? busca.teamId : dto.teamId;
+
+    if (mudaABusca) await this.exigirAlcancePermitido(usuario, alcance, time ?? null);
 
     const nome = dto.name?.trim().replace(/\s+/g, ' ');
 
     try {
       await this.prisma.$transaction(async (tx) => {
-        // Limpar o padrão antes de marcar o novo, na mesma transação: é
-        // esta serialização que faz valer "uma padrão por pessoa", que o
-        // banco não garante (ver o schema).
-        if (dto.isDefault === true) await BuscasSalvasService.limparPadrao(tx, usuario);
+        if (mudaABusca) {
+          await tx.savedSearch.update({
+            where: { id },
+            data: {
+              ...(nome === undefined ? {} : { name: nome }),
+              ...(dto.filtro === undefined
+                ? {}
+                : { query: BuscasSalvasService.paraJson(dto.filtro) }),
+              ...(dto.shareKind === undefined
+                ? {}
+                : { shareKind: alcance, teamId: alcance === 'TIME' ? time! : null }),
+            },
+          });
+        }
 
-        await tx.savedSearch.update({
-          where: { id },
-          data: {
-            ...(nome === undefined ? {} : { name: nome }),
-            ...(dto.filtro === undefined
-              ? {}
-              : { query: BuscasSalvasService.paraJson(dto.filtro) }),
-            ...(dto.isDefault === undefined ? {} : { isDefault: dto.isDefault }),
-          },
-        });
+        if (dto.isDefault === true) await BuscasSalvasService.marcarPadrao(tx, usuario, id);
+        if (dto.isDefault === false) await BuscasSalvasService.limparPadrao(tx, usuario, id);
       });
     } catch (erro) {
       throw BuscasSalvasService.traduzir(erro, nome ?? '');
@@ -119,8 +190,16 @@ export class BuscasSalvasService {
   }
 
   async remover(usuario: UsuarioAutenticado, id: string): Promise<BuscaSalvaView[]> {
-    await this.minha(usuario, id);
+    const busca = await this.aoAlcance(usuario, id);
 
+    if (busca.userId !== usuario.userId) {
+      throw new ForbiddenException(
+        'Esta busca é de quem a compartilhou. Só quem a criou pode apagá-la.',
+      );
+    }
+
+    // A cascata de `saved_search_defaults` tira a marca de padrão de
+    // todo mundo que a tinha escolhido — inclusive de quem não é dono.
     await this.prisma.savedSearch.delete({ where: { id } });
 
     return this.listar(usuario);
@@ -129,9 +208,9 @@ export class BuscasSalvasService {
   /**
    * A nova ordem, pela lista inteira.
    *
-   * Exige que a lista seja exatamente as buscas da pessoa: id de fora
-   * seria escrever posição em busca de outro, e lista incompleta deixaria
-   * as que faltam com a posição antiga, embaralhadas com as novas.
+   * Só as **próprias**: a posição de uma busca compartilhada é a que o
+   * dono deu, e deixar cada um reordenar a do outro exigiria uma tabela
+   * de ordem por pessoa para resolver um problema que ninguém tem.
    */
   async reordenar(usuario: UsuarioAutenticado, ids: string[]): Promise<BuscaSalvaView[]> {
     const minhas = await this.prisma.savedSearch.findMany({
@@ -149,7 +228,7 @@ export class BuscasSalvasService {
     if (ids.length !== meus.size || ids.some((id) => !meus.has(id))) {
       throw new BadRequestException(
         'A ordem tem de trazer todas as suas buscas salvas, e só as suas. ' +
-          'Releia a lista e mande de novo.',
+          'A de um time é ordenada por quem a compartilhou.',
       );
     }
 
@@ -164,29 +243,123 @@ export class BuscasSalvasService {
 
   // -------------------------------------------------------------------
 
-  /**
-   * A busca é desta pessoa, nesta organização.
-   *
-   * `organizationId` **e** `userId` no `where`, não só o id: a mesma
-   * pessoa pode ter vínculo em duas organizações, e a busca salva de uma
-   * não é da outra. Sem o par, um id vazado abriria a busca de outra
-   * pessoa para renomear.
-   */
-  private async minha(usuario: UsuarioAutenticado, id: string): Promise<void> {
-    const existe = await this.prisma.savedSearch.count({
-      where: { id, organizationId: usuario.organizationId, userId: usuario.userId },
-    });
-
-    if (!existe) throw new NotFoundException('Busca salva não encontrada.');
+  /** O `where` de "o que esta pessoa enxerga". */
+  private static visiveis(usuario: UsuarioAutenticado): Prisma.SavedSearchWhereInput {
+    return {
+      organizationId: usuario.organizationId,
+      OR: [
+        { userId: usuario.userId },
+        { shareKind: 'ORGANIZACAO' },
+        // Sem time nenhum, a lista de ids fica vazia e o `in` não casa
+        // com nada — que é a resposta certa, não um erro.
+        { shareKind: 'TIME', teamId: { in: usuario.teamIds } },
+      ],
+    };
   }
 
+  /**
+   * A busca existe e esta pessoa a enxerga.
+   *
+   * Enxergar não é poder mudar — quem decide isso é quem chamou. Aqui a
+   * pergunta é só se ela tem o direito de saber que a busca existe: 404
+   * para o que não enxerga, e não 403, porque 403 confirmaria o id.
+   */
+  private async aoAlcance(
+    usuario: UsuarioAutenticado,
+    id: string,
+  ): Promise<{ userId: string; shareKind: string; teamId: string | null }> {
+    const busca = await this.prisma.savedSearch.findFirst({
+      where: { id, ...BuscasSalvasService.visiveis(usuario) },
+      select: { userId: true, shareKind: true, teamId: true },
+    });
+
+    if (!busca) throw new NotFoundException('Busca salva não encontrada.');
+
+    return busca;
+  }
+
+  /**
+   * Quem pode compartilhar, e com quem.
+   *
+   * - **Privada**: qualquer um.
+   * - **Time**: ser **gerente** dele (`TeamMember.isManager`). Quem
+   *   responde pela fila do time é quem deve nomear as visões dela; um
+   *   agente qualquer podendo criar aba para os colegas enche a barra de
+   *   ideia de uma pessoa só. Quem tem a permissão da casa também pode,
+   *   porque quem já pode compartilhar com todos pode com alguns.
+   * - **Organização**: `chamado:busca-compartilhada`.
+   */
+  private async exigirAlcancePermitido(
+    usuario: UsuarioAutenticado,
+    alcance: Compartilhamento,
+    teamId: string | null,
+  ): Promise<void> {
+    if (alcance === 'PRIVADA') {
+      if (teamId) {
+        throw new BadRequestException('Busca só sua não é de time nenhum.');
+      }
+      return;
+    }
+
+    const daCasa = can(usuario.role, 'chamado:busca-compartilhada');
+
+    if (alcance === 'ORGANIZACAO') {
+      if (!daCasa) {
+        throw new ForbiddenException(
+          'Compartilhar com a organização inteira é de quem responde pela central. ' +
+            'Compartilhe com o seu time, ou peça a quem pode.',
+        );
+      }
+      return;
+    }
+
+    if (!teamId) {
+      throw new BadRequestException('Escolha com qual time a busca é compartilhada.');
+    }
+
+    const time = await this.prisma.team.findFirst({
+      where: { id: teamId, organizationId: usuario.organizationId },
+      select: { id: true, name: true, members: { where: { userId: usuario.userId } } },
+    });
+
+    if (!time) throw new BadRequestException('Time não encontrado nesta organização.');
+
+    if (daCasa) return;
+
+    if (!time.members.some((m) => m.isManager)) {
+      throw new ForbiddenException(
+        `Compartilhar uma busca com "${time.name}" é de quem gerencia o time.`,
+      );
+    }
+  }
+
+  private static async marcarPadrao(
+    tx: Prisma.TransactionClient,
+    usuario: UsuarioAutenticado,
+    savedSearchId: string,
+  ): Promise<void> {
+    // `upsert` na chave `(organização, pessoa)`: a chave primária **é** a
+    // regra "uma padrão por pessoa", então não há o que limpar antes.
+    await tx.savedSearchDefault.upsert({
+      where: {
+        organizationId_userId: {
+          organizationId: usuario.organizationId,
+          userId: usuario.userId,
+        },
+      },
+      create: { organizationId: usuario.organizationId, userId: usuario.userId, savedSearchId },
+      update: { savedSearchId },
+    });
+  }
+
+  /** Tira a marca, e só se for esta busca: desmarcar não é trocar. */
   private static async limparPadrao(
     tx: Prisma.TransactionClient,
     usuario: UsuarioAutenticado,
+    savedSearchId: string,
   ): Promise<void> {
-    await tx.savedSearch.updateMany({
-      where: { organizationId: usuario.organizationId, userId: usuario.userId, isDefault: true },
-      data: { isDefault: false },
+    await tx.savedSearchDefault.deleteMany({
+      where: { organizationId: usuario.organizationId, userId: usuario.userId, savedSearchId },
     });
   }
 
@@ -204,13 +377,20 @@ export class BuscasSalvasService {
     ) as Prisma.InputJsonValue;
   }
 
-  private static paraView(busca: {
-    id: string;
-    name: string;
-    query: Prisma.JsonValue;
-    position: number;
-    isDefault: boolean;
-  }): BuscaSalvaView {
+  private static paraView(
+    busca: {
+      id: string;
+      name: string;
+      query: Prisma.JsonValue;
+      position: number;
+      shareKind: string;
+      userId: string;
+      team: { id: string; name: string } | null;
+      user: { id: string; name: string };
+    },
+    usuario: UsuarioAutenticado,
+    padraoId: string | undefined,
+  ): BuscaSalvaView {
     return {
       id: busca.id,
       name: busca.name,
@@ -219,7 +399,11 @@ export class BuscasSalvasService {
       // Prisma tipa como "qualquer JSON".
       filtro: (busca.query ?? {}) as FiltroSalvavel,
       position: busca.position,
-      isDefault: busca.isDefault,
+      isDefault: busca.id === padraoId,
+      shareKind: busca.shareKind as Compartilhamento,
+      team: busca.team,
+      owner: busca.user,
+      isMine: busca.userId === usuario.userId,
     };
   }
 

@@ -118,15 +118,16 @@ O escopo de leitura do perfil é aplicado **sempre**, por cima do filtro
 ### Busca salva
 
 ```
-GET    /v1/saved-searches           → [{ id, name, filtro, position, isDefault }]
-POST   /v1/saved-searches           → { name, filtro, isDefault? }
-PATCH  /v1/saved-searches/:id       → { name?, filtro?, isDefault? }
+GET    /v1/saved-searches           → [{ id, name, filtro, position, isDefault,
+                                         shareKind, team, owner, isMine }]
+POST   /v1/saved-searches           → { name, filtro, isDefault?, shareKind?, teamId? }
+PATCH  /v1/saved-searches/:id       → { name?, filtro?, isDefault?, shareKind?, teamId? }
 DELETE /v1/saved-searches/:id
 PUT    /v1/saved-searches/ordem     → { ids: [...] }
 ```
 
 É o `glpi_savedsearches` sem a metade que lá não se usa: tipo de item
-(aqui só há fila de chamado), contador de execução, e a busca pública.
+(aqui só há fila de chamado) e contador de execução.
 
 **O filtro é gravado como objeto, não como query string.** String
 ninguém valida: um `status` inventado ou um `priority=99` entrariam no
@@ -156,19 +157,72 @@ menos — nunca as linhas do outro. Por isso a permissão é
 `chamado:ler:proprios`, a mesma da fila: um filtro da fila não pode
 exigir mais que a fila.
 
-**Só as próprias.** Não há endpoint para ler a busca de outra pessoa, e
-não é esquecimento — é preferência de tela de quem a salvou. Quem quer
-passar um filtro ao colega manda o link da fila, que é o que o filtro na
-URL já permite. `(organizationId, userId, name)` é único: duas "Minha
-fila" da mesma pessoa deixariam a aba repetida sem saber qual apagar.
+`(organizationId, userId, name)` é único: duas "Minha fila" da mesma
+pessoa deixariam a aba repetida sem saber qual apagar.
 
-**No máximo uma padrão por pessoa**, garantida numa transação e **não**
-por índice. Garanti-la no banco exigiria uma quinta coluna gerada, que o
-`migrate diff` passaria a sujar em toda migração daqui para frente
-(`CLAUDE.md`, armadilha 2); e o defeito que ela evita é a fila abrir numa
-de duas buscas da própria pessoa. A padrão só abre quando a URL não pediu
-nada — sobrescrever um link recebido faria o colega ver outra coisa que
-não a que lhe mandaram.
+### Compartilhar a busca
+
+`shareKind` é o `is_private` do GLPI com um degrau a mais, porque o Desk
+tem times e o GLPI não: lá a busca pública aparece para a entidade
+inteira, que numa central de vinte pessoas é o mesmo que aparecer para
+quem não trabalha naquilo.
+
+| Alcance | Quem vê | Quem pode criar |
+|---|---|---|
+| `PRIVADA` | só quem salvou | qualquer um |
+| `TIME` | quem é do time | **gerente** do time (`TeamMember.isManager`) |
+| `ORGANIZACAO` | todo mundo da organização | `chamado:busca-compartilhada` |
+
+Compartilhar com um time **não pede permissão de papel**: pede gerenciar
+aquele time. O alcance já se limita a quem trabalha junto, e quem
+responde pela fila do time é quem deve nomear as visões dela — um agente
+qualquer podendo criar aba para os colegas enche a barra com a ideia de
+uma pessoa só. Quem tem a permissão da casa também pode com qualquer
+time: quem pode compartilhar com todos pode com alguns.
+
+`teamId` é preenchido **se e só se** o alcance é `TIME`, e isso é um
+`CHECK` no banco, não uma convenção:
+
+```sql
+CHECK (("shareKind" = 'TIME') = ("teamId" IS NOT NULL))
+```
+
+Busca de time sem time é uma aba que ninguém sabe de quem é; busca
+privada apontando para um time sugere um compartilhamento que não
+existe. Apagar o time apaga as buscas dele, pela mesma razão.
+
+**Usar não é mudar.** Quem recebe abre a busca e pode marcá-la como a
+padrão *dele* — isso é preferência de quem olha e não toca na busca.
+Nome, filtro e alcance são do dono; a resposta diz `isMine` para a tela
+saber o que oferecer, e a API responde 403 de qualquer jeito. Quem quer
+uma variação mexe no filtro e salva uma cópia sua, que é o mesmo botão
+de sempre. A ordem também é só das próprias: deixar cada um reordenar a
+do outro exigiria uma tabela de ordem por pessoa para resolver um
+problema que ninguém tem.
+
+**Uma busca salva continua não concedendo acesso a nada.** A do time
+mostra, para cada um, o que aquele um já podia ver — e é por isso que
+compartilhá-la é seguro mesmo entre papéis diferentes.
+
+### Qual busca abre a fila
+
+`isDefault` **não é propriedade da busca**, e deixou de poder ser quando
+ela passou a ser vista por várias pessoas: a busca do time pode ser a
+padrão de uma e não da outra. Virou `saved_search_defaults`, que é o
+`glpi_savedsearches_users`, e vem calculado para quem consultou.
+
+A troca sai de graça: a chave primária `(organizationId, userId)` **é** a
+regra "uma padrão por pessoa", agora no banco (`CLAUDE.md`, regra 4).
+Enquanto era coluna, garanti-la exigiria uma quinta coluna gerada — que
+o `migrate diff` passaria a sujar em toda migração — e por isso ela vivia
+só numa transação do serviço.
+
+Apagar a busca tira a marca de quem a tinha escolhido, inclusive de quem
+não é dono: sem a cascata sobraria linha apontando para busca que não
+existe, e a fila abriria em nada.
+
+A padrão só abre quando a URL não pediu nada — sobrescrever um link
+recebido faria o colega ver outra coisa que não a que lhe mandaram.
 
 `PUT .../ordem` recebe a **lista inteira**, e exige que sejam exatamente
 as buscas de quem pede. Posição relativa ("mova para a terceira") obriga
@@ -177,8 +231,11 @@ tempo deixariam buracos; a lista toda é idempotente — o que chegou é o
 que fica. Lista incompleta é 400, porque as que faltassem ficariam com a
 posição antiga embaralhada entre as novas.
 
-Teto de 30 por pessoa. Não é limite de banco: são abas, e trinta já não
-cabem na tela. Quem precisa de cem filtros nomeados precisa de relatório.
+Teto de 30 por pessoa, contando só as **próprias**: as do time e as da
+casa não são dela, e incluí-las faria o gerente que compartilhou cinco
+visões consumir a cota de quem só as recebe. Não é limite de banco: são
+abas, e trinta já não cabem na tela. Quem precisa de cem filtros nomeados
+precisa de relatório.
 
 **O painel que alimenta isso entrou junto.** A API aceitava onze campos
 de filtro desde a Fase 1 e a tela oferecia cinco combinações fixas mais

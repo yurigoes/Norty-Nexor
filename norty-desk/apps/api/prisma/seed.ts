@@ -198,6 +198,37 @@ async function main() {
     }
   }
 
+  // Uma busca do time, criada por quem o gerencia.
+  //
+  // É o que faz a aba compartilhada aparecer na demonstração sem ninguém
+  // precisar montá-la: quem entra como agente vê uma aba que não é dele,
+  // com o ícone de time, e descobre o recurso existindo.
+  const supervisora = await prisma.user.findUnique({
+    where: { email: 'supervisor@desk.test' },
+    select: { id: true },
+  });
+
+  if (supervisora) {
+    await prisma.savedSearch.upsert({
+      where: {
+        organizationId_userId_name: {
+          organizationId: organizacao.id,
+          userId: supervisora.id,
+          name: 'Triagem do time',
+        },
+      },
+      update: {},
+      create: {
+        organizationId: organizacao.id,
+        userId: supervisora.id,
+        name: 'Triagem do time',
+        query: { status: ['NOVO'], semAtribuicao: true },
+        shareKind: 'TIME',
+        teamId: suporte.id,
+      },
+    });
+  }
+
   // --- Carteira e modelos, só na demonstração -------------------------
   //
   // Sem isto, `DEMO=1` produzia uma instalação onde a carteira, a

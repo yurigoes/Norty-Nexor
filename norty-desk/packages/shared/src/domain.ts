@@ -3298,3 +3298,20 @@ export function descreverFiltro(
 
   return partes.length === 0 ? 'A fila inteira, sem filtro' : partes.join(' · ');
 }
+
+/**
+ * Com quem uma busca salva é compartilhada.
+ *
+ * É o `is_private` do GLPI com um degrau a mais, porque o Desk tem times
+ * e o GLPI não: lá a busca pública aparece para a entidade inteira, que
+ * numa central de vinte pessoas é o mesmo que aparecer para quem não
+ * trabalha naquilo.
+ */
+export const COMPARTILHAMENTOS = ['PRIVADA', 'TIME', 'ORGANIZACAO'] as const;
+export type Compartilhamento = (typeof COMPARTILHAMENTOS)[number];
+
+export const ROTULO_COMPARTILHAMENTO: Record<Compartilhamento, string> = {
+  PRIVADA: 'Só minha',
+  TIME: 'Do time',
+  ORGANIZACAO: 'Da casa',
+};

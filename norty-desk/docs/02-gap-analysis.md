@@ -272,10 +272,13 @@ meu time / ler todos são permissões distintas.
 > (`docs/13-autenticacao-ldap.md`).
 >
 > A **busca salva** era o terceiro item desta lista e entrou em
-> 28/09/2026. Junto veio o painel de filtro da fila, que faltava: a API
-> aceitava onze campos e a tela oferecia cinco combinações fixas, então
-> salvar uma busca sem ter filtro para salvar seria teatro. A busca
-> **pública** do GLPI continua fora, por decisão — ver `docs/07-api.md`.
+> 28/09/2026, com o painel de filtro da fila que faltava: a API aceitava
+> onze campos e a tela oferecia cinco combinações fixas, então salvar uma
+> busca sem ter filtro para salvar seria teatro. A **compartilhada**
+> entrou no mesmo dia e passa o GLPI num ponto: além da pública da
+> organização, há a **do time** — porque o Desk tem times e o GLPI não,
+> e numa central de vinte pessoas "pública" é o mesmo que aparecer para
+> quem não trabalha naquilo.
 
 **Decisão do projeto: o Desk cobre todo o GLPI.** A versão anterior
 deste documento propunha cortar inventário de datacenter, rede,
@@ -309,7 +312,7 @@ seguem valendo:
 | Motor de regras (`RuleTicket`, coletor) | ~10 | **2 ✅** | um motor, catálogo de alvos; a tela do construtor em 27/09/2026 |
 | Aprovação em etapas | ~6 | **3 ✅** | `Approval` com quórum |
 | Base de conhecimento | ~12 | **3 ✅** | com revisão e vínculo |
-| Painéis, estatísticas, buscas salvas | ~10 | **3 ✅** | busca salva por pessoa, com ordem e uma padrão; o filtro também mora na URL, que se manda por link |
+| Painéis, estatísticas, buscas salvas | ~10 | **3 ✅** | busca salva por pessoa, do time ou da casa, com ordem e uma padrão por pessoa; o filtro também mora na URL, que se manda por link |
 | Satisfação | 3 | **3 ✅** | pesquisa pelo canal de origem |
 | Problema e Mudança | ~35 | **4 ✅** | colunas nulas distintas, com `CHECK` |
 | Recorrência e modelos de formulário | ~20 | **4 ✅** | `TicketForm` em JSONB |

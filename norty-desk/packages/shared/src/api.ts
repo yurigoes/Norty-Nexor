@@ -16,6 +16,7 @@ import type {
   ChangeRisk,
   ChangeStatus,
   Channel,
+  Compartilhamento,
   BillingPeriod,
   ComponentKind,
   ContractKind,
@@ -544,14 +545,36 @@ export type BuscaSalvaView = {
   name: string;
   filtro: FiltroSalvavel;
   position: number;
-  /** A que a fila abre quando ninguém pede outra. No máximo uma. */
+  /**
+   * A que abre a fila **de quem está pedindo**.
+   *
+   * Deixou de ser propriedade da busca quando ela passou a ser vista por
+   * várias pessoas: a busca do time pode ser a padrão de uma e não da
+   * outra. Vem calculado para quem consultou.
+   */
   isDefault: boolean;
+  /** Com quem ela é compartilhada. */
+  shareKind: Compartilhamento;
+  /** Qual time, quando o alcance é `TIME`. */
+  team: CatalogoRef | null;
+  /** Quem salvou. É quem pode renomear, refiltrar e apagar. */
+  owner: CatalogoRef;
+  /**
+   * Se quem está pedindo é o dono.
+   *
+   * A tela usa isto para decidir o que oferecer: na busca de outro há o
+   * que abrir e marcar como padrão, não o que renomear.
+   */
+  isMine: boolean;
 };
 
 export type CriarBuscaSalvaRequest = {
   name: string;
   filtro: FiltroSalvavel;
   isDefault?: boolean;
+  shareKind?: Compartilhamento;
+  /** Obrigatório quando `shareKind` é `TIME`. */
+  teamId?: string | null;
 };
 
 /** Tudo opcional: renomear não obriga a remandar o filtro. */
@@ -559,6 +582,8 @@ export type AtualizarBuscaSalvaRequest = {
   name?: string;
   filtro?: FiltroSalvavel;
   isDefault?: boolean;
+  shareKind?: Compartilhamento;
+  teamId?: string | null;
 };
 
 /** A nova ordem, pela lista inteira — ver `PUT /saved-searches/ordem`. */

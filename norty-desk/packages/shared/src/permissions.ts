@@ -57,6 +57,20 @@ export const PERMISSIONS = [
    */
   'chamado:agendar',
 
+  /**
+   * Compartilhar uma busca salva com a organização inteira.
+   *
+   * Só o alcance "da casa" passa por aqui. Compartilhar com um **time**
+   * não pede permissão: pede ser gerente dele, que é o `isManager` do
+   * vínculo — o alcance já se limita a quem trabalha junto, e quem
+   * responde pela fila do time é quem deve nomear as visões dela.
+   *
+   * A da organização é outra coisa: a aba aparece para todo mundo que
+   * abre a fila, e uma aba a mais para cem pessoas não é decisão de
+   * quem só quer organizar o próprio dia.
+   */
+  'chamado:busca-compartilhada',
+
   // --- Ordem de serviço ------------------------------------------------
   /** Ver a ordem e baixar o PDF. O cliente também vê a dele. */
   'ordem:ler',
@@ -383,6 +397,7 @@ const MATRIZ_DECLARADA: Record<Role, readonly Permission[]> = {
     'chamado:resolver',
     'chamado:fechar',
     'chamado:reabrir',
+    'chamado:busca-compartilhada',
     'chamado:excluir',
     'chamado:vincular',
     'chamado:acao-em-lote',

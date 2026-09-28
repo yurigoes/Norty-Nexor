@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsBoolean,
+  IsIn,
   IsObject,
   IsOptional,
   IsString,
@@ -11,6 +12,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
+import { COMPARTILHAMENTOS, type Compartilhamento } from '@norty-desk/shared';
 
 import { FiltroSalvavelDto } from '../tickets/dto';
 
@@ -37,8 +39,19 @@ export class CriarBuscaSalvaDto {
   @Type(() => FiltroSalvavelDto)
   filtro!: FiltroSalvavelDto;
 
-  /** Se esta passa a ser a que a fila abre. */
+  /** Se esta passa a ser a que a fila abre — de quem está salvando. */
   @IsOptional() @IsBoolean() isDefault?: boolean;
+
+  /**
+   * Com quem ela é compartilhada. Ausente é `PRIVADA`.
+   *
+   * Quem pode cada alcance é decidido no serviço, não aqui: a pergunta
+   * "é gerente deste time?" precisa do banco.
+   */
+  @IsOptional() @IsIn(COMPARTILHAMENTOS) shareKind?: Compartilhamento;
+
+  /** Obrigatório quando `shareKind` é `TIME`; recusado nos outros. */
+  @IsOptional() @IsUUID() teamId?: string | null;
 }
 
 /** Tudo opcional: renomear não obriga a remandar o filtro. */
@@ -52,6 +65,9 @@ export class AtualizarBuscaSalvaDto {
   filtro?: FiltroSalvavelDto;
 
   @IsOptional() @IsBoolean() isDefault?: boolean;
+
+  @IsOptional() @IsIn(COMPARTILHAMENTOS) shareKind?: Compartilhamento;
+  @IsOptional() @IsUUID() teamId?: string | null;
 }
 
 /**
