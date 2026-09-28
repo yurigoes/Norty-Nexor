@@ -27,6 +27,7 @@ import { PublicoModule } from './modules/publico/publico.module';
 import { CarteiraModule } from './modules/carteira/carteira.module';
 import { AuditoriaModule } from './modules/auditoria/auditoria.module';
 import { LoteModule } from './modules/lote/lote.module';
+import { BuscasSalvasModule } from './modules/buscas/buscas.module';
 import { CatalogoDoAtivoModule } from './modules/catalogo-ativo/catalogo-ativo.module';
 import { ContratosModule } from './modules/contratos/contratos.module';
 import { FormulariosModule } from './modules/formularios/formularios.module';
@@ -82,6 +83,7 @@ import { TranscricaoModule } from './modules/transcricao/transcricao.module';
     RecorrenciasModule,
     FormulariosModule,
     ContratosModule,
+    BuscasSalvasModule,
     CatalogoDoAtivoModule,
     SoftwareModule,
     ConsumiveisModule,

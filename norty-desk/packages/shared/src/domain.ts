@@ -3099,3 +3099,202 @@ function edicao(texto: string): string | null {
     .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
     .join(' ');
 }
+
+// ---------------------------------------------------------------------
+// O filtro da fila, e a busca salva
+// ---------------------------------------------------------------------
+
+/**
+ * O filtro da fila **sem a paginação**.
+ *
+ * A separação é a regra escrita em tipo: `limit` e `cursor` dizem onde a
+ * pessoa está numa lista, e isso não é parte de uma busca salva. Um
+ * cursor guardado aponta para uma página que não existe mais na próxima
+ * semana, e `limit` é preferência de tela, não de filtro.
+ *
+ * Do lado da API, `FiltroFilaDto` **estende** o DTO deste tipo. Assim o
+ * compilador — e não um comentário — é que garante que os dois lados
+ * conheçam os mesmos campos, e que a busca salva não carregue cursor.
+ */
+export type FiltroSalvavel = {
+  status?: TicketStatus[];
+  type?: TicketType;
+  priority?: Scale[];
+  channel?: Channel[];
+  categoryId?: string;
+  assignedTeamId?: string;
+  /** `me` resolve para o usuário do token, e é o que torna a busca portátil. */
+  assignedUserId?: string | 'me';
+  requesterId?: string;
+  semAtribuicao?: boolean;
+  slaBreached?: boolean;
+  slaDueBefore?: string;
+  q?: string;
+};
+
+/** Os campos do filtro, na ordem em que o painel os mostra. */
+export const CAMPOS_DO_FILTRO = [
+  'status',
+  'type',
+  'priority',
+  'channel',
+  'categoryId',
+  'assignedTeamId',
+  'assignedUserId',
+  'requesterId',
+  'semAtribuicao',
+  'slaBreached',
+  'slaDueBefore',
+  'q',
+] as const satisfies readonly (keyof FiltroSalvavel)[];
+
+/** Quais campos do filtro são lista de valores. */
+const CAMPOS_DE_LISTA = new Set(['status', 'priority', 'channel']);
+
+/** Quais campos do filtro são "sim ou nada" — falso é o mesmo que ausente. */
+const CAMPOS_DE_MARCA = new Set(['semAtribuicao', 'slaBreached']);
+
+/**
+ * O filtro escrito como parâmetros de URL.
+ *
+ * O filtro mora na URL porque link se manda para o colega, e estado de
+ * tela não. Esta função e a próxima são o par que mantém a ida e a volta
+ * coerentes: sem elas, cada tela montava os parâmetros à mão e a busca
+ * salva gravava uma forma que a fila lia de outra.
+ *
+ * Lista sai separada por vírgula, que é o que `FiltroFilaDto` espera.
+ * Campo vazio, lista vazia e marca falsa **não entram** — URL com
+ * `slaBreached=false` diz a mesma coisa que URL sem o campo, com mais
+ * ruído, e as duas precisam dar a mesma chave de cache.
+ */
+export function filtroParaParametros(filtro: FiltroSalvavel): URLSearchParams {
+  const parametros = new URLSearchParams();
+
+  for (const campo of CAMPOS_DO_FILTRO) {
+    const valor = filtro[campo];
+
+    if (valor === undefined || valor === null || valor === '') continue;
+
+    if (Array.isArray(valor)) {
+      if (valor.length > 0) parametros.set(campo, valor.join(','));
+      continue;
+    }
+
+    if (typeof valor === 'boolean') {
+      if (valor) parametros.set(campo, 'true');
+      continue;
+    }
+
+    parametros.set(campo, String(valor));
+  }
+
+  return parametros;
+}
+
+/**
+ * O filtro lido de parâmetros de URL.
+ *
+ * O que não é campo de filtro é ignorado — `cursor` inclusive, e é de
+ * propósito: é assim que "salvar esta busca" a partir da tela paginada
+ * não guarda a página em que a pessoa estava.
+ */
+export function parametrosParaFiltro(parametros: URLSearchParams): FiltroSalvavel {
+  const filtro: Record<string, unknown> = {};
+
+  for (const campo of CAMPOS_DO_FILTRO) {
+    const bruto = parametros.get(campo);
+    if (bruto === null || bruto === '') continue;
+
+    if (CAMPOS_DE_LISTA.has(campo)) {
+      const itens = bruto
+        .split(',')
+        .map((i) => i.trim())
+        .filter(Boolean);
+
+      if (itens.length === 0) continue;
+      filtro[campo] = campo === 'priority' ? itens.map(Number) : itens;
+      continue;
+    }
+
+    if (CAMPOS_DE_MARCA.has(campo)) {
+      if (bruto === 'true') filtro[campo] = true;
+      continue;
+    }
+
+    filtro[campo] = bruto;
+  }
+
+  return filtro as FiltroSalvavel;
+}
+
+/** Quantos campos este filtro realmente usa. Zero é "a fila inteira". */
+export function camposUsados(filtro: FiltroSalvavel): number {
+  return [...filtroParaParametros(filtro).keys()].length;
+}
+
+/**
+ * O filtro dito em português, numa linha.
+ *
+ * Uma função só, usada pelo painel, pela aba da busca salva e pela
+ * confirmação de apagar. Três textos escritos à mão divergiriam na
+ * primeira vez que alguém acrescentasse um campo — e a pessoa leria uma
+ * coisa na aba e outra no painel sobre o mesmo filtro.
+ *
+ * `nomeDe` resolve o que só o banco sabe: categoria, time e pessoa são
+ * ids. Sem ele a frase diria o id, que não é frase.
+ */
+export function descreverFiltro(
+  filtro: FiltroSalvavel,
+  nomeDe: (campo: 'categoria' | 'time' | 'pessoa', id: string) => string | undefined = () =>
+    undefined,
+): string {
+  const partes: string[] = [];
+
+  if (filtro.status?.length) {
+    partes.push(filtro.status.map((s) => ROTULO_STATUS[s]).join(' ou '));
+  }
+
+  if (filtro.type) partes.push(ROTULO_TIPO[filtro.type]);
+
+  if (filtro.priority?.length) {
+    const nomes = filtro.priority.map((p) => ROTULO_PRIORIDADE[p as Scale] ?? String(p));
+    partes.push(`prioridade ${nomes.join(' ou ')}`);
+  }
+
+  if (filtro.channel?.length) {
+    partes.push(`por ${filtro.channel.map((c) => ROTULO_CANAL[c]).join(' ou ')}`);
+  }
+
+  if (filtro.categoryId) {
+    partes.push(`categoria ${nomeDe('categoria', filtro.categoryId) ?? 'escolhida'}`);
+  }
+
+  if (filtro.assignedTeamId) {
+    partes.push(`time ${nomeDe('time', filtro.assignedTeamId) ?? 'escolhido'}`);
+  }
+
+  if (filtro.assignedUserId) {
+    partes.push(
+      filtro.assignedUserId === 'me'
+        ? 'atribuídos a mim'
+        : `atribuídos a ${nomeDe('pessoa', filtro.assignedUserId) ?? 'quem foi escolhido'}`,
+    );
+  }
+
+  if (filtro.requesterId) {
+    partes.push(`abertos por ${nomeDe('pessoa', filtro.requesterId) ?? 'quem foi escolhido'}`);
+  }
+
+  if (filtro.semAtribuicao) partes.push('sem atribuição');
+  if (filtro.slaBreached) partes.push('com SLA estourado');
+
+  if (filtro.slaDueBefore) {
+    // Só a data: a hora do compromisso não é o que a pessoa escolheu no
+    // painel, e mostrá-la sugeriria uma precisão que o filtro não tem.
+    partes.push(`vencendo antes de ${filtro.slaDueBefore.slice(0, 10)}`);
+  }
+
+  if (filtro.q) partes.push(`contendo "${filtro.q}"`);
+
+  return partes.length === 0 ? 'A fila inteira, sem filtro' : partes.join(' · ');
+}

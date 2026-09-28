@@ -15,6 +15,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
+import type { Scale } from '@norty-desk/shared';
 
 const TIPOS = ['INCIDENTE', 'REQUISICAO'] as const;
 const STATUS = [
@@ -129,14 +130,39 @@ export class VincularDto {
   @IsEnum(TIPOS_VINCULO) type!: (typeof TIPOS_VINCULO)[number];
 }
 
-export class FiltroFilaDto {
+/**
+ * O filtro da fila **sem a paginação** — o que uma busca salva guarda.
+ *
+ * A separação existe para que o compilador, e não um comentário, garanta
+ * que a busca salva não carregue `cursor`: o corpo de
+ * `POST /saved-searches` aceita este DTO, e `FiltroFilaDto` o estende.
+ * Cursor guardado aponta para uma página que na semana seguinte não
+ * existe; `limit` é preferência de tela, não de filtro.
+ *
+ * Os `@Transform` de lista servem aos dois usos: na fila o valor vem da
+ * URL como `"NOVO,PENDENTE"`, e na busca salva vem do JSON já como
+ * array. `listaDeTexto` aceita os dois, e é por isso que o mesmo DTO
+ * valida a query string e o corpo.
+ */
+export class FiltroSalvavelDto {
   @IsOptional() @Transform(listaDeTexto) @IsArray() @IsEnum(STATUS, { each: true })
   status?: (typeof STATUS)[number][];
 
   @IsOptional() @IsEnum(TIPOS) type?: (typeof TIPOS)[number];
 
-  @IsOptional() @Transform(listaDeInteiros) @IsArray() @IsInt({ each: true })
-  priority?: number[];
+  /**
+   * A escala é 1 a 5, e o teto importa: `priority=99` passava por
+   * `@IsInt` e ia para o `where` casar com nada. Na fila isso é uma tela
+   * vazia sem explicação; numa busca salva, uma aba que nunca mostra
+   * nada e ninguém sabe por quê.
+   */
+  @IsOptional()
+  @Transform(listaDeInteiros)
+  @IsArray()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(5, { each: true })
+  priority?: Scale[];
 
   @IsOptional() @Transform(listaDeTexto) @IsArray() @IsEnum(CANAIS, { each: true })
   channel?: (typeof CANAIS)[number][];
@@ -153,7 +179,9 @@ export class FiltroFilaDto {
   @IsOptional() @IsDateString() slaDueBefore?: string;
 
   @IsOptional() @IsString() @MaxLength(200) q?: string;
+}
 
+export class FiltroFilaDto extends FiltroSalvavelDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200) limit?: number;
   @IsOptional() @IsString() cursor?: string;
 }

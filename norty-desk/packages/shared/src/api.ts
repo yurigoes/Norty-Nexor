@@ -27,6 +27,7 @@ import type {
   TemplateKind,
   EventPayload,
   EventType,
+  FiltroSalvavel,
   LinkType,
   ProblemStatus,
   Scale,
@@ -532,6 +533,37 @@ export type ResolveRequest = { body: string; solutionTypeId?: string };
 export type ReopenRequest = { body: string };
 export type LinkRequest = { targetTicketId: string; type: LinkType };
 
+/**
+ * Uma busca salva: um nome, um filtro da fila e a ordem da aba.
+ *
+ * Por pessoa, e só a própria — a API não devolve a busca de ninguém
+ * mais. Quem quer passar um filtro ao colega manda o link da fila.
+ */
+export type BuscaSalvaView = {
+  id: string;
+  name: string;
+  filtro: FiltroSalvavel;
+  position: number;
+  /** A que a fila abre quando ninguém pede outra. No máximo uma. */
+  isDefault: boolean;
+};
+
+export type CriarBuscaSalvaRequest = {
+  name: string;
+  filtro: FiltroSalvavel;
+  isDefault?: boolean;
+};
+
+/** Tudo opcional: renomear não obriga a remandar o filtro. */
+export type AtualizarBuscaSalvaRequest = {
+  name?: string;
+  filtro?: FiltroSalvavel;
+  isDefault?: boolean;
+};
+
+/** A nova ordem, pela lista inteira — ver `PUT /saved-searches/ordem`. */
+export type ReordenarBuscasRequest = { ids: string[] };
+
 export type TicketQuery = {
   status?: TicketStatus[];
   assignedTeamId?: string;
@@ -544,7 +576,6 @@ export type TicketQuery = {
   slaBreached?: boolean;
   slaDueBefore?: string;
   q?: string;
-  sort?: string;
   limit?: number;
   cursor?: string;
 };

@@ -115,6 +115,7 @@ O que faz a operação escalar.
 | Base de conhecimento | artigos, revisões, sugestão por similaridade | pronto |
 | Painéis | agente, time, organização | pronto |
 | Relatório de SLA | cumprimento por período, categoria, time, acordo | pronto |
+| Busca salva | filtro nomeado por pessoa, com ordem e padrão | pronto (28/09/2026) |
 | Ativo simples | equipamento vinculável a chamado (sem CMDB) | pronto |
 | Satisfação | pesquisa pós-fechamento, pelo canal de origem | pronto |
 | Webhooks de saída | assinatura HMAC, retentativa, log | pronto |
@@ -147,6 +148,21 @@ navegador em cada tela nova.
 
 - **A trilha registra o diff, e segredo nunca entra nela** — nem o
   valor antigo.
+
+**A busca salva entrou em 28/09/2026**, e com ela o painel de filtro da
+fila. A ordem foi essa porque a recíproca não faz sentido: a API aceitava
+onze campos de filtro desde a Fase 1 e a tela oferecia cinco combinações
+fixas mais a busca do cabeçalho — o resto só se alcançava editando a
+barra de endereços. Salvar uma busca sem ter filtro para salvar seria
+salvar uma das cinco.
+
+O filtro é gravado como objeto e validado pelo **mesmo DTO da fila**:
+string de consulta ninguém valida, e um `status` inventado só apareceria
+quando alguém clicasse na aba meses depois. A paginação não entra por
+construção de tipo — `FiltroFilaDto` estende o DTO da busca salva —,
+porque cursor guardado aponta para uma página que na semana seguinte não
+existe. E `assignedUserId` guarda `me` literal, não o id de quem salvou,
+que é o que torna a busca portátil.
 
 **Também entrou nesta fase:** as telas de configuração de categorias,
 acordos de SLA, calendários e motivos de pendência — as quatro que a

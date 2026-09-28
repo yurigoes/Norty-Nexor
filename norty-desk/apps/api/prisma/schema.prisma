@@ -66,6 +66,7 @@ model Organization {
   locations           Location[]
   manufacturers       Manufacturer[]
   assetModels         AssetModel[]
+  savedSearches       SavedSearch[]
   osAliases           OperatingSystemAlias[]
   components          AssetComponent[]
   assetHoldings       AssetHolding[]
@@ -125,6 +126,7 @@ model User {
 
   authSource             AuthSource?             @relation(fields: [authSourceId], references: [id], onDelete: SetNull)
   memberships            Membership[]
+  savedSearches          SavedSearch[]
   teamMembers            TeamMember[]
   actorIn                TicketActor[]
   categoriasPadrao       Category[]              @relation("ResponsavelPadraoDaCategoria")
@@ -165,6 +167,55 @@ model User {
 }
 
 /// Vínculo usuário x organização x perfil. Substitui glpi_profiles_users.
+/// A busca salva de uma pessoa.
+///
+/// É o `glpi_savedsearches`, sem a metade que lá não se usa: tipo de
+/// item (aqui só há fila de chamado), contador de execução, e a busca
+/// pública. A pública fica de fora por decisão, não por esquecimento —
+/// ver `docs/07-api.md`.
+///
+/// **O filtro é gravado como o objeto que a fila entende**, validado na
+/// entrada pelo mesmo DTO da fila. Guardar a string de consulta seria
+/// mais curto e deixaria a busca salva carregar filtro que a fila
+/// recusa: ninguém valida uma string, e o erro só apareceria quando
+/// alguém clicasse na aba meses depois.
+///
+/// `limit` e `cursor` não entram, e isso é tipo, não convenção:
+/// `FiltroFilaDto` estende `FiltroSalvavelDto`, e é o segundo que o
+/// corpo aceita. Cursor guardado aponta para uma página que na semana
+/// seguinte não existe.
+model SavedSearch {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  userId         String @db.Uuid
+  name           String
+  /// O filtro, na forma de `FiltroSalvavel` (`packages/shared`).
+  query          Json
+  /// A ordem das abas. Reordenar é gravar a lista inteira.
+  position       Int    @default(0)
+  /// A que a fila abre quando ninguém pede outra.
+  ///
+  /// Sem `@@unique`, ao contrário da posse de equipamento: ali duas
+  /// posses abertas são dois termos assinados para o mesmo notebook, e
+  /// aqui duas padrão é a fila abrir numa das duas. O preço de garantir
+  /// no banco seria uma quinta coluna gerada, que o `migrate diff`
+  /// passaria a sujar em toda migração daqui para frente (CLAUDE.md,
+  /// armadilha 2) — caro para um defeito que ninguém sente.
+  isDefault      Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Duas "Minha fila" da mesma pessoa não dá: a aba ficaria repetida e
+  /// ninguém saberia qual apagou.
+  @@unique([organizationId, userId, name])
+  @@index([organizationId, userId, position])
+  @@map("saved_searches")
+}
+
 model Membership {
   id             String   @id @default(uuid()) @db.Uuid
   userId         String   @db.Uuid

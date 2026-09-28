@@ -267,11 +267,15 @@ meu time / ler todos são permissões distintas.
 
 > **Estado em 28/09/2026: as oito fases estão entregues.** A tabela de
 > áreas abaixo está marcada uma a uma. O que a paridade ainda não
-> alcança, e está dito na linha de cada área: **busca salva por pessoa**
-> (o filtro da fila mora na URL, que se manda por link, mas não se
-> guarda), **estêncil** de datacenter (fora de propósito) e, no LDAP,
+> alcança: **estêncil** de datacenter (fora de propósito) e, no LDAP,
 > **grupo do AD virando equipe ou perfil** e **réplica de diretório**
 > (`docs/13-autenticacao-ldap.md`).
+>
+> A **busca salva** era o terceiro item desta lista e entrou em
+> 28/09/2026. Junto veio o painel de filtro da fila, que faltava: a API
+> aceitava onze campos e a tela oferecia cinco combinações fixas, então
+> salvar uma busca sem ter filtro para salvar seria teatro. A busca
+> **pública** do GLPI continua fora, por decisão — ver `docs/07-api.md`.
 
 **Decisão do projeto: o Desk cobre todo o GLPI.** A versão anterior
 deste documento propunha cortar inventário de datacenter, rede,
@@ -305,7 +309,7 @@ seguem valendo:
 | Motor de regras (`RuleTicket`, coletor) | ~10 | **2 ✅** | um motor, catálogo de alvos; a tela do construtor em 27/09/2026 |
 | Aprovação em etapas | ~6 | **3 ✅** | `Approval` com quórum |
 | Base de conhecimento | ~12 | **3 ✅** | com revisão e vínculo |
-| Painéis, estatísticas, buscas salvas | ~10 | **3 ✅ (busca salva não)** | o filtro da fila mora na URL, e link se manda para o colega; salvar por pessoa não existe |
+| Painéis, estatísticas, buscas salvas | ~10 | **3 ✅** | busca salva por pessoa, com ordem e uma padrão; o filtro também mora na URL, que se manda por link |
 | Satisfação | 3 | **3 ✅** | pesquisa pelo canal de origem |
 | Problema e Mudança | ~35 | **4 ✅** | colunas nulas distintas, com `CHECK` |
 | Recorrência e modelos de formulário | ~20 | **4 ✅** | `TicketForm` em JSONB |

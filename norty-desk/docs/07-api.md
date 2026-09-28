@@ -66,18 +66,28 @@ recalcula a matriz.
 ```
 GET /v1/tickets
     ?status=NOVO,ATRIBUIDO
+    &type=INCIDENTE
     &assignedTeamId=<uuid>
     &assignedUserId=me
     &requesterId=<uuid>
     &categoryId=<uuid>
     &priority=4,5
     &channel=WHATSAPP
+    &semAtribuicao=true
     &slaBreached=true
     &slaDueBefore=2026-09-10T12:00:00Z
     &q=impressora
-    &sort=-priority,createdAt
     &limit=50&cursor=<opaco>
 ```
+
+**A ordem é fixa: prioridade desc, abertura asc, id asc.** Não há
+`sort` — uma versão anterior deste documento o anunciava e nada o lia. A
+ordem é a da fila de trabalho, e é ela que dá sentido ao cursor: mudar a
+ordenação no meio da paginação faria a página seguinte repetir ou pular
+linhas.
+
+`priority` aceita só 1 a 5. `priority=99` passava por `@IsInt` e ia para
+o `where` casar com nada — tela vazia sem explicação.
 
 O escopo de leitura do perfil é aplicado **sempre**, por cima do filtro
 (`docs/04-rbac.md`, seção 3).
@@ -104,6 +114,83 @@ O escopo de leitura do perfil é aplicado **sempre**, por cima do filtro
   "nextCursor": "eyJpZCI6..."
 }
 ```
+
+### Busca salva
+
+```
+GET    /v1/saved-searches           → [{ id, name, filtro, position, isDefault }]
+POST   /v1/saved-searches           → { name, filtro, isDefault? }
+PATCH  /v1/saved-searches/:id       → { name?, filtro?, isDefault? }
+DELETE /v1/saved-searches/:id
+PUT    /v1/saved-searches/ordem     → { ids: [...] }
+```
+
+É o `glpi_savedsearches` sem a metade que lá não se usa: tipo de item
+(aqui só há fila de chamado), contador de execução, e a busca pública.
+
+**O filtro é gravado como objeto, não como query string.** String
+ninguém valida: um `status` inventado ou um `priority=99` entrariam no
+banco e só apareceriam quando alguém clicasse na aba, meses depois, e
+visse uma lista vazia sem explicação. Como objeto, ele passa pelo
+**mesmo DTO que a fila usa** — `FiltroSalvavelDto` — e é 400 na hora de
+salvar. Com `forbidNonWhitelisted`, campo desconhecido também: uma tela
+nova que mande um campo que a API ainda não conhece falha alto, em vez
+de gravar algo que a fila ignora em silêncio.
+
+**A paginação não entra, e isso é tipo, não convenção.**
+`FiltroFilaDto` **estende** `FiltroSalvavelDto` acrescentando `limit` e
+`cursor`; o corpo da busca salva aceita o segundo. Então não há por onde
+um cursor entrar — e um cursor guardado apontaria para uma página que na
+semana seguinte não existe. Mandá-lo é 400.
+
+`assignedUserId` guarda `me` **literal**, não o id de quem salvou. É o
+que torna a busca portátil: ela aponta para quem a está usando. Gravar o
+id faria a busca dizer "os da Marina" para sempre, inclusive para quem a
+copiasse.
+
+**A busca salva não concede acesso a nada.** Ela é um filtro; quem
+decide quais chamados a pessoa vê é o escopo de leitura
+(`chamado:ler:proprios` / `:time` / `:todos`), aplicado depois. Uma busca
+copiada de alguém com mais alcance mostra menos linhas para quem tem
+menos — nunca as linhas do outro. Por isso a permissão é
+`chamado:ler:proprios`, a mesma da fila: um filtro da fila não pode
+exigir mais que a fila.
+
+**Só as próprias.** Não há endpoint para ler a busca de outra pessoa, e
+não é esquecimento — é preferência de tela de quem a salvou. Quem quer
+passar um filtro ao colega manda o link da fila, que é o que o filtro na
+URL já permite. `(organizationId, userId, name)` é único: duas "Minha
+fila" da mesma pessoa deixariam a aba repetida sem saber qual apagar.
+
+**No máximo uma padrão por pessoa**, garantida numa transação e **não**
+por índice. Garanti-la no banco exigiria uma quinta coluna gerada, que o
+`migrate diff` passaria a sujar em toda migração daqui para frente
+(`CLAUDE.md`, armadilha 2); e o defeito que ela evita é a fila abrir numa
+de duas buscas da própria pessoa. A padrão só abre quando a URL não pediu
+nada — sobrescrever um link recebido faria o colega ver outra coisa que
+não a que lhe mandaram.
+
+`PUT .../ordem` recebe a **lista inteira**, e exige que sejam exatamente
+as buscas de quem pede. Posição relativa ("mova para a terceira") obriga
+o servidor a reescrever as vizinhas, e duas pessoas arrastando ao mesmo
+tempo deixariam buracos; a lista toda é idempotente — o que chegou é o
+que fica. Lista incompleta é 400, porque as que faltassem ficariam com a
+posição antiga embaralhada entre as novas.
+
+Teto de 30 por pessoa. Não é limite de banco: são abas, e trinta já não
+cabem na tela. Quem precisa de cem filtros nomeados precisa de relatório.
+
+**O painel que alimenta isso entrou junto.** A API aceitava onze campos
+de filtro desde a Fase 1 e a tela oferecia cinco combinações fixas mais
+a busca do cabeçalho — o resto só se alcançava editando a barra de
+endereços, o que na prática quer dizer que ninguém alcançava. Salvar uma
+busca sem ter filtro para salvar seria teatro.
+
+A conversão entre filtro e URL mora em `packages/shared`
+(`filtroParaParametros` / `parametrosParaFiltro`), e a frase que descreve
+o filtro também (`descreverFiltro`) — a mesma que o título da aba, o
+painel e a barra usam. Três textos escritos à mão divergiriam na primeira
+vez que alguém acrescentasse um campo.
 
 ### Detalhe, timeline, criação
 
