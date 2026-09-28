@@ -280,9 +280,29 @@ O inventário que o chamado referencia.
   regra de texto descobre: que "Hewlett-Packard" é HP), e os apelidos
   que a casa ensina. O índice único por chave é o que impede a duplicata
   de nascer; `POST /manufacturers/:id/juntar` é a saída para a que já
-  nasceu. Modelo e sistema operacional ainda não têm o equivalente — o
-  SMBIOS responde a mesma coisa nas duas máquinas para modelo, então o
-  problema é menor e ainda não apareceu.
+  nasceu.
+  **Modelo e sistema operacional entraram em 28/09/2026**, e fecham o
+  item. O modelo tinha uma agravante que o fabricante não tem: o SMBIOS
+  não combina as duas pontas — a HP manda `Manufacturer` =
+  "Hewlett-Packard" e `Model` = "HP EliteBook 840 G8 Notebook PC", com o
+  fabricante colado na frente. A chave tira o prefixo por qualquer
+  grafia conhecida do fabricante, e tira o sufixo genérico ("Notebook
+  PC") mas **não** o formato do gabinete: "OptiPlex 7090 Tower" e
+  "OptiPlex 7090 SFF" têm placa e fonte diferentes, e juntá-los
+  esconderia o que o técnico precisa antes de comprar peça. O maior
+  ganho nem era o dicionário: era o filtro de lixo. "System Product
+  Name" e "To Be Filled By O.E.M." viravam modelos do catálogo, um por
+  máquina branca varrida.
+  O de SO é de outra forma, e é a única exceção da família: não aponta
+  para linha nenhuma, porque `osName`/`osVersion` são colunas por
+  decisão. É regra de reescrita — "este caption quer dizer este produto
+  e esta edição" —, que é o que o GLPI chama de dicionário e é de fato.
+  Dois campos porque são dois eixos: "quantas máquinas ainda estão no
+  Windows 10?" ignora a edição, "quantas numa Home?" ignora o produto, e
+  com um texto só nenhuma das duas sai de um `where`. A regra da casa
+  vence a função pura, senão não corrigiria nada, e ensinar reclassifica
+  o parque na mesma chamada — ensinar sem reclassificar seria ensinar
+  para nada, porque a máquina que saiu de operação nunca mais varre.
 - **Inventário automático** — **feito em 24/09/2026**, e não como o
   GLPI faz: em vez de receber o que o agente dele coleta, o Desk tem
   agente próprio (`agente/`, PowerShell, Windows). `POST

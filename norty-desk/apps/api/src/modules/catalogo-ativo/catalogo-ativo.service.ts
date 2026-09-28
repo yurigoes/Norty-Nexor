@@ -8,6 +8,9 @@ import type {
   FabricanteView,
   LocalizacaoView,
   ModeloDeAtivoView,
+  ReclassificacaoView,
+  RegraDeSistemaView,
+  SistemasDoParqueView,
 } from '@norty-desk/shared';
 import { Prisma } from '@prisma/client';
 
@@ -15,10 +18,13 @@ import type { UsuarioAutenticado } from '../../common/decorators/current-user.de
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { DicionarioDeFabricante } from './fabricantes.dicionario';
+import { DicionarioDeModelo } from './modelos.dicionario';
+import { DicionarioDeSistemaOperacional } from './sistemas.dicionario';
 import type {
   EscreverFabricanteDto,
   EscreverLocalizacaoDto,
   EscreverModeloDeAtivoDto,
+  EscreverRegraDeSistemaDto,
 } from './dto';
 
 /** Teto da subida na árvore. Ciclo no banco não vira laço infinito aqui. */
@@ -45,6 +51,8 @@ export class CatalogoDoAtivoService {
     private readonly prisma: PrismaService,
     private readonly auditoria: AuditoriaService,
     private readonly dicionario: DicionarioDeFabricante,
+    private readonly dicionarioDeModelo: DicionarioDeModelo,
+    private readonly sistemas: DicionarioDeSistemaOperacional,
   ) {}
 
   // -------------------------------------------------------------------
@@ -523,17 +531,27 @@ export class CatalogoDoAtivoService {
       include: {
         manufacturer: { select: { id: true, name: true } },
         _count: { select: { assets: true } },
+        aliases: { orderBy: { alias: 'asc' }, select: { id: true, alias: true } },
       },
       orderBy: [{ kind: 'asc' }, { name: 'asc' }],
     });
 
-    return modelos.map((m) => ({
-      id: m.id,
-      name: m.name,
-      kind: m.kind,
-      manufacturer: m.manufacturer,
-      assetCount: m._count.assets,
-    }));
+    return modelos.map((m) => {
+      // A chave do próprio nome não é informação — todo modelo tem a
+      // sua. Interessa o que ele responde **além** dela.
+      const proprias = new Set(DicionarioDeModelo.chavesDe(m.name, m.manufacturer?.name));
+
+      return {
+        id: m.id,
+        name: m.name,
+        kind: m.kind,
+        manufacturer: m.manufacturer,
+        assetCount: m._count.assets,
+        aliases: m.aliases
+          .filter((a) => !proprias.has(a.alias))
+          .map((a) => ({ id: a.id, alias: a.alias })),
+      };
+    });
   }
 
   async criarModelo(
@@ -551,15 +569,25 @@ export class CatalogoDoAtivoService {
       manufacturerId: dto.manufacturerId ?? null,
     });
 
+    const fabricante = await this.nomeDoFabricante(usuario, dto.manufacturerId ?? null);
+    await this.exigirChaveDeModeloLivre(usuario, dto.name, fabricante);
+
     try {
-      await this.prisma.assetModel.create({
+      const criado = await this.prisma.assetModel.create({
         data: {
           organizationId: usuario.organizationId,
           name: dto.name,
           kind: dto.kind ?? 'OUTRO',
           manufacturerId: dto.manufacturerId ?? null,
         },
+        select: { id: true },
       });
+
+      await this.dicionarioDeModelo.ensinar(
+        usuario.organizationId,
+        criado.id,
+        DicionarioDeModelo.chavesDe(dto.name, fabricante),
+      );
     } catch (erro) {
       throw CatalogoDoAtivoService.traduzirDuplicidade(erro, `modelo "${dto.name}"`);
     }
@@ -595,6 +623,12 @@ export class CatalogoDoAtivoService {
       id,
     );
 
+    const antes = await this.nomeDoFabricante(usuario, atual.manufacturerId);
+    const depois = await this.nomeDoFabricante(
+      usuario,
+      dto.manufacturerId === undefined ? atual.manufacturerId : (dto.manufacturerId ?? null),
+    );
+
     try {
       await this.prisma.assetModel.update({
         where: { id },
@@ -607,6 +641,15 @@ export class CatalogoDoAtivoService {
     } catch (erro) {
       throw CatalogoDoAtivoService.traduzirDuplicidade(erro, `modelo "${dto.name}"`);
     }
+
+    // O nome velho **continua** valendo como apelido, igual ao
+    // fabricante: corrigir "20XW00AABR" para "ThinkPad T14 Gen 2" não faz
+    // a máquina mandar outra coisa, e sem isto a próxima varredura
+    // recriaria o cadastro que acabou de ser corrigido.
+    await this.dicionarioDeModelo.ensinar(usuario.organizationId, id, [
+      ...DicionarioDeModelo.chavesDe(atual.name, antes),
+      ...DicionarioDeModelo.chavesDe(dto.name, depois),
+    ]);
 
     return this.modelos(usuario);
   }
@@ -630,9 +673,445 @@ export class CatalogoDoAtivoService {
     return this.modelos(usuario);
   }
 
+  /**
+   * Um nome a mais pelo qual este modelo atende.
+   *
+   * O caso que justifica a tela: a Lenovo manda "20XW00AABR" e ninguém
+   * consegue adivinhar que é um ThinkPad T14 Gen 2. Quem sabe ensina uma
+   * vez, e a próxima varredura cai no cadastro certo.
+   */
+  async apelidarModelo(
+    usuario: UsuarioAutenticado,
+    id: string,
+    texto: string,
+  ): Promise<ModeloDeAtivoView[]> {
+    const modelo = await this.prisma.assetModel.findFirst({
+      where: { id, organizationId: usuario.organizationId },
+      select: { id: true, name: true, manufacturer: { select: { name: true } } },
+    });
+    if (!modelo) throw new NotFoundException('Modelo não encontrado.');
+
+    const chaves = DicionarioDeModelo.chavesDe(texto, modelo.manufacturer?.name);
+    if (chaves.length === 0) {
+      throw new BadRequestException('Este apelido não tem letra nem número que o identifique.');
+    }
+
+    const dono = await this.dicionarioDeModelo.procurarPorTexto(
+      usuario.organizationId,
+      texto,
+      modelo.manufacturer?.name,
+    );
+
+    if (dono && dono !== id) {
+      const outro = await this.prisma.assetModel.findUnique({
+        where: { id: dono },
+        select: { name: true },
+      });
+
+      throw new ConflictException(
+        `"${texto}" já responde pelo modelo "${outro?.name}". ` +
+          'Se forem o mesmo, junte os dois cadastros em vez de apelidar.',
+      );
+    }
+
+    await this.dicionarioDeModelo.ensinar(usuario.organizationId, id, chaves);
+
+    await this.auditoria.registrar(usuario, {
+      action: 'modelo.apelidado',
+      entity: 'AssetModel',
+      entityId: id,
+      depois: { name: modelo.name, apelidos: chaves },
+    });
+
+    return this.modelos(usuario);
+  }
+
+  async removerApelidoDeModelo(
+    usuario: UsuarioAutenticado,
+    id: string,
+    aliasId: string,
+  ): Promise<ModeloDeAtivoView[]> {
+    const apelido = await this.prisma.assetModelAlias.findFirst({
+      where: { id: aliasId, assetModelId: id, organizationId: usuario.organizationId },
+      include: { assetModel: { select: { name: true, manufacturer: { select: { name: true } } } } },
+    });
+    if (!apelido) throw new NotFoundException('Apelido não encontrado.');
+
+    if (
+      DicionarioDeModelo.chavesDe(
+        apelido.assetModel.name,
+        apelido.assetModel.manufacturer?.name,
+      ).includes(apelido.alias)
+    ) {
+      throw new BadRequestException(
+        'Este é o nome do próprio modelo, não um apelido. Renomeie o modelo.',
+      );
+    }
+
+    await this.prisma.assetModelAlias.delete({ where: { id: aliasId } });
+
+    await this.auditoria.registrar(usuario, {
+      action: 'modelo.apelido-removido',
+      entity: 'AssetModel',
+      entityId: id,
+      antes: { apelido: apelido.alias },
+    });
+
+    return this.modelos(usuario);
+  }
+
+  /**
+   * Junta dois cadastros que são o mesmo equipamento.
+   *
+   * A saída para a sujeira que já está no banco — e aqui ela é mais
+   * comum que no fabricante, porque o nome do modelo tem mais formas de
+   * ser escrito: "20XW00AABR", "ThinkPad T14 Gen 2" e "Thinkpad T14"
+   * podem ser três linhas com máquinas em cada uma.
+   *
+   * Tudo o que aponta para o absorvido passa ao que fica, e o **nome
+   * dele vira apelido** — senão a próxima varredura o recria.
+   */
+  async juntarModelos(
+    usuario: UsuarioAutenticado,
+    id: string,
+    absorvidoId: string,
+  ): Promise<ModeloDeAtivoView[]> {
+    if (id === absorvidoId) {
+      throw new BadRequestException('Um modelo não se junta com ele mesmo.');
+    }
+
+    const onde = { organizationId: usuario.organizationId };
+    const selecao = {
+      id: true,
+      name: true,
+      manufacturer: { select: { name: true } },
+      _count: { select: { assets: true } },
+    };
+
+    const [fica, sai] = await Promise.all([
+      this.prisma.assetModel.findFirst({ where: { id, ...onde }, select: selecao }),
+      this.prisma.assetModel.findFirst({ where: { id: absorvidoId, ...onde }, select: selecao }),
+    ]);
+
+    if (!fica || !sai) throw new NotFoundException('Modelo não encontrado.');
+
+    const organizationId = usuario.organizationId;
+    const apelidosQueSobem = [
+      ...DicionarioDeModelo.chavesDe(sai.name, sai.manufacturer?.name),
+      ...DicionarioDeModelo.chavesDe(fica.name, fica.manufacturer?.name),
+    ];
+
+    // Uma transação só: metade da junção deixa equipamento apontando
+    // para um modelo que não existe mais.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.asset.updateMany({
+        where: { organizationId, assetModelId: absorvidoId },
+        data: { assetModelId: id },
+      });
+
+      // A compatibilidade de consumível tem chave composta
+      // `(assetModelId, itemId)`: o mesmo cartucho declarado nos dois
+      // lados viraria duas linhas iguais, e a chave recusa. O que já
+      // existe no modelo que fica prevalece; o do absorvido é apagado.
+      const [meus, dele] = await Promise.all([
+        tx.consumableItemModel.findMany({ where: { assetModelId: id } }),
+        tx.consumableItemModel.findMany({ where: { assetModelId: absorvidoId } }),
+      ]);
+
+      const jaTenho = new Set(meus.map((c) => c.itemId));
+
+      for (const compat of dele) {
+        const chave = { itemId: compat.itemId, assetModelId: absorvidoId };
+
+        if (jaTenho.has(compat.itemId)) {
+          await tx.consumableItemModel.delete({ where: { itemId_assetModelId: chave } });
+        } else {
+          await tx.consumableItemModel.update({
+            where: { itemId_assetModelId: chave },
+            data: { assetModelId: id },
+          });
+        }
+      }
+
+      await tx.assetModelAlias.updateMany({
+        where: { organizationId, assetModelId: absorvidoId },
+        data: { assetModelId: id },
+      });
+
+      await tx.assetModel.delete({ where: { id: absorvidoId } });
+
+      await tx.assetModelAlias.createMany({
+        data: apelidosQueSobem.map((alias) => ({ organizationId, assetModelId: id, alias })),
+        skipDuplicates: true,
+      });
+    });
+
+    await this.auditoria.registrar(usuario, {
+      action: 'modelo.juntado',
+      entity: 'AssetModel',
+      entityId: id,
+      antes: { absorvido: sai.name, ativos: sai._count.assets },
+      depois: { name: fica.name },
+    });
+
+    return this.modelos(usuario);
+  }
+
+  // -------------------------------------------------------------------
+  // Dicionário de sistema operacional
+  // -------------------------------------------------------------------
+
+  /**
+   * O que o parque tem hoje, do ponto de vista do sistema operacional.
+   *
+   * Duas listas, porque a tela faz duas perguntas. `porProduto` é o
+   * relatório — "quantas máquinas ainda estão no Windows 10?". `captions`
+   * é o material de trabalho: **não dá para ensinar o que ninguém sabe
+   * que existe**, e o caption estranho é exatamente o que desaparece de
+   * qualquer agrupamento.
+   *
+   * O que aparece em cada caption é o que está **gravado**, não o que a
+   * função diria agora: é o valor que os relatórios estão usando, e é
+   * sobre ele que a decisão de ensinar se toma. Um mesmo caption pode
+   * aparecer em duas linhas — a correção por build separa a máquina que
+   * subiu para o 11 daquela que ficou no 10 —, e isso é informação.
+   */
+  async sistemasDoParque(usuario: UsuarioAutenticado): Promise<SistemasDoParqueView> {
+    const organizationId = usuario.organizationId;
+
+    const [porProduto, porCaption, regras] = await Promise.all([
+      this.prisma.asset.groupBy({
+        by: ['osProduct', 'osEdition'],
+        where: { organizationId, osName: { not: null } },
+        _count: { _all: true },
+      }),
+      this.prisma.asset.groupBy({
+        by: ['osName', 'osProduct', 'osEdition'],
+        where: { organizationId, osName: { not: null } },
+        _count: { _all: true },
+      }),
+      this.prisma.operatingSystemAlias.findMany({
+        where: { organizationId },
+        select: { alias: true },
+      }),
+    ]);
+
+    const ensinados = new Set(regras.map((r) => r.alias));
+
+    return {
+      porProduto: porProduto
+        .map((p) => ({
+          product: p.osProduct,
+          edition: p.osEdition,
+          assetCount: p._count._all,
+        }))
+        .sort((a, b) => b.assetCount - a.assetCount),
+
+      captions: porCaption
+        .map((c) => {
+          const alias = DicionarioDeSistemaOperacional.chaveDe(c.osName ?? '');
+
+          return {
+            osName: c.osName ?? '',
+            assetCount: c._count._all,
+            alias,
+            product: c.osProduct,
+            edition: c.osEdition,
+            ensinado: ensinados.has(alias),
+          };
+        })
+        .sort((a, b) => b.assetCount - a.assetCount),
+    };
+  }
+
+  async regrasDeSistema(usuario: UsuarioAutenticado): Promise<RegraDeSistemaView[]> {
+    const organizationId = usuario.organizationId;
+
+    const [regras, porCaption] = await Promise.all([
+      this.prisma.operatingSystemAlias.findMany({
+        where: { organizationId },
+        orderBy: { alias: 'asc' },
+      }),
+      this.prisma.asset.groupBy({
+        by: ['osName'],
+        where: { organizationId, osName: { not: null } },
+        _count: { _all: true },
+      }),
+    ]);
+
+    // Quantas máquinas cada regra está classificando. Duas grafias do
+    // mesmo caption caem na mesma chave, então a contagem soma por chave
+    // e não por texto.
+    const porChave = new Map<string, number>();
+
+    for (const c of porCaption) {
+      const chave = DicionarioDeSistemaOperacional.chaveDe(c.osName ?? '');
+      porChave.set(chave, (porChave.get(chave) ?? 0) + c._count._all);
+    }
+
+    return regras.map((r) => ({
+      id: r.id,
+      alias: r.alias,
+      product: r.product,
+      edition: r.edition,
+      assetCount: porChave.get(r.alias) ?? 0,
+    }));
+  }
+
+  /**
+   * Ensina — ou corrige — a regra de um caption.
+   *
+   * Reclassifica o parque na mesma chamada. Ensinar e não reclassificar
+   * seria ensinar para nada: as máquinas já varridas continuariam com a
+   * classificação antiga, e a próxima varredura pode demorar dias — ou
+   * nunca vir, se a máquina saiu de operação. Quem ensina espera ver o
+   * número mudar.
+   */
+  async escreverRegraDeSistema(
+    usuario: UsuarioAutenticado,
+    dto: EscreverRegraDeSistemaDto,
+  ): Promise<RegraDeSistemaView[]> {
+    const alias = DicionarioDeSistemaOperacional.chaveDe(dto.caption);
+
+    if (!alias || !/[a-z0-9]/.test(alias)) {
+      throw new BadRequestException('Este texto não tem letra nem número que o identifique.');
+    }
+
+    const product = dto.product.trim().replace(/\s+/g, ' ');
+    const edition = dto.edition?.trim().replace(/\s+/g, ' ') || null;
+
+    const antes = await this.prisma.operatingSystemAlias.findUnique({
+      where: { organizationId_alias: { organizationId: usuario.organizationId, alias } },
+      select: { product: true, edition: true },
+    });
+
+    await this.prisma.operatingSystemAlias.upsert({
+      where: { organizationId_alias: { organizationId: usuario.organizationId, alias } },
+      create: { organizationId: usuario.organizationId, alias, product, edition },
+      update: { product, edition },
+    });
+
+    await this.sistemas.reclassificar(usuario.organizationId);
+
+    await this.auditoria.registrar(usuario, {
+      action: antes ? 'so.regra-corrigida' : 'so.regra-criada',
+      entity: 'OperatingSystemAlias',
+      entityId: alias,
+      ...(antes ? { antes } : {}),
+      depois: { alias, product, edition },
+    });
+
+    return this.regrasDeSistema(usuario);
+  }
+
+  /**
+   * Apaga a regra e reclassifica.
+   *
+   * Sem reclassificar, o parque ficaria com o resultado de uma regra que
+   * não existe mais — que é pior que estar errado, porque não há onde
+   * olhar para descobrir de onde veio.
+   */
+  async removerRegraDeSistema(
+    usuario: UsuarioAutenticado,
+    id: string,
+  ): Promise<RegraDeSistemaView[]> {
+    const regra = await this.prisma.operatingSystemAlias.findFirst({
+      where: { id, organizationId: usuario.organizationId },
+    });
+    if (!regra) throw new NotFoundException('Regra não encontrada.');
+
+    await this.prisma.operatingSystemAlias.delete({ where: { id } });
+    await this.sistemas.reclassificar(usuario.organizationId);
+
+    await this.auditoria.registrar(usuario, {
+      action: 'so.regra-removida',
+      entity: 'OperatingSystemAlias',
+      entityId: regra.alias,
+      antes: { alias: regra.alias, product: regra.product, edition: regra.edition },
+    });
+
+    return this.regrasDeSistema(usuario);
+  }
+
+  /**
+   * Reaplica o dicionário sobre o parque, sem mexer em regra nenhuma.
+   *
+   * É a porta para o caso em que a classificação mudou sem ninguém
+   * ensinar nada: as colunas nasceram nulas na migração, e uma versão
+   * nova da aplicação pode melhorar a função pura. Botão explícito, e
+   * não um cron: rodar sozinho escondereria a mudança de número de quem
+   * precisa explicá-la.
+   */
+  async reclassificarSistemas(usuario: UsuarioAutenticado): Promise<ReclassificacaoView> {
+    const resultado = await this.sistemas.reclassificar(usuario.organizationId);
+
+    await this.auditoria.registrar(usuario, {
+      action: 'so.reclassificado',
+      entity: 'Organization',
+      entityId: usuario.organizationId,
+      depois: resultado,
+    });
+
+    return resultado;
+  }
+
   // -------------------------------------------------------------------
   // Internos
   // -------------------------------------------------------------------
+
+  /**
+   * O nome do fabricante deste id, que é o que a chave do modelo precisa.
+   *
+   * A chave é calculada em `packages/shared` a partir do nome — ver
+   * `chaveDeModelo`, que tira o fabricante colado na frente. Só o id não
+   * serve.
+   */
+  private async nomeDoFabricante(
+    usuario: UsuarioAutenticado,
+    manufacturerId: string | null,
+  ): Promise<string | null> {
+    if (!manufacturerId) return null;
+
+    const fabricante = await this.prisma.manufacturer.findFirst({
+      where: { id: manufacturerId, organizationId: usuario.organizationId },
+      select: { name: true },
+    });
+
+    return fabricante?.name ?? null;
+  }
+
+  /**
+   * Recusa o modelo cujo nome o dicionário já resolve para outro.
+   *
+   * Diferente de `exigirNomeLivre`, que compara texto sob o mesmo
+   * fabricante: aqui a pergunta é se cadastrar "EliteBook 840 G8 Notebook
+   * PC" vai cair no "EliteBook 840 G8" que já existe. Cai — e deixar
+   * criar os dois é criar a duplicata que o dicionário existe para
+   * impedir.
+   */
+  private async exigirChaveDeModeloLivre(
+    usuario: UsuarioAutenticado,
+    nome: string,
+    fabricante: string | null,
+    ignorarId?: string,
+  ): Promise<void> {
+    const dono = await this.dicionarioDeModelo.procurarPorTexto(
+      usuario.organizationId,
+      nome,
+      fabricante,
+    );
+
+    if (!dono || dono === ignorarId) return;
+
+    const outro = await this.prisma.assetModel.findUnique({
+      where: { id: dono },
+      select: { name: true },
+    });
+
+    throw new ConflictException(
+      `"${nome}" é o mesmo modelo que "${outro?.name}", que já está cadastrado.`,
+    );
+  }
 
   /**
    * Recusa nome repetido entre irmãos, sem olhar maiúscula.

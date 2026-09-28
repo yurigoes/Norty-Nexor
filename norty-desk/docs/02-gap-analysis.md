@@ -265,14 +265,13 @@ meu time / ler todos são permissões distintas.
 
 ## F. Cobertura do GLPI
 
-> **Estado em 27/09/2026: as oito fases estão entregues.** A tabela de
+> **Estado em 28/09/2026: as oito fases estão entregues.** A tabela de
 > áreas abaixo está marcada uma a uma. O que a paridade ainda não
-> alcança, e está dito na linha de cada área: dicionário de **modelo** e
-> de **sistema operacional** (só o de fabricante existe), **busca salva
-> por pessoa** (o filtro da fila mora na URL, que se manda por link, mas
-> não se guarda), **estêncil** de datacenter (fora de propósito) e, no
-> LDAP, **grupo do AD virando equipe ou perfil** e **réplica de
-> diretório** (`docs/13-autenticacao-ldap.md`).
+> alcança, e está dito na linha de cada área: **busca salva por pessoa**
+> (o filtro da fila mora na URL, que se manda por link, mas não se
+> guarda), **estêncil** de datacenter (fora de propósito) e, no LDAP,
+> **grupo do AD virando equipe ou perfil** e **réplica de diretório**
+> (`docs/13-autenticacao-ldap.md`).
 
 **Decisão do projeto: o Desk cobre todo o GLPI.** A versão anterior
 deste documento propunha cortar inventário de datacenter, rede,
@@ -317,7 +316,7 @@ seguem valendo:
 | Consumíveis e cartuchos | ~8 | **6 ✅** | estoque por movimentação, não uma linha por unidade |
 | Rede: portas, IP, VLAN, FQDN | ~30 | **6 ✅** | `inet` do Postgres; conflito de IP barrado no banco |
 | Datacenter: rack, PDU, sala, cabo, estêncil | ~25 | **7 ✅ (rack, sala)** | U com face, sem sobreposição; PDU é equipamento; estêncil não |
-| Dicionários de regra | ~40 | **7 ✅ (fabricante)** | chave do nome, lista conhecida e apelidos da casa; modelo e sistema operacional ainda sem o equivalente |
+| Dicionários de regra | ~40 | **7 ✅** | fabricante, modelo e sistema operacional: chave do nome, lista conhecida e apelidos da casa; o de SO é regra de reescrita, não catálogo |
 | Inventário automático (agente, `RuleImportAsset`) | ~12 | **7 ✅** | agente próprio (`agente/`, PowerShell), não o do GLPI; toda decisão no servidor |
 | Projetos e tarefas de projeto | ~15 | **8 ✅** | quadro, linha do tempo, custo dos chamados; agenda da equipe junto |
 | Reservas de equipamento | 2 | **8 ✅** | janela sem sobreposição barrada por `EXCLUDE` no banco |

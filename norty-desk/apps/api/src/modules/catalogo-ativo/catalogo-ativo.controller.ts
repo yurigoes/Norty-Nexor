@@ -9,7 +9,14 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import type { FabricanteView, LocalizacaoView, ModeloDeAtivoView } from '@norty-desk/shared';
+import type {
+  FabricanteView,
+  LocalizacaoView,
+  ModeloDeAtivoView,
+  ReclassificacaoView,
+  RegraDeSistemaView,
+  SistemasDoParqueView,
+} from '@norty-desk/shared';
 
 import { CurrentUser, type UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
@@ -18,10 +25,12 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { CatalogoDoAtivoService } from './catalogo-ativo.service';
 import {
   ApelidarFabricanteDto,
+  ApelidarModeloDto,
   EscreverFabricanteDto,
-  JuntarFabricantesDto,
+  JuntarCadastrosDto,
   EscreverLocalizacaoDto,
   EscreverModeloDeAtivoDto,
+  EscreverRegraDeSistemaDto,
 } from './dto';
 
 @Controller()
@@ -134,7 +143,7 @@ export class CatalogoDoAtivoController {
   juntar(
     @CurrentUser() usuario: UsuarioAutenticado,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: JuntarFabricantesDto,
+    @Body() dto: JuntarCadastrosDto,
   ): Promise<FabricanteView[]> {
     return this.catalogo.juntarFabricantes(usuario, id, dto.absorvidoId);
   }
@@ -171,5 +180,82 @@ export class CatalogoDoAtivoController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<ModeloDeAtivoView[]> {
     return this.catalogo.removerModelo(usuario, id);
+  }
+
+  @Post('asset-models/:id/apelidos')
+  @RequirePermission('ativo:catalogo')
+  apelidarModelo(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ApelidarModeloDto,
+  ): Promise<ModeloDeAtivoView[]> {
+    return this.catalogo.apelidarModelo(usuario, id, dto.alias);
+  }
+
+  @Delete('asset-models/:id/apelidos/:aliasId')
+  @RequirePermission('ativo:catalogo')
+  removerApelidoDeModelo(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('aliasId', ParseUUIDPipe) aliasId: string,
+  ): Promise<ModeloDeAtivoView[]> {
+    return this.catalogo.removerApelidoDeModelo(usuario, id, aliasId);
+  }
+
+  @Post('asset-models/:id/juntar')
+  @RequirePermission('ativo:catalogo')
+  juntarModelos(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: JuntarCadastrosDto,
+  ): Promise<ModeloDeAtivoView[]> {
+    return this.catalogo.juntarModelos(usuario, id, dto.absorvidoId);
+  }
+
+  // -----------------------------------------------------------------
+  // Dicionário de sistema operacional
+  // -----------------------------------------------------------------
+
+  /**
+   * O parque visto pelo SO. Leitura, e por isso `ativo:ler`: é a mesma
+   * pergunta que o relatório faz, e quem lê o inventário pode fazê-la.
+   */
+  @Get('operating-systems')
+  @RequirePermission('ativo:ler')
+  sistemas(@CurrentUser() usuario: UsuarioAutenticado): Promise<SistemasDoParqueView> {
+    return this.catalogo.sistemasDoParque(usuario);
+  }
+
+  @Get('operating-systems/regras')
+  @RequirePermission('ativo:ler')
+  regrasDeSistema(@CurrentUser() usuario: UsuarioAutenticado): Promise<RegraDeSistemaView[]> {
+    return this.catalogo.regrasDeSistema(usuario);
+  }
+
+  /** Cria ou corrige — a chave é o caption normalizado, então é `upsert`. */
+  @Post('operating-systems/regras')
+  @RequirePermission('ativo:catalogo')
+  escreverRegraDeSistema(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Body() dto: EscreverRegraDeSistemaDto,
+  ): Promise<RegraDeSistemaView[]> {
+    return this.catalogo.escreverRegraDeSistema(usuario, dto);
+  }
+
+  @Delete('operating-systems/regras/:id')
+  @RequirePermission('ativo:catalogo')
+  removerRegraDeSistema(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<RegraDeSistemaView[]> {
+    return this.catalogo.removerRegraDeSistema(usuario, id);
+  }
+
+  @Post('operating-systems/reclassificar')
+  @RequirePermission('ativo:catalogo')
+  reclassificarSistemas(
+    @CurrentUser() usuario: UsuarioAutenticado,
+  ): Promise<ReclassificacaoView> {
+    return this.catalogo.reclassificarSistemas(usuario);
   }
 }

@@ -2685,3 +2685,417 @@ export function canonizarFabricante(
     nome: conhecido?.nome ?? texto.trim().replace(/\s+/g, ' '),
   };
 }
+
+// ---------------------------------------------------------------------
+// Dicionário de modelo de equipamento
+// ---------------------------------------------------------------------
+
+/**
+ * O que o SMBIOS devolve no campo de modelo quando ninguém o preencheu.
+ *
+ * Mesma ideia de `SERIE_DE_MENTIRA`, e pela mesma razão: sem esta lista
+ * cada máquina branca cria um modelo chamado "System Product Name" no
+ * catálogo, e o relatório de parque por modelo passa a ter uma linha que
+ * é o nome de um campo vazio. É a sujeira que mais aparece, porque a
+ * montadora que não preenche a série também não preenche o modelo.
+ *
+ * Sem a regra de tamanho mínimo que a série tem: "X1" é modelo de
+ * verdade (ThinkPad X1), e cortar por comprimento apagaria um real para
+ * pegar um falso.
+ */
+const MODELO_DE_MENTIRA = new Set([
+  'tobefilledbyoem',
+  'tobefilledbyoem.',
+  'tobefilled',
+  'systemproductname',
+  'systemmodel',
+  'systemname',
+  'systemversion',
+  'productname',
+  'defaultstring',
+  'allseries',
+  'none',
+  'notspecified',
+  'notapplicable',
+  'na',
+  'n/a',
+  'unknown',
+  'undefined',
+  'invalid',
+  'oem',
+  'tbd',
+  'xxxxxxx',
+  '123456789',
+]);
+
+/**
+ * Todas as grafias conhecidas do fabricante que este texto nomeia.
+ *
+ * `"HP"` devolve `["hp", "hewlett packard", "hewlett packard
+ * development"]`, e `"Hewlett-Packard"` devolve a mesma lista: a
+ * pergunta é qual **empresa**, não qual texto.
+ *
+ * Serve ao dicionário de modelo. O SMBIOS não combina as duas pontas —
+ * a HP manda `Manufacturer` = "Hewlett-Packard" e `Model` = "HP Compaq
+ * 6200 Pro", e há máquina que faz o contrário. Tentar só a grafia que
+ * veio no campo do fabricante deixaria metade dos casos passar.
+ */
+export function grafiasDeFabricante(nome: string): string[] {
+  const canonico = canonizarFabricante(nome);
+  if (!canonico) return [];
+
+  const conhecido = FABRICANTES_CONHECIDOS.find(
+    (f) => chaveDeFabricante(f.nome) === canonico.chaveCanonica,
+  );
+
+  const grafias = new Set([canonico.chave, canonico.chaveCanonica]);
+  for (const c of conhecido?.chaves ?? []) grafias.add(chaveDeFabricante(c));
+
+  // A mais longa primeiro: tirar "hp" de "hewlett packard compaq" não
+  // casa, e tirar "hewlett packard" dele casa.
+  return [...grafias].filter(Boolean).sort((a, b) => b.length - a.length);
+}
+
+/**
+ * O modelo que este texto informa, ou `null` quando não informa nada.
+ *
+ * Devolve o texto com os espaços colapsados — a limpeza de grafia é
+ * `chaveDeModelo`; aqui a pergunta é só se há modelo.
+ */
+export function modeloUtil(valor: string | null | undefined): string | null {
+  const limpo = (valor ?? '').trim().replace(/\s+/g, ' ');
+  if (!limpo) return null;
+
+  const chave = limpo
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\s._-]/g, '');
+
+  if (MODELO_DE_MENTIRA.has(chave)) return null;
+  if (!/[a-z0-9]/.test(chave)) return null;
+
+  return limpo;
+}
+
+/**
+ * Sufixos que descrevem o formato do gabinete e não o modelo.
+ *
+ * Só os que terminam na palavra genérica: a HP manda "EliteBook 840 G8
+ * **Notebook PC**", e o "Notebook PC" não distingue nada — todo
+ * EliteBook é um.
+ *
+ * O que **não** está aqui é deliberado. "Tower", "SFF", "Mini" e "Small
+ * Form Factor" soltos ficam: a Dell vende "OptiPlex 7090 Tower" e
+ * "OptiPlex 7090 Small Form Factor" como dois equipamentos diferentes,
+ * com placa e fonte diferentes, e juntá-los esconderia justamente o que
+ * o técnico precisa saber antes de comprar peça.
+ */
+const SUFIXOS_DE_GABINETE = [
+  'notebook pc',
+  'notebook computer',
+  'desktop pc',
+  'desktop computer',
+  'laptop pc',
+  'all in one pc',
+  'aio pc',
+  'personal computer',
+];
+
+/**
+ * O nome do modelo reduzido ao que o identifica.
+ *
+ * Minúsculas, sem acento, sem pontuação, espaços colapsados — e mais
+ * duas correções que só o inventário exige:
+ *
+ * 1. **O fabricante colado na frente sai.** A HP manda "HP EliteBook
+ *    840 G8"; quem digita na tela escreve "EliteBook 840 G8". São o
+ *    mesmo equipamento, e sem isto o catálogo teria os dois. Passa-se o
+ *    fabricante quando ele é conhecido — é o que o inventário tem em
+ *    mãos na mesma requisição.
+ * 2. **O sufixo de gabinete genérico sai** (ver `SUFIXOS_DE_GABINETE`).
+ *
+ * Devolve `''` quando não sobra nada.
+ */
+export function chaveDeModelo(nome: string, fabricante?: string | null): string {
+  let chave = nome
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+  if (!chave) return '';
+
+  // O prefixo do fabricante, por qualquer grafia conhecida dele.
+  if (fabricante) {
+    for (const prefixo of grafiasDeFabricante(fabricante)) {
+      if (!prefixo) continue;
+
+      if (chave.startsWith(`${prefixo} `)) {
+        const resto = chave.slice(prefixo.length + 1).trim();
+        // Só corta se sobrar modelo. Um modelo cadastrado com o nome do
+        // próprio fabricante existe (a impressora que só diz "HP"), e
+        // esvaziá-lo o esconderia do dicionário inteiro.
+        if (resto) {
+          chave = resto;
+          break;
+        }
+      }
+    }
+  }
+
+  for (const sufixo of SUFIXOS_DE_GABINETE) {
+    if (chave.endsWith(` ${sufixo}`)) {
+      const resto = chave.slice(0, chave.length - sufixo.length - 1).trim();
+      if (resto) {
+        chave = resto;
+        break;
+      }
+    }
+  }
+
+  return chave;
+}
+
+/**
+ * O modelo que este texto quer dizer.
+ *
+ * `chave` é por onde procurá-lo; `nome` é como criá-lo se não existir —
+ * e aqui o nome é o texto **como veio**, sem o fabricante na frente,
+ * porque é o que a tela mostra ao lado da coluna de fabricante.
+ *
+ * `null` quando o texto não informa modelo nenhum (`modeloUtil`).
+ */
+export function canonizarModelo(
+  texto: string | null | undefined,
+  fabricante?: string | null,
+): { chave: string; nome: string } | null {
+  const util = modeloUtil(texto);
+  if (!util) return null;
+
+  const chave = chaveDeModelo(util, fabricante);
+  if (!chave) return null;
+
+  return { chave, nome: nomeSemFabricante(util, fabricante) };
+}
+
+/**
+ * O texto do modelo sem o nome do fabricante na frente, preservando a
+ * grafia original do que sobra — "HP EliteBook 840 G8" vira "EliteBook
+ * 840 G8", não "elitebook 840 g8".
+ */
+function nomeSemFabricante(nome: string, fabricante?: string | null): string {
+  if (!fabricante) return nome;
+
+  const palavras = nome.split(/\s+/);
+
+  for (const chave of grafiasDeFabricante(fabricante)) {
+    if (!chave) continue;
+
+    const quantas = chave.split(' ').length;
+    const inicio = chaveDeModelo(palavras.slice(0, quantas).join(' '));
+
+    if (inicio === chave && palavras.length > quantas) {
+      return palavras.slice(quantas).join(' ');
+    }
+  }
+
+  return nome;
+}
+
+// ---------------------------------------------------------------------
+// Dicionário de sistema operacional
+// ---------------------------------------------------------------------
+
+/**
+ * Edições, na grafia com que o parque as conta.
+ *
+ * "Professional" e "Pro" são a mesma edição escrita de dois jeitos pela
+ * própria Microsoft — a de 2009 diz "Professional", a de 2021 diz
+ * "Pro" —, e contá-las separado responde errado a "quantas máquinas
+ * precisam de licença Pro?".
+ */
+const EDICOES: Record<string, string> = {
+  pro: 'Pro',
+  professional: 'Pro',
+  'pro n': 'Pro',
+  'pro education': 'Pro Education',
+  'pro for workstations': 'Pro for Workstations',
+  'professional for workstations': 'Pro for Workstations',
+  home: 'Home',
+  'home basic': 'Home Basic',
+  'home premium': 'Home Premium',
+  'home single language': 'Home Single Language',
+  'single language': 'Home Single Language',
+  'home n': 'Home',
+  core: 'Home',
+  'core single language': 'Home Single Language',
+  enterprise: 'Enterprise',
+  'enterprise n': 'Enterprise',
+  'enterprise ltsc': 'Enterprise LTSC',
+  'enterprise ltsb': 'Enterprise LTSC',
+  education: 'Education',
+  'education n': 'Education',
+  standard: 'Standard',
+  'standard evaluation': 'Standard',
+  datacenter: 'Datacenter',
+  'datacenter evaluation': 'Datacenter',
+  essentials: 'Essentials',
+  foundation: 'Foundation',
+  ultimate: 'Ultimate',
+  starter: 'Starter',
+  business: 'Business',
+  iot: 'IoT',
+  'iot enterprise': 'IoT Enterprise',
+  ltsc: 'Enterprise LTSC',
+  lts: 'LTS',
+  server: 'Server',
+};
+
+/**
+ * Sistemas que não são Windows, pela chave do texto.
+ *
+ * Lista curta de propósito: o agente é do Windows, e cobrir o parque de
+ * verdade é cobrir bem uma família. O que não está aqui cai no retorno
+ * genérico — que preserva o texto, não o perde.
+ */
+const SO_CONHECIDOS: { chaves: string[]; produto: string }[] = [
+  { chaves: ['ubuntu'], produto: 'Ubuntu' },
+  { chaves: ['debian', 'debian gnu linux'], produto: 'Debian' },
+  { chaves: ['centos', 'centos linux', 'centos stream'], produto: 'CentOS' },
+  { chaves: ['red hat enterprise linux', 'rhel'], produto: 'Red Hat Enterprise Linux' },
+  { chaves: ['fedora', 'fedora linux'], produto: 'Fedora' },
+  { chaves: ['alpine linux', 'alpine'], produto: 'Alpine Linux' },
+  { chaves: ['arch linux', 'arch'], produto: 'Arch Linux' },
+  { chaves: ['opensuse', 'opensuse leap', 'suse linux enterprise server'], produto: 'openSUSE' },
+  { chaves: ['linux mint', 'mint'], produto: 'Linux Mint' },
+  { chaves: ['rocky linux'], produto: 'Rocky Linux' },
+  { chaves: ['almalinux', 'alma linux'], produto: 'AlmaLinux' },
+  { chaves: ['macos', 'mac os', 'mac os x', 'os x'], produto: 'macOS' },
+  { chaves: ['freebsd'], produto: 'FreeBSD' },
+  { chaves: ['android'], produto: 'Android' },
+  { chaves: ['ios', 'ipados'], produto: 'iOS' },
+];
+
+/** A chave pela qual um caption de SO é procurado no dicionário. */
+export function chaveDeSistemaOperacional(caption: string): string {
+  return caption
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9.]+/g, ' ')
+    .trim();
+}
+
+/**
+ * O build a partir do qual o Windows 10 passou a se chamar Windows 11.
+ *
+ * `Win32_OperatingSystem.Version` continua dizendo `10.0` nos dois — a
+ * Microsoft nunca mudou o número de versão maior —, e é só o build que
+ * os separa. Por isso o produto sai do `Caption`, e este número existe
+ * como rede de segurança para o caption que vem errado.
+ */
+const BUILD_DO_WINDOWS_11 = 22000;
+
+/**
+ * O que este `Win32_OperatingSystem.Caption` diz, em duas perguntas
+ * separadas: **qual produto** e **qual edição**.
+ *
+ * São dois eixos, e juntá-los num campo só é o que impede o relatório
+ * de responder. "Quantas máquinas ainda estão no Windows 10?" ignora a
+ * edição; "quantas estão numa Home, que não entra no domínio?" ignora o
+ * produto. Com um campo de texto só, nenhuma das duas sai de um `where`.
+ *
+ * A versão entra só como rede de segurança (ver `BUILD_DO_WINDOWS_11`).
+ *
+ * `null` quando o caption não tem letra nem número.
+ */
+export function canonizarSistemaOperacional(
+  caption: string | null | undefined,
+  versao?: string | null,
+): { produto: string; edicao: string | null; chave: string } | null {
+  const chave = chaveDeSistemaOperacional(caption ?? '');
+  if (!chave || !/[a-z0-9]/.test(chave)) return null;
+
+  // "Microsoft" na frente é assinatura da fabricante, não nome do
+  // produto: o caption diz "Microsoft Windows 11 Pro" e a máquina ao
+  // lado, recém-instalada, diz "Windows 11 Pro".
+  const sem = chave.replace(/^microsoft\s+/, '');
+
+  const servidor = /^windows server\s+(\d{4})(\s+r2)?\b/.exec(sem);
+  if (servidor) {
+    const resto = sem.slice(servidor[0].length).trim();
+    return {
+      chave,
+      produto: `Windows Server ${servidor[1]}${servidor[2] ? ' R2' : ''}`,
+      edicao: edicao(resto),
+    };
+  }
+
+  const cliente = /^windows\s+(\d+(?:\.\d+)?)\b/.exec(sem);
+  if (cliente) {
+    const resto = sem.slice(cliente[0].length).trim();
+    const build = Number.parseInt((versao ?? '').split('.')[2] ?? '', 10);
+
+    const numero =
+      cliente[1] === '10' && Number.isFinite(build) && build >= BUILD_DO_WINDOWS_11
+        ? '11'
+        : cliente[1];
+
+    return { chave, produto: `Windows ${numero}`, edicao: edicao(resto) };
+  }
+
+  // Windows sem número: "Windows XP Professional", "Windows Vista".
+  const antigo = /^windows\s+(xp|vista|7|2000|me|98)\b/.exec(sem);
+  if (antigo) {
+    const resto = sem.slice(antigo[0].length).trim();
+    const nome = antigo[1] === 'xp' ? 'XP' : antigo[1]!.charAt(0).toUpperCase() + antigo[1]!.slice(1);
+    return { chave, produto: `Windows ${nome}`, edicao: edicao(resto) };
+  }
+
+  for (const conhecido of SO_CONHECIDOS) {
+    for (const prefixo of [...conhecido.chaves].sort((a, b) => b.length - a.length)) {
+      if (sem !== prefixo && !sem.startsWith(`${prefixo} `)) continue;
+
+      const resto = sem.slice(prefixo.length).trim();
+      // A versão do Linux é parte do produto, não edição: "Ubuntu 22.04"
+      // e "Ubuntu 24.04" são dois alvos de atualização diferentes, e
+      // contá-los como um só esconde o que está para vencer.
+      //
+      // O número é consumido **inteiro** e depois cortado em dois
+      // componentes: "22.04.3" é a mesma 22.04 com correções aplicadas,
+      // e casar só "22.04" deixaria ".3" sobrando para a edição.
+      const versaoNoTexto = /^(\d+(?:\.\d+)*)/.exec(resto);
+      const doisPrimeiros = versaoNoTexto?.[1]!.split('.').slice(0, 2).join('.');
+
+      return {
+        chave,
+        produto: doisPrimeiros ? `${conhecido.produto} ${doisPrimeiros}` : conhecido.produto,
+        edicao: edicao(versaoNoTexto ? resto.slice(versaoNoTexto[0].length).trim() : resto),
+      };
+    }
+  }
+
+  // Desconhecido: o texto limpo vira o produto, com as palavras que
+  // vieram. Perder o caption seria pior que não o classificar — a
+  // pergunta "que SO é esse?" ainda se responde olhando.
+  return { chave, produto: (caption ?? '').trim().replace(/\s+/g, ' '), edicao: null };
+}
+
+/** A edição pela grafia canônica, ou o texto capitalizado, ou nada. */
+function edicao(texto: string): string | null {
+  const limpo = texto.replace(/\s+/g, ' ').trim();
+  if (!limpo) return null;
+
+  const conhecida = EDICOES[limpo];
+  if (conhecida) return conhecida;
+
+  // Palavra que não está no mapa: fica como veio, com inicial maiúscula.
+  // É o mesmo princípio do produto desconhecido — classificar errado é
+  // pior que não classificar.
+  return limpo
+    .split(' ')
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(' ');
+}

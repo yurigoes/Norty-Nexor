@@ -5,6 +5,8 @@ import type {
   FabricanteView,
   LocalizacaoView,
   ModeloDeAtivoView,
+  RegraDeSistemaView,
+  SistemasDoParqueView,
 } from '@norty-desk/shared';
 import { ASSET_KINDS, ROTULO_ATIVO, canonizarFabricante } from '@norty-desk/shared';
 
@@ -20,14 +22,22 @@ import {
   listarLocalizacoes,
   listarModelosDeAtivo,
   apelidarFabricante,
+  apelidarModelo,
+  escreverRegraDeSistema,
   juntarFabricantes,
+  juntarModelos,
+  lerSistemasDoParque,
+  listarRegrasDeSistema,
+  reclassificarSistemas,
+  removerApelidoDeModelo,
+  removerRegraDeSistema,
   removerApelidoDeFabricante,
   removerFabricante,
   removerLocalizacao,
   removerModeloDeAtivo,
 } from '../../api/catalogoAtivo';
 
-type Aba = 'LOCAIS' | 'FABRICANTES' | 'MODELOS';
+type Aba = 'LOCAIS' | 'FABRICANTES' | 'MODELOS' | 'SISTEMAS';
 
 /**
  * O catálogo que o cadastro do ativo escolhe em vez de digitar.
@@ -54,6 +64,7 @@ export function CatalogoDoAtivo() {
             ['LOCAIS', 'Localizações'],
             ['FABRICANTES', 'Fabricantes'],
             ['MODELOS', 'Modelos'],
+            ['SISTEMAS', 'Sistemas operacionais'],
           ] as [Aba, string][]
         ).map(([chave, rotulo]) => (
           <button
@@ -70,6 +81,7 @@ export function CatalogoDoAtivo() {
       {aba === 'LOCAIS' ? <ListaDeLocalizacoes /> : null}
       {aba === 'FABRICANTES' ? <ListaDeFabricantes /> : null}
       {aba === 'MODELOS' ? <ListaDeModelos /> : null}
+      {aba === 'SISTEMAS' ? <DicionarioDeSistemas /> : null}
     </div>
   );
 }
@@ -367,23 +379,26 @@ function FormularioDeLocalizacao({
  * O aviso de gêmeo aparece quando dois cadastros seriam o mesmo nome
  * para o dicionário. De hoje em diante isso não nasce — o cadastro novo
  * é recusado —, mas é o que sobrou de antes, e é a fila da junção.
+ *
+ * Serve fabricante e modelo: a lista de chaves é a mesma coisa nos dois,
+ * e duas cópias divergiriam na primeira mudança.
  */
 function Apelidos({
-  fabricante,
+  aliases,
   gemeo,
   aoRemover,
 }: {
-  fabricante: FabricanteView;
+  aliases: { id: string; alias: string }[];
   gemeo: string | undefined;
   aoRemover: (aliasId: string) => void;
 }) {
   return (
     <div className="pilha-sm">
-      {fabricante.aliases.length === 0 ? (
+      {aliases.length === 0 ? (
         <span className="campo-ajuda">Só pelo próprio nome.</span>
       ) : (
         <div className="linha" style={{ gap: 'var(--e-1)', flexWrap: 'wrap' }}>
-          {fabricante.aliases.map((a) => (
+          {aliases.map((a) => (
             <span key={a.id} className="selo -contorno mono">
               {a.alias}
               <button
@@ -645,7 +660,7 @@ function ListaDeFabricantes() {
                         </form>
                       ) : (
                         <Apelidos
-                          fabricante={f}
+                          aliases={f.aliases}
                           gemeo={gemeos.get(f.id)}
                           aoRemover={(aliasId) => {
                             setErro(null);
@@ -714,7 +729,12 @@ function ListaDeModelos() {
   const [modelos, setModelos] = useState<ModeloDeAtivoView[] | null>(null);
   const [fabricantes, setFabricantes] = useState<FabricanteView[]>([]);
   const [emEdicao, setEmEdicao] = useState<ModeloDeAtivoView | 'novo' | null>(null);
+  const [apelidando, setApelidando] = useState<{ id: string; alias: string } | null>(null);
+  const [juntando, setJuntando] = useState<{ id: string; absorvidoId: string } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+
+  const falhar = (e: unknown) =>
+    setErro(e instanceof ErroDaApi ? e.message : 'Não foi possível salvar.');
 
   useEffect(() => {
     void listarModelosDeAtivo()
@@ -732,7 +752,9 @@ function ListaDeModelos() {
       <div className="linha-entre">
         <span className="campo-ajuda">
           O modelo carrega o tipo do equipamento: escolher &quot;OptiPlex 7090&quot; no cadastro
-          já diz que aquilo é um computador.
+          já diz que aquilo é um computador. <strong>Apelidar</strong> é para o que a máquina
+          manda no lugar do nome — a Lenovo reporta o código de fábrica
+          (&quot;20XW00AABR&quot;), não &quot;ThinkPad T14 Gen 2&quot;.
         </span>
         <button type="button" className="btn -primario -sm" onClick={() => setEmEdicao('novo')}>
           Novo modelo
@@ -761,6 +783,7 @@ function ListaDeModelos() {
               <thead>
                 <tr>
                   <th>Modelo</th>
+                  <th>Também atende por</th>
                   <th>Tipo</th>
                   <th>Fabricante</th>
                   <th className="-num">Ativos</th>
@@ -771,33 +794,149 @@ function ListaDeModelos() {
                 {modelos.map((m) => (
                   <tr key={m.id}>
                     <td className="tabela-titulo-celula">{m.name}</td>
+                    <td>
+                      {apelidando?.id === m.id ? (
+                        <form
+                          className="linha"
+                          style={{ gap: 'var(--e-2)' }}
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            setErro(null);
+                            void apelidarModelo(m.id, apelidando.alias)
+                              .then((lista) => {
+                                setModelos(lista);
+                                setApelidando(null);
+                              })
+                              .catch(falhar);
+                          }}
+                        >
+                          <label className="so-leitor" htmlFor={`apelido-modelo-${m.id}`}>
+                            Nome que a varredura manda
+                          </label>
+                          <input
+                            id={`apelido-modelo-${m.id}`}
+                            className="input"
+                            required
+                            autoFocus
+                            placeholder="Ex.: 20XW00AABR"
+                            value={apelidando.alias}
+                            onChange={(e) => setApelidando({ id: m.id, alias: e.target.value })}
+                          />
+                          <button type="submit" className="btn -primario -sm">
+                            Salvar
+                          </button>
+                          <button
+                            type="button"
+                            className="btn -fantasma -sm"
+                            onClick={() => setApelidando(null)}
+                          >
+                            Cancelar
+                          </button>
+                        </form>
+                      ) : juntando?.id === m.id ? (
+                        <form
+                          className="linha"
+                          style={{ gap: 'var(--e-2)' }}
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            setErro(null);
+                            void juntarModelos(m.id, juntando.absorvidoId)
+                              .then((lista) => {
+                                setModelos(lista);
+                                setJuntando(null);
+                              })
+                              .catch(falhar);
+                          }}
+                        >
+                          <label className="so-leitor" htmlFor={`juntar-modelo-${m.id}`}>
+                            Cadastro que some dentro deste
+                          </label>
+                          <select
+                            id={`juntar-modelo-${m.id}`}
+                            className="select -auto"
+                            required
+                            value={juntando.absorvidoId}
+                            onChange={(e) => setJuntando({ id: m.id, absorvidoId: e.target.value })}
+                          >
+                            <option value="">Qual é o mesmo que este?</option>
+                            {modelos
+                              .filter((o) => o.id !== m.id)
+                              .map((o) => (
+                                <option key={o.id} value={o.id}>
+                                  {o.manufacturer ? `${o.manufacturer.name} ` : ''}
+                                  {o.name}
+                                </option>
+                              ))}
+                          </select>
+                          <button type="submit" className="btn -perigo -sm">
+                            Juntar os dois
+                          </button>
+                          <button
+                            type="button"
+                            className="btn -fantasma -sm"
+                            onClick={() => setJuntando(null)}
+                          >
+                            Cancelar
+                          </button>
+                        </form>
+                      ) : (
+                        <Apelidos
+                          aliases={m.aliases}
+                          gemeo={undefined}
+                          aoRemover={(aliasId) => {
+                            setErro(null);
+                            void removerApelidoDeModelo(m.id, aliasId)
+                              .then(setModelos)
+                              .catch(falhar);
+                          }}
+                        />
+                      )}
+                    </td>
                     <td>{ROTULO_ATIVO[m.kind]}</td>
                     <td>{m.manufacturer?.name ?? '—'}</td>
                     <td className="-num">{m.assetCount}</td>
                     <td className="-num">
-                      <button
-                        type="button"
-                        className="btn -fantasma -sm"
-                        onClick={() => setEmEdicao(m)}
-                      >
-                        Editar
-                      </button>
-                      <button
-                        type="button"
-                        className="btn -perigo -sm"
-                        onClick={() => {
-                          setErro(null);
-                          void removerModeloDeAtivo(m.id)
-                            .then(setModelos)
-                            .catch((e: unknown) =>
-                              setErro(
-                                e instanceof ErroDaApi ? e.message : 'Não foi possível apagar.',
-                              ),
-                            );
-                        }}
-                      >
-                        Apagar
-                      </button>
+                      {apelidando?.id === m.id || juntando?.id === m.id ? null : (
+                        <>
+                          <button
+                            type="button"
+                            className="btn -fantasma -sm"
+                            onClick={() => setEmEdicao(m)}
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            className="btn -fantasma -sm"
+                            onClick={() => setApelidando({ id: m.id, alias: '' })}
+                          >
+                            Apelidar
+                          </button>
+                          <button
+                            type="button"
+                            className="btn -fantasma -sm"
+                            onClick={() => setJuntando({ id: m.id, absorvidoId: '' })}
+                          >
+                            Juntar com…
+                          </button>
+                          <button
+                            type="button"
+                            className="btn -perigo -sm"
+                            onClick={() => {
+                              setErro(null);
+                              void removerModeloDeAtivo(m.id)
+                                .then(setModelos)
+                                .catch((e: unknown) =>
+                                  setErro(
+                                    e instanceof ErroDaApi ? e.message : 'Não foi possível apagar.',
+                                  ),
+                                );
+                            }}
+                          >
+                            Apagar
+                          </button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -953,6 +1092,284 @@ function FormularioDeModelo({
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Sistemas operacionais
+// ---------------------------------------------------------------------
+
+/**
+ * O dicionário de sistema operacional.
+ *
+ * Desenhada ao contrário das outras três abas, e de propósito: não há
+ * cadastro para listar. O que existe é o parque — e a aba começa pelo
+ * que ele tem, porque **não dá para ensinar o que ninguém sabe que
+ * existe**. O caption estranho é justamente o que desaparece de qualquer
+ * agrupamento, então ele aparece aqui em primeiro lugar, com a contagem
+ * do lado.
+ *
+ * Cada linha de caption traz o que está gravado nos dois campos. Quem
+ * olha decide: está certo, ou vale ensinar. Ensinar reclassifica o
+ * parque na mesma chamada — ensinar e não reclassificar seria ensinar
+ * para nada, porque a próxima varredura pode demorar dias ou nunca vir.
+ */
+function DicionarioDeSistemas() {
+  const [parque, setParque] = useState<SistemasDoParqueView | null>(null);
+  const [regras, setRegras] = useState<RegraDeSistemaView[]>([]);
+  const [ensinando, setEnsinando] = useState<{
+    caption: string;
+    product: string;
+    edition: string;
+  } | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
+
+  const recarregar = () => {
+    void lerSistemasDoParque()
+      .then(setParque)
+      .catch(() => setParque({ porProduto: [], captions: [] }));
+    void listarRegrasDeSistema()
+      .then(setRegras)
+      .catch(() => undefined);
+  };
+
+  useEffect(recarregar, []);
+
+  const falhar = (e: unknown) =>
+    setErro(e instanceof ErroDaApi ? e.message : 'Não foi possível salvar.');
+
+  if (!parque) return <div className="sk sk-bloco" />;
+
+  const porRegra = new Map(regras.map((r) => [r.alias, r]));
+
+  return (
+    <div className="pilha">
+      <div className="linha-entre">
+        <span className="campo-ajuda">
+          O agente manda o <code>Caption</code> do Windows, que é um texto só para duas perguntas:
+          qual produto e qual edição. O dicionário separa as duas — é o que faz
+          &quot;quantas máquinas ainda estão no Windows 10?&quot; ter resposta.
+        </span>
+        <button
+          type="button"
+          className="btn -secundario -sm"
+          onClick={() => {
+            setErro(null);
+            setAviso(null);
+            void reclassificarSistemas()
+              .then((r) => {
+                setAviso(
+                  r.mudados === 0
+                    ? `${r.lidos} máquina(s) conferida(s), nenhuma mudou.`
+                    : `${r.mudados} de ${r.lidos} máquina(s) reclassificada(s).`,
+                );
+                recarregar();
+              })
+              .catch(falhar);
+          }}
+        >
+          Reclassificar o parque
+        </button>
+      </div>
+
+      {erro ? (
+        <div className="alerta-bloco -erro">
+          <span aria-hidden="true">!</span>
+          <span>{erro}</span>
+        </div>
+      ) : null}
+
+      {aviso ? (
+        <div className="alerta-bloco -info">
+          <span aria-hidden="true">i</span>
+          <span>{aviso}</span>
+        </div>
+      ) : null}
+
+      {parque.captions.length === 0 ? (
+        <div className="vazio">
+          <h3>Nenhuma máquina reportou sistema operacional</h3>
+          <p>
+            Esta aba se enche sozinha quando o agente de inventário varre o parque. Não há o que
+            cadastrar aqui antes disso.
+          </p>
+        </div>
+      ) : (
+        <>
+          <section className="pilha-sm">
+            <h3 className="titulo-secao">O parque hoje</h3>
+            <div className="tabela-caixa">
+              <div className="tabela-rolagem">
+                <table className="tabela">
+                  <thead>
+                    <tr>
+                      <th>Produto</th>
+                      <th>Edição</th>
+                      <th className="-num">Máquinas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {parque.porProduto.map((p) => (
+                      <tr key={`${p.product ?? '?'}|${p.edition ?? '?'}`}>
+                        <td className="tabela-titulo-celula">{p.product ?? 'Sem classificação'}</td>
+                        <td>{p.edition ?? '—'}</td>
+                        <td className="-num">{p.assetCount}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section className="pilha-sm">
+            <h3 className="titulo-secao">O que as máquinas mandam</h3>
+            <span className="campo-ajuda">
+              O texto como veio, com o que o dicionário faz dele. Ensinar é para o que nenhuma
+              regra descobre — a máquina instalada em francês diz
+              &quot;Professionnel&quot;, e só quem sabe pode dizer que é Pro.
+            </span>
+
+            <div className="tabela-caixa">
+              <div className="tabela-rolagem">
+                <table className="tabela">
+                  <thead>
+                    <tr>
+                      <th>Caption</th>
+                      <th className="-num">Máquinas</th>
+                      <th>Produto</th>
+                      <th>Edição</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {parque.captions.map((c) => {
+                      const regra = porRegra.get(c.alias);
+
+                      return (
+                        <tr key={`${c.osName}|${c.product ?? '?'}|${c.edition ?? '?'}`}>
+                          <td className="tabela-titulo-celula">
+                            <span className="mono">{c.osName}</span>
+                            {c.ensinado ? (
+                              <>
+                                {' '}
+                                <span className="selo -contorno">ensinado</span>
+                              </>
+                            ) : null}
+                          </td>
+                          <td className="-num">{c.assetCount}</td>
+
+                          {ensinando?.caption === c.osName ? (
+                            <td colSpan={3}>
+                              <form
+                                className="linha"
+                                style={{ gap: 'var(--e-2)', flexWrap: 'wrap' }}
+                                onSubmit={(e) => {
+                                  e.preventDefault();
+                                  setErro(null);
+                                  setAviso(null);
+                                  void escreverRegraDeSistema({
+                                    caption: ensinando.caption,
+                                    product: ensinando.product,
+                                    edition: ensinando.edition || null,
+                                  })
+                                    .then((lista) => {
+                                      setRegras(lista);
+                                      setEnsinando(null);
+                                      recarregar();
+                                    })
+                                    .catch(falhar);
+                                }}
+                              >
+                                <label className="so-leitor" htmlFor={`produto-${c.alias}`}>
+                                  Produto
+                                </label>
+                                <input
+                                  id={`produto-${c.alias}`}
+                                  className="input"
+                                  required
+                                  autoFocus
+                                  placeholder="Windows 10"
+                                  value={ensinando.product}
+                                  onChange={(e) =>
+                                    setEnsinando({ ...ensinando, product: e.target.value })
+                                  }
+                                />
+                                <label className="so-leitor" htmlFor={`edicao-${c.alias}`}>
+                                  Edição
+                                </label>
+                                <input
+                                  id={`edicao-${c.alias}`}
+                                  className="input"
+                                  placeholder="Pro (em branco: sem edição)"
+                                  value={ensinando.edition}
+                                  onChange={(e) =>
+                                    setEnsinando({ ...ensinando, edition: e.target.value })
+                                  }
+                                />
+                                <button type="submit" className="btn -primario -sm">
+                                  Salvar e reclassificar
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn -fantasma -sm"
+                                  onClick={() => setEnsinando(null)}
+                                >
+                                  Cancelar
+                                </button>
+                              </form>
+                            </td>
+                          ) : (
+                            <>
+                              <td>{c.product ?? 'Sem classificação'}</td>
+                              <td>{c.edition ?? '—'}</td>
+                              <td className="-num">
+                                <button
+                                  type="button"
+                                  className="btn -fantasma -sm"
+                                  onClick={() =>
+                                    setEnsinando({
+                                      caption: c.osName,
+                                      product: c.product ?? '',
+                                      edition: c.edition ?? '',
+                                    })
+                                  }
+                                >
+                                  {c.ensinado ? 'Corrigir' : 'Ensinar'}
+                                </button>
+                                {regra ? (
+                                  <button
+                                    type="button"
+                                    className="btn -perigo -sm"
+                                    onClick={() => {
+                                      setErro(null);
+                                      setAviso(null);
+                                      void removerRegraDeSistema(regra.id)
+                                        .then((lista) => {
+                                          setRegras(lista);
+                                          recarregar();
+                                        })
+                                        .catch(falhar);
+                                    }}
+                                  >
+                                    Esquecer
+                                  </button>
+                                ) : null}
+                              </td>
+                            </>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </>
+      )}
     </div>
   );
 }

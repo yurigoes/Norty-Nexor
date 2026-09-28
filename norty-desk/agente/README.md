@@ -21,6 +21,15 @@ O `dhcp` de cada endereço importa do outro lado: concessão vence e vira
 instantâneo, endereço fixo vira cadastro no IPAM. O agente só responde
 o que o Windows diz; quem separa é o servidor.
 
+Vale o mesmo para o **modelo** e o **sistema operacional**, e é a mesma
+regra dita de outro jeito: o agente manda o texto cru. `Model` vem com o
+fabricante colado na frente na HP ("HP EliteBook 840 G8 Notebook PC") e
+vem como código de fábrica na Lenovo ("20XW00AABR"); `Caption` junta
+produto e edição num texto só, e diz "Professionnel" na máquina
+instalada em francês. Limpar isso aqui seria escrever a regra em duzentas
+máquinas de cliente — que não se corrigem numa tarde. Quem limpa é o
+dicionário do servidor (`docs/07-api.md`, seção 17).
+
 ## O que ele **não** faz
 
 - Não instala, não remove, não altera configuração, não abre porta.

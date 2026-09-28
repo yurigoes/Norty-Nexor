@@ -6,6 +6,8 @@ import { Prisma } from '@prisma/client';
 import { normalizarIp, normalizarMac } from '../../common/ip';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { DicionarioDeFabricante } from '../catalogo-ativo/fabricantes.dicionario';
+import { DicionarioDeModelo } from '../catalogo-ativo/modelos.dicionario';
+import { DicionarioDeSistemaOperacional } from '../catalogo-ativo/sistemas.dicionario';
 import type { InventarioDto } from './inventario.dto';
 
 /**
@@ -64,6 +66,8 @@ export class InventarioService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly fabricantes: DicionarioDeFabricante,
+    private readonly modelos: DicionarioDeModelo,
+    private readonly sistemas: DicionarioDeSistemaOperacional,
   ) {}
 
   async receber(
@@ -97,19 +101,34 @@ export class InventarioService {
     }
 
     const agora = new Date();
+
+    // O fabricante vem **antes** do modelo, e não em paralelo com ele:
+    // a chave do modelo tira o nome do fabricante da frente ("HP
+    // EliteBook 840 G8" é o mesmo que "EliteBook 840 G8"), e o id dele
+    // é o que a linha nova do catálogo grava. Duas idas ao banco em
+    // sequência valem menos que um catálogo com o modelo órfão.
+    const manufacturerId = await this.fabricantes.resolver(organizationId, dto.manufacturer);
+
+    const [assetModelId, sistema] = await Promise.all([
+      this.modelos.resolver(organizationId, dto.model, {
+        id: manufacturerId,
+        texto: dto.manufacturer,
+      }),
+      this.sistemas.resolver(organizationId, dto.os?.name, dto.os?.version),
+    ]);
+
     const daMaquina = {
       deviceUuid: uuid,
       hostname: dto.hostname.trim(),
+      // O caption cru fica: é o diagnóstico de quando a classificação
+      // errar. O que o relatório agrupa são as duas colunas ao lado.
       osName: dto.os?.name?.trim() || null,
       osVersion: dto.os?.version?.trim() || null,
+      osProduct: sistema.produto,
+      osEdition: sistema.edicao,
       agentVersion: dto.agente?.versao?.trim() || null,
       lastSeenAt: agora,
     };
-
-    const [manufacturerId, assetModelId] = await Promise.all([
-      this.fabricantes.resolver(organizationId, dto.manufacturer),
-      this.doCatalogo(organizationId, dto.model),
-    ]);
 
     let assetId: string;
 
@@ -650,57 +669,6 @@ export class InventarioService {
     `);
 
     return rede?.id ?? null;
-  }
-
-  // -------------------------------------------------------------------
-  // Catálogo
-  // -------------------------------------------------------------------
-
-  /**
-   * O modelo de equipamento, do catálogo.
-   *
-   * Procura **sem diferenciar caixa** antes de criar: "Latitude 5420" e
-   * "LATITUDE 5420" são duas linhas para quem conta e um só modelo para
-   * quem olha, e é essa multiplicação que o catálogo existe para
-   * impedir. O agente é justamente quem a produziria mais rápido, uma
-   * por máquina.
-   *
-   * O fabricante não passa por aqui: ele tem dicionário próprio
-   * (`DicionarioDeFabricante`), porque "Hewlett-Packard" e "HP" são o
-   * mesmo e nenhuma comparação de texto descobre isso. Modelo não tem o
-   * problema equivalente — quem escreve "Latitude 5420" não escreve
-   * "L5420" na outra máquina, é o SMBIOS que responde nas duas.
-   */
-  private async doCatalogo(
-    organizationId: string,
-    nome: string | null | undefined,
-  ): Promise<string | null> {
-    const limpo = (nome ?? '').trim().replace(/\s+/g, ' ');
-    if (!limpo) return null;
-
-    const procurar = () =>
-      this.prisma.assetModel.findFirst({
-        where: { organizationId, name: { equals: limpo, mode: 'insensitive' } },
-        select: { id: true },
-      });
-
-    const existente = await procurar();
-    if (existente) return existente.id;
-
-    // Corrida entre duas máquinas varrendo ao mesmo tempo: as duas leem
-    // "não existe" e as duas criam. A segunda bate no índice único, e
-    // aí a resposta certa é procurar de novo — não falhar a varredura
-    // por causa do nome de um modelo.
-    try {
-      return (
-        await this.prisma.assetModel.create({
-          data: { organizationId, name: limpo },
-          select: { id: true },
-        })
-      ).id;
-    } catch {
-      return (await procurar())?.id ?? null;
-    }
   }
 }
 

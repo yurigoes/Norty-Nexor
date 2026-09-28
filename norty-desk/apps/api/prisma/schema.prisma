@@ -66,6 +66,7 @@ model Organization {
   locations           Location[]
   manufacturers       Manufacturer[]
   assetModels         AssetModel[]
+  osAliases           OperatingSystemAlias[]
   components          AssetComponent[]
   assetHoldings       AssetHolding[]
   assetReservations   AssetReservation[]
@@ -1491,8 +1492,25 @@ model Asset {
   /// ainda estão no Windows 10?" é pergunta de inventário, e tem de
   /// sair de um `where` — não de um `join` com a tabela de licenças,
   /// que existe para contar assento pago.
+  ///
+  /// `osName` é o `Caption` **cru**, do jeito que veio. Ele fica porque
+  /// é o diagnóstico: quando a classificação abaixo erra, é olhando o
+  /// texto de origem que se descobre por quê.
   osName         String?
   osVersion      String?
+  /// O produto e a edição que o `Caption` quer dizer, pelo dicionário.
+  ///
+  /// São **dois eixos**, e é por isso que são duas colunas. "Quantas
+  /// máquinas ainda estão no Windows 10?" ignora a edição; "quantas
+  /// estão numa Home, que não entra no domínio?" ignora o produto. Com
+  /// um campo de texto só, nenhuma das duas sai de um `where` — e é
+  /// exatamente o que acontecia antes: `osName` guardava "Microsoft
+  /// Windows 10 Pro" numa máquina e "Windows 10 Professional" na outra.
+  ///
+  /// Derivadas na gravação por `canonizarSistemaOperacional`, nunca
+  /// digitadas. Ver `OperatingSystemAlias`.
+  osProduct      String?
+  osEdition      String?
   /// Quando o agente falou desta máquina pela última vez.
   ///
   /// É o que responde "esta máquina ainda existe?". Sem isto, o parque
@@ -1606,6 +1624,9 @@ model Asset {
   @@index([userId])
   @@index([locationId])
   @@index([parentAssetId])
+  /// "Quantas máquinas ainda estão no Windows 10?" — a pergunta que o
+  /// produto existe para responder, e que varre o parque inteiro.
+  @@index([organizationId, osProduct])
   @@map("assets")
 }
 
@@ -2543,6 +2564,74 @@ model ManufacturerAlias {
 /// O GLPI tem uma tabela por tipo — `computermodels`, `monitormodels`,
 /// `printermodels` e mais três —, todas com as mesmas quatro colunas.
 /// Aqui é um modelo com discriminador, como o próprio ativo.
+/// Um nome a mais pelo qual um modelo de equipamento atende.
+///
+/// Espelha `ManufacturerAlias`, e existe pelo mesmo motivo com um caso
+/// pior: a Lenovo não manda o nome do produto. `Win32_ComputerSystem`
+/// devolve o código de máquina — "20XW00AABR" —, e o nome comercial
+/// ("ThinkPad T14 Gen 2") está em outro campo que nem toda máquina
+/// preenche. Nenhuma regra de texto descobre que os dois são o mesmo
+/// equipamento; só alguém que sabe pode ensinar.
+///
+/// A chave embute o fabricante (ver `chaveDeModelo`), então "Latitude
+/// 5420" da Dell e um homônimo de outra marca não colidem — e é por
+/// isso que a unicidade é por organização, e não por modelo.
+model AssetModelAlias {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  assetModelId   String @db.Uuid
+  /// Já normalizado por `chaveDeModelo`: minúsculas, sem pontuação, sem
+  /// o fabricante colado na frente. É chave de busca, não texto de tela.
+  alias          String
+
+  createdAt DateTime @default(now())
+
+  assetModel AssetModel @relation(fields: [assetModelId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, alias])
+  @@index([assetModelId])
+  @@map("asset_model_aliases")
+}
+
+/// O dicionário de sistema operacional.
+///
+/// **Não é uma entidade de catálogo, e é a única exceção da família.**
+/// O apelido de fabricante e o de modelo apontam para uma linha que
+/// existe (`manufacturers`, `asset_models`); aqui não há linha para
+/// apontar, porque a decisão de `Asset.osName` foi deliberada: duas
+/// colunas, não uma instalação de software. Criar `operating_systems`,
+/// `operating_system_versions` e `operating_system_editions` — as três
+/// tabelas que o GLPI tem — desfaria essa decisão para ganhar o quê?
+/// Nada consulta um SO pelo id.
+///
+/// Então este modelo é o que o GLPI chama de dicionário e é de fato:
+/// uma **regra de reescrita**. "este texto quer dizer este produto e
+/// esta edição". O alvo são dois campos, não uma chave estrangeira.
+///
+/// Existe porque nenhuma regra de texto cobre o caption traduzido: a
+/// máquina instalada em francês diz "Microsoft Windows 10
+/// Professionnel", e a alemã "Windows 10 Pro" com outra ordem de
+/// palavras. Só quem sabe pode ensinar que as duas são Pro.
+model OperatingSystemAlias {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  /// O caption normalizado por `chaveDeSistemaOperacional`.
+  alias          String
+  /// O que a regra escreve em `Asset.osProduct`.
+  product        String
+  /// O que a regra escreve em `Asset.osEdition`. Nulo é "sem edição",
+  /// e é diferente de não ter regra: um SO pode não ter edição nenhuma.
+  edition        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, alias])
+  @@map("operating_system_aliases")
+}
+
 model AssetModel {
   id             String    @id @default(uuid()) @db.Uuid
   organizationId String    @db.Uuid
@@ -2557,6 +2646,7 @@ model AssetModel {
   manufacturer Manufacturer?         @relation(fields: [manufacturerId], references: [id], onDelete: SetNull)
   assets       Asset[]
   consumables  ConsumableItemModel[]
+  aliases      AssetModelAlias[]
 
   @@unique([organizationId, manufacturerId, name])
   @@index([organizationId, kind])

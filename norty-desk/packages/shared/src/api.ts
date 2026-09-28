@@ -1187,6 +1187,15 @@ export type ModeloDeAtivoView = {
   kind: AssetKind;
   manufacturer: CatalogoRef | null;
   assetCount: number;
+  /**
+   * Os outros nomes pelos quais este modelo atende, já normalizados.
+   *
+   * Sem a chave do próprio nome, pela mesma razão do fabricante. O que
+   * aparece aqui é o que a casa ensinou — e o caso que mais importa é o
+   * código de máquina da Lenovo, que é o que o agente manda no lugar do
+   * nome do produto.
+   */
+  aliases: { id: string; alias: string }[];
 };
 
 export type EscreverModeloDeAtivoRequest = {
@@ -1194,6 +1203,52 @@ export type EscreverModeloDeAtivoRequest = {
   kind?: AssetKind;
   manufacturerId?: string | null;
 };
+
+/** Uma regra do dicionário de sistema operacional. */
+export type RegraDeSistemaView = {
+  id: string;
+  /** O caption normalizado que a regra reescreve. */
+  alias: string;
+  product: string;
+  edition: string | null;
+  /** Quantas máquinas do parque esta regra está classificando hoje. */
+  assetCount: number;
+};
+
+export type EscreverRegraDeSistemaRequest = {
+  /** O caption como ele aparece na máquina. É normalizado no servidor. */
+  caption: string;
+  product: string;
+  edition?: string | null;
+};
+
+/**
+ * O que o parque tem hoje, do ponto de vista do sistema operacional.
+ *
+ * Serve à tela do dicionário: não dá para ensinar o que não se sabe que
+ * existe, e o caption que ninguém classificou é justamente o que some
+ * de qualquer relatório.
+ */
+export type SistemasDoParqueView = {
+  /** Agrupado pelo que o dicionário concluiu. */
+  porProduto: { product: string | null; edition: string | null; assetCount: number }[];
+  /**
+   * Os captions crus que estão no parque, com o que o dicionário faz
+   * deles hoje. É desta lista que sai o que vale ensinar.
+   */
+  captions: {
+    osName: string;
+    assetCount: number;
+    /** A chave pela qual uma regra o pegaria. */
+    alias: string;
+    product: string | null;
+    edition: string | null;
+    /** Se já existe regra da casa para este caption. */
+    ensinado: boolean;
+  }[];
+};
+
+export type ReclassificacaoView = { lidos: number; mudados: number };
 
 // ---------------------------------------------------------------------
 // Componentes do ativo

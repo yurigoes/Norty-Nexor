@@ -1562,10 +1562,20 @@ POST   /v1/manufacturers/:id/apelidos            → { alias }
 DELETE /v1/manufacturers/:id/apelidos/:aliasId
 POST   /v1/manufacturers/:id/juntar              → { absorvidoId }
 
-GET    /v1/asset-models             → { id, name, kind, manufacturer, assetCount }
+GET    /v1/asset-models             → { id, name, kind, manufacturer, assetCount, aliases }
 POST   /v1/asset-models             → { name, kind?, manufacturerId? }
 PATCH  /v1/asset-models/:id
 DELETE /v1/asset-models/:id
+
+POST   /v1/asset-models/:id/apelidos             → { alias }
+DELETE /v1/asset-models/:id/apelidos/:aliasId
+POST   /v1/asset-models/:id/juntar               → { absorvidoId }
+
+GET    /v1/operating-systems                     → { porProduto, captions }
+GET    /v1/operating-systems/regras              → { id, alias, product, edition, assetCount }
+POST   /v1/operating-systems/regras              → { caption, product, edition? }
+DELETE /v1/operating-systems/regras/:id
+POST   /v1/operating-systems/reclassificar       → { lidos, mudados }
 ```
 
 Localização, fabricante e modelo eram texto livre dentro do ativo. Texto
@@ -1628,6 +1638,116 @@ verdade que envelhece sozinha. O cadastro anterior ao dicionário é
 adotado na primeira consulta que o encontrar, e sai dela com os apelidos
 gravados — a varredura da lista acontece uma vez por fabricante, não uma
 por máquina.
+
+### O dicionário de modelo
+
+O mesmo problema, com uma agravante e uma atenuante.
+
+A atenuante: quem escreve "Latitude 5420" não escreve "L5420" na outra
+máquina — é o SMBIOS que responde nas duas, e ele é consistente dentro
+de um fabricante. Por isso o modelo demorou mais a precisar de
+dicionário que o fabricante.
+
+A agravante é que o SMBIOS **não combina as duas pontas**. A HP manda
+`Manufacturer` = "Hewlett-Packard" e `Model` = "HP EliteBook 840 G8
+Notebook PC" — com o nome do fabricante colado na frente e um sufixo que
+não distingue nada. Quem cadastra na tela escreve "EliteBook 840 G8".
+Dois cadastros, um equipamento.
+
+`chaveDeModelo(nome, fabricante?)` resolve os dois, e **o fabricante
+entra por qualquer grafia conhecida dele** (`grafiasDeFabricante`): o
+cadastro pode dizer "Hewlett-Packard" e o modelo vir com "HP" na frente,
+ou o contrário. Tentar só a grafia que veio no campo do fabricante
+deixaria metade dos casos passar.
+
+O que o sufixo **não** corta é deliberado. "Notebook PC" e "Desktop PC"
+saem; "Tower", "SFF" e "Small Form Factor" ficam. A Dell vende "OptiPlex
+7090 Tower" e "OptiPlex 7090 Small Form Factor" como equipamentos
+diferentes, com placa e fonte diferentes, e juntá-los esconderia
+justamente o que o técnico precisa saber antes de comprar peça.
+
+**`modeloUtil` recusa o campo que a montadora não preencheu.** "System
+Product Name", "To Be Filled By O.E.M.", "Default string", "All Series":
+é o irmão de `serieUtil`, e sem ele cada máquina branca criava no
+catálogo um modelo com o nome de um campo vazio. Sem a regra de tamanho
+mínimo que a série tem — "X1" é modelo de verdade, e cortar por
+comprimento apagaria um real para pegar um falso.
+
+**A tabela `asset_model_aliases` existe por um caso que nenhuma regra de
+texto alcança: a Lenovo não manda o nome do produto.**
+`Win32_ComputerSystem.Model` devolve "20XW00AABR"; o nome comercial está
+em `Win32_ComputerSystemProduct.Version`, que nem toda máquina preenche.
+Só quem sabe pode ensinar que aquele código é um ThinkPad T14 Gen 2 — e
+depois de ensinado, a varredura cai no cadastro certo.
+
+A chave **embute o fabricante**, então "Latitude 5420" da Dell e um
+homônimo de outra marca não colidem, e a unicidade pode ser por
+organização. Renomear guarda o nome velho como apelido, e
+`POST /asset-models/:id/juntar` é a saída para a duplicata que já
+nasceu — igual ao fabricante.
+
+Dois defeitos antigos que entraram nesta conta: o modelo criado pela
+varredura **nascia sem fabricante** mesmo com o fabricante resolvido na
+mesma requisição (agora o dicionário de fabricante roda antes, e o id
+vai junto), e `POST /asset-models` aceitava cadastrar o nome que o
+dicionário já resolvia para outro (agora é 409 dizendo qual).
+
+### O dicionário de sistema operacional
+
+O terceiro, e o de forma diferente dos outros dois. Fabricante e modelo
+resolvem para uma **linha** do catálogo. Aqui não há linha: `osName` e
+`osVersion` são colunas do ativo por decisão — nada consulta um sistema
+operacional por id, e criar as três tabelas que o GLPI tem
+(`glpi_operatingsystems`, `...versions`, `...editions`) seria esquema
+para não ganhar consulta nenhuma.
+
+Então este é o que o GLPI chama de dicionário e é de fato: uma **regra
+de reescrita**, cujo alvo são dois campos.
+
+Dois campos porque são **dois eixos**, e é isso que o `Caption` junta
+num texto só. "Quantas máquinas ainda estão no Windows 10?" ignora a
+edição; "quantas estão numa Home, que não entra no domínio?" ignora o
+produto. Com um campo de texto, nenhuma das duas sai de um `where` — e
+era o que acontecia: `osName` guardava "Microsoft Windows 10 Pro" numa
+máquina e "Windows 10 Professional" na outra.
+
+`canonizarSistemaOperacional(caption, versao?)` devolve `{ produto,
+edicao }`. O "Microsoft" da frente sai, "Professional" e "Pro" viram a
+mesma edição, o Windows Server é reconhecido pelo ano (com R2), e a
+versão do Linux entra no produto — "Ubuntu 22.04" e "Ubuntu 24.04" são
+dois alvos de atualização diferentes, e o terceiro número ("22.04.3")
+sai porque é a mesma versão com correções.
+
+A versão entra por um motivo só, e vale registrar: **`Version` diz `10.0`
+no Windows 10 e no 11** — a Microsoft nunca subiu o número maior. Só o
+build os separa, e por isso o produto sai do `Caption`, com o build
+(≥ 22000) como rede de segurança para o caption que vem errado.
+
+`operating_system_aliases` guarda o que nenhuma regra de texto cobre: a
+máquina instalada em francês diz "Microsoft Windows 10 **Professionnel**".
+**A regra da casa vence a função** — quem ensinou sabe mais que a regra,
+e um dicionário que a função pudesse contradizer não corrigiria nada.
+
+`osName` continua guardando o `Caption` cru. É o diagnóstico: quando a
+classificação erra, é olhando o texto de origem que se descobre por quê.
+
+`POST /operating-systems/reclassificar` reaplica o dicionário sobre o
+parque. Não é conveniência — é parte do desenho, por duas razões que são
+a mesma: **ensinar um apelido não muda nada sozinho** (as máquinas já
+varridas estão classificadas pela regra antiga, e a próxima varredura
+pode demorar dias ou nunca vir, se a máquina saiu de operação), e as
+colunas **nasceram nulas na migração**, porque reduzir caption a produto
+é função de `shared` e fazê-lo em SQL daria uma segunda verdade. Escrever
+ou apagar uma regra já reclassifica; o botão existe para o caso em que a
+função melhorou sem ninguém ensinar nada. Só grava o que mudou.
+
+`GET /operating-systems` devolve duas listas porque a tela faz duas
+perguntas: `porProduto` é o relatório, e `captions` é o material de
+trabalho — **não dá para ensinar o que ninguém sabe que existe**, e o
+caption estranho é exatamente o que desaparece de qualquer agrupamento.
+
+Permissão: ler o parque é `ativo:ler` (é a mesma pergunta que o
+relatório faz); escrever regra e reclassificar é `ativo:catalogo`.
 
 **Toda resposta de escrita devolve a coleção inteira, não o item.** A
 tela de configuração é uma lista pequena que se relê a cada mudança; um

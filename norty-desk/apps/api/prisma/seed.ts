@@ -10,6 +10,7 @@ import {
   DEFAULT_BUSINESS_HOURS,
   DEFAULT_PRIORITY_MATRIX,
   canonizarFabricante,
+  canonizarSistemaOperacional,
   loginDoCliente,
 } from '@norty-desk/shared';
 import { PrismaClient } from '@prisma/client';
@@ -444,10 +445,42 @@ async function main() {
     }
 
     const parque = [
-      { tag: 'PAT-1001', name: 'NB-MARINA', visto: 2 * 3600e3, cliente: false, marca: 'Dell' },
-      { tag: 'PAT-1002', name: 'NB-JOAO', visto: 1 * DIA, cliente: true, marca: 'Lenovo' },
-      { tag: 'PAT-1003', name: 'NB-FERIAS', visto: 22 * DIA, cliente: false, marca: 'Dell' },
-      { tag: 'PAT-1004', name: 'DESK-RECEPCAO', visto: 96 * DIA, cliente: true, marca: 'HP' },
+      // Os captions são variados de propósito: é o que faz a aba de
+      // dicionário de SO mostrar para que serve. O francês é o caso que
+      // nenhuma regra de texto classifica, e a máquina de 96 dias ainda
+      // está no Windows 10 — que é a pergunta que o relatório responde.
+      {
+        tag: 'PAT-1001',
+        name: 'NB-MARINA',
+        visto: 2 * 3600e3,
+        cliente: false,
+        marca: 'Dell',
+        so: { nome: 'Microsoft Windows 11 Pro', versao: '10.0.22631' },
+      },
+      {
+        tag: 'PAT-1002',
+        name: 'NB-JOAO',
+        visto: 1 * DIA,
+        cliente: true,
+        marca: 'Lenovo',
+        so: { nome: 'Windows 11 Pro', versao: '10.0.22621' },
+      },
+      {
+        tag: 'PAT-1003',
+        name: 'NB-FERIAS',
+        visto: 22 * DIA,
+        cliente: false,
+        marca: 'Dell',
+        so: { nome: 'Microsoft Windows 10 Professionnel', versao: '10.0.19045' },
+      },
+      {
+        tag: 'PAT-1004',
+        name: 'DESK-RECEPCAO',
+        visto: 96 * DIA,
+        cliente: true,
+        marca: 'HP',
+        so: { nome: 'Microsoft Windows 10 Pro', versao: '10.0.19045' },
+      },
       {
         tag: 'PAT-2001',
         name: 'Impressora do balcão',
@@ -480,8 +513,15 @@ async function main() {
             ? {}
             : {
                 hostname: maquina.name,
-                osName: 'Windows 11 Pro',
-                osVersion: '10.0.22631',
+                osName: maquina.so.nome,
+                osVersion: maquina.so.versao,
+                // Pela mesma função que o inventário usa. Escrever o
+                // produto à mão aqui daria uma segunda verdade, que é
+                // exatamente o que a migração evitou não carregando dado.
+                ...(() => {
+                  const so = canonizarSistemaOperacional(maquina.so.nome, maquina.so.versao);
+                  return { osProduct: so?.produto ?? null, osEdition: so?.edicao ?? null };
+                })(),
                 lastSeenAt: new Date(Date.now() - maquina.visto),
                 agentVersion: '1.0.0',
               }),
