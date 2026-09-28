@@ -265,6 +265,15 @@ meu time / ler todos são permissões distintas.
 
 ## F. Cobertura do GLPI
 
+> **Estado em 27/09/2026: as oito fases estão entregues.** A tabela de
+> áreas abaixo está marcada uma a uma. O que a paridade ainda não
+> alcança, e está dito na linha de cada área: dicionário de **modelo** e
+> de **sistema operacional** (só o de fabricante existe), **busca salva
+> por pessoa** (o filtro da fila mora na URL, que se manda por link, mas
+> não se guarda), **estêncil** de datacenter (fora de propósito) e, no
+> LDAP, **grupo do AD virando equipe ou perfil** e **réplica de
+> diretório** (`docs/13-autenticacao-ldap.md`).
+
 **Decisão do projeto: o Desk cobre todo o GLPI.** A versão anterior
 deste documento propunha cortar inventário de datacenter, rede,
 software, consumíveis e dicionários de regra. Essa proposta foi
@@ -293,26 +302,26 @@ seguem valendo:
 | Chamado, conversa, SLA, atores | ~40 | **1 ✅** | entregue |
 | Categorias, times, pessoas, perfis | ~15 | **1 ✅** | entregue |
 | Anexos e documentos | 4 | **1 ✅** | porta de armazenamento |
-| Canais de entrada e notificação | ~35 | 2 | e-mail, WhatsApp, webhooks |
-| Motor de regras (`RuleTicket`, coletor) | ~10 | 2 | um motor, catálogo de alvos |
-| Aprovação em etapas | ~6 | 3 | `Approval` com quórum |
-| Base de conhecimento | ~12 | 3 | com revisão e vínculo |
-| Painéis, estatísticas, buscas salvas | ~10 | 3 | |
-| Satisfação | 3 | 3 | pesquisa pelo canal de origem |
-| Problema e Mudança | ~35 | 4 | colunas nulas distintas, com `CHECK` |
-| Recorrência e modelos de formulário | ~20 | 4 | `TicketForm` em JSONB |
-| Contratos, fornecedores, orçamento, `Infocom` | ~15 | 4 | |
-| Ativos: computador, monitor, impressora, telefone, periférico, equipamento de rede | ~30 | 5 | modelo de ativo com tipo |
-| Componentes (`Device*`, `Item_Device*`) | ~60 | 5 | **um** modelo de componente com tipo, não sessenta tabelas |
+| Canais de entrada e notificação | ~35 | **2 ✅** | e-mail, WhatsApp, webhooks |
+| Motor de regras (`RuleTicket`, coletor) | ~10 | **2 ✅** | um motor, catálogo de alvos; a tela do construtor em 27/09/2026 |
+| Aprovação em etapas | ~6 | **3 ✅** | `Approval` com quórum |
+| Base de conhecimento | ~12 | **3 ✅** | com revisão e vínculo |
+| Painéis, estatísticas, buscas salvas | ~10 | **3 ✅ (busca salva não)** | o filtro da fila mora na URL, e link se manda para o colega; salvar por pessoa não existe |
+| Satisfação | 3 | **3 ✅** | pesquisa pelo canal de origem |
+| Problema e Mudança | ~35 | **4 ✅** | colunas nulas distintas, com `CHECK` |
+| Recorrência e modelos de formulário | ~20 | **4 ✅** | `TicketForm` em JSONB |
+| Contratos, fornecedores, orçamento, `Infocom` | ~15 | **4 ✅** | vigência, custo do chamado e aviso de vencimento consultável |
+| Ativos: computador, monitor, impressora, telefone, periférico, equipamento de rede | ~30 | **5 ✅** | modelo de ativo com tipo |
+| Componentes (`Device*`, `Item_Device*`) | ~60 | **5 ✅** | **um** modelo de componente com tipo, não sessenta tabelas |
 | Software, versões e licenças | ~10 | **6 ✅** | 5 tabelas; conformidade por software, assento de máquina ou pessoa |
 | Consumíveis e cartuchos | ~8 | **6 ✅** | estoque por movimentação, não uma linha por unidade |
 | Rede: portas, IP, VLAN, FQDN | ~30 | **6 ✅** | `inet` do Postgres; conflito de IP barrado no banco |
 | Datacenter: rack, PDU, sala, cabo, estêncil | ~25 | **7 ✅ (rack, sala)** | U com face, sem sobreposição; PDU é equipamento; estêncil não |
-| Dicionários de regra | ~40 | 7 | catálogo do mesmo motor da fase 2 |
-| Inventário automático (agente, `RuleImportAsset`) | ~12 | 7 | recebe o inventário do agente GLPI |
+| Dicionários de regra | ~40 | **7 ✅ (fabricante)** | chave do nome, lista conhecida e apelidos da casa; modelo e sistema operacional ainda sem o equivalente |
+| Inventário automático (agente, `RuleImportAsset`) | ~12 | **7 ✅** | agente próprio (`agente/`, PowerShell), não o do GLPI; toda decisão no servidor |
 | Projetos e tarefas de projeto | ~15 | **8 ✅** | quadro, linha do tempo, custo dos chamados; agenda da equipe junto |
-| Reservas de equipamento | 2 | 8 | |
-| Análise de impacto em grafo | 6 | 8 | |
+| Reservas de equipamento | 2 | **8 ✅** | janela sem sobreposição barrada por `EXCLUDE` no banco |
+| Análise de impacto em grafo | 6 | **8 ✅** | travessia em largura por periférico e cabo, com o caminho como explicação |
 
 ### O que a paridade custa, dito com franqueza
 
@@ -336,10 +345,10 @@ Duas observações que ajudam a decidir a ordem, não a decisão:
 
 | Dimensão | GLPI 11 | Norty Desk |
 |---|---|---|
-| Tabelas | 442 | 35 na Fase 1; ~120 na paridade |
+| Tabelas | 442 | 35 na Fase 1; **89 na paridade** |
 | Classes de domínio | 623 | ~60 na Fase 1 |
 | Colunas no chamado | 44 | 18 + tabelas satélite |
-| Telas | 315 | 30 na Fase 1; ~90 na paridade |
+| Telas | 315 | 30 na Fase 1; **64 rotas na paridade** |
 | Timeline | 4 tabelas + `UNION` | 1 tabela |
 | Canais de entrada | web, e-mail | web, e-mail, **WhatsApp**, API |
 | Multi-tenant | árvore com herança recursiva | organização plana |

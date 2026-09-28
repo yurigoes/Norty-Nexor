@@ -154,8 +154,9 @@ barra lateral mostrava apagadas desde a Fase 1. A API dos acordos,
 calendários e motivos não existia: eles só se criavam por SQL, o que na
 prática significa que ninguém os configurava.
 
-**O que continua de fora:** a tela de pessoas e times (a API existe), e
-o construtor visual de regras de entrada (o motor e a API existem).
+**O que ficou de fora aqui, e já entrou:** a tela de pessoas e times
+(`Pessoas.tsx`, `Times.tsx`) e o construtor visual de regras de entrada
+(`RegrasDeEntrada.tsx`, em 27/09/2026).
 
 ---
 
@@ -212,8 +213,8 @@ Postgres real — mais passeios de navegador em cada tela nova.
   antecedência é coluna e nada a lê: o contrato vence e alguém descobre
   pela fatura.
 
-**O que continua de fora:** a tela de pessoas e times (a API existe) e o
-construtor visual de regras de entrada (o motor e a API existem).
+**O que ficou de fora aqui, e já entrou:** as mesmas duas da Fase 3 —
+a tela de pessoas e times e o construtor de regras de entrada.
 
 ---
 
