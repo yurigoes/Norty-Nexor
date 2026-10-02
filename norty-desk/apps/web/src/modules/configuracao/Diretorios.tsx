@@ -7,17 +7,21 @@ import { BUSCAS_DE_GRUPO, ROTULO_BUSCA_DE_GRUPO } from '@norty-desk/shared';
 import {
   criarFonte,
   criarMapaDeGrupo,
+  criarReplica,
   desativarFonte,
   editarFonte,
   editarMapaDeGrupo,
+  editarReplica,
   listarFontes,
   listarMapasDeGrupo,
   removerMapaDeGrupo,
+  removerReplica,
   testarFonte,
   type DadosDaFonte,
   type Fonte,
   type MapaDeGrupo,
   type PapelDoDiretorio,
+  type Replica,
   type ResultadoDoTeste,
   type Seguranca,
 } from '../../api/diretorios';
@@ -552,6 +556,8 @@ export function Diretorios() {
                 </div>
               </div>
 
+              <Replicas fonte={f} />
+
               <MapaDeGrupos fonte={f} />
 
               <form
@@ -799,6 +805,189 @@ function MapaDeGrupos({ fonte }: { fonte: Fonte }) {
           <span className="campo-ajuda">
             Sair do grupo no diretório tira do time e devolve o perfil padrão da fonte, no login
             seguinte. O que alguém atrelou pela tela de times não é mexido.
+          </span>
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="submit" className="btn -primario -sm">
+              Salvar
+            </button>
+            <button type="button" className="btn -fantasma -sm" onClick={() => setEmEdicao(null)}>
+              Cancelar
+            </button>
+          </div>
+        </form>
+      ) : null}
+    </div>
+  );
+}
+
+/** "há 3 min", para a última vez que a réplica atendeu. */
+function quando(iso: string): string {
+  const minutos = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (minutos < 1) return 'agora';
+  if (minutos < 60) return `há ${minutos} min`;
+  const horas = Math.round(minutos / 60);
+  if (horas < 24) return `há ${horas} h`;
+  return new Date(iso).toLocaleDateString('pt-BR');
+}
+
+/**
+ * Os outros servidores do mesmo diretório.
+ *
+ * Com dois controladores de domínio, o login da empresa não deve cair
+ * porque um deles reiniciou para atualizar. A troca acontece na hora de
+ * conectar: o primeiro que atende responde o login inteiro.
+ *
+ * Só endereço, de propósito — base, conta de serviço, filtros e campos
+ * continuam sendo os da fonte. Se fossem outros, seria outra fonte.
+ */
+function Replicas({ fonte }: { fonte: Fonte }) {
+  const [replicas, setReplicas] = useState<Replica[]>(fonte.replicas ?? []);
+  const [emEdicao, setEmEdicao] = useState<Replica | 'nova' | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const [host, setHost] = useState('');
+  const [porta, setPorta] = useState('389');
+
+  function abrir(replica: Replica | 'nova') {
+    setErro(null);
+    setEmEdicao(replica);
+    setHost(replica === 'nova' ? '' : replica.host);
+    setPorta(replica === 'nova' ? String(fonte.port) : String(replica.port));
+  }
+
+  const falhar = (e: unknown) =>
+    setErro(e instanceof ErroDaApi ? e.message : 'Não foi possível salvar a réplica.');
+
+  return (
+    <div className="pilha-sm">
+      <div className="linha-entre">
+        <span className="campo-ajuda">
+          {replicas.length === 0
+            ? 'Sem réplica: se este servidor cair, o login por este diretório para.'
+            : `${replicas.length} servidor(es) de reserva, tentados nesta ordem depois do principal.`}
+        </span>
+        <button type="button" className="btn -fantasma -sm" onClick={() => abrir('nova')}>
+          Adicionar réplica
+        </button>
+      </div>
+
+      {erro ? (
+        <div className="alerta-bloco -erro">
+          <span aria-hidden="true">!</span>
+          <span>{erro}</span>
+        </div>
+      ) : null}
+
+      {replicas.length > 0 ? (
+        <table className="tabela -densa">
+          <thead>
+            <tr>
+              <th>Servidor de reserva</th>
+              <th>Atendeu</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {replicas.map((r) => (
+              <tr key={r.id}>
+                <td className="mono">
+                  {r.host}:{r.port}
+                  {r.isActive ? null : <span className="selo -neutro"> desligada</span>}
+                </td>
+                {/* Vazio é o normal: significa que o principal nunca faltou. */}
+                <td className="suave">{r.lastUsedAt ? quando(r.lastUsedAt) : '—'}</td>
+                <td className="-num">
+                  <button type="button" className="btn -fantasma -sm" onClick={() => abrir(r)}>
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn -fantasma -sm"
+                    onClick={() => {
+                      setErro(null);
+                      void editarReplica(fonte.id, r.id, {
+                        host: r.host,
+                        port: r.port,
+                        isActive: !r.isActive,
+                      })
+                        .then(setReplicas)
+                        .catch(falhar);
+                    }}
+                  >
+                    {r.isActive ? 'Desligar' : 'Religar'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn -perigo -sm"
+                    onClick={() => {
+                      setErro(null);
+                      void removerReplica(fonte.id, r.id).then(setReplicas).catch(falhar);
+                    }}
+                  >
+                    Apagar
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
+
+      {emEdicao ? (
+        <form
+          className="pilha-sm"
+          style={{ border: '1px solid var(--borda, #ddd)', borderRadius: 8, padding: 12 }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            setErro(null);
+
+            const dados = { host, port: Number(porta) || 389 };
+            const salvar =
+              emEdicao === 'nova'
+                ? criarReplica(fonte.id, dados)
+                : editarReplica(fonte.id, emEdicao.id, dados);
+
+            void salvar
+              .then((lista) => {
+                setReplicas(lista);
+                setEmEdicao(null);
+              })
+              .catch(falhar);
+          }}
+        >
+          <div className="grade-2">
+            <Campo
+              id={`replica-host-${fonte.id}`}
+              rotulo="Endereço do servidor"
+              dica="Outro controlador do mesmo domínio. A base, a conta de serviço e os campos são os desta fonte."
+            >
+              <input
+                id={`replica-host-${fonte.id}`}
+                className="input"
+                required
+                autoFocus
+                autoCapitalize="none"
+                spellCheck={false}
+                value={host}
+                onChange={(e) => setHost(e.target.value)}
+                placeholder="dc02.empresa.local"
+              />
+            </Campo>
+            <Campo id={`replica-porta-${fonte.id}`} rotulo="Porta">
+              <input
+                id={`replica-porta-${fonte.id}`}
+                className="input"
+                inputMode="numeric"
+                value={porta}
+                onChange={(e) => setPorta(e.target.value)}
+              />
+            </Campo>
+          </div>
+
+          <span className="campo-ajuda">
+            A réplica entra em jogo só quando o servidor da frente não responde. Senha errada é
+            resposta do diretório, não queda: ela não vira nova tentativa aqui.
           </span>
 
           <div style={{ display: 'flex', gap: 8 }}>

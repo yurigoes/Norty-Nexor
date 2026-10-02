@@ -2899,10 +2899,51 @@ model AuthSource {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   users        User[]
   groupMaps    DirectoryGroupMap[]
+  replicas     AuthSourceReplica[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
   @@map("auth_sources")
+}
+
+/// Outro servidor do **mesmo** diretório.
+///
+/// É o `glpi_authldapreplicates`: com dois controladores de domínio, o
+/// login não deve cair porque um deles reiniciou.
+///
+/// Só endereço. Base, conta de serviço, filtros e campos vêm da fonte,
+/// porque réplica é o mesmo diretório noutro servidor — se os dados
+/// fossem outros, seria outra fonte. Repetir a configuração aqui daria
+/// dois lugares para mudar o `baseDn`, e o esquecido viraria um login
+/// que ora acha a pessoa, ora não.
+///
+/// A troca acontece só na **conexão** (ver `conectarComoServico`): uma
+/// vez ligado, o servidor que atendeu responde a busca e o bind da
+/// pessoa. Senha errada é resposta, não queda — tentar a próxima réplica
+/// atrás de outra resposta seria tentar a mesma senha errada três vezes.
+model AuthSourceReplica {
+  id           String @id @default(uuid()) @db.Uuid
+  authSourceId String @db.Uuid
+  host         String
+  port         Int    @default(389)
+  /// Ordem de tentativa, depois do servidor principal da fonte.
+  position     Int    @default(0)
+  isActive     Boolean @default(true)
+
+  /// Quando esta réplica atendeu pela última vez. Serve para a tela
+  /// mostrar qual está realmente carregando o login.
+  lastUsedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  authSource AuthSource @relation(fields: [authSourceId], references: [id], onDelete: Cascade)
+
+  /// O mesmo endereço duas vezes na mesma fonte é tentar o mesmo
+  /// servidor duas vezes quando ele cai — espera dobrada, sem ganho.
+  @@unique([authSourceId, host, port])
+  @@index([authSourceId, position])
+  @@map("auth_source_replicas")
 }
 
 /// Como descobrir os grupos da pessoa. O `group_search_type` do GLPI.

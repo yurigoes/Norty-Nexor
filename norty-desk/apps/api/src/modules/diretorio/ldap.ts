@@ -33,7 +33,17 @@ export type FonteLdap = {
   phoneField: string | null;
   timeoutMs: number;
   grupos: GruposDaFonte;
+  /**
+   * Outros servidores do **mesmo** diretório, na ordem de tentativa.
+   *
+   * Só endereço: todo o resto vem da fonte, porque réplica é o mesmo
+   * diretório noutro servidor.
+   */
+  replicas: Servidor[];
 };
+
+/** Um endereço de servidor. */
+export type Servidor = { host: string; port: number };
 
 /** A parte da fonte que diz como descobrir os grupos. */
 export type GruposDaFonte = {
@@ -66,9 +76,14 @@ export type PessoaDoDiretorio = {
   telefone: string | null;
 };
 
+/**
+ * `servidor` é quem atendeu — o principal ou a réplica que está
+ * carregando o login. Nulo só quando nem se chegou a conectar (senha em
+ * branco), porque aí não houve servidor nenhum.
+ */
 export type ResultadoLdap =
-  | { ok: true; pessoa: PessoaDoDiretorio }
-  | { ok: false; motivo: 'nao-encontrado' | 'ambiguo' | 'senha' };
+  | { ok: true; pessoa: PessoaDoDiretorio; servidor: Servidor }
+  | { ok: false; motivo: 'nao-encontrado' | 'ambiguo' | 'senha'; servidor: Servidor | null };
 
 /** O diretório não respondeu ou recusou a conta de serviço. Não é "senha errada". */
 export class ErroDeDiretorio extends Error {
@@ -148,18 +163,38 @@ export async function abrirConexao(fonte: FonteLdap): Promise<ConexaoLdap> {
   };
 }
 
-/** Abre a conexão e autentica a conta de serviço. Qualquer falha é do diretório. */
-async function conectarComoServico(
+/** A conexão aberta e de qual servidor ela é. */
+type Ligada = { conexao: ConexaoLdap; servidor: Servidor };
+
+/**
+ * Um servidor só: abrir, e se houver conta de serviço, ligar-se como ela.
+ *
+ * `provar` resolve um detalhe do cliente: a conexão do `ldapts` é
+ * preguiçosa, e quem não tem conta de serviço não faz bind nenhum aqui —
+ * então abrir "dá certo" mesmo com o servidor fora, e a queda só
+ * apareceria na busca, tarde demais para trocar de servidor. Com réplica
+ * cadastrada, um bind anônimo faz o papel do `ldap_bind` sem credencial
+ * do GLPI: prova que o servidor está de pé antes de escolhê-lo.
+ *
+ * Fora disso ele fica desligado, de propósito: numa fonte anônima de um
+ * servidor só não há escolha a fazer, e exigir bind anônimo quebraria
+ * quem hoje busca sem ele.
+ */
+async function ligarEm(
   fonte: FonteLdap,
+  servidor: Servidor,
   senhaDeServico: string | null,
   abrir: (fonte: FonteLdap) => Promise<ConexaoLdap>,
+  provar: boolean,
 ): Promise<ConexaoLdap> {
   let conexao: ConexaoLdap;
   try {
-    conexao = await abrir(fonte);
+    conexao = await abrir({ ...fonte, ...servidor });
   } catch (e) {
     if (e instanceof ErroDeDiretorio) throw e;
-    throw new ErroDeDiretorio(`Sem conexão com ${fonte.host}:${fonte.port}: ${(e as Error).message}`);
+    throw new ErroDeDiretorio(
+      `Sem conexão com ${servidor.host}:${servidor.port}: ${(e as Error).message}`,
+    );
   }
 
   if (fonte.bindDn) {
@@ -173,8 +208,72 @@ async function conectarComoServico(
           : `Falha no bind da conta de serviço: ${(e as Error).message}`,
       );
     }
+  } else if (provar) {
+    try {
+      await conexao.bind('', '');
+    } catch (e) {
+      await conexao.fechar();
+      throw new ErroDeDiretorio(
+        `O bind anônimo em ${servidor.host}:${servidor.port} falhou: ${(e as Error).message}`,
+      );
+    }
   }
   return conexao;
+}
+
+/**
+ * O primeiro servidor que atender: o principal, depois as réplicas.
+ *
+ * É o `tryToConnectToServer` do GLPI, e a troca acontece **só aqui** —
+ * no ato de conectar e de se ligar como conta de serviço. Uma vez
+ * ligado, o servidor que atendeu responde a busca e o bind da pessoa:
+ * senha errada é resposta, não queda, e procurar outra resposta noutra
+ * réplica seria tentar a mesma senha errada três vezes.
+ *
+ * Falha de credencial da **conta de serviço** também passa para a
+ * próxima, de propósito: senha de serviço recém-trocada demora a
+ * replicar, e a réplica que ainda tem a antiga recusa enquanto a outra
+ * aceita. Custa pouco — credencial recusada volta rápido, sem esperar
+ * o tempo de rede.
+ *
+ * Quando nenhum atende, a mensagem traz o motivo de **cada um**. "O
+ * diretório não respondeu" manda o administrador adivinhar qual; a lista
+ * mostra na hora se foi o primeiro que caiu ou se os três recusaram a
+ * mesma senha de serviço.
+ */
+async function conectarComoServico(
+  fonte: FonteLdap,
+  senhaDeServico: string | null,
+  abrir: (fonte: FonteLdap) => Promise<ConexaoLdap>,
+): Promise<Ligada> {
+  const servidores: Servidor[] = [
+    { host: fonte.host, port: fonte.port },
+    ...fonte.replicas,
+  ];
+
+  // Só vale provar o servidor quando há outro para escolher no lugar.
+  const provar = servidores.length > 1;
+
+  const recusas: { servidor: Servidor; erro: ErroDeDiretorio }[] = [];
+
+  for (const servidor of servidores) {
+    try {
+      return { conexao: await ligarEm(fonte, servidor, senhaDeServico, abrir, provar), servidor };
+    } catch (e) {
+      if (!(e instanceof ErroDeDiretorio)) throw e;
+      recusas.push({ servidor, erro: e });
+    }
+  }
+
+  // Sem réplica, a mensagem é a do único servidor, sem prefixo: dizer o
+  // endereço de quem falhou só informa quando havia escolha.
+  if (recusas.length === 1) throw recusas[0]!.erro;
+
+  const lista = recusas
+    .map(({ servidor, erro }) => `${servidor.host}:${servidor.port} — ${erro.message}`)
+    .join(' | ');
+
+  throw new ErroDeDiretorio(`Nenhum dos ${servidores.length} servidores atendeu. ${lista}`);
 }
 
 type Procura = { ok: true; entrada: Entrada } | { ok: false; motivo: 'nao-encontrado' | 'ambiguo' };
@@ -311,17 +410,17 @@ export async function autenticar(
   // Bind com senha vazia é bind anônimo em muitos servidores, e eles
   // respondem sucesso. Sem esta linha, senha em branco entraria em
   // qualquer conta do diretório.
-  if (!senha || !login.trim()) return { ok: false, motivo: 'senha' };
+  if (!senha || !login.trim()) return { ok: false, motivo: 'senha', servidor: null };
 
-  const conexao = await conectarComoServico(fonte, senhaDeServico, abrir);
+  const { conexao, servidor } = await conectarComoServico(fonte, senhaDeServico, abrir);
   try {
     const achou = await procurar(conexao, fonte, login);
-    if (!achou.ok) return achou;
+    if (!achou.ok) return { ...achou, servidor };
 
     try {
       await conexao.bind(achou.entrada.dn, senha);
     } catch (e) {
-      if (e instanceof InvalidCredentialsError) return { ok: false, motivo: 'senha' };
+      if (e instanceof InvalidCredentialsError) return { ok: false, motivo: 'senha', servidor };
       throw new ErroDeDiretorio(`Falha ao validar a senha no diretório: ${(e as Error).message}`);
     }
 
@@ -329,7 +428,7 @@ export async function autenticar(
     // há diretório que só mostra o `memberOf` para quem se autenticou.
     const grupos = await lerGrupos(conexao, fonte, achou.entrada);
 
-    return { ok: true, pessoa: paraPessoa(fonte, achou.entrada, login, grupos) };
+    return { ok: true, pessoa: paraPessoa(fonte, achou.entrada, login, grupos), servidor };
   } finally {
     await conexao.fechar();
   }
@@ -340,12 +439,21 @@ export type ResultadoDoTeste = {
   mensagem: string;
   /** Presente quando o teste procurou alguém e achou. */
   pessoa?: PessoaDoDiretorio;
+  /**
+   * Quem atendeu. Ausente quando ninguém atendeu — e aí a mensagem traz o
+   * motivo de cada servidor.
+   */
+  servidor?: Servidor;
 };
 
 /**
  * O "Testar" da tela: conexão, conta de serviço, base e, se veio um login,
  * a busca por ele — sem a senha da pessoa, que o administrador não tem.
  * Nunca lança: a resposta vira mensagem na tela.
+ *
+ * Quando foi uma réplica que atendeu, a mensagem diz isso antes de tudo.
+ * Teste verde esconderia a melhor notícia que ele tem para dar: o
+ * principal está fora, e só o segundo servidor é que está de pé.
  */
 export async function testarFonte(
   fonte: FonteLdap,
@@ -353,13 +461,33 @@ export async function testarFonte(
   login?: string | null,
   abrir: (fonte: FonteLdap) => Promise<ConexaoLdap> = abrirConexao,
 ): Promise<ResultadoDoTeste> {
-  let conexao: ConexaoLdap;
+  let ligada: Ligada;
   try {
-    conexao = await conectarComoServico(fonte, senhaDeServico, abrir);
+    ligada = await conectarComoServico(fonte, senhaDeServico, abrir);
   } catch (e) {
     return { ok: false, mensagem: (e as Error).message };
   }
 
+  const { conexao, servidor } = ligada;
+  const daReplica =
+    servidor.host === fonte.host && servidor.port === fonte.port
+      ? ''
+      : `Quem atendeu foi a réplica ${servidor.host}:${servidor.port} — o servidor principal não respondeu. `;
+
+  try {
+    const resultado = await testarLigado(conexao, fonte, login);
+    return { ...resultado, servidor, mensagem: daReplica + resultado.mensagem };
+  } finally {
+    await conexao.fechar();
+  }
+}
+
+/** O teste de dentro da conexão já aberta. Separado para a mensagem do servidor ser uma só. */
+async function testarLigado(
+  conexao: ConexaoLdap,
+  fonte: FonteLdap,
+  login?: string | null,
+): Promise<ResultadoDoTeste> {
   try {
     try {
       await conexao.buscar(fonte.baseDn, '(objectClass=*)', ['objectClass'], 'base');
@@ -412,7 +540,5 @@ export async function testarFonte(
     };
   } catch (e) {
     return { ok: false, mensagem: (e as Error).message };
-  } finally {
-    await conexao.fechar();
   }
 }

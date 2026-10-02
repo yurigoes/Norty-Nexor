@@ -6,8 +6,8 @@ e como isso vira o desenho do Norty Desk.
 
 > **Estado em 02/10/2026.** No ar: login por **e-mail** ou por **nome de
 > usuário + empresa**, e-mail opcional, o **LDAP/AD por organização**
-> (seção 2) e os **grupos virando time e perfil** (seção 4). Falta:
-> réplicas.
+> (seção 2), os **grupos virando time e perfil** (seção 4) e as
+> **réplicas** (seção 5).
 
 ---
 
@@ -257,9 +257,96 @@ O teste da fonte (`POST .../testar`) lista os grupos do login informado.
 Montar o mapa sem saber como o diretório nomeia os grupos é adivinhar, e
 adivinhar errado dá um mapa que nunca casa e ninguém sabe por quê.
 
-### O que ainda não tem
+## 5. Réplica: o mesmo diretório noutro servidor
 
-- **Réplicas**: um servidor por fonte. Com dois DCs, duas fontes na ordem.
+É o `glpi_authldapreplicates`. Uma empresa com dois controladores de
+domínio não deve perder o login porque um deles reiniciou para atualizar.
+
+`auth_source_replicas` guarda **só endereço** — `host`, `port`,
+`position`, `isActive`. Base, conta de serviço, filtros e campos
+continuam na fonte, porque réplica é o mesmo diretório noutro servidor:
+se os dados fossem outros, seria outra fonte. Repetir a configuração aqui
+daria dois lugares para mudar o `baseDn`, e o esquecido viraria um login
+que ora acha a pessoa, ora não.
+
+```
+GET    /v1/auth-sources/:id/replicas              → [{ id, host, port, position, isActive, lastUsedAt }]
+POST   /v1/auth-sources/:id/replicas              → { host, port?, position?, isActive? }
+PATCH  /v1/auth-sources/:id/replicas/:replicaId
+DELETE /v1/auth-sources/:id/replicas/:replicaId
+```
+
+A lista de fontes (`GET /v1/auth-sources`) já traz as réplicas de cada
+uma: a tela as mostra junto da ficha, sem outra volta.
+
+### A troca acontece só na conexão
+
+O login monta a fila `[servidor da fonte, ...réplicas ativas por
+position]` e fica com **o primeiro que atender** (`conectarComoServico`,
+o `tryToConnectToServer` do GLPI). Daí em diante é ele que responde a
+busca e o bind da pessoa.
+
+Isso é escolha, não limitação. Depois de conectado, o que o diretório
+responde é **resposta**, não queda: senha errada é senha errada, e
+procurar outra resposta noutra réplica seria tentar a mesma senha errada
+em cada controlador da empresa. O mesmo vale para "não encontrei" — a
+réplica tem a mesma base.
+
+| O que acontece | Passa para a próxima? |
+|---|---|
+| Conexão recusada, timeout, StartTLS negado | sim |
+| Conta de serviço recusada | **sim** — senha de serviço recém-trocada demora a replicar, e a réplica que ainda tem a antiga recusa enquanto a outra aceita. Custa pouco: credencial recusada volta rápido. |
+| Login não encontrado, login ambíguo | não |
+| Senha da pessoa errada | não |
+| Queda no meio da busca | não — sobe como erro do diretório |
+
+**Fonte sem conta de serviço tem um detalhe.** A conexão do `ldapts` é
+preguiçosa: quem não faz bind nenhum "conecta" mesmo com o servidor
+fora, e a queda só apareceria na busca, tarde demais para trocar de
+servidor. Por isso, **quando há réplica cadastrada**, a fonte anônima faz
+um bind anônimo para provar que o servidor está de pé — é o `ldap_bind`
+sem credencial do GLPI. Com um servidor só esse bind não acontece: não há
+escolha a fazer, e exigi-lo quebraria quem hoje busca sem ele.
+
+### Quando nenhum atende
+
+A mensagem traz o motivo de **cada servidor**:
+
+```
+Nenhum dos 3 servidores atendeu. dc01:389 — Sem conexão: ECONNREFUSED |
+dc02:389 — O diretório recusou a conta de serviço. | dc03:389 — ...
+```
+
+"O diretório não respondeu" mandaria o administrador adivinhar qual; a
+lista mostra na hora se foi um que caiu ou se os três recusaram a mesma
+senha de serviço. Com um servidor só, a mensagem é a dele, sem prefixo:
+dizer o endereço de quem falhou só informa quando havia escolha.
+
+### Quem está carregando o login
+
+`lastUsedAt` na réplica é a última vez que ela atendeu, e a tela mostra
+isso ao lado do endereço. Coluna vazia é a notícia boa: o principal nunca
+faltou. A gravação tem intervalo de um minuto — anotar a cada login seria
+um `UPDATE` por autenticação durante toda a queda, e a tela não fica
+melhor por saber o segundo exato.
+
+O teste da fonte diz o mesmo em palavras: quando foi a réplica que
+atendeu, a mensagem começa por *"Quem atendeu foi a réplica dc02:389 — o
+servidor principal não respondeu"*. Teste verde sem essa linha esconderia
+a melhor informação que ele tem para dar.
+
+### O que a tela recusa
+
+- **O endereço do próprio servidor principal.** Tentar duas vezes o mesmo
+  servidor quando ele cai é espera dobrada, sem uma chance a mais.
+- **O mesmo `host:port` duas vezes na fonte** (`@@unique`), pelo mesmo
+  motivo.
+
+Réplica é apagada de verdade, ao contrário da fonte. Ninguém aponta para
+ela — é endereço de reserva, não origem de conta.
+
+## O que ainda não tem
+
 - **Login por UPN** (`nome@empresa.local`): o `@` manda para a busca por
   e-mail. Use o `sAMAccountName`.
 - **Tempo de resposta**: o caminho do diretório demora o que o AD demora, e

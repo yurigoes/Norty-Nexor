@@ -34,6 +34,7 @@ const FONTE: FonteLdap = {
     baseDn: null,
     aninhados: false,
   },
+  replicas: [],
 };
 
 const MARIA: Entrada = {
@@ -56,16 +57,23 @@ function diretorio(opcoes: {
   erroNaBusca?: Error;
   /** Resposta por filtro: é como o teste separa a busca do login da de grupos. */
   porFiltro?: (filtro: string) => Entrada[];
+  /** Servidores que não atendem: `abrir` falha como quem teve a conexão recusada. */
+  fora?: string[];
+  /** Por servidor, os DNs que ele recusa — a senha que ainda não replicou. */
+  recusa?: Record<string, string[]>;
 }) {
   const binds: string[] = [];
   const filtros: string[] = [];
   const atributos: string[][] = [];
-  let fechada = false;
-  let aberta = false;
+  const aberturas: string[] = [];
+  let fechamentos = 0;
 
-  const conexao: ConexaoLdap = {
+  const conexaoDe = (endereco: string): ConexaoLdap => ({
     async bind(dn, senha) {
       binds.push(dn);
+      if (opcoes.recusa?.[endereco]?.includes(dn)) {
+        throw new InvalidCredentialsError('credenciais inválidas');
+      }
       if (opcoes.senhas?.[dn] !== senha) throw new InvalidCredentialsError('credenciais inválidas');
     },
     async buscar(_base, filtro, pedidos) {
@@ -76,28 +84,38 @@ function diretorio(opcoes: {
       return opcoes.entradas ?? [];
     },
     async fechar() {
-      fechada = true;
+      fechamentos += 1;
     },
-  };
+  });
 
   return {
-    abrir: async () => {
-      aberta = true;
-      return conexao;
+    abrir: async (f: FonteLdap) => {
+      const endereco = `${f.host}:${f.port}`;
+      aberturas.push(endereco);
+      if (opcoes.fora?.includes(endereco)) throw new Error('ECONNREFUSED');
+      return conexaoDe(endereco);
     },
     binds,
     filtros,
     atributos,
+    /** Os endereços tentados, na ordem. É o que prova a ordem do reserva. */
+    aberturas,
+    get fechamentos() {
+      return fechamentos;
+    },
     get fechada() {
-      return fechada;
+      return fechamentos > 0;
     },
     get aberta() {
-      return aberta;
+      return aberturas.length > 0;
     },
   };
 }
 
 const SENHAS = { [FONTE.bindDn!]: 'servico', [MARIA.dn]: 'certa' };
+
+/** O servidor da própria fonte, que é quem atende quando está de pé. */
+const PRINCIPAL = { host: FONTE.host, port: FONTE.port };
 
 describe('filtro LDAP', () => {
   it('escapa curinga, parênteses e barra — sem injeção de filtro', () => {
@@ -135,25 +153,26 @@ describe('autenticação no diretório', () => {
   it('recusa senha vazia sem nem abrir conexão — bind vazio seria anônimo', async () => {
     const d = diretorio({ entradas: [MARIA], senhas: SENHAS });
     const r = await autenticar(FONTE, 'servico', 'msouza', '', d.abrir);
-    assert.deepEqual(r, { ok: false, motivo: 'senha' });
+    assert.deepEqual(r, { ok: false, motivo: 'senha', servidor: null });
     assert.equal(d.aberta, false);
   });
 
   it('senha errada volta como resultado, não como erro', async () => {
     const d = diretorio({ entradas: [MARIA], senhas: SENHAS });
     const r = await autenticar(FONTE, 'servico', 'msouza', 'errada', d.abrir);
-    assert.deepEqual(r, { ok: false, motivo: 'senha' });
+    assert.deepEqual(r, { ok: false, motivo: 'senha', servidor: PRINCIPAL });
     assert.equal(d.fechada, true);
   });
 
   it('zero resultados é não encontrado; dois é ambíguo', async () => {
     const nenhum = await autenticar(FONTE, 'servico', 'x', 'y', diretorio({ senhas: SENHAS }).abrir);
-    assert.deepEqual(nenhum, { ok: false, motivo: 'nao-encontrado' });
+    assert.deepEqual(nenhum, { ok: false, motivo: 'nao-encontrado', servidor: PRINCIPAL });
 
     const dois = diretorio({ entradas: [MARIA, { ...MARIA, dn: 'CN=Outra,DC=exemplo,DC=dev' }], senhas: SENHAS });
     assert.deepEqual(await autenticar(FONTE, 'servico', 'msouza', 'certa', dois.abrir), {
       ok: false,
       motivo: 'ambiguo',
+      servidor: PRINCIPAL,
     });
   });
 
@@ -173,6 +192,7 @@ describe('autenticação no diretório', () => {
     assert.deepEqual(await autenticar(FONTE, 'servico', 'msouza', 'certa', semBase.abrir), {
       ok: false,
       motivo: 'nao-encontrado',
+      servidor: PRINCIPAL,
     });
   });
 
@@ -216,6 +236,178 @@ describe('teste da fonte', () => {
     const ninguem = await testarFonte(FONTE, 'servico', 'fulano', diretorio({ senhas: SENHAS }).abrir);
     assert.equal(ninguem.ok, false);
     assert.match(ninguem.mensagem, /ninguém com sAMAccountName=fulano/);
+  });
+});
+
+/**
+ * Réplica: o mesmo diretório noutro servidor.
+ *
+ * O que estes testes fixam é tanto o que o reserva faz quanto onde ele
+ * **para**. Trocar de servidor na conexão salva o login de uma queda;
+ * trocar depois dela seria perguntar a mesma coisa duas vezes — e no
+ * caso da senha da pessoa, seria tentar a mesma senha errada em cada
+ * controlador de domínio da empresa.
+ */
+describe('réplica do diretório', () => {
+  const DC2 = { host: 'dc2.exemplo.dev', port: 389 };
+  const DC3 = { host: 'dc3.exemplo.dev', port: 636 };
+  const COM_REPLICA: FonteLdap = { ...FONTE, replicas: [DC2, DC3] };
+
+  it('com o principal de pé, ninguém mais é procurado — réplica não é balanceamento', async () => {
+    const d = diretorio({ entradas: [MARIA], senhas: SENHAS });
+    const r = await autenticar(COM_REPLICA, 'servico', 'msouza', 'certa', d.abrir);
+
+    assert.equal(r.ok, true);
+    assert.deepEqual(r.servidor, PRINCIPAL);
+    assert.deepEqual(d.aberturas, ['ad.exemplo.dev:389']);
+  });
+
+  it('principal fora do ar: a réplica seguinte atende, e o login não cai', async () => {
+    const d = diretorio({ entradas: [MARIA], senhas: SENHAS, fora: ['ad.exemplo.dev:389'] });
+    const r = await autenticar(COM_REPLICA, 'servico', 'msouza', 'certa', d.abrir);
+
+    assert.ok(r.ok);
+    assert.equal(r.pessoa.login, 'msouza');
+    assert.deepEqual(r.servidor, DC2);
+    assert.deepEqual(d.aberturas, ['ad.exemplo.dev:389', 'dc2.exemplo.dev:389']);
+  });
+
+  it('a réplica fora passa a vez para a próxima, na ordem cadastrada', async () => {
+    const d = diretorio({
+      entradas: [MARIA],
+      senhas: SENHAS,
+      fora: ['ad.exemplo.dev:389', 'dc2.exemplo.dev:389'],
+    });
+    const r = await autenticar(COM_REPLICA, 'servico', 'msouza', 'certa', d.abrir);
+
+    assert.ok(r.ok);
+    assert.deepEqual(r.servidor, DC3);
+    assert.deepEqual(d.aberturas, ['ad.exemplo.dev:389', 'dc2.exemplo.dev:389', 'dc3.exemplo.dev:636']);
+  });
+
+  /**
+   * Senha de serviço recém-trocada demora a replicar, e a réplica que
+   * ainda tem a antiga recusa enquanto a outra aceita. Custa pouco
+   * tentar: credencial recusada volta rápido.
+   */
+  it('servidor que recusa a conta de serviço também passa a vez — e fecha a conexão dele', async () => {
+    const d = diretorio({
+      entradas: [MARIA],
+      senhas: SENHAS,
+      recusa: { 'ad.exemplo.dev:389': [FONTE.bindDn!] },
+    });
+    const r = await autenticar(COM_REPLICA, 'servico', 'msouza', 'certa', d.abrir);
+
+    assert.ok(r.ok);
+    assert.deepEqual(r.servidor, DC2);
+    // A do principal e a que atendeu: a recusada não fica aberta pendurada.
+    assert.equal(d.fechamentos, 2);
+  });
+
+  it('nenhum servidor atende: o erro traz o motivo de cada um', async () => {
+    const d = diretorio({
+      senhas: SENHAS,
+      fora: ['ad.exemplo.dev:389', 'dc3.exemplo.dev:636'],
+      recusa: { 'dc2.exemplo.dev:389': [FONTE.bindDn!] },
+    });
+
+    await assert.rejects(
+      () => autenticar(COM_REPLICA, 'servico', 'msouza', 'certa', d.abrir),
+      (e: Error) => {
+        assert.ok(e instanceof ErroDeDiretorio);
+        assert.match(e.message, /Nenhum dos 3 servidores atendeu/);
+        assert.match(e.message, /ad\.exemplo\.dev:389 — Sem conexão/);
+        assert.match(e.message, /dc2\.exemplo\.dev:389 — O diretório recusou a conta de serviço/);
+        assert.match(e.message, /dc3\.exemplo\.dev:636 — Sem conexão/);
+        return true;
+      },
+    );
+    assert.deepEqual(d.aberturas, ['ad.exemplo.dev:389', 'dc2.exemplo.dev:389', 'dc3.exemplo.dev:636']);
+  });
+
+  it('com um servidor só, a mensagem é a de sempre — sem falar de lista', async () => {
+    const d = diretorio({ senhas: SENHAS, fora: ['ad.exemplo.dev:389'] });
+    await assert.rejects(
+      () => autenticar(FONTE, 'servico', 'msouza', 'certa', d.abrir),
+      (e: Error) => {
+        assert.match(e.message, /^Sem conexão com ad\.exemplo\.dev:389/);
+        return true;
+      },
+    );
+  });
+
+  it('senha errada da pessoa não vai perguntar na réplica', async () => {
+    const d = diretorio({ entradas: [MARIA], senhas: SENHAS });
+    const r = await autenticar(COM_REPLICA, 'servico', 'msouza', 'errada', d.abrir);
+
+    assert.deepEqual(r, { ok: false, motivo: 'senha', servidor: PRINCIPAL });
+    assert.deepEqual(d.aberturas, ['ad.exemplo.dev:389']);
+  });
+
+  it('nem quem não foi encontrado: a réplica é o mesmo diretório, com a mesma resposta', async () => {
+    const d = diretorio({ senhas: SENHAS });
+    const r = await autenticar(COM_REPLICA, 'servico', 'ninguem', 'certa', d.abrir);
+
+    assert.deepEqual(r, { ok: false, motivo: 'nao-encontrado', servidor: PRINCIPAL });
+    assert.deepEqual(d.aberturas, ['ad.exemplo.dev:389']);
+  });
+
+  it('queda no meio da busca não troca de servidor: é erro do diretório, e sobe', async () => {
+    const d = diretorio({ senhas: SENHAS, erroNaBusca: new Error('ECONNRESET') });
+    await assert.rejects(
+      () => autenticar(COM_REPLICA, 'servico', 'msouza', 'certa', d.abrir),
+      ErroDeDiretorio,
+    );
+    assert.deepEqual(d.aberturas, ['ad.exemplo.dev:389']);
+  });
+
+  /**
+   * Fonte anônima, o caso que o cliente preguiçoso esconde: sem conta de
+   * serviço ninguém faz bind na hora de conectar, então abrir "dá certo"
+   * mesmo com o servidor fora e a queda só apareceria na busca — tarde
+   * demais para trocar de servidor.
+   */
+  it('sem conta de serviço, o bind anônimo prova o servidor antes de escolhê-lo', async () => {
+    const anonima: FonteLdap = { ...COM_REPLICA, bindDn: null };
+    const d = diretorio({
+      entradas: [MARIA],
+      senhas: { ...SENHAS, '': '' },
+      recusa: { 'ad.exemplo.dev:389': [''] },
+    });
+
+    const r = await autenticar(anonima, null, 'msouza', 'certa', d.abrir);
+
+    assert.ok(r.ok);
+    assert.deepEqual(r.servidor, DC2);
+    assert.deepEqual(d.binds, ['', '', MARIA.dn]);
+  });
+
+  it('e com um servidor só não prova nada — fonte anônima que busca sem bind continua funcionando', async () => {
+    const anonima: FonteLdap = { ...FONTE, bindDn: null };
+    const d = diretorio({ entradas: [MARIA], senhas: SENHAS });
+
+    const r = await autenticar(anonima, null, 'msouza', 'certa', d.abrir);
+
+    assert.ok(r.ok);
+    assert.deepEqual(d.binds, [MARIA.dn]);
+  });
+
+  it('o teste da fonte avisa quando foi a réplica que atendeu', async () => {
+    const d = diretorio({ entradas: [MARIA], senhas: SENHAS, fora: ['ad.exemplo.dev:389'] });
+    const r = await testarFonte(COM_REPLICA, 'servico', null, d.abrir);
+
+    assert.equal(r.ok, true);
+    assert.deepEqual(r.servidor, DC2);
+    assert.match(r.mensagem, /^Quem atendeu foi a réplica dc2\.exemplo\.dev:389 — o servidor principal não respondeu\./);
+    assert.match(r.mensagem, /base encontrada/);
+  });
+
+  it('e não avisa nada quando foi o principal', async () => {
+    const d = diretorio({ entradas: [MARIA], senhas: SENHAS });
+    const r = await testarFonte(COM_REPLICA, 'servico', null, d.abrir);
+
+    assert.deepEqual(r.servidor, PRINCIPAL);
+    assert.match(r.mensagem, /^Conta de serviço aceita e base encontrada\.$/);
   });
 });
 

@@ -2817,6 +2817,10 @@ HTML — imagem quebrada logo depois do upload.
 GET|POST     /v1/auth-sources        → config:autenticacao
 PATCH|DELETE /v1/auth-sources/:id    (DELETE 204)
 POST         /v1/auth-sources/:id/testar
+GET|POST     /v1/auth-sources/:id/grupos
+PATCH|DELETE /v1/auth-sources/:id/grupos/:mapaId
+GET|POST     /v1/auth-sources/:id/replicas
+PATCH|DELETE /v1/auth-sources/:id/replicas/:replicaId
 ```
 
 A conta do AD entra pelo login normal (seção 2): o que muda é onde a

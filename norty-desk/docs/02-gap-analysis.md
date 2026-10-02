@@ -267,8 +267,15 @@ meu time / ler todos são permissões distintas.
 
 > **Estado em 02/10/2026: as oito fases estão entregues.** A tabela de
 > áreas abaixo está marcada uma a uma. O que a paridade ainda não
-> alcança: **estêncil** de datacenter (fora de propósito) e **réplica de
-> diretório** (`docs/13-autenticacao-ldap.md`).
+> alcança é o **estêncil** de datacenter, e por decisão: desenhar o rack
+> em quadradinhos não é o que esta casa precisa de um service desk.
+>
+> A **réplica de diretório** fechou a lista em 02/10/2026
+> (`docs/13-autenticacao-ldap.md`, seção 5): a fonte ganhou outros
+> `host:port` do mesmo AD, e o login fica com o primeiro que atende. A
+> troca acontece só na conexão, como no `tryToConnectToServer` do GLPI —
+> depois de ligado, o que o diretório responde é resposta, e senha errada
+> não vira nova tentativa em cada controlador da empresa.
 >
 > O **grupo do AD virando time e perfil** entrou em 02/10/2026, e passa o
 > GLPI num ponto: lá o `RuleRight` concede e nada revoga sozinho; aqui

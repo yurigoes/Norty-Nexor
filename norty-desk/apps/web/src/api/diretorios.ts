@@ -13,6 +13,30 @@ import { chamar } from './cliente';
 export type Seguranca = 'NONE' | 'STARTTLS' | 'LDAPS';
 export type PapelDoDiretorio = 'SOLICITANTE' | 'AGENTE' | 'SUPERVISOR';
 
+/**
+ * Outro servidor do **mesmo** diretório, para o login não cair com um
+ * controlador de domínio.
+ *
+ * Só endereço: base, conta de serviço, filtros e campos continuam na
+ * fonte. `lastUsedAt` é quando esta réplica atendeu pela última vez — é
+ * o que diz quem está realmente carregando o login.
+ */
+export type Replica = {
+  id: string;
+  host: string;
+  port: number;
+  position: number;
+  isActive: boolean;
+  lastUsedAt: string | null;
+};
+
+export type DadosDaReplica = {
+  host: string;
+  port?: number;
+  position?: number;
+  isActive?: boolean;
+};
+
 export type Fonte = {
   id: string;
   name: string;
@@ -43,15 +67,21 @@ export type Fonte = {
   lastTestOk: boolean | null;
   lastTestMessage: string | null;
   userCount: number;
+  replicas: Replica[];
 };
 
 export type DadosDaFonte = Partial<
-  Omit<Fonte, 'id' | 'hasBindPassword' | 'lastTestAt' | 'lastTestOk' | 'lastTestMessage' | 'userCount'>
+  Omit<
+    Fonte,
+    'id' | 'hasBindPassword' | 'lastTestAt' | 'lastTestOk' | 'lastTestMessage' | 'userCount' | 'replicas'
+  >
 > & { bindPassword?: string | null };
 
 export type ResultadoDoTeste = {
   ok: boolean;
   mensagem: string;
+  /** Qual servidor atendeu. Quando não é o principal, a mensagem já diz. */
+  servidor?: { host: string; port: number };
   pessoa?: {
     dn: string;
     login: string;
@@ -120,3 +150,18 @@ export const editarMapaDeGrupo = (fonteId: string, mapaId: string, dados: DadosD
 
 export const removerMapaDeGrupo = (fonteId: string, mapaId: string) =>
   chamar<MapaDeGrupo[]>(`/auth-sources/${fonteId}/grupos/${mapaId}`, { metodo: 'DELETE' });
+
+export const listarReplicas = (fonteId: string) =>
+  chamar<Replica[]>(`/auth-sources/${fonteId}/replicas`);
+
+export const criarReplica = (fonteId: string, dados: DadosDaReplica) =>
+  chamar<Replica[]>(`/auth-sources/${fonteId}/replicas`, { metodo: 'POST', corpo: dados });
+
+export const editarReplica = (fonteId: string, replicaId: string, dados: DadosDaReplica) =>
+  chamar<Replica[]>(`/auth-sources/${fonteId}/replicas/${replicaId}`, {
+    metodo: 'PATCH',
+    corpo: dados,
+  });
+
+export const removerReplica = (fonteId: string, replicaId: string) =>
+  chamar<Replica[]>(`/auth-sources/${fonteId}/replicas/${replicaId}`, { metodo: 'DELETE' });

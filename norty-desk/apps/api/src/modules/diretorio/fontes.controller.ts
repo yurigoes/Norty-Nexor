@@ -136,6 +136,21 @@ export class EscreverMapaDeGrupoDto {
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 
+/**
+ * Outro servidor do mesmo diretório.
+ *
+ * Só endereço, de propósito: base, conta de serviço, filtros e campos
+ * continuam na fonte. Se os dados fossem outros, seria outra fonte — e
+ * repetir a configuração aqui daria dois lugares para mudar o `baseDn`,
+ * com o esquecido virando um login que ora acha a pessoa, ora não.
+ */
+export class EscreverReplicaDto {
+  @IsString() @MinLength(1) @MaxLength(255) host!: string;
+  @IsOptional() @IsInt() @Min(1) @Max(65535) port?: number;
+  @IsOptional() @IsInt() @Min(0) @Max(99) position?: number;
+  @IsOptional() @IsBoolean() isActive?: boolean;
+}
+
 export class TestarFonteDto {
   /** Um login para procurar. Sem senha: o teste nunca autentica a pessoa. */
   @IsOptional() @IsString() @MaxLength(256) login?: string;
@@ -170,7 +185,10 @@ export class FontesController {
     const fontes = await this.prisma.authSource.findMany({
       where: { organizationId: usuario.organizationId },
       orderBy: [{ position: 'asc' }, { name: 'asc' }],
-      include: { _count: { select: { users: true } } },
+      include: {
+        _count: { select: { users: true } },
+        replicas: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
+      },
     });
     return fontes.map(({ _count, ...f }) => ({ ...paraTela(f), userCount: _count.users }));
   }
@@ -407,6 +425,158 @@ export class FontesController {
     });
 
     return this.listarGrupos(id);
+  }
+
+  // -------------------------------------------------------------------
+  // Réplicas
+  // -------------------------------------------------------------------
+
+  @Get(':id/replicas')
+  @RequirePermission('config:autenticacao')
+  async replicas(@CurrentUser() usuario: UsuarioAutenticado, @Param('id', ParseUUIDPipe) id: string) {
+    await this.exigir(usuario, id);
+    return this.listarReplicas(id);
+  }
+
+  @Post(':id/replicas')
+  @RequirePermission('config:autenticacao')
+  async criarReplica(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: EscreverReplicaDto,
+  ) {
+    const fonte = await this.exigir(usuario, id);
+    const { host, port } = this.endereco(fonte, dto);
+
+    const criada = await this.replicando(host, port, () =>
+      this.prisma.authSourceReplica.create({
+        data: {
+          authSourceId: fonte.id,
+          host,
+          port,
+          position: dto.position ?? 0,
+          ...(dto.isActive === undefined ? {} : { isActive: dto.isActive }),
+        },
+        select: { id: true },
+      }),
+    );
+
+    await this.auditoria.registrar(usuario, {
+      action: 'fonte-autenticacao.replica-adicionada',
+      entity: 'AuthSourceReplica',
+      entityId: criada.id,
+      depois: { fonte: fonte.name, host, port },
+    });
+
+    return this.listarReplicas(id);
+  }
+
+  @Patch(':id/replicas/:replicaId')
+  @RequirePermission('config:autenticacao')
+  async editarReplica(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('replicaId', ParseUUIDPipe) replicaId: string,
+    @Body() dto: EscreverReplicaDto,
+  ) {
+    const fonte = await this.exigir(usuario, id);
+    await this.exigirReplica(fonte.id, replicaId);
+    const { host, port } = this.endereco(fonte, dto);
+
+    await this.replicando(host, port, () =>
+      this.prisma.authSourceReplica.update({
+        where: { id: replicaId },
+        data: {
+          host,
+          port,
+          ...(dto.position === undefined ? {} : { position: dto.position }),
+          ...(dto.isActive === undefined ? {} : { isActive: dto.isActive }),
+        },
+      }),
+    );
+
+    await this.auditoria.registrar(usuario, {
+      action: 'fonte-autenticacao.replica-editada',
+      entity: 'AuthSourceReplica',
+      entityId: replicaId,
+      depois: { fonte: fonte.name, host, port, isActive: dto.isActive },
+    });
+
+    return this.listarReplicas(id);
+  }
+
+  /**
+   * Apaga de verdade, ao contrário da fonte.
+   *
+   * Ninguém aponta para uma réplica: ela é endereço de reserva, não
+   * origem de conta. Tirá-la só faz o login deixar de tentar aquele
+   * servidor — e é exatamente o que quem a tira está pedindo.
+   */
+  @Delete(':id/replicas/:replicaId')
+  @RequirePermission('config:autenticacao')
+  async removerReplica(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('replicaId', ParseUUIDPipe) replicaId: string,
+  ) {
+    const fonte = await this.exigir(usuario, id);
+    const replica = await this.exigirReplica(fonte.id, replicaId);
+
+    await this.prisma.authSourceReplica.delete({ where: { id: replicaId } });
+
+    await this.auditoria.registrar(usuario, {
+      action: 'fonte-autenticacao.replica-removida',
+      entity: 'AuthSourceReplica',
+      entityId: replicaId,
+      antes: { fonte: fonte.name, host: replica.host, port: replica.port },
+    });
+
+    return this.listarReplicas(id);
+  }
+
+  private listarReplicas(authSourceId: string) {
+    return this.prisma.authSourceReplica.findMany({
+      where: { authSourceId },
+      orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+    });
+  }
+
+  private async exigirReplica(authSourceId: string, replicaId: string) {
+    const replica = await this.prisma.authSourceReplica.findFirst({
+      where: { id: replicaId, authSourceId },
+    });
+    if (!replica) throw new NotFoundException('Réplica não encontrada nesta fonte.');
+    return replica;
+  }
+
+  /**
+   * O endereço normalizado — e a recusa do que não é réplica.
+   *
+   * Cadastrar o endereço do próprio servidor principal como réplica faz
+   * o login tentar duas vezes o mesmo servidor quando ele cai: espera
+   * dobrada, e nenhuma chance a mais de entrar.
+   */
+  private endereco(fonte: AuthSource, dto: EscreverReplicaDto) {
+    const host = dto.host.trim();
+    const port = dto.port ?? 389;
+
+    if (host.toLowerCase() === fonte.host.toLowerCase() && port === fonte.port) {
+      throw new BadRequestException(
+        'Esse é o endereço do servidor principal da fonte. A réplica é outro servidor.',
+      );
+    }
+    return { host, port };
+  }
+
+  private async replicando<T>(host: string, port: number, operacao: () => Promise<T>): Promise<T> {
+    try {
+      return await operacao();
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        throw new ConflictException(`${host}:${port} já está cadastrado como réplica desta fonte.`);
+      }
+      throw e;
+    }
   }
 
   private listarGrupos(authSourceId: string) {

@@ -205,7 +205,9 @@ export class AuthService {
     usuario: UsuarioComVinculos,
     senha: string,
   ): Promise<UsuarioComVinculos | null> {
-    const fonte = await this.prisma.authSource.findUnique({ where: { id: usuario.authSourceId! } });
+    // Pela ponte do diretório, não direto pelo Prisma: é ela que carrega
+    // as réplicas junto, e sem elas o login cai com o servidor principal.
+    const fonte = await this.diretorio.fonte(usuario.authSourceId!);
     if (!fonte?.isActive) return null;
 
     const login = usuario.memberships.find((v) => v.organizationId === fonte.organizationId)?.username;
