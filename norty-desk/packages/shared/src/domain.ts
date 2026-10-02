@@ -3315,3 +3315,81 @@ export const ROTULO_COMPARTILHAMENTO: Record<Compartilhamento, string> = {
   TIME: 'Do time',
   ORGANIZACAO: 'Da casa',
 };
+
+// ---------------------------------------------------------------------
+// Grupos do diretório
+// ---------------------------------------------------------------------
+
+/**
+ * Como a fonte descobre a que grupos a pessoa pertence.
+ *
+ * É o `group_search_type` do GLPI. No Active Directory o `memberOf` do
+ * próprio usuário responde quase sempre, e sai de graça — já vem na
+ * entrada que o login buscou. No OpenLDAP com `groupOfNames` não existe
+ * `memberOf`: é o grupo que lista os membros, e aí só a segunda busca
+ * resolve.
+ */
+export const BUSCAS_DE_GRUPO = ['ATRIBUTO', 'OBJETO', 'AMBOS'] as const;
+export type BuscaDeGrupo = (typeof BUSCAS_DE_GRUPO)[number];
+
+export const ROTULO_BUSCA_DE_GRUPO: Record<BuscaDeGrupo, string> = {
+  ATRIBUTO: 'Pelo atributo da pessoa (memberOf)',
+  OBJETO: 'Procurando o objeto do grupo (member)',
+  AMBOS: 'Pelos dois',
+};
+
+/**
+ * As chaves pelas quais um grupo do diretório é reconhecido.
+ *
+ * O AD devolve o DN inteiro em `memberOf`:
+ * `CN=TI-Suporte,OU=Grupos,DC=norty,DC=local`. Quem cadastra o mapa quer
+ * escrever `TI-Suporte` — e quem tem dois grupos de mesmo nome em ramos
+ * diferentes quer escrever o DN. Daí as duas chaves: o DN inteiro e só o
+ * primeiro componente.
+ *
+ * Tudo em minúsculas e com os espaços colapsados, porque o AD não
+ * diferencia caixa em DN e a pessoa que digita o mapa não vai acertar a
+ * grafia do diretório.
+ *
+ * `[]` quando não sobra nada.
+ */
+export function chavesDoGrupo(bruto: string): string[] {
+  const limpo = bruto.trim().replace(/\s+/g, ' ');
+  if (!limpo) return [];
+
+  const chaves = new Set<string>();
+  const inteiro = limpo.toLowerCase();
+  chaves.add(inteiro);
+
+  // O primeiro componente do DN, sem o `CN=`. A vírgula separa
+  // componentes, mas `\,` dentro do valor não — é escape de DN, e um
+  // grupo chamado "Suporte, N1" existe.
+  const primeiro = /^([a-z]+)=((?:[^,\\]|\\.)*)/.exec(inteiro);
+  if (primeiro) {
+    const valor = primeiro[2]!.replace(/\\(.)/g, '$1').trim();
+    if (valor) chaves.add(valor);
+  }
+
+  return [...chaves];
+}
+
+/**
+ * Este mapa responde por este grupo?
+ *
+ * **Os dois lados têm regras diferentes, e a assimetria é o ponto.**
+ *
+ * O lado do AD é reconhecido pelas duas chaves: o DN inteiro e o nome.
+ * O lado cadastrado vale como foi escrito — quem escreveu só
+ * `TI-Suporte` casa com o grupo em qualquer ramo, e quem escreveu
+ * `CN=TI-Suporte,OU=Matriz,...` casa só com aquele.
+ *
+ * Tratar os dois lados igual faria o DN cadastrado casar também pelo
+ * nome, e aí escrever o ramo não distinguiria nada — que é a única razão
+ * de alguém escrever o ramo.
+ */
+export function grupoCasa(cadastrado: string, doDiretorio: string): boolean {
+  const doMapa = cadastrado.trim().replace(/\s+/g, ' ').toLowerCase();
+  if (!doMapa) return false;
+
+  return new Set(chavesDoGrupo(doDiretorio)).has(doMapa);
+}

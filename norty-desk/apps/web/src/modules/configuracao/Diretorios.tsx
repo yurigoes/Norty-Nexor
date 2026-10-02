@@ -1,18 +1,27 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 
 import { ErroDaApi } from '../../api/cliente';
+import type { BuscaDeGrupo, TimeView } from '@norty-desk/shared';
+import { BUSCAS_DE_GRUPO, ROTULO_BUSCA_DE_GRUPO } from '@norty-desk/shared';
+
 import {
   criarFonte,
+  criarMapaDeGrupo,
   desativarFonte,
   editarFonte,
+  editarMapaDeGrupo,
   listarFontes,
+  listarMapasDeGrupo,
+  removerMapaDeGrupo,
   testarFonte,
   type DadosDaFonte,
   type Fonte,
+  type MapaDeGrupo,
   type PapelDoDiretorio,
   type ResultadoDoTeste,
   type Seguranca,
 } from '../../api/diretorios';
+import * as api from '../../api/endpoints';
 import { useAutenticacao } from '../../auth/Autenticacao';
 
 type Edicao = {
@@ -36,6 +45,12 @@ type Edicao = {
   timeoutMs: string;
   autoCreate: boolean;
   defaultRole: PapelDoDiretorio;
+  groupSearch: BuscaDeGrupo;
+  groupField: string;
+  groupMemberField: string;
+  groupFilter: string;
+  groupBaseDn: string;
+  groupNested: boolean;
   position: string;
   isActive: boolean;
 };
@@ -85,6 +100,12 @@ const NOVA: Edicao = {
   timeoutMs: '5000',
   autoCreate: true,
   defaultRole: 'SOLICITANTE',
+  groupSearch: 'ATRIBUTO',
+  groupField: 'memberOf',
+  groupMemberField: 'member',
+  groupFilter: '(objectClass=group)',
+  groupBaseDn: '',
+  groupNested: false,
   position: '0',
   isActive: true,
 };
@@ -122,6 +143,12 @@ function paraEdicao(f: Fonte): Edicao {
     timeoutMs: String(f.timeoutMs),
     autoCreate: f.autoCreate,
     defaultRole: f.defaultRole,
+    groupSearch: f.groupSearch,
+    groupField: f.groupField,
+    groupMemberField: f.groupMemberField,
+    groupFilter: f.groupFilter ?? '',
+    groupBaseDn: f.groupBaseDn ?? '',
+    groupNested: f.groupNested,
     position: String(f.position),
     isActive: f.isActive,
   };
@@ -149,6 +176,12 @@ function paraApi(e: Edicao): DadosDaFonte {
     timeoutMs: Number(e.timeoutMs) || 5000,
     autoCreate: e.autoCreate,
     defaultRole: e.defaultRole,
+    groupSearch: e.groupSearch,
+    groupField: e.groupField.trim() || 'memberOf',
+    groupMemberField: e.groupMemberField.trim() || 'member',
+    groupFilter: e.groupFilter.trim() || null,
+    groupBaseDn: e.groupBaseDn.trim() || null,
+    groupNested: e.groupNested,
     position: Number(e.position) || 0,
     isActive: e.isActive,
     ...senha,
@@ -398,6 +431,67 @@ export function Diretorios() {
               </select>
             </Campo>
           ) : null}
+          <details>
+            <summary>Grupos</summary>
+            <div className="pilha-sm" style={{ paddingTop: 12 }}>
+              <span className="campo-ajuda">
+                Como descobrir a que grupos a pessoa pertence. O que cada grupo concede é
+                configurado abaixo, na própria fonte, depois de salvar.
+              </span>
+              <Campo
+                id="fonte-busca-grupo"
+                rotulo="Onde procurar"
+                dica="No AD o memberOf da pessoa resolve e não custa busca a mais."
+              >
+                <select
+                  id="fonte-busca-grupo"
+                  className="input"
+                  value={edicao.groupSearch}
+                  onChange={(e) => setEdicao({ ...edicao, groupSearch: e.target.value as BuscaDeGrupo })}
+                >
+                  {BUSCAS_DE_GRUPO.map((b) => (
+                    <option key={b} value={b}>
+                      {ROTULO_BUSCA_DE_GRUPO[b]}
+                    </option>
+                  ))}
+                </select>
+              </Campo>
+              <div className="grade-2">
+                {edicao.groupSearch === 'OBJETO' ? null : (
+                  <Campo id="fonte-campo-grupo" rotulo="Atributo da pessoa">
+                    <input id="fonte-campo-grupo" className="input" value={edicao.groupField} onChange={muda('groupField')} />
+                  </Campo>
+                )}
+                {edicao.groupSearch === 'ATRIBUTO' ? null : (
+                  <>
+                    <Campo id="fonte-campo-membro" rotulo="Atributo do grupo">
+                      <input id="fonte-campo-membro" className="input" value={edicao.groupMemberField} onChange={muda('groupMemberField')} />
+                    </Campo>
+                    <Campo id="fonte-filtro-grupo" rotulo="Filtro dos grupos">
+                      <input id="fonte-filtro-grupo" className="input" value={edicao.groupFilter} onChange={muda('groupFilter')} />
+                    </Campo>
+                    <Campo id="fonte-base-grupo" rotulo="Base dos grupos" dica="Vazio usa a base da fonte.">
+                      <input id="fonte-base-grupo" className="input" value={edicao.groupBaseDn} onChange={muda('groupBaseDn')} />
+                    </Campo>
+                  </>
+                )}
+              </div>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  type="checkbox"
+                  checked={edicao.groupNested}
+                  onChange={(e) => setEdicao({ ...edicao, groupNested: e.target.checked })}
+                />
+                Seguir grupo dentro de grupo
+              </label>
+              <span className="campo-ajuda">
+                Só no Active Directory: usa uma regra de correspondência da Microsoft. Num
+                OpenLDAP a busca volta vazia. Sem ela, quem está em &quot;TI-N2&quot; não aparece
+                em &quot;TI&quot; mesmo que o segundo contenha o primeiro.
+              </span>
+            </div>
+          </details>
+
           {edicao.id ? (
             <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input type="checkbox" checked={edicao.isActive} onChange={(e) => setEdicao({ ...edicao, isActive: e.target.checked })} />
@@ -458,6 +552,8 @@ export function Diretorios() {
                 </div>
               </div>
 
+              <MapaDeGrupos fonte={f} />
+
               <form
                 style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}
                 onSubmit={(e) => {
@@ -498,6 +594,223 @@ export function Diretorios() {
           );
         })
       )}
+    </div>
+  );
+}
+
+/**
+ * O que cada grupo do diretório concede.
+ *
+ * Fica dentro da ficha da fonte porque o grupo é dela: o mesmo nome em
+ * dois ADs é dois grupos, e um mapa que valesse para todas as fontes
+ * daria acesso de um cliente pelo diretório de outro.
+ *
+ * Time e papel são os dois opcionais. Há mapa que só põe no time — o
+ * grupo diz de que área a pessoa é — e mapa que só dá papel, que diz o
+ * que ela faz.
+ */
+function MapaDeGrupos({ fonte }: { fonte: Fonte }) {
+  const [mapas, setMapas] = useState<MapaDeGrupo[] | null>(null);
+  const [times, setTimes] = useState<TimeView[]>([]);
+  const [emEdicao, setEmEdicao] = useState<MapaDeGrupo | 'novo' | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const [grupo, setGrupo] = useState('');
+  const [teamId, setTeamId] = useState('');
+  const [gerente, setGerente] = useState(false);
+  const [papel, setPapel] = useState<PapelDoDiretorio | ''>('');
+
+  useEffect(() => {
+    void listarMapasDeGrupo(fonte.id)
+      .then(setMapas)
+      .catch(() => setMapas([]));
+    void api
+      .listarTimes()
+      .then(setTimes)
+      .catch(() => undefined);
+  }, [fonte.id]);
+
+  function abrir(mapa: MapaDeGrupo | 'novo') {
+    setErro(null);
+    setEmEdicao(mapa);
+    setGrupo(mapa === 'novo' ? '' : mapa.group);
+    setTeamId(mapa === 'novo' ? '' : (mapa.teamId ?? ''));
+    setGerente(mapa === 'novo' ? false : mapa.isTeamManager);
+    setPapel(mapa === 'novo' ? '' : (mapa.role ?? ''));
+  }
+
+  const falhar = (e: unknown) =>
+    setErro(e instanceof ErroDaApi ? e.message : 'Não foi possível salvar o mapa.');
+
+  if (!mapas) return <div className="sk sk-linha" />;
+
+  return (
+    <div className="pilha-sm">
+      <div className="linha-entre">
+        <span className="campo-ajuda">
+          {mapas.length === 0
+            ? 'Nenhum grupo mapeado: o diretório não mexe em time nem perfil nesta fonte.'
+            : `${mapas.length} grupo(s) mapeado(s). Vale a cada login.`}
+        </span>
+        <button type="button" className="btn -fantasma -sm" onClick={() => abrir('novo')}>
+          Mapear grupo
+        </button>
+      </div>
+
+      {erro ? (
+        <div className="alerta-bloco -erro">
+          <span aria-hidden="true">!</span>
+          <span>{erro}</span>
+        </div>
+      ) : null}
+
+      {mapas.length > 0 ? (
+        <table className="tabela -densa">
+          <thead>
+            <tr>
+              <th>Grupo</th>
+              <th>Entra no time</th>
+              <th>Perfil</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {mapas.map((m) => (
+              <tr key={m.id}>
+                <td className="mono">
+                  {m.group}
+                  {m.isActive ? null : <span className="selo -neutro"> desligado</span>}
+                </td>
+                <td>
+                  {m.team?.name ?? '—'}
+                  {m.team && m.isTeamManager ? ' (como gerente)' : ''}
+                </td>
+                <td>{PAPEIS.find((p) => p.valor === m.role)?.rotulo ?? '—'}</td>
+                <td className="-num">
+                  <button type="button" className="btn -fantasma -sm" onClick={() => abrir(m)}>
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn -perigo -sm"
+                    onClick={() => {
+                      setErro(null);
+                      void removerMapaDeGrupo(fonte.id, m.id).then(setMapas).catch(falhar);
+                    }}
+                  >
+                    Apagar
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
+
+      {emEdicao ? (
+        <form
+          className="pilha-sm"
+          style={{ border: '1px solid var(--borda, #ddd)', borderRadius: 8, padding: 12 }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            setErro(null);
+
+            const dados = {
+              group: grupo,
+              teamId: teamId || null,
+              isTeamManager: gerente,
+              role: papel || null,
+            };
+
+            const salvar =
+              emEdicao === 'novo'
+                ? criarMapaDeGrupo(fonte.id, dados)
+                : editarMapaDeGrupo(fonte.id, emEdicao.id, dados);
+
+            void salvar
+              .then((lista) => {
+                setMapas(lista);
+                setEmEdicao(null);
+              })
+              .catch(falhar);
+          }}
+        >
+          <Campo
+            id={`mapa-grupo-${fonte.id}`}
+            rotulo="Grupo no diretório"
+            dica="O nome (TI-Suporte) ou o DN inteiro, quando há grupos de mesmo nome em ramos diferentes. O teste acima lista os grupos de um login."
+          >
+            <input
+              id={`mapa-grupo-${fonte.id}`}
+              className="input"
+              required
+              autoFocus
+              value={grupo}
+              onChange={(e) => setGrupo(e.target.value)}
+              placeholder="TI-Suporte"
+            />
+          </Campo>
+
+          <div className="grade-2">
+            <Campo id={`mapa-time-${fonte.id}`} rotulo="Entra no time">
+              <select
+                id={`mapa-time-${fonte.id}`}
+                className="input"
+                value={teamId}
+                onChange={(e) => setTeamId(e.target.value)}
+              >
+                <option value="">Nenhum</option>
+                {times.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </Campo>
+
+            <Campo
+              id={`mapa-papel-${fonte.id}`}
+              rotulo="Perfil"
+              dica="Com mais de um grupo dando perfil, vale o primeiro da lista."
+            >
+              <select
+                id={`mapa-papel-${fonte.id}`}
+                className="input"
+                value={papel}
+                onChange={(e) => setPapel(e.target.value as PapelDoDiretorio | '')}
+              >
+                <option value="">Não mexe no perfil</option>
+                {PAPEIS.map((p) => (
+                  <option key={p.valor} value={p.valor}>
+                    {p.rotulo}
+                  </option>
+                ))}
+              </select>
+            </Campo>
+          </div>
+
+          {teamId ? (
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input type="checkbox" checked={gerente} onChange={(e) => setGerente(e.target.checked)} />
+              Entra como gerente do time
+            </label>
+          ) : null}
+
+          <span className="campo-ajuda">
+            Sair do grupo no diretório tira do time e devolve o perfil padrão da fonte, no login
+            seguinte. O que alguém atrelou pela tela de times não é mexido.
+          </span>
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="submit" className="btn -primario -sm">
+              Salvar
+            </button>
+            <button type="button" className="btn -fantasma -sm" onClick={() => setEmEdicao(null)}>
+              Cancelar
+            </button>
+          </div>
+        </form>
+      ) : null}
     </div>
   );
 }

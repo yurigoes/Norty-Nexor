@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   ConflictException,
   Controller,
@@ -20,6 +21,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   Max,
   MaxLength,
@@ -35,6 +37,8 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { cifrar } from '../channels/segredos';
+import { BUSCAS_DE_GRUPO, type BuscaDeGrupo } from '@norty-desk/shared';
+
 import { DiretorioService } from './diretorio.service';
 
 const SEGURANCA = ['NONE', 'STARTTLS', 'LDAPS'] as const;
@@ -74,6 +78,12 @@ export class CriarFonteDto {
   @IsOptional() @IsBoolean() autoCreate?: boolean;
   @IsOptional() @IsEnum(PAPEIS_DO_DIRETORIO) defaultRole?: (typeof PAPEIS_DO_DIRETORIO)[number];
   @IsOptional() @IsInt() @Min(0) @Max(99) position?: number;
+  @IsOptional() @IsEnum(BUSCAS_DE_GRUPO) groupSearch?: BuscaDeGrupo;
+  @IsOptional() @Matches(ATRIBUTO, { message: MSG_ATRIBUTO }) groupField?: string;
+  @IsOptional() @Matches(ATRIBUTO, { message: MSG_ATRIBUTO }) groupMemberField?: string;
+  @IsOptional() @ValidateIf(naoNulo) @IsString() @MaxLength(1000) groupFilter?: string | null;
+  @IsOptional() @ValidateIf(naoNulo) @IsString() @MaxLength(500) groupBaseDn?: string | null;
+  @IsOptional() @IsBoolean() groupNested?: boolean;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 
@@ -99,6 +109,30 @@ export class EditarFonteDto {
   @IsOptional() @IsBoolean() autoCreate?: boolean;
   @IsOptional() @IsEnum(PAPEIS_DO_DIRETORIO) defaultRole?: (typeof PAPEIS_DO_DIRETORIO)[number];
   @IsOptional() @IsInt() @Min(0) @Max(99) position?: number;
+  @IsOptional() @IsEnum(BUSCAS_DE_GRUPO) groupSearch?: BuscaDeGrupo;
+  @IsOptional() @Matches(ATRIBUTO, { message: MSG_ATRIBUTO }) groupField?: string;
+  @IsOptional() @Matches(ATRIBUTO, { message: MSG_ATRIBUTO }) groupMemberField?: string;
+  @IsOptional() @ValidateIf(naoNulo) @IsString() @MaxLength(1000) groupFilter?: string | null;
+  @IsOptional() @ValidateIf(naoNulo) @IsString() @MaxLength(500) groupBaseDn?: string | null;
+  @IsOptional() @IsBoolean() groupNested?: boolean;
+  @IsOptional() @IsBoolean() isActive?: boolean;
+}
+
+/**
+ * Um grupo do diretório virando time e papel.
+ *
+ * O papel aceito é o mesmo conjunto do provisionamento
+ * (`PAPEIS_DO_DIRETORIO`), e pela mesma razão, que aqui é ainda mais
+ * direta: quem administra o AD do cliente escreveria um grupo chamado o
+ * que quisesse e se poria dentro dele. Gestor e administrador do Desk
+ * continuam sendo decisão de alguém daqui.
+ */
+export class EscreverMapaDeGrupoDto {
+  @IsString() @MinLength(1) @MaxLength(500) group!: string;
+  @IsOptional() @ValidateIf(naoNulo) @IsUUID() teamId?: string | null;
+  @IsOptional() @IsBoolean() isTeamManager?: boolean;
+  @IsOptional() @ValidateIf(naoNulo) @IsEnum(PAPEIS_DO_DIRETORIO) role?: (typeof PAPEIS_DO_DIRETORIO)[number] | null;
+  @IsOptional() @IsInt() @Min(0) @Max(999) position?: number;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 
@@ -256,6 +290,162 @@ export class FontesController {
       position: dto.position,
       isActive: dto.isActive,
     };
+  }
+
+  // -------------------------------------------------------------------
+  // Mapa de grupos
+  // -------------------------------------------------------------------
+
+  @Get(':id/grupos')
+  @RequirePermission('config:autenticacao')
+  async grupos(@CurrentUser() usuario: UsuarioAutenticado, @Param('id', ParseUUIDPipe) id: string) {
+    await this.exigir(usuario, id);
+    return this.listarGrupos(id);
+  }
+
+  @Post(':id/grupos')
+  @RequirePermission('config:autenticacao')
+  async criarGrupo(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: EscreverMapaDeGrupoDto,
+  ) {
+    const fonte = await this.exigir(usuario, id);
+    await this.exigirTime(usuario, dto.teamId);
+
+    const grupo = dto.group.trim().replace(/\s+/g, ' ');
+
+    const criado = await this.mapeando(grupo, () =>
+      this.prisma.directoryGroupMap.create({
+        data: {
+          organizationId: usuario.organizationId,
+          authSourceId: fonte.id,
+          group: grupo,
+          teamId: dto.teamId ?? null,
+          isTeamManager: dto.isTeamManager ?? false,
+          role: dto.role ?? null,
+          position: dto.position ?? 0,
+          ...(dto.isActive === undefined ? {} : { isActive: dto.isActive }),
+        },
+        select: { id: true },
+      }),
+    );
+
+    await this.auditoria.registrar(usuario, {
+      action: 'diretorio.grupo-mapeado',
+      entity: 'DirectoryGroupMap',
+      entityId: criado.id,
+      depois: { fonte: fonte.name, grupo, teamId: dto.teamId ?? null, role: dto.role ?? null },
+    });
+
+    return this.listarGrupos(id);
+  }
+
+  @Patch(':id/grupos/:mapaId')
+  @RequirePermission('config:autenticacao')
+  async editarGrupo(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('mapaId', ParseUUIDPipe) mapaId: string,
+    @Body() dto: EscreverMapaDeGrupoDto,
+  ) {
+    const fonte = await this.exigir(usuario, id);
+    await this.exigirMapa(fonte.id, mapaId);
+    await this.exigirTime(usuario, dto.teamId);
+
+    const grupo = dto.group.trim().replace(/\s+/g, ' ');
+
+    await this.mapeando(grupo, () =>
+      this.prisma.directoryGroupMap.update({
+        where: { id: mapaId },
+        data: {
+          group: grupo,
+          teamId: dto.teamId ?? null,
+          isTeamManager: dto.isTeamManager ?? false,
+          role: dto.role ?? null,
+          ...(dto.position === undefined ? {} : { position: dto.position }),
+          ...(dto.isActive === undefined ? {} : { isActive: dto.isActive }),
+        },
+      }),
+    );
+
+    await this.auditoria.registrar(usuario, {
+      action: 'diretorio.grupo-remapeado',
+      entity: 'DirectoryGroupMap',
+      entityId: mapaId,
+      depois: { fonte: fonte.name, grupo, teamId: dto.teamId ?? null, role: dto.role ?? null },
+    });
+
+    return this.listarGrupos(id);
+  }
+
+  /**
+   * Apaga o mapa — e **não** desfaz o que ele concedeu.
+   *
+   * Quem tirou o mapa pode ter tirado por engano, e varrer os times de
+   * todo mundo na hora seria caro e irreversível. O desfazer acontece no
+   * próximo login de cada pessoa, que é quando o mapa some da conta dela:
+   * o vínculo marcado como do diretório deixa de ser concedido e sai.
+   */
+  @Delete(':id/grupos/:mapaId')
+  @RequirePermission('config:autenticacao')
+  async removerGrupo(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('mapaId', ParseUUIDPipe) mapaId: string,
+  ) {
+    const fonte = await this.exigir(usuario, id);
+    const mapa = await this.exigirMapa(fonte.id, mapaId);
+
+    await this.prisma.directoryGroupMap.delete({ where: { id: mapaId } });
+
+    await this.auditoria.registrar(usuario, {
+      action: 'diretorio.grupo-desmapeado',
+      entity: 'DirectoryGroupMap',
+      entityId: mapaId,
+      antes: { fonte: fonte.name, grupo: mapa.group },
+    });
+
+    return this.listarGrupos(id);
+  }
+
+  private listarGrupos(authSourceId: string) {
+    return this.prisma.directoryGroupMap.findMany({
+      where: { authSourceId },
+      orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+      include: { team: { select: { id: true, name: true } } },
+    });
+  }
+
+  private async exigirMapa(authSourceId: string, mapaId: string) {
+    const mapa = await this.prisma.directoryGroupMap.findFirst({
+      where: { id: mapaId, authSourceId },
+    });
+    if (!mapa) throw new NotFoundException('Mapa de grupo não encontrado.');
+    return mapa;
+  }
+
+  /** O time é desta organização — id de outra seria atrelar gente ao time alheio. */
+  private async exigirTime(usuario: UsuarioAutenticado, teamId: string | null | undefined) {
+    if (!teamId) return;
+
+    const existe = await this.prisma.team.count({
+      where: { id: teamId, organizationId: usuario.organizationId },
+    });
+    if (!existe) throw new BadRequestException('Time não encontrado nesta organização.');
+  }
+
+  private async mapeando<T>(grupo: string, operacao: () => Promise<T>): Promise<T> {
+    try {
+      return await operacao();
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        throw new ConflictException(
+          `O grupo "${grupo}" já está mapeado nesta fonte. Edite o mapa que existe.`,
+        );
+      }
+      throw e;
+    }
   }
 
   private async salvando<T>(operacao: () => Promise<T>): Promise<T> {

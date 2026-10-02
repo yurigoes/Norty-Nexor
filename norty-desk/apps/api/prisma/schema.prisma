@@ -68,6 +68,7 @@ model Organization {
   assetModels         AssetModel[]
   savedSearches       SavedSearch[]
   savedSearchDefaults SavedSearchDefault[]
+  directoryGroupMaps  DirectoryGroupMap[]
   osAliases           OperatingSystemAlias[]
   components          AssetComponent[]
   assetHoldings       AssetHolding[]
@@ -278,6 +279,13 @@ model Membership {
   userId         String   @db.Uuid
   organizationId String   @db.Uuid
   role           Role
+  /// O papel atual veio de um mapa de grupo, não de alguém.
+  ///
+  /// É o que permite **devolver** o papel ao padrão da fonte quando a
+  /// pessoa sai do grupo. Sem a marca, não haveria como distinguir
+  /// "AGENTE porque o grupo deu" de "AGENTE porque o administrador
+  /// promoveu", e devolver os dois ao padrão desfaria a promoção.
+  roleFromDirectory Boolean @default(false)
   /// Login por nome de usuário, único dentro da organização (decisão do
   /// Yuri, 10/09/2026): dois clientes podem ter o seu `jsilva`. Minúsculas,
   /// sem "@" — ver common/usuario.ts.
@@ -412,6 +420,7 @@ model Team {
 
   organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   savedSearches SavedSearch[]
+  groupMaps    DirectoryGroupMap[]
   members      TeamMember[]
   actorIn      TicketActor[]
   categories   Category[]
@@ -429,6 +438,14 @@ model TeamMember {
   teamId    String  @db.Uuid
   userId    String  @db.Uuid
   isManager Boolean @default(false)
+  /// Entrou no time por mapa de grupo do diretório.
+  ///
+  /// Mesma regra do `managedByAgent` do inventário: **o diretório só tira
+  /// o que o diretório pôs**. Sem esta marca, sincronizar o AD apagaria
+  /// quem alguém atrelou ao time à mão — e a alternativa, não apagar
+  /// nada, faria sair do grupo no AD não tirar do time, que é metade do
+  /// motivo de o mapa existir.
+  managedByDirectory Boolean @default(false)
 
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -2845,7 +2862,34 @@ model AuthSource {
   timeoutMs       Int            @default(5000)
   /// Cria a pessoa no primeiro login bem-sucedido (decisão do Yuri).
   autoCreate      Boolean        @default(true)
+  /// O papel de quem entra sem nenhum mapa de grupo casar.
+  ///
+  /// Também é para onde o papel **volta** quando a pessoa sai do grupo
+  /// que o concedia: sem isso, tirar do grupo no AD não tiraria o acesso.
   defaultRole     Role           @default(SOLICITANTE)
+
+  /// --- Grupos --------------------------------------------------------
+
+  /// Como descobrir a que grupos a pessoa pertence. Ver `BuscaDeGrupo`.
+  groupSearch      GroupSearch @default(ATRIBUTO)
+  /// O atributo do usuário que lista os grupos. `memberOf` no AD.
+  groupField       String      @default("memberOf")
+  /// O atributo do grupo que lista os membros. `member` no AD.
+  groupMemberField String      @default("member")
+  /// Filtro dos objetos de grupo, combinado com o do membro num `(& ...)`.
+  groupFilter      String?     @default("(objectClass=group)")
+  /// Onde procurar grupos. Vazio usa o `baseDn`.
+  groupBaseDn      String?
+  /// Seguir grupo dentro de grupo.
+  ///
+  /// **Só no Active Directory**: usa a regra de correspondência
+  /// `1.2.840.113556.1.4.1941` (`LDAP_MATCHING_RULE_IN_CHAIN`), que é
+  /// extensão da Microsoft. Num OpenLDAP a busca volta vazia, por isso
+  /// nasce desligada.
+  ///
+  /// Sem ela, quem está em "TI-N2" não aparece em "TI" mesmo que o
+  /// segundo contenha o primeiro: `memberOf` do AD não é transitivo.
+  groupNested      Boolean     @default(false)
   lastTestAt      DateTime?
   lastTestOk      Boolean?
   lastTestMessage String?
@@ -2854,10 +2898,76 @@ model AuthSource {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   users        User[]
+  groupMaps    DirectoryGroupMap[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
   @@map("auth_sources")
+}
+
+/// Como descobrir os grupos da pessoa. O `group_search_type` do GLPI.
+enum GroupSearch {
+  /// `memberOf` do próprio usuário. Sai de graça: já vem na entrada.
+  ATRIBUTO
+  /// Procura objetos de grupo que listem a pessoa como membro.
+  OBJETO
+  AMBOS
+}
+
+/// O que um grupo do diretório concede.
+///
+/// É o `RuleRight` do GLPI, reduzido ao que o Desk tem: um grupo vira
+/// time, papel, ou os dois. Lá a regra tem um motor de critérios
+/// genérico; aqui a pergunta é sempre a mesma — "a pessoa está neste
+/// grupo?" —, e um motor para uma pergunta só é esquema sem uso.
+///
+/// **Nada aqui concede sozinho.** O mapa roda a cada login e o resultado
+/// é escrito no vínculo e no time, que são os lugares que o resto do
+/// sistema já lê. Quem olha a tela de times vê a pessoa lá, não uma
+/// regra que ninguém sabe que existe.
+model DirectoryGroupMap {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  authSourceId   String @db.Uuid
+
+  /// O grupo como a casa o escreve: o nome ("TI-Suporte") ou o DN
+  /// inteiro, quando há homônimos em ramos diferentes. A comparação é
+  /// `grupoCasa`, em `packages/shared`.
+  group String
+
+  /// O time em que a pessoa entra. Nulo é mapa que só dá papel.
+  teamId String? @db.Uuid
+  /// Se ela entra como gerente dele.
+  isTeamManager Boolean @default(false)
+  /// O papel que o grupo concede. Nulo é mapa que só dá time.
+  role Role?
+
+  /// A ordem em que os mapas são lidos.
+  ///
+  /// Decide o **papel**: vence o primeiro mapa que casa e tem papel.
+  /// Time não precisa de ordem — a pessoa entra em todos os que casam.
+  ///
+  /// A alternativa seria "o papel mais forte vence", que exige inventar
+  /// uma escada entre os papéis. GESTOR e AGENTE não se comparam: um
+  /// decide aprovação do lado do cliente, o outro atende. Ordem explícita
+  /// não inventa comparação nenhuma.
+  position Int @default(0)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  authSource   AuthSource   @relation(fields: [authSourceId], references: [id], onDelete: Cascade)
+  team         Team?        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  /// Dois mapas para o mesmo grupo na mesma fonte seriam duas respostas
+  /// para a mesma pergunta, e a ordem decidiria em silêncio qual vale.
+  @@unique([authSourceId, group])
+  @@index([organizationId, position])
+  @@index([teamId])
+  @@map("directory_group_maps")
 }
 
 // =========================================================

@@ -18,6 +18,7 @@ import { ThrottleService } from '../../common/throttle/throttle.service';
 import type { UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { normalizarUsername } from '../../common/usuario';
 import { DiretorioService } from '../diretorio/diretorio.service';
+import { GruposDoDiretorioService } from '../diretorio/grupos.service';
 import { ErroDeDiretorio, type PessoaDoDiretorio, type ResultadoLdap } from '../diretorio/ldap';
 import type { AtualizarPerfilDto } from './dto';
 
@@ -60,6 +61,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly diretorio: DiretorioService,
+    private readonly gruposDoDiretorio: GruposDoDiretorioService,
     private readonly throttle: ThrottleService,
   ) {}
 
@@ -230,6 +232,7 @@ export class AuthService {
     }
 
     await this.sincronizar(usuario.id, resultado.pessoa);
+    await this.aplicarGrupos(fonte, usuario.id, resultado.pessoa.grupos);
     return this.carregar(usuario.id);
   }
 
@@ -290,6 +293,7 @@ export class AuthService {
           update: { username },
         });
         await this.sincronizar(existente.id, pessoa);
+        await this.aplicarGrupos(fonte, existente.id, pessoa.grupos);
         return this.carregar(existente.id);
       }
 
@@ -322,6 +326,7 @@ export class AuthService {
         select: { id: true },
       });
       this.log.log(`"${username}" criado(a) pela fonte "${fonte.name}" como ${fonte.defaultRole}.`);
+      await this.aplicarGrupos(fonte, criado.id, pessoa.grupos);
       return this.carregar(criado.id);
     } catch (e) {
       // O login já é de uma conta local desta empresa: não se funde conta
@@ -331,6 +336,22 @@ export class AuthService {
         return null;
       }
       throw e;
+    }
+  }
+
+  /**
+   * Os grupos do diretório viram time e papel, a cada login.
+   *
+   * Falhar aqui **não** barra a entrada: o mapa é conveniência de
+   * configuração, e quem já provou a senha no AD não deve ficar de fora
+   * porque um time foi apagado no meio do caminho. O papel continua o
+   * que estava, que é o conservador — e o log diz o que houve.
+   */
+  private async aplicarGrupos(fonte: AuthSource, userId: string, grupos: string[]): Promise<void> {
+    try {
+      await this.gruposDoDiretorio.aplicar(fonte, userId, fonte.organizationId, grupos);
+    } catch (e) {
+      this.log.error(`Mapa de grupo da fonte "${fonte.name}" falhou para ${userId}: ${(e as Error).message}`);
     }
   }
 

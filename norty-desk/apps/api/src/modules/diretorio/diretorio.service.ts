@@ -29,6 +29,14 @@ export class DiretorioService {
       nameField: f.nameField,
       phoneField: f.phoneField,
       timeoutMs: f.timeoutMs,
+      grupos: {
+        busca: f.groupSearch,
+        campoDoUsuario: f.groupField,
+        campoDoMembro: f.groupMemberField,
+        filtro: f.groupFilter,
+        baseDn: f.groupBaseDn,
+        aninhados: f.groupNested,
+      },
     };
   }
 

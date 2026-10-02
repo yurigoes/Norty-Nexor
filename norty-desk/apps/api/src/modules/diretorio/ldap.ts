@@ -1,4 +1,5 @@
 import { Client, InvalidCredentialsError } from 'ldapts';
+import type { BuscaDeGrupo } from '@norty-desk/shared';
 
 /**
  * Conversa com o diretório (LDAP/AD) no mesmo roteiro do GLPI
@@ -31,10 +32,31 @@ export type FonteLdap = {
   nameField: string;
   phoneField: string | null;
   timeoutMs: number;
+  grupos: GruposDaFonte;
+};
+
+/** A parte da fonte que diz como descobrir os grupos. */
+export type GruposDaFonte = {
+  busca: BuscaDeGrupo;
+  campoDoUsuario: string;
+  campoDoMembro: string;
+  filtro: string | null;
+  baseDn: string | null;
+  aninhados: boolean;
 };
 
 export type PessoaDoDiretorio = {
   dn: string;
+  /**
+   * Os grupos a que ela pertence, como o diretório os nomeia — DN
+   * inteiro no AD.
+   *
+   * Lista vazia é "procurei e não achou"; a busca que falha lança, e o
+   * login não chega aqui. A diferença importa: tratar queda do diretório
+   * como "sem grupo" tiraria todo mundo dos times na primeira
+   * instabilidade de rede.
+   */
+  grupos: string[];
   /** O login como o diretório o escreve (o que a pessoa digitou pode vir em outra caixa). */
   login: string;
   /** Valor do `syncField`, estável mesmo se o login mudar. Binário (objectGUID) vira hex. */
@@ -165,6 +187,9 @@ async function procurar(conexao: ConexaoLdap, fonte: FonteLdap, login: string): 
     fonte.emailField,
     fonte.nameField,
     ...(fonte.phoneField ? [fonte.phoneField] : []),
+    // Pedido junto com o resto: o `memberOf` vem na mesma entrada, e
+    // buscá-lo depois seria uma ida a mais ao diretório por login.
+    ...(fonte.grupos.busca === 'OBJETO' ? [] : [fonte.grupos.campoDoUsuario]),
   ];
 
   let entradas: Entrada[];
@@ -187,9 +212,87 @@ async function procurar(conexao: ConexaoLdap, fonte: FonteLdap, login: string): 
   return { ok: true, entrada: entradas[0]! };
 }
 
-function paraPessoa(fonte: FonteLdap, entrada: Entrada, digitado: string): PessoaDoDiretorio {
+/**
+ * A regra de correspondência do AD que segue grupo dentro de grupo.
+ *
+ * `LDAP_MATCHING_RULE_IN_CHAIN`, extensão da Microsoft. Num diretório
+ * que não a conhece a busca volta vazia — por isso `aninhados` nasce
+ * desligado, e por isso o filtro só a usa quando a casa pediu.
+ */
+const REGRA_EM_CADEIA = '1.2.840.113556.1.4.1941';
+
+/** Tudo o que o atributo multivalorado tem, não só o primeiro. */
+function comoLista(bruto: unknown): string[] {
+  const valores = Array.isArray(bruto) ? bruto : [bruto];
+
+  return valores
+    .map((v) => (Buffer.isBuffer(v) ? v.toString('utf8') : v))
+    .filter((v): v is string => typeof v === 'string')
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Os grupos da pessoa, pelos dois caminhos que o GLPI oferece.
+ *
+ * O `memberOf` do próprio usuário sai de graça — já veio na entrada que
+ * o login buscou. A busca por objeto de grupo custa uma consulta a mais,
+ * e é a única que funciona no OpenLDAP com `groupOfNames`, onde não há
+ * `memberOf`.
+ *
+ * Com `AMBOS`, os dois resultados se somam e o DN repetido some: o
+ * mesmo grupo encontrado pelos dois caminhos é um grupo só.
+ *
+ * **Erro aqui sobe.** Quem chama não pode confundir "o diretório caiu"
+ * com "a pessoa não está em grupo nenhum" — a segunda tiraria todo mundo
+ * dos times na primeira instabilidade de rede.
+ */
+export async function lerGrupos(
+  conexao: ConexaoLdap,
+  fonte: FonteLdap,
+  entrada: Entrada,
+): Promise<string[]> {
+  const { grupos: cfg } = fonte;
+  const achados = new Set<string>();
+
+  if (cfg.busca === 'ATRIBUTO' || cfg.busca === 'AMBOS') {
+    for (const grupo of comoLista(atributo(entrada, cfg.campoDoUsuario))) achados.add(grupo);
+  }
+
+  if (cfg.busca === 'OBJETO' || cfg.busca === 'AMBOS') {
+    const membro = cfg.aninhados
+      ? `(${cfg.campoDoMembro}:${REGRA_EM_CADEIA}:=${escaparFiltro(entrada.dn)})`
+      : `(${cfg.campoDoMembro}=${escaparFiltro(entrada.dn)})`;
+
+    const extra = cfg.filtro?.trim();
+    const filtro = extra
+      ? `(&${membro}${extra.startsWith('(') ? extra : `(${extra})`})`
+      : membro;
+
+    let objetos: Entrada[];
+    try {
+      objetos = await conexao.buscar(cfg.baseDn?.trim() || fonte.baseDn, filtro, ['dn']);
+    } catch (e) {
+      // Base inexistente é "não há grupos aí", e não queda do diretório.
+      if ((e as Error).name === 'NoSuchObjectError') return [...achados];
+      throw new ErroDeDiretorio(`O diretório recusou a busca de grupos: ${(e as Error).message}`);
+    }
+
+    for (const objeto of objetos) if (objeto.dn) achados.add(objeto.dn.trim());
+  }
+
+  return [...achados];
+}
+
+function paraPessoa(
+  fonte: FonteLdap,
+  entrada: Entrada,
+  digitado: string,
+  grupos: string[],
+): PessoaDoDiretorio {
   return {
     dn: entrada.dn,
+    grupos,
     login: comoTexto(atributo(entrada, fonte.loginField)) ?? digitado.trim(),
     externalId: comoTexto(atributo(entrada, fonte.syncField)),
     email: comoTexto(atributo(entrada, fonte.emailField))?.toLowerCase() ?? null,
@@ -222,7 +325,11 @@ export async function autenticar(
       throw new ErroDeDiretorio(`Falha ao validar a senha no diretório: ${(e as Error).message}`);
     }
 
-    return { ok: true, pessoa: paraPessoa(fonte, achou.entrada, login) };
+    // Depois do bind: antes dele a conta de serviço é quem está ligada, e
+    // há diretório que só mostra o `memberOf` para quem se autenticou.
+    const grupos = await lerGrupos(conexao, fonte, achou.entrada);
+
+    return { ok: true, pessoa: paraPessoa(fonte, achou.entrada, login, grupos) };
   } finally {
     await conexao.fechar();
   }
@@ -279,12 +386,28 @@ export async function testarFonte(
             : `${servico}, mas ninguém com ${fonte.loginField}=${login.trim()} na base (com o filtro extra).`,
       };
     }
-    const pessoa = paraPessoa(fonte, achou.entrada, login);
+    // O teste lê os grupos de propósito: montar o mapa sem saber como o
+    // diretório nomeia os grupos é adivinhar, e adivinhar errado dá um
+    // mapa que nunca casa e ninguém sabe por quê.
+    //
+    // Sem bind como a pessoa, ao contrário do login — aqui não há a
+    // senha dela. Diretório que esconde `memberOf` da conta de serviço
+    // devolve lista vazia, e a mensagem diz isso.
+    const grupos = await lerGrupos(conexao, fonte, achou.entrada);
+    const pessoa = paraPessoa(fonte, achou.entrada, login, grupos);
+
+    const semId = pessoa.externalId
+      ? ''
+      : `, mas sem ${fonte.syncField}: o vínculo vai depender só do login`;
+
+    const comGrupos =
+      grupos.length > 0
+        ? ` ${grupos.length} grupo(s): ${grupos.slice(0, 5).join('; ')}${grupos.length > 5 ? '; …' : ''}`
+        : ' Nenhum grupo — confira a busca de grupos, ou se a conta de serviço enxerga o atributo.';
+
     return {
       ok: true,
-      mensagem: pessoa.externalId
-        ? `Encontrada: ${pessoa.dn}`
-        : `Encontrada, mas sem ${fonte.syncField}: o vínculo vai depender só do login.`,
+      mensagem: `Encontrada: ${pessoa.dn}${semId}.${comGrupos}`,
       pessoa,
     };
   } catch (e) {

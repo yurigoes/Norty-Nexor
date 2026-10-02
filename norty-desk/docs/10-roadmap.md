@@ -393,6 +393,19 @@ O inventário que o chamado referencia.
 
 ---
 
+## Depois das oito fases
+
+- **Grupo do diretório virando time e perfil** — feito em 02/10/2026. O
+  `RuleRight` do GLPI, com a metade que lá não existe: **revogar**. Sair
+  do grupo no AD tira do time e devolve o perfil padrão da fonte no login
+  seguinte, e o que alguém atrelou pela tela não é tocado — a marca
+  `managedByDirectory` é a mesma ideia do `managedByAgent` do inventário.
+  Administrador e gestor ficam fora do mapa: quem administra o AD do
+  cliente escreveria um grupo com o nome que quisesse e se poria dentro
+  dele.
+
+---
+
 ## Sobre a ordem
 
 A paridade com o GLPI é requisito (`docs/02-gap-analysis.md`, seção F).

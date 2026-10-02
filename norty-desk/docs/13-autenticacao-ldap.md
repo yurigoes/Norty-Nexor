@@ -4,9 +4,10 @@ Como o GLPI conversa com o LDAP, lido no código-fonte dele
 (`glpi-project/glpi`, ramo `main`, `src/Auth.php` e `src/AuthLDAP.php`),
 e como isso vira o desenho do Norty Desk.
 
-> **Estado em 10/09/2026.** No ar: login por **e-mail** ou por **nome de
-> usuário + empresa**, e-mail opcional, e o **LDAP/AD por organização**
-> (seção 2). Falta: grupos do AD virando equipes e perfis, e réplicas.
+> **Estado em 02/10/2026.** No ar: login por **e-mail** ou por **nome de
+> usuário + empresa**, e-mail opcional, o **LDAP/AD por organização**
+> (seção 2) e os **grupos virando time e perfil** (seção 4). Falta:
+> réplicas.
 
 ---
 
@@ -154,9 +155,110 @@ troca, `null` apaga.
 
 Biblioteca: **`ldapts` 8.2** (a 9 exige Node 22; a imagem é Node 20).
 
+## 4. Grupos virando time e perfil
+
+É o `RuleRight` do GLPI, reduzido ao que o Desk tem: um grupo do AD vira
+time, perfil, ou os dois. Lá a regra tem um motor de critérios genérico;
+aqui a pergunta é sempre a mesma — "a pessoa está neste grupo?" —, e um
+motor para uma pergunta só é esquema sem uso.
+
+```
+GET    /v1/auth-sources/:id/grupos           → [{ id, group, team, isTeamManager, role, position }]
+POST   /v1/auth-sources/:id/grupos           → { group, teamId?, isTeamManager?, role?, position? }
+PATCH  /v1/auth-sources/:id/grupos/:mapaId
+DELETE /v1/auth-sources/:id/grupos/:mapaId
+```
+
+### Como os grupos são lidos
+
+`groupSearch` é o `group_search_type` do GLPI:
+
+| Valor | Como | Quando |
+|---|---|---|
+| `ATRIBUTO` | `memberOf` da própria pessoa | AD. Sai **de graça**: o atributo vem na mesma entrada que o login buscou |
+| `OBJETO` | procura grupos cujo `member` é o DN da pessoa | OpenLDAP com `groupOfNames`, onde não existe `memberOf` |
+| `AMBOS` | os dois, somados sem repetir | diretório misto |
+
+A leitura acontece **depois do bind da pessoa**, e não antes: há
+diretório que só mostra o `memberOf` a quem se autenticou.
+
+`groupNested` segue grupo dentro de grupo, e é **só do Active
+Directory**: usa `1.2.840.113556.1.4.1941`
+(`LDAP_MATCHING_RULE_IN_CHAIN`), extensão da Microsoft. Num OpenLDAP a
+busca volta vazia, por isso nasce desligada. Sem ela, quem está em
+"TI-N2" não aparece em "TI" mesmo que o segundo contenha o primeiro —
+`memberOf` do AD não é transitivo.
+
+**Erro na leitura sobe e barra o login.** Confundir "o diretório caiu"
+com "a pessoa não está em grupo nenhum" tiraria todo mundo dos times na
+primeira instabilidade de rede.
+
+### Como o grupo é reconhecido
+
+O AD devolve o DN inteiro; quem cadastra o mapa quer escrever o nome. Os
+dois lados têm regras **diferentes**, e a assimetria é o ponto
+(`grupoCasa`, em `packages/shared`):
+
+- Cadastrado como `TI-Suporte` → casa com o grupo em **qualquer** ramo.
+- Cadastrado como `CN=TI-Suporte,OU=Matriz,…` → casa **só** com aquele.
+
+Tratar os dois lados igual faria o DN cadastrado casar também pelo nome,
+e aí escrever o ramo não distinguiria nada — que é a única razão de
+alguém escrever o ramo.
+
+### O que o mapa concede
+
+Time e perfil são os dois opcionais: há mapa que só põe no time (o grupo
+diz de que área a pessoa é) e mapa que só dá perfil (diz o que ela faz).
+A pessoa entra em **todos** os times cujos mapas casam.
+
+O perfil é um só, então **vence o primeiro mapa pela ordem** que tenha
+perfil. A alternativa — "o perfil mais forte vence" — exigiria inventar
+uma escada entre perfis que não se comparam: gestor decide aprovação do
+lado do cliente, agente atende.
+
+**Administrador e gestor não entram no mapa**, pela mesma razão do
+provisionamento automático e de forma ainda mais direta: quem administra
+o AD do cliente escreveria um grupo com o nome que quisesse e se poria
+dentro dele. São 400 no DTO.
+
+### Revogar, que é o que faz isto prestar
+
+Conceder é a parte fácil. Sair do grupo no AD tem de tirar do time e
+devolver o perfil, senão o mapa é uma catraca que só gira para um lado e
+quem mudou de área continua vendo a fila da área antiga.
+
+E revogar tem o risco oposto: apagar o que ninguém mandou apagar. A
+saída é a mesma do inventário (`managedByAgent`): **o diretório só mexe
+no que é dele.**
+
+| Marca | O que garante |
+|---|---|
+| `team_members.managedByDirectory` | o diretório só tira do time quem ele pôs; quem foi atrelado pela tela fica, e não vira gerente por mapa |
+| `memberships.roleFromDirectory` | o perfil volta ao `defaultRole` da fonte quando a pessoa sai do grupo, sem desfazer a promoção que um administrador deu à mão |
+
+Duas consequências que valem saber:
+
+- **Fonte sem mapa nenhum não mexe em nada.** É o estado de quem ainda
+  não configurou, e tratá-lo como "nenhum grupo casou" rebaixaria a
+  central inteira ao perfil padrão no primeiro login depois da
+  atualização.
+- **Apagar um mapa não desfaz o que ele concedeu na hora.** Quem o tirou
+  pode ter tirado por engano, e varrer os times de todo mundo seria caro
+  e irreversível. Cada pessoa perde aquilo no próprio login seguinte.
+
+O mapa roda a cada login, como no GLPI — o AD é a fonte da verdade sobre
+quem é de qual equipe, e uma sincronização que só rodasse no primeiro
+acesso seria um retrato do dia em que a pessoa entrou. Falhar nele
+**não** barra a entrada: quem já provou a senha no AD não fica de fora
+porque um time foi apagado no meio do caminho.
+
+O teste da fonte (`POST .../testar`) lista os grupos do login informado.
+Montar o mapa sem saber como o diretório nomeia os grupos é adivinhar, e
+adivinhar errado dá um mapa que nunca casa e ninguém sabe por quê.
+
 ### O que ainda não tem
 
-- **Grupos → equipes e perfis** (`group_*` do GLPI).
 - **Réplicas**: um servidor por fonte. Com dois DCs, duas fontes na ordem.
 - **Login por UPN** (`nome@empresa.local`): o `@` manda para a busca por
   e-mail. Use o `sAMAccountName`.

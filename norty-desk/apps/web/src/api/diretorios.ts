@@ -1,3 +1,5 @@
+import type { BuscaDeGrupo } from '@norty-desk/shared';
+
 import { chamar } from './cliente';
 
 /**
@@ -31,6 +33,12 @@ export type Fonte = {
   timeoutMs: number;
   autoCreate: boolean;
   defaultRole: PapelDoDiretorio;
+  groupSearch: BuscaDeGrupo;
+  groupField: string;
+  groupMemberField: string;
+  groupFilter: string | null;
+  groupBaseDn: string | null;
+  groupNested: boolean;
   lastTestAt: string | null;
   lastTestOk: boolean | null;
   lastTestMessage: string | null;
@@ -70,3 +78,45 @@ export const testarFonte = (id: string, login?: string) =>
     metodo: 'POST',
     corpo: login ? { login } : {},
   });
+
+/**
+ * Um grupo do diretório virando time e papel.
+ *
+ * Papel e time são os dois opcionais: há mapa que só põe no time (o
+ * grupo diz de que área a pessoa é) e mapa que só dá papel (o grupo diz
+ * o que ela faz).
+ */
+export type MapaDeGrupo = {
+  id: string;
+  group: string;
+  teamId: string | null;
+  team: { id: string; name: string } | null;
+  isTeamManager: boolean;
+  role: PapelDoDiretorio | null;
+  position: number;
+  isActive: boolean;
+};
+
+export type DadosDoMapa = {
+  group: string;
+  teamId?: string | null;
+  isTeamManager?: boolean;
+  role?: PapelDoDiretorio | null;
+  position?: number;
+  isActive?: boolean;
+};
+
+export const listarMapasDeGrupo = (fonteId: string) =>
+  chamar<MapaDeGrupo[]>(`/auth-sources/${fonteId}/grupos`);
+
+export const criarMapaDeGrupo = (fonteId: string, dados: DadosDoMapa) =>
+  chamar<MapaDeGrupo[]>(`/auth-sources/${fonteId}/grupos`, { metodo: 'POST', corpo: dados });
+
+export const editarMapaDeGrupo = (fonteId: string, mapaId: string, dados: DadosDoMapa) =>
+  chamar<MapaDeGrupo[]>(`/auth-sources/${fonteId}/grupos/${mapaId}`, {
+    metodo: 'PATCH',
+    corpo: dados,
+  });
+
+export const removerMapaDeGrupo = (fonteId: string, mapaId: string) =>
+  chamar<MapaDeGrupo[]>(`/auth-sources/${fonteId}/grupos/${mapaId}`, { metodo: 'DELETE' });

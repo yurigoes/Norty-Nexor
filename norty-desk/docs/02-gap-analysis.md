@@ -265,11 +265,15 @@ meu time / ler todos são permissões distintas.
 
 ## F. Cobertura do GLPI
 
-> **Estado em 28/09/2026: as oito fases estão entregues.** A tabela de
+> **Estado em 02/10/2026: as oito fases estão entregues.** A tabela de
 > áreas abaixo está marcada uma a uma. O que a paridade ainda não
-> alcança: **estêncil** de datacenter (fora de propósito) e, no LDAP,
-> **grupo do AD virando equipe ou perfil** e **réplica de diretório**
-> (`docs/13-autenticacao-ldap.md`).
+> alcança: **estêncil** de datacenter (fora de propósito) e **réplica de
+> diretório** (`docs/13-autenticacao-ldap.md`).
+>
+> O **grupo do AD virando time e perfil** entrou em 02/10/2026, e passa o
+> GLPI num ponto: lá o `RuleRight` concede e nada revoga sozinho; aqui
+> sair do grupo tira do time e devolve o perfil no login seguinte, sem
+> desfazer o que alguém atribuiu à mão.
 >
 > A **busca salva** era o terceiro item desta lista e entrou em
 > 28/09/2026, com o painel de filtro da fila que faltava: a API aceitava

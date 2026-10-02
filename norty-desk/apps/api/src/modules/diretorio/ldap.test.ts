@@ -26,6 +26,14 @@ const FONTE: FonteLdap = {
   nameField: 'displayName',
   phoneField: 'telephoneNumber',
   timeoutMs: 1000,
+  grupos: {
+    busca: 'ATRIBUTO',
+    campoDoUsuario: 'memberOf',
+    campoDoMembro: 'member',
+    filtro: '(objectClass=group)',
+    baseDn: null,
+    aninhados: false,
+  },
 };
 
 const MARIA: Entrada = {
@@ -35,6 +43,10 @@ const MARIA: Entrada = {
   mail: 'Maria.Souza@Exemplo.dev',
   displayName: 'Maria Souza',
   telephoneNumber: '71 3333-0000',
+  memberOf: [
+    'CN=TI-Suporte,OU=Grupos,DC=exemplo,DC=dev',
+    'CN=Todos,OU=Grupos,DC=exemplo,DC=dev',
+  ],
 };
 
 /** Diretório falso: registra o que o fluxo pediu e responde o combinado. */
@@ -42,9 +54,12 @@ function diretorio(opcoes: {
   entradas?: Entrada[];
   senhas?: Record<string, string>;
   erroNaBusca?: Error;
+  /** Resposta por filtro: é como o teste separa a busca do login da de grupos. */
+  porFiltro?: (filtro: string) => Entrada[];
 }) {
   const binds: string[] = [];
   const filtros: string[] = [];
+  const atributos: string[][] = [];
   let fechada = false;
   let aberta = false;
 
@@ -53,9 +68,11 @@ function diretorio(opcoes: {
       binds.push(dn);
       if (opcoes.senhas?.[dn] !== senha) throw new InvalidCredentialsError('credenciais inválidas');
     },
-    async buscar(_base, filtro) {
+    async buscar(_base, filtro, pedidos) {
       filtros.push(filtro);
+      atributos.push(pedidos);
       if (opcoes.erroNaBusca) throw opcoes.erroNaBusca;
+      if (opcoes.porFiltro) return opcoes.porFiltro(filtro);
       return opcoes.entradas ?? [];
     },
     async fechar() {
@@ -70,6 +87,7 @@ function diretorio(opcoes: {
     },
     binds,
     filtros,
+    atributos,
     get fechada() {
       return fechada;
     },
@@ -107,6 +125,7 @@ describe('autenticação no diretório', () => {
       email: 'maria.souza@exemplo.dev',
       nome: 'Maria Souza',
       telefone: '71 3333-0000',
+      grupos: MARIA.memberOf,
     });
     assert.deepEqual(d.binds, [FONTE.bindDn, MARIA.dn]);
     assert.deepEqual(d.filtros, ['(&(sAMAccountName=MSouza)(objectClass=user))']);
@@ -197,5 +216,155 @@ describe('teste da fonte', () => {
     const ninguem = await testarFonte(FONTE, 'servico', 'fulano', diretorio({ senhas: SENHAS }).abrir);
     assert.equal(ninguem.ok, false);
     assert.match(ninguem.mensagem, /ninguém com sAMAccountName=fulano/);
+  });
+});
+
+/**
+ * Ler os grupos.
+ *
+ * O `memberOf` do próprio usuário sai de graça; a busca por objeto de
+ * grupo é a única que funciona no OpenLDAP, onde não há `memberOf`.
+ *
+ * O que mais importa aqui é o que **não** acontece: erro na busca de
+ * grupos sobe. Quem chama não pode confundir "o diretório caiu" com "a
+ * pessoa não está em grupo nenhum" — a segunda tiraria todo mundo dos
+ * times na primeira instabilidade de rede.
+ */
+describe('os grupos da pessoa', () => {
+  it('saem do memberOf, sem busca a mais', async () => {
+    const d = diretorio({
+      entradas: [MARIA],
+      senhas: { [MARIA.dn]: 'senha-certa', [FONTE.bindDn!]: '' },
+    });
+
+    const r = await autenticar(FONTE, '', 'msouza', 'senha-certa', d.abrir);
+
+    assert.ok(r.ok);
+    assert.deepEqual(r.pessoa.grupos, [
+      'CN=TI-Suporte,OU=Grupos,DC=exemplo,DC=dev',
+      'CN=Todos,OU=Grupos,DC=exemplo,DC=dev',
+    ]);
+    // Uma busca só: a do login. O `memberOf` veio junto na entrada.
+    assert.equal(d.filtros.length, 1);
+  });
+
+  it('são pedidos junto com o resto dos atributos', async () => {
+    const d = diretorio({
+      entradas: [MARIA],
+      senhas: { [MARIA.dn]: 'senha-certa', [FONTE.bindDn!]: '' },
+    });
+
+    await autenticar(FONTE, '', 'msouza', 'senha-certa', d.abrir);
+
+    assert.ok(d.atributos[0]?.includes('memberOf'), JSON.stringify(d.atributos[0]));
+  });
+
+  it('saem da busca por objeto de grupo quando não há memberOf', async () => {
+    const semMemberOf = { ...MARIA };
+    delete (semMemberOf as Record<string, unknown>).memberOf;
+
+    const fonte: FonteLdap = { ...FONTE, grupos: { ...FONTE.grupos, busca: 'OBJETO' } };
+
+    const d = diretorio({
+      entradas: [semMemberOf],
+      senhas: { [MARIA.dn]: 'senha-certa', [FONTE.bindDn!]: '' },
+      porFiltro: (filtro) =>
+        filtro.includes('member=')
+          ? [{ dn: 'CN=Equipe,OU=Grupos,DC=exemplo,DC=dev' }]
+          : [semMemberOf],
+    });
+
+    const r = await autenticar(fonte, '', 'msouza', 'senha-certa', d.abrir);
+
+    assert.ok(r.ok);
+    assert.deepEqual(r.pessoa.grupos, ['CN=Equipe,OU=Grupos,DC=exemplo,DC=dev']);
+    assert.equal(d.filtros.length, 2, 'login e grupos');
+  });
+
+  it('junta os dois caminhos sem repetir o mesmo grupo', async () => {
+    const fonte: FonteLdap = { ...FONTE, grupos: { ...FONTE.grupos, busca: 'AMBOS' } };
+
+    const d = diretorio({
+      entradas: [MARIA],
+      senhas: { [MARIA.dn]: 'senha-certa', [FONTE.bindDn!]: '' },
+      porFiltro: (filtro) =>
+        filtro.includes('member=')
+          ? // O mesmo grupo que o memberOf já trouxe, mais um novo.
+            [
+              { dn: 'CN=TI-Suporte,OU=Grupos,DC=exemplo,DC=dev' },
+              { dn: 'CN=Plantao,OU=Grupos,DC=exemplo,DC=dev' },
+            ]
+          : [MARIA],
+    });
+
+    const r = await autenticar(fonte, '', 'msouza', 'senha-certa', d.abrir);
+
+    assert.ok(r.ok);
+    assert.deepEqual(r.pessoa.grupos.sort(), [
+      'CN=Plantao,OU=Grupos,DC=exemplo,DC=dev',
+      'CN=TI-Suporte,OU=Grupos,DC=exemplo,DC=dev',
+      'CN=Todos,OU=Grupos,DC=exemplo,DC=dev',
+    ]);
+  });
+
+  it('usa a regra em cadeia do AD só quando a casa pede', async () => {
+    const base: FonteLdap = { ...FONTE, grupos: { ...FONTE.grupos, busca: 'OBJETO' } };
+
+    const simples = diretorio({
+      entradas: [MARIA],
+      senhas: { [MARIA.dn]: 'senha-certa', [FONTE.bindDn!]: '' },
+    });
+    await autenticar(base, '', 'msouza', 'senha-certa', simples.abrir);
+
+    const aninhado = diretorio({
+      entradas: [MARIA],
+      senhas: { [MARIA.dn]: 'senha-certa', [FONTE.bindDn!]: '' },
+    });
+    await autenticar(
+      { ...base, grupos: { ...base.grupos, aninhados: true } },
+      '',
+      'msouza',
+      'senha-certa',
+      aninhado.abrir,
+    );
+
+    assert.ok(!simples.filtros[1]?.includes('1.2.840.113556.1.4.1941'), simples.filtros[1]);
+    assert.ok(aninhado.filtros[1]?.includes('1.2.840.113556.1.4.1941'), aninhado.filtros[1]);
+  });
+
+  it('escapa o DN da pessoa no filtro do grupo', async () => {
+    // Sem escape, um DN com `(` ou `*` abriria condição nova no filtro —
+    // a mesma injeção que o campo de login já cerca.
+    const comParenteses = { ...MARIA, dn: 'CN=Ana (TI),OU=Pessoas,DC=exemplo,DC=dev' };
+    const fonte: FonteLdap = { ...FONTE, grupos: { ...FONTE.grupos, busca: 'OBJETO' } };
+
+    const d = diretorio({
+      entradas: [comParenteses],
+      senhas: { [comParenteses.dn]: 'senha-certa', [FONTE.bindDn!]: '' },
+    });
+
+    await autenticar(fonte, '', 'ana', 'senha-certa', d.abrir);
+
+    assert.ok(!d.filtros[1]?.includes('(TI)'), d.filtros[1]);
+    assert.ok(d.filtros[1]?.includes('\\28'), d.filtros[1]);
+  });
+
+  it('queda na busca de grupos **sobe**, e não vira "sem grupo"', async () => {
+    const fonte: FonteLdap = { ...FONTE, grupos: { ...FONTE.grupos, busca: 'OBJETO' } };
+
+    const d = diretorio({
+      entradas: [MARIA],
+      senhas: { [MARIA.dn]: 'senha-certa', [FONTE.bindDn!]: '' },
+      porFiltro: (filtro) => {
+        if (filtro.includes('member=')) throw new Error('conexão perdida');
+        return [MARIA];
+      },
+    });
+
+    // Tratar isto como lista vazia tiraria a pessoa de todos os times.
+    await assert.rejects(
+      () => autenticar(fonte, '', 'msouza', 'senha-certa', d.abrir),
+      ErroDeDiretorio,
+    );
   });
 });
