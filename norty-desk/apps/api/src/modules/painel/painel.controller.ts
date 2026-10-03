@@ -10,7 +10,7 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import type { PainelDoAtivo, PainelDoModeloView } from '@norty-desk/shared';
+import type { PainelDoAtivo, PainelDoModeloView, PainelNoRackView } from '@norty-desk/shared';
 
 import { CurrentUser, type UsuarioAutenticado } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
@@ -123,6 +123,19 @@ export class PainelController {
     @Param('zonaId', ParseUUIDPipe) zonaId: string,
   ): Promise<PainelDoModeloView[]> {
     return this.painel.removerZona(usuario, id, PainelService.face(face), zonaId);
+  }
+
+  /**
+   * Os painéis de um rack inteiro, para a elevação desenhar as portas
+   * sem pedir um por equipamento.
+   */
+  @Get('racks/:id/paineis')
+  @RequirePermission('ativo:ler')
+  doRack(
+    @CurrentUser() usuario: UsuarioAutenticado,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<PainelNoRackView[]> {
+    return this.painel.doRack(usuario, id);
   }
 
   /** O desenho com as portas do equipamento por cima. Nulo é "não há painel". */

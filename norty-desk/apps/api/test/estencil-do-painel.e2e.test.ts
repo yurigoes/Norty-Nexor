@@ -240,8 +240,10 @@ describe('a zona, que é a exceção do painel', () => {
   });
 });
 
+/** O switch com painel, criado no bloco abaixo e usado também no rack. */
+let switchId = '';
+
 describe('o painel do equipamento', () => {
-  let switchId = '';
 
   /** Uma porta de rede no switch, como o agente ou a tela a cadastraria. */
   const porta = (name: string) =>
@@ -405,5 +407,143 @@ describe('o painel do equipamento', () => {
       painel!.faces[1]!.cells.flatMap((c) => c.ports),
       [],
     );
+  });
+});
+
+/**
+ * O painel na elevação do rack.
+ *
+ * A elevação responde "em que U está o equipamento"; o painel responde
+ * "qual das portas dele". Juntos, respondem a pergunta inteira de quem
+ * está com o rack aberto na frente — e é por isso que o desenho vai
+ * junto, numa consulta só, em vez de uma por equipamento.
+ */
+describe('o painel na vista do rack', () => {
+  let rackId = '';
+
+  type NoRack = {
+    itemId: string;
+    assetId: string;
+    painel: { model: { name: string }; faces: { face: string; cells: { numero: number | null; ports: { name: string }[] }[] }[] };
+  };
+
+  const doRack = async (id = rackId) => {
+    const r = await plantao.get<NoRack[]>(`/racks/${id}/paineis`);
+    assert.equal(r.status, 200, JSON.stringify(r.corpo));
+    return r.corpo;
+  };
+
+  before(async () => {
+    const rack = await catalogo.post<{ id: string }>('/racks', { name: 'Rack B', units: 42 });
+    assert.equal(rack.status, 201, JSON.stringify(rack.corpo));
+    rackId = rack.corpo.id;
+
+    assert.equal(
+      (await catalogo.post(`/racks/${rackId}/items`, {
+        assetId: switchId,
+        positionU: 21,
+        heightU: 1,
+        face: 'FRENTE',
+      })).status,
+      201,
+    );
+  });
+
+  it('traz o desenho de cada item do rack, com as portas no lugar', async () => {
+    const lista = await doRack();
+    assert.equal(lista.length, 1);
+
+    const [item] = lista;
+    assert.equal(item!.assetId, switchId);
+    assert.equal(item!.painel.model.name, 'Catalyst 2960-24TC');
+
+    const frente = item!.painel.faces.find((f) => f.face === 'FRENTE')!;
+    const treze = frente.cells.find((c) => c.numero === 13)!;
+    assert.deepEqual(
+      treze.ports.map((p) => p.name),
+      ['GigabitEthernet1/0/13'],
+    );
+  });
+
+  it('equipamento sem painel não entra na lista — o rack continua desenhando o retângulo dele', async () => {
+    // Os dois casos, que são diferentes: sem modelo nenhum, e com modelo
+    // que ninguém desenhou. O segundo é o que passaria batido num filtro
+    // que só perguntasse pelo modelo.
+    const semModelo = await catalogo.post<AssetView>('/assets', { name: 'Nobreak do rack', kind: 'OUTRO' });
+
+    const modeloSemPainel = await catalogo.post<ModeloDeAtivoView[]>('/asset-models', {
+      name: 'Patch panel 24p',
+      kind: 'OUTRO',
+    });
+    const patch = modeloSemPainel.corpo.find((m) => m.name === 'Patch panel 24p')!;
+    const comModelo = await catalogo.post<AssetView>('/assets', {
+      name: 'PP-RACK-B',
+      kind: 'OUTRO',
+      assetModelId: patch.id,
+    });
+
+    for (const [ativo, u] of [
+      [semModelo.corpo.id, 1],
+      [comModelo.corpo.id, 3],
+    ] as const) {
+      assert.equal(
+        (await catalogo.post(`/racks/${rackId}/items`, { assetId: ativo, positionU: u, heightU: 2 })).status,
+        201,
+      );
+    }
+
+    const lista = await doRack();
+    assert.deepEqual(
+      lista.map((x) => x.assetId),
+      [switchId],
+    );
+  });
+
+  it('cada item recebe o painel do modelo dele, e não o do vizinho', async () => {
+    const outroModelo = await catalogo.post<ModeloDeAtivoView[]>('/asset-models', {
+      name: 'MikroTik CRS305',
+      kind: 'REDE',
+    });
+    const mikrotik = outroModelo.corpo.find((m) => m.name === 'MikroTik CRS305')!;
+    assert.equal(
+      (await catalogo.put(`/asset-models/${mikrotik.id}/paineis/FRENTE`, {
+        columns: 4,
+        rows: 1,
+        startAt: 1,
+      })).status,
+      200,
+    );
+
+    const pequeno = await catalogo.post<AssetView>('/assets', {
+      name: 'SW-SFP-01',
+      kind: 'REDE',
+      assetModelId: mikrotik.id,
+    });
+    assert.equal(
+      (await catalogo.post(`/racks/${rackId}/items`, { assetId: pequeno.corpo.id, positionU: 30 }))
+        .status,
+      201,
+    );
+
+    const lista = await doRack();
+    const porAtivo = new Map(lista.map((x) => [x.assetId, x]));
+
+    assert.equal(porAtivo.get(switchId)?.painel.faces[0]?.cells.length, 24);
+    assert.equal(porAtivo.get(pequeno.corpo.id)?.painel.faces[0]?.cells.length, 4);
+    assert.equal(porAtivo.get(pequeno.corpo.id)?.painel.model.name, 'MikroTik CRS305');
+  });
+
+  it('rack vazio de painéis responde lista vazia, e não erro', async () => {
+    const outro = await catalogo.post<{ id: string }>('/racks', { name: 'Rack C', units: 12 });
+    assert.deepEqual(await doRack(outro.corpo.id), []);
+  });
+
+  it('rack de outra organização não existe para quem pergunta', async () => {
+    const alheio = await prisma.rack.create({
+      data: { organizationId: f.outra.id, name: 'Rack da outra', units: 42 },
+      select: { id: true },
+    });
+
+    assert.equal((await plantao.get(`/racks/${alheio.id}/paineis`)).status, 404);
   });
 });

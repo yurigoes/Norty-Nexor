@@ -9,6 +9,7 @@ import {
   type GradeDoPainel,
   type PainelDoAtivo,
   type PainelDoModeloView,
+  type PainelNoRackView,
   type PortaNoPainel,
   type ZonaDoPainel,
 } from '@norty-desk/shared';
@@ -267,17 +268,116 @@ export class PainelService {
 
     const portas = await this.prisma.networkPort.findMany({
       where: { organizationId: usuario.organizationId, assetId },
-      select: {
-        id: true,
-        name: true,
-        currentIp: true,
-        vlan: { select: { tag: true } },
-        connectedTo: {
-          select: { id: true, name: true, asset: { select: { id: true, name: true, tag: true } } },
-        },
-      },
+      select: PainelService.DA_PORTA,
       orderBy: { name: 'asc' },
     });
+
+    return PainelService.montar(ativo.assetModel, paineis, portas);
+  }
+
+  /**
+   * Os painéis de um rack inteiro, numa consulta só.
+   *
+   * A elevação do rack desenha quarenta e duas posições; pedir o painel
+   * de cada equipamento uma por uma seriam quarenta e duas idas ao
+   * servidor para montar uma tela. Aqui são três consultas, não importa
+   * o tamanho do rack: os itens, os painéis dos modelos que aparecem
+   * neles e as portas de todos.
+   *
+   * Equipamento sem modelo, ou cujo modelo não tem painel, simplesmente
+   * não entra na lista — a elevação continua desenhando o retângulo
+   * dele, só não tem portas para mostrar.
+   */
+  async doRack(usuario: UsuarioAutenticado, rackId: string): Promise<PainelNoRackView[]> {
+    const rack = await this.prisma.rack.findFirst({
+      where: { id: rackId, organizationId: usuario.organizationId },
+      select: { id: true },
+    });
+    if (!rack) throw new NotFoundException('Rack não encontrado.');
+
+    const itens = await this.prisma.rackItem.findMany({
+      where: { rackId },
+      select: {
+        id: true,
+        assetId: true,
+        asset: { select: { assetModel: { select: { id: true, name: true } } } },
+      },
+    });
+
+    const modelos = [
+      ...new Set(itens.map((i) => i.asset.assetModel?.id).filter((id): id is string => Boolean(id))),
+    ];
+    if (modelos.length === 0) return [];
+
+    const paineis = await this.prisma.modelPanel.findMany({
+      where: { organizationId: usuario.organizationId, assetModelId: { in: modelos } },
+      include: { zones: { orderBy: [{ column: 'asc' }, { row: 'asc' }] } },
+      orderBy: { face: 'asc' },
+    });
+    if (paineis.length === 0) return [];
+
+    const comPainel = itens.filter(
+      (i) => i.asset.assetModel && paineis.some((p) => p.assetModelId === i.asset.assetModel!.id),
+    );
+    if (comPainel.length === 0) return [];
+
+    const portas = await this.prisma.networkPort.findMany({
+      where: { organizationId: usuario.organizationId, assetId: { in: comPainel.map((i) => i.assetId) } },
+      select: { ...PainelService.DA_PORTA, assetId: true },
+      orderBy: { name: 'asc' },
+    });
+
+    const porAtivo = new Map<string, typeof portas>();
+    for (const porta of portas) {
+      porAtivo.set(porta.assetId, [...(porAtivo.get(porta.assetId) ?? []), porta]);
+    }
+
+    return comPainel.map((item) => {
+      const modelo = item.asset.assetModel!;
+      return {
+        itemId: item.id,
+        assetId: item.assetId,
+        painel: PainelService.montar(
+          modelo,
+          paineis.filter((p) => p.assetModelId === modelo.id),
+          porAtivo.get(item.assetId) ?? [],
+        )!,
+      };
+    });
+  }
+
+  // -------------------------------------------------------------------
+
+  /** O que o desenho precisa saber de uma porta. */
+  private static readonly DA_PORTA = {
+    id: true,
+    name: true,
+    currentIp: true,
+    vlan: { select: { tag: true } },
+    connectedTo: {
+      select: { id: true, name: true, asset: { select: { id: true, name: true, tag: true } } },
+    },
+  } as const;
+
+  /**
+   * O desenho: as portas do equipamento sobre os painéis do modelo.
+   *
+   * Sem banco de propósito — é o mesmo cálculo para um equipamento
+   * sozinho e para cada um dos quarenta e dois de um rack, e dois
+   * cálculos seriam dois lugares para o desenho divergir de si mesmo.
+   */
+  private static montar(
+    model: { id: string; name: string },
+    paineis: PainelComZonas[],
+    portas: {
+      id: string;
+      name: string;
+      currentIp: string | null;
+      vlan: { tag: number } | null;
+      connectedTo: { id: string; name: string; asset: { id: string; name: string; tag: string | null } } | null;
+    }[],
+  ): PainelDoAtivo {
+    if (paineis.length === 0) return null;
 
     const porNumero = new Map<number, PortaNoPainel[]>();
     const semNumero: PortaNoPainel[] = [];
@@ -320,7 +420,7 @@ export class PainelService {
       ...[...porNumero.values()].flat().filter((p) => !colocadas.has(p.id)),
     ];
 
-    return { model: ativo.assetModel, faces, outside };
+    return { model, faces, outside };
   }
 
   // -------------------------------------------------------------------

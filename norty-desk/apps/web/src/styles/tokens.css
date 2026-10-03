@@ -204,6 +204,9 @@
      numa amostra de 16px o raio de 8 vira círculo, e a amostra deixa
      de ter a forma da coisa que ela representa. */
   --r-xs: 4px;
+  /* E o `--r-mini`, para a caixinha de nove pixels do painel dentro do
+     rack: pela mesma razão, um passo abaixo. */
+  --r-mini: 2px;
   --r-sm: 8px;
   --r-md: 10px;
   --r-lg: 14px;
@@ -262,6 +265,11 @@
      painel do equipamento e o editor do catálogo — e os dois têm de
      desenhar o mesmo painel. */
   --painel-celula: 30px;
+  /* Dentro de um U da elevação do rack (22px de altura), duas fileiras
+     de porta têm de caber com a borda. Nove pixels é o maior tamanho em
+     que isso acontece — e já não cabe algarismo legível, por isso o
+     painel miúdo não escreve número. */
+  --painel-celula-mini: 9px;
   --painel-ligada:        var(--azul-100);
   --painel-ligada-borda:  var(--azul-600);
   --painel-livre:         var(--superficie-afundada);

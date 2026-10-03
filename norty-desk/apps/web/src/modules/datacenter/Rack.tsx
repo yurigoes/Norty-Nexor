@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { RACK_FACES, ROTULO_FACE, type AssetView, type ItemDeRackView, type RackDetail, type RackFace, type SalaView } from '@norty-desk/shared';
+import { RACK_FACES, ROTULO_FACE, type AssetView, type FaceDoPainel, type ItemDeRackView, type PainelNoRackView, type RackDetail, type RackFace, type SalaView } from '@norty-desk/shared';
 
 import { buscarAtivos } from '../../api/ativos';
 import { ErroDaApi } from '../../api/cliente';
 import { colocarNoRack, editarRack, listarSalas, moverNoRack, obterRack, removerRack, retirarDoRack } from '../../api/datacenter';
+import { paineisDoRack } from '../../api/painel';
+import { DesenhoDoPainel, PainelMiudo } from '../../components/Painel';
 import { useAutenticacao } from '../../auth/Autenticacao';
 
 const ALTURA_U = 22;
@@ -25,8 +27,19 @@ export function Rack() {
   const [edicao, setEdicao] = useState<{ name: string; units: string; roomId: string; position: string } | null>(null);
   const [salas, setSalas] = useState<SalaView[]>([]);
   const [movendo, setMovendo] = useState<{ item: ItemDeRackView; positionU: string } | null>(null);
+  const [paineis, setPaineis] = useState<PainelNoRackView[]>([]);
+  const [escolhido, setEscolhido] = useState<string | null>(null);
 
-  const carregar = useCallback(async () => setRack(await obterRack(id)), [id]);
+  const carregar = useCallback(async () => {
+    const [detalhe, desenhos] = await Promise.all([
+      obterRack(id),
+      // O painel é um extra da tela: rack sem nenhum equipamento
+      // desenhado continua abrindo igual.
+      paineisDoRack(id).catch(() => [] as PainelNoRackView[]),
+    ]);
+    setRack(detalhe);
+    setPaineis(desenhos);
+  }, [id]);
   useEffect(() => {
     void carregar().catch((e) => setErro(e instanceof ErroDaApi ? e.message : 'Não foi possível carregar.'));
   }, [carregar]);
@@ -61,6 +74,23 @@ export function Rack() {
 
   const coluna = (face: RackFace) => (face === 'FRENTE' ? '2' : face === 'TRAS' ? '3' : '2 / span 2');
   const linha = (i: { positionU: number; heightU: number }) => `${rack.units - (i.positionU + i.heightU - 1) + 1} / span ${i.heightU}`;
+
+  const painelDoItem = (itemId: string) => paineis.find((p) => p.itemId === itemId)?.painel ?? null;
+
+  /**
+   * Qual face do painel aparece dentro do U: a que está virada para
+   * quem olha. Equipamento montado de costas mostra a traseira dele, e
+   * o que ocupa a profundidade inteira aparece pela frente.
+   */
+  const faceVisivel = (it: ItemDeRackView) => {
+    const painel = painelDoItem(it.id);
+    if (!painel) return null;
+    const qual: FaceDoPainel = it.face === 'TRAS' ? 'TRAS' : 'FRENTE';
+    return painel.faces.find((f) => f.face === qual) ?? null;
+  };
+
+  const itemEscolhido = escolhido ? rack.items.find((i) => i.id === escolhido) : undefined;
+  const painelEscolhido = itemEscolhido ? painelDoItem(itemEscolhido.id) : null;
 
   return (
     <div className="pilha" style={{ maxWidth: 1100 }}>
@@ -167,36 +197,67 @@ export function Rack() {
             ))}
             {rack.items.map((it) => {
               const [inicio, span] = linha(it).split(' / ');
+              const face = faceVisivel(it);
+              const us = `U${it.positionU}${it.heightU > 1 ? `–${it.positionU + it.heightU - 1}` : ''}`;
               return (
                 <button
                   key={it.id}
                   type="button"
-                  disabled={!podeGerenciar}
-                  onClick={() => setMovendo({ item: it, positionU: String(it.positionU) })}
-                  title={`${it.asset.name} · U${it.positionU}${it.heightU > 1 ? `–${it.positionU + it.heightU - 1}` : ''} · ${ROTULO_FACE[it.face]}`}
-                  style={{
-                    gridColumn: coluna(it.face),
-                    gridRow: `${Number(inicio) + 1} / ${span}`,
-                    background: 'var(--primaria-suave, #dbeafe)',
-                    border: '1px solid var(--primaria, #2563eb)',
-                    borderRadius: 4,
-                    padding: '0 8px',
-                    textAlign: 'left',
-                    overflow: 'hidden',
-                    whiteSpace: 'nowrap',
-                    textOverflow: 'ellipsis',
-                    cursor: podeGerenciar ? 'pointer' : 'default',
-                    zIndex: 1,
-                  }}
+                  className={`rack-item${escolhido === it.id ? ' -escolhido' : ''}`}
+                  // Escolher, e não mover: mover é uma das coisas que se
+                  // faz com o item escolhido, e ver o painel dele é a
+                  // outra — esta não exige mandar no parque.
+                  onClick={() => setEscolhido(escolhido === it.id ? null : it.id)}
+                  title={`${it.asset.name} · ${us} · ${ROTULO_FACE[it.face]}${face ? ' · tem painel' : ''}`}
+                  style={{ gridColumn: coluna(it.face), gridRow: `${Number(inicio) + 1} / ${span}`, zIndex: 1 }}
                 >
-                  <Link to={`/ativos/${it.asset.id}`} onClick={(e) => e.stopPropagation()}>{it.asset.name}</Link>
-                  <span className="suave"> · U{it.positionU}{it.heightU > 1 ? `–${it.positionU + it.heightU - 1}` : ''}</span>
+                  <span className="rack-item-nome">{it.asset.name}</span>
+                  <span className="suave">· {us}</span>
+                  {face ? <PainelMiudo face={face} /> : null}
                 </button>
               );
             })}
           </div>
         </div>
       </section>
+
+      {itemEscolhido ? (
+        <section className="card">
+          <div className="card-topo">
+            <div>
+              <h3>
+                <Link to={`/ativos/${itemEscolhido.asset.id}`}>{itemEscolhido.asset.name}</Link>
+              </h3>
+              <p className="suave">
+                U{itemEscolhido.positionU}
+                {itemEscolhido.heightU > 1 ? `–${itemEscolhido.positionU + itemEscolhido.heightU - 1}` : ''} ·{' '}
+                {ROTULO_FACE[itemEscolhido.face]}
+                {painelEscolhido ? ` · painel de ${painelEscolhido.model.name}` : ' · sem painel cadastrado'}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {podeGerenciar ? (
+                <button
+                  type="button"
+                  className="btn -fantasma -sm"
+                  onClick={() => setMovendo({ item: itemEscolhido, positionU: String(itemEscolhido.positionU) })}
+                >
+                  Mover ou retirar
+                </button>
+              ) : null}
+              <button type="button" className="btn -fantasma -sm" onClick={() => setEscolhido(null)}>
+                Fechar
+              </button>
+            </div>
+          </div>
+
+          {painelEscolhido ? (
+            <div className="card-corpo">
+              <DesenhoDoPainel painel={painelEscolhido} />
+            </div>
+          ) : null}
+        </section>
+      ) : null}
     </div>
   );
 }

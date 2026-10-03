@@ -2821,6 +2821,7 @@ POST   /v1/asset-models/:id/paineis/:face/zonas
 PATCH  /v1/asset-models/:id/paineis/:face/zonas/:zonaId
 DELETE /v1/asset-models/:id/paineis/:face/zonas/:zonaId
 GET    /v1/assets/:id/painel                        → ativo:ler
+GET    /v1/racks/:id/paineis                        → ativo:ler
 ```
 
 O painel é do **modelo** e o equipamento o empresta; a face é `FRENTE` ou

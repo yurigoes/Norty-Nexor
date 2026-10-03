@@ -4,6 +4,7 @@ import type {
   FaceDoPainel,
   PainelDoAtivo,
   PainelDoModeloView,
+  PainelNoRackView,
 } from '@norty-desk/shared';
 
 import { chamar } from './cliente';
@@ -60,6 +61,16 @@ export const removerZonaDoPainel = (assetModelId: string, face: FaceDoPainel, zo
   chamar<PainelDoModeloView[]>(`/asset-models/${assetModelId}/paineis/${face}/zonas/${zonaId}`, {
     metodo: 'DELETE',
   });
+
+/**
+ * Os painéis de um rack inteiro, numa consulta só.
+ *
+ * A elevação desenha quarenta e duas posições; pedir o painel de cada
+ * equipamento seriam quarenta e duas idas ao servidor para montar uma
+ * tela. Item sem painel não vem na lista.
+ */
+export const paineisDoRack = (rackId: string) =>
+  chamar<PainelNoRackView[]>(`/racks/${rackId}/paineis`);
 
 /** Nulo é "este equipamento não tem painel" — sem modelo, ou modelo sem estêncil. */
 export const painelDoAtivo = (assetId: string) =>

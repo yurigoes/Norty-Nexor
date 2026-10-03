@@ -4,7 +4,8 @@ Onde cada porta fica na frente do equipamento, desenhado.
 
 > **Estado em 03/10/2026.** No ar: painel por modelo e por face, zonas,
 > ligação automática com as portas de rede do equipamento, tela de
-> edição no catálogo e desenho na ficha do equipamento.
+> edição no catálogo, desenho na ficha do equipamento e na **elevação do
+> rack**.
 
 ---
 
@@ -93,6 +94,7 @@ PATCH  /v1/asset-models/:id/paineis/:face/zonas/:zonaId
 DELETE /v1/asset-models/:id/paineis/:face/zonas/:zonaId
 
 GET    /v1/assets/:id/painel                              → ativo:ler
+GET    /v1/racks/:id/paineis                              → ativo:ler
 ```
 
 Desenhar o painel é **curadoria do catálogo** (`ativo:catalogo`), como o
@@ -154,7 +156,36 @@ Nenhuma informação depende só da cor: cada caixinha mostra o número, e o
 Equipamento sem modelo, ou modelo sem painel, não desenha nada: uma grade
 vazia pareceria defeito.
 
-## 6. O que fica no banco
+## 6. Na elevação do rack
+
+É onde a pergunta nasce: quem está de pé na frente do rack já sabe em
+que U está o equipamento — falta saber **qual das portas**.
+
+Dentro de cada U, o painel aparece miúdo: uma caixinha de nove pixels
+por posição, sem número. Número em nove pixels não se lê, e número
+ilegível é pior que número nenhum — passa a impressão de que se pode
+ler. O que o miúdo mostra é a **forma** do painel e quanto dele está em
+uso; clicar no equipamento abre o desenho grande logo abaixo, com os
+números, o cabo de cada porta e o aviso das que não têm lugar.
+
+A face desenhada dentro do U é a que está virada para quem olha:
+equipamento montado de costas mostra a traseira dele, e o que ocupa a
+profundidade inteira aparece pela frente.
+
+`GET /v1/racks/:id/paineis` traz o rack inteiro de uma vez. A elevação
+desenha quarenta e duas posições; pedir o painel de cada equipamento
+seriam quarenta e duas idas ao servidor para montar uma tela. São três
+consultas, não importa o tamanho do rack: os itens, os painéis dos
+modelos que aparecem neles e as portas de todos. Item sem modelo, ou
+cujo modelo não tem painel, não vem na lista — a elevação continua
+desenhando o retângulo dele.
+
+Clicar num item passou a **escolhê-lo**, e não a abrir o formulário de
+mover: ver o painel é o que mais se faz com um item do rack, e não exige
+mandar no parque. Mover e retirar continuam ali, no cartão do item
+escolhido, para quem tem `ativo:gerenciar`.
+
+## 7. O que fica no banco
 
 ```
 model_panels   (assetModelId, face) único  — a grade, por face
@@ -171,7 +202,7 @@ Encolher a grade com uma zona fora dela é **recusado**, nomeando a zona:
 apagá-la junto seria desfazer em silêncio o que alguém cadastrou de
 propósito.
 
-## 7. O que ainda não tem
+## 8. O que ainda não tem
 
 - **Foto do painel por trás da grade.** Daria o reconhecimento visual que
   a grade não dá ("é este switch mesmo"), e é o que o GLPI faz. Depende de
@@ -179,6 +210,3 @@ propósito.
 - **Tomada de PDU ligada a uma régua de verdade.** O tipo `TOMADA` já
   desenha, mas nada liga a tomada 7 a quem está plugado nela — o Desk
   trata PDU como equipamento, e não tem o modelo de alimentação do GLPI.
-- **O painel dentro da vista do rack.** Hoje o desenho vive na ficha do
-  equipamento; vê-lo na elevação do rack, em cima do U correspondente,
-  seria o passo seguinte.

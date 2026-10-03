@@ -1474,6 +1474,56 @@ button.painel-celula:not(:disabled) {
   cursor: pointer;
 }
 
+/* O equipamento dentro da elevação do rack. Era estilo solto no TSX,
+   com cor literal e um token que não existe (`--primaria-suave`), o que
+   dava o azul de reserva do navegador em vez do azul da casa. */
+.rack-item {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  padding: 0 var(--e-2);
+  border: 1px solid var(--azul-600);
+  border-radius: var(--r-xs);
+  background: var(--azul-50);
+  color: var(--texto-forte);
+  font-size: var(--t-micro);
+  text-align: left;
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.rack-item-nome {
+  font-weight: var(--p-semi);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* O painel miúdo encosta à direita: o nome fica à esquerda, e o desenho
+   onde o olho procura as portas. */
+.rack-item .painel.-mini { margin-left: auto; }
+
+.rack-item.-escolhido {
+  outline: 2px solid var(--borda-foco);
+  outline-offset: 1px;
+}
+
+/* O painel miúdo, dentro de um U da elevação do rack: só a forma e o
+   quanto está em uso. Número não cabe em nove pixels, e número ilegível
+   é pior que nenhum — passa a impressão de que se pode ler. */
+.painel.-mini {
+  display: inline-grid;
+  gap: 1px;
+  vertical-align: middle;
+}
+
+.painel.-mini .painel-celula {
+  width: var(--painel-celula-mini);
+  height: var(--painel-celula-mini);
+  border-radius: var(--r-mini);
+  font-size: 0;
+}
+
 .painel-legenda {
   display: flex;
   flex-wrap: wrap;

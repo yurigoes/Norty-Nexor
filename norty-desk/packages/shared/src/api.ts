@@ -2854,6 +2854,19 @@ export type PainelDoAtivo = {
   outside: PortaNoPainel[];
 } | null;
 
+/**
+ * O painel de um equipamento que está num rack.
+ *
+ * É o que a elevação do rack consome: o desenho de cada item, numa
+ * consulta só. Item sem modelo, ou cujo modelo não tem painel, não
+ * aparece — a elevação continua desenhando o retângulo dele.
+ */
+export type PainelNoRackView = {
+  itemId: string;
+  assetId: string;
+  painel: NonNullable<PainelDoAtivo>;
+};
+
 
 // ---------------------------------------------------------------------
 // Notificações fora da aba
