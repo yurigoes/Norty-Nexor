@@ -88,6 +88,7 @@ model Organization {
   ipAddresses         IpAddress[]
   dcRooms             DcRoom[]
   racks               Rack[]
+  modelPanels         ModelPanel[]
 
   @@map("organizations")
 }
@@ -2773,6 +2774,7 @@ model AssetModel {
   assets       Asset[]
   consumables  ConsumableItemModel[]
   aliases      AssetModelAlias[]
+  panels       ModelPanel[]
 
   @@unique([organizationId, manufacturerId, name])
   @@index([organizationId, kind])
@@ -3562,6 +3564,111 @@ model RackItem {
 
   @@index([rackId])
   @@map("rack_items")
+}
+
+// ---------------------------------------------------------------------
+// Estêncil: o painel do equipamento
+// ---------------------------------------------------------------------
+
+/// De que lado do equipamento está o painel.
+enum PanelFace {
+  FRENTE
+  TRAS
+}
+
+/// Por onde a numeração corre na grade.
+enum PanelNumbering {
+  /// Ímpares em cima, pares embaixo. O painel da Cisco e da maioria.
+  COLUNA
+  /// A fileira de cima inteira, depois a de baixo.
+  LINHA
+}
+
+/// O que há numa posição do painel.
+enum PanelZoneKind {
+  PORTA
+  TOMADA
+  CONSOLE
+  ENERGIA
+  /// Posição desenhada que não tem nada: o painel não fecha a grade.
+  VAZIO
+}
+
+/// O estêncil do painel de um **modelo** de equipamento.
+///
+/// É o `Stencil` do GLPI 11, com uma diferença deliberada: lá o estêncil
+/// é uma foto do painel com retângulos desenhados por cima, um por
+/// porta; aqui é uma grade — tantas colunas, tantas linhas, e a
+/// numeração correndo por uma delas (ver `packages/shared/src/painel.ts`).
+///
+/// Painel de switch é grade. Pedir foto e editor de retângulos para
+/// descrever duas fileiras de doze é pedir trabalho manual para gerar o
+/// que uma conta dá; o que a grade não descreve vive em `PanelZone`.
+///
+/// Mora no **modelo**, não no equipamento: trinta switches do mesmo
+/// modelo têm o mesmo painel, e descrevê-lo trinta vezes é trinta
+/// chances de divergir. O equipamento empresta o painel do modelo dele.
+model ModelPanel {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  assetModelId   String    @db.Uuid
+  face           PanelFace @default(FRENTE)
+
+  columns   Int
+  rows      Int            @default(1)
+  numbering PanelNumbering @default(COLUNA)
+
+  /// O número da primeira posição. 1 no switch; 0 onde as placas se
+  /// chamam `eth0`, `eth1`.
+  startAt Int @default(1)
+
+  /// Quantas posições a grade numera. Nulo é "todas".
+  ///
+  /// É para o painel que não fecha a conta — dez portas numa fileira
+  /// desenhada de doze. O que sobra fica vazio, em vez de ganhar um
+  /// número que o equipamento não tem.
+  slots Int?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assetModel   AssetModel   @relation(fields: [assetModelId], references: [id], onDelete: Cascade)
+  zones        PanelZone[]
+
+  /// Um painel por face. Dois desenhos da mesma frente seriam duas
+  /// respostas para "onde fica a porta 17", e o plantão não tem como
+  /// escolher entre elas.
+  @@unique([assetModelId, face])
+  @@index([organizationId])
+  @@map("model_panels")
+}
+
+/// A exceção que a grade não descreve: console, SFP fora da fileira, furo.
+///
+/// A zona manda sobre a célula, e **não consome número** — a posição de
+/// console no meio do painel não empurra a numeração, porque no
+/// equipamento de verdade ela também não empurrou.
+model PanelZone {
+  id         String        @id @default(uuid()) @db.Uuid
+  panelId    String        @db.Uuid
+  column     Int
+  row        Int
+  kind       PanelZoneKind @default(PORTA)
+  label      String?
+  /// A que porta esta zona corresponde, quando corresponde a alguma.
+  portNumber Int?
+
+  createdAt DateTime @default(now())
+
+  panel ModelPanel @relation(fields: [panelId], references: [id], onDelete: Cascade)
+
+  /// Uma coisa por posição. Duas zonas na mesma célula seriam dois
+  /// desenhos no mesmo lugar, e qual deles vale viraria sorteio.
+  @@unique([panelId, column, row])
+  @@map("panel_zones")
 }
 
 // ---------------------------------------------------------------------

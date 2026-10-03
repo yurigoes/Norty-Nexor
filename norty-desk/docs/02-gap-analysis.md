@@ -265,12 +265,21 @@ meu time / ler todos são permissões distintas.
 
 ## F. Cobertura do GLPI
 
-> **Estado em 02/10/2026: as oito fases estão entregues.** A tabela de
-> áreas abaixo está marcada uma a uma. O que a paridade ainda não
-> alcança é o **estêncil** de datacenter, e por decisão: desenhar o rack
-> em quadradinhos não é o que esta casa precisa de um service desk.
+> **Estado em 03/10/2026: as oito fases estão entregues, e a paridade
+> com o GLPI está fechada.**
 >
-> A **réplica de diretório** fechou a lista em 02/10/2026
+> O **estêncil do painel** foi o último item, e entrou em 03/10/2026
+> (`docs/14-estencil-do-painel.md`). Ficou fora da lista por um tempo
+> com a justificativa errada — "desenhar o rack em quadradinhos" —, que
+> descrevia a elevação do rack, essa sim já pronta desde a fase 7. O
+> `Stencil` do GLPI 11 é outra coisa: onde cada **porta** fica na frente
+> do equipamento, que é o que responde "a porta 17 é qual delas?" com o
+> rack aberto na frente. Aqui ele é uma grade (colunas, fileiras e a
+> ordem da numeração) em vez de uma foto com retângulos, e as portas de
+> rede do equipamento caem sozinhas nas posições, pelo nome que elas já
+> têm.
+>
+> A **réplica de diretório** entrou em 02/10/2026
 > (`docs/13-autenticacao-ldap.md`, seção 5): a fonte ganhou outros
 > `host:port` do mesmo AD, e o login fica com o primeiro que atende. A
 > troca acontece só na conexão, como no `tryToConnectToServer` do GLPI —
@@ -333,7 +342,7 @@ seguem valendo:
 | Software, versões e licenças | ~10 | **6 ✅** | 5 tabelas; conformidade por software, assento de máquina ou pessoa |
 | Consumíveis e cartuchos | ~8 | **6 ✅** | estoque por movimentação, não uma linha por unidade |
 | Rede: portas, IP, VLAN, FQDN | ~30 | **6 ✅** | `inet` do Postgres; conflito de IP barrado no banco |
-| Datacenter: rack, PDU, sala, cabo, estêncil | ~25 | **7 ✅ (rack, sala)** | U com face, sem sobreposição; PDU é equipamento; estêncil não |
+| Datacenter: rack, PDU, sala, cabo, estêncil | ~25 | **8 ✅ (rack, sala, estêncil)** | U com face, sem sobreposição; PDU é equipamento; estêncil é grade, não foto (`docs/14`) |
 | Dicionários de regra | ~40 | **7 ✅** | fabricante, modelo e sistema operacional: chave do nome, lista conhecida e apelidos da casa; o de SO é regra de reescrita, não catálogo |
 | Inventário automático (agente, `RuleImportAsset`) | ~12 | **7 ✅** | agente próprio (`agente/`, PowerShell), não o do GLPI; toda decisão no servidor |
 | Projetos e tarefas de projeto | ~15 | **8 ✅** | quadro, linha do tempo, custo dos chamados; agenda da equipe junto |

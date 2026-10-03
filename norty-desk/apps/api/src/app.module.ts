@@ -44,6 +44,7 @@ import { ProjetosModule } from './modules/projetos/projetos.module';
 import { AgendaModule } from './modules/agenda/agenda.module';
 import { RedeModule } from './modules/rede/rede.module';
 import { DatacenterModule } from './modules/datacenter/datacenter.module';
+import { PainelModule } from './modules/painel/painel.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { TicketsModule } from './modules/tickets/tickets.module';
 import { TranscricaoModule } from './modules/transcricao/transcricao.module';
@@ -91,6 +92,7 @@ import { TranscricaoModule } from './modules/transcricao/transcricao.module';
     AgendaModule,
     RedeModule,
     DatacenterModule,
+    PainelModule,
     ModelosModule,
     TarefasModule,
     SatisfacaoModule,

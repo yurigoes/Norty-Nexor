@@ -241,6 +241,10 @@ usuário + perfil + entidade + `is_recursive`.
 | Inventário de ativos (`Computer`, `Monitor`, `Printer`, `Phone`, `NetworkEquipment`, `Peripheral`) | ~30 | Parcial |
 | Componentes (`Device*`, `Item_Device*`) | ~60 | **Não** |
 | Datacenter (`Rack`, `PDU`, `Enclosure`, `Cable`, `DCRoom`, `Stencil`) | ~25 | **Não** |
+
+> `Stencil` é o mapa do painel: onde cada porta fica na frente do
+> equipamento. Entrou em 03/10/2026 como grade, e não como foto com
+> retângulos — ver `docs/14-estencil-do-painel.md`.
 | Software e licenças | ~10 | **Não** |
 | Consumíveis e cartuchos | ~8 | **Não** |
 | Rede (`NetworkPort*`, `IPAddress`, `Vlan`, `FQDN`) | ~30 | **Não** |

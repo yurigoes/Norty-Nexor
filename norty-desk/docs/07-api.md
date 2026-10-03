@@ -2811,6 +2811,25 @@ HTML — imagem quebrada logo depois do upload.
 
 ---
 
+## 33a. Estêncil: o painel do equipamento
+
+```
+GET    /v1/asset-models/:id/paineis                 → ativo:ler
+PUT    /v1/asset-models/:id/paineis/:face           → ativo:catalogo
+DELETE /v1/asset-models/:id/paineis/:face
+POST   /v1/asset-models/:id/paineis/:face/zonas
+PATCH  /v1/asset-models/:id/paineis/:face/zonas/:zonaId
+DELETE /v1/asset-models/:id/paineis/:face/zonas/:zonaId
+GET    /v1/assets/:id/painel                        → ativo:ler
+```
+
+O painel é do **modelo** e o equipamento o empresta; a face é `FRENTE` ou
+`TRAS`. `GET /v1/assets/:id/painel` devolve o desenho com as portas do
+equipamento já nas posições, e `outside` com as que não têm lugar nele.
+Detalhes em `docs/14-estencil-do-painel.md`.
+
+---
+
 ## 33. Diretório (LDAP / Active Directory)
 
 ```

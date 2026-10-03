@@ -11,6 +11,7 @@ import type {
 import { ASSET_KINDS, ROTULO_ATIVO, canonizarFabricante } from '@norty-desk/shared';
 
 import { ErroDaApi } from '../../api/cliente';
+import { PainelDoModelo } from './PainelDoModelo';
 import {
   criarFabricante,
   criarLocalizacao,
@@ -731,6 +732,7 @@ function ListaDeModelos() {
   const [emEdicao, setEmEdicao] = useState<ModeloDeAtivoView | 'novo' | null>(null);
   const [apelidando, setApelidando] = useState<{ id: string; alias: string } | null>(null);
   const [juntando, setJuntando] = useState<{ id: string; absorvidoId: string } | null>(null);
+  const [painelDe, setPainelDe] = useState<ModeloDeAtivoView | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
   const falhar = (e: unknown) =>
@@ -919,6 +921,18 @@ function ListaDeModelos() {
                           >
                             Juntar com…
                           </button>
+                          {/*
+                            O painel é do modelo, e é por isso que ele se
+                            edita aqui: trinta switches iguais têm um
+                            desenho só.
+                          */}
+                          <button
+                            type="button"
+                            className="btn -fantasma -sm"
+                            onClick={() => setPainelDe(m)}
+                          >
+                            Painel
+                          </button>
                           <button
                             type="button"
                             className="btn -perigo -sm"
@@ -945,6 +959,13 @@ function ListaDeModelos() {
           </div>
         </div>
       )}
+
+      {painelDe ? (
+        <PainelDoModelo
+          modelo={painelDe}
+          aoFechar={() => setPainelDe(null)}
+        />
+      ) : null}
 
       {emEdicao ? (
         <FormularioDeModelo

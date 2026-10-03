@@ -38,6 +38,12 @@ import type {
   TicketType,
   Visibility,
 } from './domain';
+import type {
+  CelulaDoPainel,
+  FaceDoPainel,
+  OrdemDoPainel,
+  TipoDeZona,
+} from './painel';
 import type { Permission, Role } from './permissions';
 
 // ---------------------------------------------------------------------
@@ -2746,6 +2752,107 @@ export type WriteRackRequest = {
   notes?: string | null;
 };
 export type ColocarNoRackRequest = { assetId: string; positionU: number; heightU?: number; face?: RackFace };
+
+// ---------------------------------------------------------------------
+// Estêncil: o painel do equipamento
+// ---------------------------------------------------------------------
+
+/**
+ * O painel de um modelo, como a tela de catálogo o edita.
+ *
+ * `portCount` é a conferência de quem cadastra: o número que tem de
+ * bater com o que está escrito na frente do equipamento. Um painel de
+ * 12×2 que diz 23 portas avisa, ali mesmo, que alguém pôs uma zona a
+ * mais ou errou a grade.
+ */
+export type PainelDoModeloView = {
+  id: string;
+  face: FaceDoPainel;
+  columns: number;
+  rows: number;
+  numbering: OrdemDoPainel;
+  startAt: number;
+  slots: number | null;
+  notes: string | null;
+  zones: ZonaDoPainelView[];
+  portCount: number;
+};
+
+export type ZonaDoPainelView = {
+  id: string;
+  column: number;
+  row: number;
+  kind: TipoDeZona;
+  label: string | null;
+  portNumber: number | null;
+};
+
+export type EscreverPainelRequest = {
+  columns: number;
+  rows?: number;
+  numbering?: OrdemDoPainel;
+  startAt?: number;
+  slots?: number | null;
+  notes?: string | null;
+};
+
+export type EscreverZonaRequest = {
+  column: number;
+  row: number;
+  kind?: TipoDeZona;
+  label?: string | null;
+  portNumber?: number | null;
+};
+
+/** Uma porta do equipamento, no tanto que o painel precisa mostrar. */
+export type PortaNoPainel = {
+  id: string;
+  name: string;
+  /** O outro lado do cabo. Nulo é porta livre. */
+  connectedTo: { id: string; name: string; asset: AtivoRef } | null;
+  vlan: number | null;
+  currentIp: string | null;
+};
+
+export type FaceDoPainelDoAtivo = {
+  face: FaceDoPainel;
+  columns: number;
+  rows: number;
+  /**
+   * Toda posição do painel, na ordem da numeração, com as portas do
+   * equipamento que caíram nela.
+   *
+   * Mais de uma porta na mesma posição é nome ambíguo no equipamento
+   * (`Gi1/0/1` e `Te1/0/1` dão o mesmo número): a lista mostra as duas
+   * em vez de escolher uma em silêncio.
+   */
+  cells: CelulaDoPainelDoAtivo[];
+};
+
+/** A célula do desenho, mais as portas que caíram nela. */
+export type CelulaDoPainelDoAtivo = CelulaDoPainel & { ports: PortaNoPainel[] };
+
+/**
+ * O painel do equipamento: o desenho do modelo com as portas dele por
+ * cima.
+ *
+ * Nulo quando o equipamento não tem modelo, ou o modelo não tem painel
+ * cadastrado — e aí a tela não desenha nada, em vez de desenhar uma
+ * grade vazia que parece defeito.
+ */
+export type PainelDoAtivo = {
+  model: CatalogoRef;
+  faces: FaceDoPainelDoAtivo[];
+  /**
+   * As portas que nenhuma posição acomodou.
+   *
+   * É o aviso de que o painel e o equipamento discordam: um switch de 24
+   * com uma porta 25, ou uma porta chamada `Ethernet`, sem número. Sem
+   * esta lista, a porta simplesmente não apareceria — e ninguém
+   * descobriria que o desenho está incompleto.
+   */
+  outside: PortaNoPainel[];
+} | null;
 
 
 // ---------------------------------------------------------------------

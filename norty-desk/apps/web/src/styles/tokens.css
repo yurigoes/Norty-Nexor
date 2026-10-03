@@ -198,7 +198,12 @@
   --e-20: 80px;
 
   /* ---------- Raio ----------
-     Entre 8 e 16. Nada de pílula em superfície grande. */
+     Entre 8 e 16. Nada de pílula em superfície grande.
+
+     O `--r-xs` é a exceção, e só vale para marca menor que um botão:
+     numa amostra de 16px o raio de 8 vira círculo, e a amostra deixa
+     de ter a forma da coisa que ela representa. */
+  --r-xs: 4px;
   --r-sm: 8px;
   --r-md: 10px;
   --r-lg: 14px;
@@ -241,6 +246,29 @@
      token a mais para repetir uma medida que já existe seria
      divergência disfarçada de configuração. */
   --fila-linha-alt: 46px;
+
+  /* ---------- [DESK] Painel do equipamento ----------
+     O estêncil: o desenho da frente do switch, com uma caixinha por
+     porta. Três estados, e nada mais — é o que se decide olhando:
+     tem cabo, está livre, não é porta.
+
+     A porta com cabo recebe o azul, que é quem carrega estado ativo
+     no sistema; a livre fica no cinza da superfície afundada; o que
+     não é porta (console, fonte, furo no painel) perde a cor e fica
+     só com o contorno. Nenhuma informação depende da cor: cada
+     caixinha mostra o número, e o `title` diz o resto.
+
+     A medida da caixinha é token porque aparece em dois lugares — o
+     painel do equipamento e o editor do catálogo — e os dois têm de
+     desenhar o mesmo painel. */
+  --painel-celula: 30px;
+  --painel-ligada:        var(--azul-100);
+  --painel-ligada-borda:  var(--azul-600);
+  --painel-livre:         var(--superficie-afundada);
+  --painel-livre-borda:   var(--borda-forte);
+  --painel-outro:         var(--superficie-card);
+  --painel-outro-borda:   var(--cinza-400);
+  --painel-vazia-borda:   var(--borda-suave);
 }
 
 /* Redução de movimento é preferência de acessibilidade, não de gosto. */

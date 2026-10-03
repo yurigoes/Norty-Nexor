@@ -1406,3 +1406,93 @@
 @media (prefers-reduced-motion: reduce) {
   .chat-ponto.-aberto { animation: none; }
 }
+
+/* ---------- [DESK] Painel do equipamento (estêncil) ----------
+   A frente do switch desenhada: uma caixinha por posição, na grade do
+   modelo. Serve a quem está com o rack aberto na frente, então o
+   desenho é a planta do painel e não uma lista — "a porta 17 é a nona
+   de cima na segunda fileira" é a resposta que a lista não dá.
+
+   A grade vem por `style` (as colunas e as linhas são do painel
+   cadastrado, não do CSS); daqui sai tudo o mais. */
+
+.painel {
+  display: grid;
+  gap: var(--e-1);
+  /* Painel de 48 portas não cabe em tela estreita, e espremer a
+     caixinha até ilegível seria pior do que rolar na horizontal. */
+  width: max-content;
+}
+
+.painel-celula {
+  width: var(--painel-celula);
+  height: var(--painel-celula);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--painel-livre-borda);
+  background: var(--painel-livre);
+  font-family: var(--fonte-mono);
+  font-size: var(--t-micro);
+  color: var(--texto-suave);
+  padding: 0;
+  cursor: default;
+}
+
+/* Com cabo do outro lado: é a porta que está em uso agora. */
+.painel-celula.-ligada {
+  background: var(--painel-ligada);
+  border-color: var(--painel-ligada-borda);
+  color: var(--texto-forte);
+  font-weight: var(--p-semi);
+}
+
+/* Console, fonte, tomada: não é porta de rede, e por isso não tem cor. */
+.painel-celula.-outro {
+  background: var(--painel-outro);
+  border-color: var(--painel-outro-borda);
+  border-style: dashed;
+}
+
+/* Posição que o painel desenha e o equipamento não tem. */
+.painel-celula.-vazia {
+  background: transparent;
+  border-color: var(--painel-vazia-borda);
+  border-style: dashed;
+  color: var(--texto-tenue);
+}
+
+/* A porta existe no cadastro mas o número dela não tem lugar na grade. */
+.painel-celula.-escolhida {
+  outline: 2px solid var(--borda-foco);
+  outline-offset: 1px;
+}
+
+.painel-celula[role='button'],
+button.painel-celula:not(:disabled) {
+  cursor: pointer;
+}
+
+.painel-legenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-3);
+  font-size: var(--t-micro);
+  color: var(--texto-suave);
+}
+
+.painel-legenda-item { display: flex; align-items: center; gap: var(--e-1); }
+
+.painel-amostra {
+  /* Quadradinho, como a posição que ela representa — por isso o raio
+     menor: com o de 8px uma amostra deste tamanho vira bolinha. */
+  width: var(--e-4);
+  height: var(--e-4);
+  border-radius: var(--r-xs);
+  border: 1px solid var(--painel-livre-borda);
+  background: var(--painel-livre);
+  flex: none;
+}
+.painel-amostra.-ligada { background: var(--painel-ligada); border-color: var(--painel-ligada-borda); }
+.painel-amostra.-outro { background: var(--painel-outro); border-color: var(--painel-outro-borda); border-style: dashed; }
