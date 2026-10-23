@@ -6,7 +6,8 @@ import { PASSWORD, unique } from './helpers';
 
 export const db = new PrismaClient({ datasourceUrl: process.env.DATABASE_URL });
 
-export async function asPlatform<T>(fn: (tx: any) => Promise<T>): Promise<T> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function asPlatform(fn: (tx: any) => Promise<any>): Promise<any> {
   return db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT set_config('app.bypass_rls', 'on', true)`;
     return fn(tx);
