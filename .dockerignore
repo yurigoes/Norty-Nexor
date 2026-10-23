@@ -1,0 +1,16 @@
+# Contexto de build das imagens (my Home e Norty Car).
+# Dependências e artefatos são reconstruídos dentro da imagem.
+**/node_modules
+**/dist
+**/dist-standalone
+.git
+.claude
+backups
+**/.env
+**/.env.*
+!**/.env.example
+apps/car-api/storage
+apps/car-api/storage-test
+apps/car-api/src/generated
+**/*.log
+**/.tmp
