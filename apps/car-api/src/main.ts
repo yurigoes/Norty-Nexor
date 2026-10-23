@@ -12,6 +12,8 @@ import { requestId } from './common/request-id';
 export async function createApp(): Promise<NestExpressApplication> {
   const config = loadConfig();
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    // Corpo bruto preservado: a assinatura HMAC dos webhooks é calculada sobre os bytes recebidos.
+    rawBody: true,
     logger: config.nodeEnv === 'test' ? ['error'] : ['log', 'warn', 'error'],
   });
 

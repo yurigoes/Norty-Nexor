@@ -26,7 +26,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   private readonly logger = new Logger(PrismaService.name);
 
   constructor() {
-    super({ log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'] });
+    // Em teste, conflitos esperados (409 por sobreposição de agenda) não poluem o log.
+    super({ log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : process.env.NODE_ENV === 'test' ? [] : ['error'] });
   }
 
   async onModuleInit(): Promise<void> {
