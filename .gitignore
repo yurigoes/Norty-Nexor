@@ -56,3 +56,6 @@ apps/car-api/src/generated/
 apps/car-api/storage/
 apps/car-web/.env
 apps/car-api/storage-test/
+
+# Worktrees temporários de agentes
+.claude/worktrees/

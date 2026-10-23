@@ -2,7 +2,7 @@
   "name": "my-home",
   "private": true,
   "version": "1.0.0",
-  "description": "my Home by norty — plataforma de gestão condominial",
+  "description": "Ecossistema Norty — my Home (gestão condominial) e Norty Car (gestão de locadoras)",
   "workspaces": [
     "packages/*",
     "apps/*"
@@ -19,7 +19,14 @@
     "db:studio": "npm run db:studio -w @myhome/api",
     "up": "docker compose -f infra/docker-compose.yml up -d",
     "down": "docker compose -f infra/docker-compose.yml down",
-    "logs": "docker compose -f infra/docker-compose.yml logs -f"
+    "logs": "docker compose -f infra/docker-compose.yml logs -f",
+    "dev:car-api": "npm run dev -w @nortycar/api",
+    "dev:car-web": "npm run dev -w @nortycar/web",
+    "build:car": "npm run build -w @nortycar/shared && npm run build -w @nortycar/api && npm run build -w @nortycar/web",
+    "test:car": "npm run build -w @nortycar/shared && npm test -w @nortycar/shared && npm run build -w @nortycar/api && npm test -w @nortycar/api",
+    "db:car:migrate": "npm run db:migrate -w @nortycar/api",
+    "db:car:seed": "npm run db:seed -w @nortycar/api",
+    "db:car:demo": "npm run db:demo -w @nortycar/api"
   },
   "engines": {
     "node": ">=22"

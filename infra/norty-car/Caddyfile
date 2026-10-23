@@ -1,0 +1,23 @@
+# =========================================================
+#  Norty Car — borda opcional para DOMÍNIOS PRÓPRIOS das locadoras
+# ---------------------------------------------------------
+#  Use quando os domínios próprios não passarem pelo Cloudflare
+#  (ver DEPLOY.md). O Caddy emite o certificado na primeira visita
+#  (on-demand TLS), mas SÓ depois de perguntar à API se o domínio
+#  está ativo e verificado — sem o `ask`, qualquer pessoa apontaria
+#  um domínio para cá e nos faria emitir certificados à vontade.
+# =========================================================
+{
+	email {$ACME_EMAIL}
+	on_demand_tls {
+		ask http://api:3334/v1/public/domains/tls-ask
+	}
+}
+
+https:// {
+	tls {
+		on_demand
+	}
+	encode gzip
+	reverse_proxy web:80
+}
