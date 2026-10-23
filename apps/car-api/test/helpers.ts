@@ -91,6 +91,7 @@ export class Client {
   get<T = any>(path: string) { return this.req<T>('GET', path); }
   post<T = any>(path: string, body?: unknown, extra?: Record<string, string>) { return this.req<T>('POST', path, body ?? {}, extra); }
   patch<T = any>(path: string, body?: unknown) { return this.req<T>('PATCH', path, body ?? {}); }
+  put<T = any>(path: string, body?: unknown) { return this.req<T>('PUT', path, body ?? {}); }
   del<T = any>(path: string, body?: unknown) { return this.req<T>('DELETE', path, body); }
 
   /** Login completo: senha → (contexto) → token. */

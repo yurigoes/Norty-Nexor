@@ -240,7 +240,7 @@ export class PublicSiteService {
         body: `${lead.name}${period ? ` · ${period.start.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}` : ''}`,
         link: `/locacoes/pedidos-site?id=${lead.id}`, audiencePermission: 'leads.manage', branchId: lead.branchId, dedupeKey: `lead:${lead.id}`,
       });
-      await this.audit.record(tx, null, { action: 'site.lead_received', entityType: 'Lead', entityId: lead.id, organizationId: organization.id, after: { kind: lead.kind } });
+      await this.audit.record(tx, null, { action: 'site.lead_received', entityType: 'Lead', entityId: lead.id, organizationId: organization.id, actorType: 'PUBLIC', after: { kind: lead.kind } });
     });
     return { received: true };
   }

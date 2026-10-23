@@ -22,18 +22,18 @@ import { IntegrationsPage } from '../modules/site-admin/IntegrationsPage';
  * permissões aqui são de plataforma; o Guard compara com a sessão.
  */
 export const MASTER_ROUTES: AppRoute[] = [
-  { path: '/master', element: <MasterDashboard />, permissions: ['platform.orgs.view' as never] },
-  { path: '/master/empresas', element: <OrganizationsPage />, permissions: ['platform.orgs.view' as never] },
-  { path: '/master/empresas/:id', element: <OrganizationDetail />, permissions: ['platform.orgs.view' as never] },
-  { path: '/master/planos', element: <PlansPage />, permissions: ['platform.orgs.view' as never] },
-  { path: '/master/assinaturas', element: <SubscriptionsPage />, permissions: ['platform.billing.manage' as never] },
-  { path: '/master/dominios', element: <MasterDomainsPage />, permissions: ['platform.domains.manage' as never] },
-  { path: '/master/suporte', element: <MasterSupportPage />, permissions: ['platform.support' as never] },
-  { path: '/master/saude', element: <HealthPage />, permissions: ['platform.health.view' as never] },
-  { path: '/master/auditoria', element: <MasterAuditPage />, permissions: ['platform.audit.view' as never] },
-  { path: '/master/equipe', element: <StaffPage />, permissions: ['platform.staff.manage' as never] },
-  { path: '/master/integracoes', element: <MasterIntegrationsPage />, permissions: ['platform.integrations.manage' as never] },
-  { path: '/master/configuracoes', element: <MasterSettingsPage />, permissions: ['platform.settings.manage' as never] },
+  { path: '/master', element: <MasterDashboard />, permissions: ['platform.orgs.view'] },
+  { path: '/master/empresas', element: <OrganizationsPage />, permissions: ['platform.orgs.view'] },
+  { path: '/master/empresas/:id', element: <OrganizationDetail />, permissions: ['platform.orgs.view'] },
+  { path: '/master/planos', element: <PlansPage />, permissions: ['platform.orgs.view'] },
+  { path: '/master/assinaturas', element: <SubscriptionsPage />, permissions: ['platform.billing.manage'] },
+  { path: '/master/dominios', element: <MasterDomainsPage />, permissions: ['platform.domains.manage'] },
+  { path: '/master/suporte', element: <MasterSupportPage />, permissions: ['platform.support'] },
+  { path: '/master/saude', element: <HealthPage />, permissions: ['platform.health.view'] },
+  { path: '/master/auditoria', element: <MasterAuditPage />, permissions: ['platform.audit.view'] },
+  { path: '/master/equipe', element: <StaffPage />, permissions: ['platform.staff.manage'] },
+  { path: '/master/integracoes', element: <MasterIntegrationsPage />, permissions: ['platform.integrations.manage'] },
+  { path: '/master/configuracoes', element: <MasterSettingsPage />, permissions: ['platform.settings.manage'] },
   { path: '/master/perfil', element: <ProfilePage /> },
 ];
 

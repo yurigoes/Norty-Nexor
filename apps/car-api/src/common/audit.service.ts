@@ -14,6 +14,8 @@ export interface AuditInput {
   /** Força o escopo de plataforma (organizationId nulo). */
   platformScope?: boolean;
   organizationId?: string | null;
+  /** Origem quando não há usuário (ex.: PUBLIC para pedidos do site). */
+  actorType?: 'SYSTEM' | 'PUBLIC' | 'INTEGRATION';
 }
 
 /** Campos que nunca entram na trilha, mesmo que estejam no objeto. */
@@ -50,7 +52,7 @@ export class AuditService {
       data: {
         organizationId: input.platformScope ? null : (input.organizationId ?? ctx?.organizationId ?? null),
         branchId: input.branchId ?? null,
-        actorType: ctx ? actorType(ctx) : 'SYSTEM',
+        actorType: ctx ? actorType(ctx) : (input.actorType ?? 'SYSTEM'),
         actorUserId: ctx?.userId ?? null,
         actorName: ctx?.userName ?? 'Sistema',
         supportGrantId: ctx?.supportGrantId ?? null,
