@@ -88,3 +88,36 @@
 .tabbar a svg { width: 20px; height: 20px; }
 .tabbar a[aria-current='page'] { color: var(--brand); }
 @media (max-width: 960px) { .tabbar.mobile-only { display: flex !important; } }
+
+/* ---------- Cena do carro no login ---------- */
+.car-scene { position: relative; height: 210px; max-width: 620px; perspective: 900px; perspective-origin: 30% 40%; }
+.car-scene__road { position: absolute; left: -48px; right: -48px; bottom: 26px; height: 2px; background: linear-gradient(90deg, transparent, rgba(22, 119, 255, 0.55) 30%, rgba(32, 197, 160, 0.45) 70%, transparent); }
+.car-scene__car {
+  position: absolute; left: 0; bottom: 18px; width: 70%;
+  transform-style: preserve-3d;
+  animation: car-enter 1.9s cubic-bezier(0.16, 0.84, 0.32, 1) 0.2s both;
+}
+.car-scene__svg { width: 100%; height: auto; display: block; overflow: visible; }
+.car-scene__wheel { animation: car-wheel 0.45s linear 4 both; animation-delay: 0.2s; }
+.car-scene__light, .car-scene__glow, .car-scene__beam { opacity: 0; animation: car-blink 0.9s ease-in-out 2.15s 1 both; }
+.car-scene__glow { filter: blur(6px); }
+
+/* O carro chega de longe (pequeno, girado em profundidade) até o meio do painel. */
+@keyframes car-enter {
+  0% { transform: translate3d(-110%, -6px, -260px) rotateY(38deg) scale(0.86); opacity: 0; }
+  25% { opacity: 1; }
+  100% { transform: translate3d(0, 0, 0) rotateY(0) scale(1); opacity: 1; }
+}
+@keyframes car-wheel { to { transform: rotate(360deg); } }
+/* Duas piscadas e o farol fica levemente aceso. */
+@keyframes car-blink {
+  0%, 18% { opacity: 0; }
+  24%, 40% { opacity: 1; }
+  48%, 58% { opacity: 0; }
+  64%, 80% { opacity: 1; }
+  100% { opacity: 0.35; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .car-scene__car, .car-scene__wheel { animation: none; }
+  .car-scene__light, .car-scene__glow, .car-scene__beam { animation: none; opacity: 0.35; }
+}

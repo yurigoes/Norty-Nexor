@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { BrandMark, Wordmark } from '../../brand/Logo';
+import { CarScene } from '../../brand/CarScene';
 
 export function AuthLayout({ children }: { children: ReactNode }) {
   return (
@@ -7,6 +8,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
       <section className="auth__panel" aria-hidden>
         <div className="row"><BrandMark size={40} /><Wordmark subtitle="Sistema de Controle de Carros" /></div>
         <div className="stack-lg">
+          <CarScene />
           <h2>A operação da sua locadora, do pátio ao financeiro.</h2>
           <p>Frota, reservas, contratos, vistorias com fotos, manutenção, estoque e cobrança — com isolamento por empresa e trilha de auditoria.</p>
           <div className="auth__features">
