@@ -1,0 +1,12 @@
+{
+  "name": "Norty Car | Sistema de Controle de Carros",
+  "short_name": "Norty Car",
+  "description": "Gestão de locadoras de veículos: frota, locações, vistorias e financeiro.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0B1220",
+  "theme_color": "#0B1220",
+  "lang": "pt-BR",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

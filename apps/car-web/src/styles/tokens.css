@@ -1,0 +1,214 @@
+/* =========================================================
+   Norty Car — Design tokens
+   Fonte única de cores, espaçamento, tipografia, raios,
+   sombras e movimento. Nenhum CSS de módulo usa valor literal
+   de cor: tudo passa por estas variáveis, e o tema escuro só
+   redefine o bloco [data-theme="dark"].
+
+   Papéis fixos da paleta:
+     azul-noite    superfícies de marca e navegação
+     azul (brand)  ação primária, foco, seleção, links
+     verde         resultado positivo, disponível, quitado
+     âmbar         atenção, vencimento próximo
+     vermelho      crítico de verdade — nunca decoração
+   ========================================================= */
+
+:root {
+  /* ---------- Paleta oficial ---------- */
+  --nc-night: #0b1220;
+  --nc-night-800: #111a2e;
+  --nc-night-700: #18233b;
+  --nc-night-600: #22304d;
+  --nc-blue: #1677ff;
+  --nc-blue-700: #0b5cd6;
+  --nc-blue-600: #0f6af0;
+  --nc-blue-100: #e6f0ff;
+  --nc-blue-050: #f2f7ff;
+  --nc-green: #20c5a0;
+  --nc-green-700: #0e8f72;
+  --nc-green-100: #e3f8f2;
+  --nc-amber: #f59e0b;
+  --nc-amber-700: #b45309;
+  --nc-amber-100: #fef3dc;
+  --nc-red: #f04438;
+  --nc-red-700: #c4261b;
+  --nc-red-100: #fee9e7;
+  --nc-bg: #f4f7fb;
+  --nc-white: #ffffff;
+  --nc-text: #101828;
+  --nc-text-2: #667085;
+
+  /* ---------- Superfícies ---------- */
+  --surface-app: var(--nc-bg);
+  --surface-card: var(--nc-white);
+  --surface-raised: var(--nc-white);
+  --surface-sunken: #eaeff6;
+  --surface-hover: #f0f4fa;
+  --surface-active: #e5ecf6;
+  --surface-nav: var(--nc-night);
+  --surface-nav-hover: var(--nc-night-700);
+  --surface-nav-active: var(--nc-night-600);
+  --surface-overlay: rgba(11, 18, 32, 0.52);
+
+  /* ---------- Texto ---------- */
+  --text-strong: var(--nc-text);
+  --text-default: #253046;
+  --text-muted: var(--nc-text-2);
+  --text-subtle: #98a2b3;
+  --text-inverse: #ffffff;
+  --text-nav: #c3cce0;
+  --text-nav-muted: #7d8aa8;
+  --text-link: var(--nc-blue-700);
+  --text-on-brand: #ffffff;
+
+  /* ---------- Bordas ---------- */
+  --border-subtle: #e7ecf3;
+  --border-default: #d9e0ea;
+  --border-strong: #b9c3d3;
+  --border-nav: rgba(255, 255, 255, 0.07);
+
+  /* ---------- Ação ---------- */
+  --brand: var(--nc-blue);
+  --brand-hover: var(--nc-blue-600);
+  --brand-active: var(--nc-blue-700);
+  --brand-soft: var(--nc-blue-100);
+  --brand-softer: var(--nc-blue-050);
+
+  /* ---------- Semântica ---------- */
+  --success: var(--nc-green-700);
+  --success-strong: var(--nc-green);
+  --success-bg: var(--nc-green-100);
+  --warning: var(--nc-amber-700);
+  --warning-strong: var(--nc-amber);
+  --warning-bg: var(--nc-amber-100);
+  --danger: var(--nc-red-700);
+  --danger-strong: var(--nc-red);
+  --danger-bg: var(--nc-red-100);
+  --info: var(--nc-blue-700);
+  --info-bg: var(--nc-blue-100);
+  --neutral: #475467;
+  --neutral-bg: #eef2f6;
+
+  /* ---------- Gráficos (ordem fixa de séries) ---------- */
+  --chart-1: var(--nc-blue);
+  --chart-2: var(--nc-green);
+  --chart-3: #7a5af8;
+  --chart-4: var(--nc-amber);
+  --chart-5: #06aed4;
+  --chart-6: var(--nc-red);
+  --chart-grid: #e7ecf3;
+
+  /* ---------- Espaçamento (escala 4) ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --space-9: 48px;
+  --space-10: 64px;
+
+  /* ---------- Raios ---------- */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  /* ---------- Sombras ---------- */
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-md: 0 6px 16px -4px rgba(16, 24, 40, 0.1), 0 2px 6px -2px rgba(16, 24, 40, 0.05);
+  --shadow-lg: 0 18px 36px -10px rgba(16, 24, 40, 0.18);
+  --shadow-focus: 0 0 0 3px rgba(22, 119, 255, 0.32);
+
+  /* ---------- Tipografia ---------- */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 22px;
+  --text-3xl: 28px;
+  --text-4xl: 36px;
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* ---------- Layout ---------- */
+  --sidebar-width: 264px;
+  --sidebar-collapsed: 72px;
+  --header-height: 64px;
+  --content-max: 1440px;
+
+  /* ---------- Camadas ---------- */
+  --z-nav: 30;
+  --z-header: 40;
+  --z-dropdown: 60;
+  --z-drawer: 80;
+  --z-modal: 90;
+  --z-toast: 100;
+
+  /* ---------- Movimento ---------- */
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --duration-fast: 120ms;
+  --duration: 200ms;
+
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --surface-app: #0a101c;
+  --surface-card: #111a2b;
+  --surface-raised: #152036;
+  --surface-sunken: #0d1524;
+  --surface-hover: #18243b;
+  --surface-active: #1d2b46;
+  --surface-nav: #070c16;
+  --surface-nav-hover: #121c30;
+  --surface-nav-active: #18264a;
+  --surface-overlay: rgba(2, 6, 14, 0.7);
+
+  --text-strong: #f2f5fa;
+  --text-default: #d5dceb;
+  --text-muted: #94a1ba;
+  --text-subtle: #67748e;
+  --text-link: #6aa8ff;
+
+  --border-subtle: #1b2740;
+  --border-default: #24324f;
+  --border-strong: #34466b;
+
+  --brand: #3d8bff;
+  --brand-hover: #5a9cff;
+  --brand-active: #2a7af5;
+  --brand-soft: rgba(61, 139, 255, 0.16);
+  --brand-softer: rgba(61, 139, 255, 0.08);
+
+  --success: #34d6b2;
+  --success-bg: rgba(32, 197, 160, 0.14);
+  --warning: #fbbf4a;
+  --warning-bg: rgba(245, 158, 11, 0.14);
+  --danger: #ff7b70;
+  --danger-bg: rgba(240, 68, 56, 0.15);
+  --info: #6aa8ff;
+  --info-bg: rgba(61, 139, 255, 0.14);
+  --neutral: #a5b1c6;
+  --neutral-bg: rgba(148, 161, 186, 0.12);
+  --chart-grid: #1f2c46;
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 20px -6px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 20px 44px -12px rgba(0, 0, 0, 0.65);
+
+  color-scheme: dark;
+}
