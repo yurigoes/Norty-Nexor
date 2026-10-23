@@ -1,0 +1,59 @@
+/* =========================================================
+   Operação de campo: vistoria no celular, mapa de avarias,
+   assinatura, estoque e ordens de serviço. Só tokens.
+   ========================================================= */
+
+/* ---------- Assistente de vistoria (mobile first) ---------- */
+.op-wizard { max-width: 760px; margin: 0 auto; width: 100%; }
+.op-wizard__nav { position: sticky; bottom: 0; display: flex; gap: var(--space-2); padding: var(--space-3) 0; background: var(--surface-app); border-top: 1px solid var(--border-subtle); z-index: 2; }
+.op-wizard__nav .nc-btn { flex: 1; }
+
+.op-fuel { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 4px; }
+.op-fuel button { height: 48px; border: 1px solid var(--border-default); background: var(--surface-card); border-radius: var(--radius-sm); cursor: pointer; font-size: var(--text-xs); color: var(--text-muted); font-weight: var(--weight-medium); }
+.op-fuel button[aria-pressed='true'] { background: var(--brand); color: var(--text-on-brand); border-color: var(--brand); }
+
+.op-item { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3) 0; border-bottom: 1px solid var(--border-subtle); }
+.op-item:last-child { border-bottom: 0; }
+.op-item__status { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); }
+.op-item__status button { min-height: 44px; border-radius: var(--radius-md); border: 1px solid var(--border-default); background: var(--surface-card); cursor: pointer; font-weight: var(--weight-medium); color: var(--text-default); font-size: var(--text-sm); }
+.op-item__status button[aria-pressed='true'][data-s='OK'] { background: var(--success-bg); border-color: var(--success); color: var(--success); }
+.op-item__status button[aria-pressed='true'][data-s='DAMAGED'] { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); }
+.op-item__status button[aria-pressed='true'][data-s='MISSING'] { background: var(--warning-bg); border-color: var(--warning); color: var(--warning); }
+.op-item__status button[aria-pressed='true'][data-s='NA'] { background: var(--neutral-bg); border-color: var(--border-strong); color: var(--neutral); }
+@media (max-width: 420px) { .op-item__status { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ---------- Mapa de avarias ---------- */
+.op-map { width: 100%; max-width: 420px; margin: 0 auto; display: block; touch-action: manipulation; }
+.op-map .region { fill: var(--surface-sunken); stroke: var(--border-strong); stroke-width: 1.5; cursor: pointer; transition: fill var(--duration-fast) var(--ease); }
+.op-map .region:hover, .op-map .region:focus-visible { fill: var(--brand-soft); outline: none; }
+.op-map .region[data-selected='true'] { fill: var(--brand-soft); stroke: var(--brand); stroke-width: 2.5; }
+.op-map .region[data-damaged='true'] { fill: var(--danger-bg); stroke: var(--danger); }
+.op-map .region[data-new='true'] { fill: var(--warning-bg); stroke: var(--warning); stroke-width: 2.5; }
+.op-map .body { fill: none; stroke: var(--border-strong); stroke-width: 2; pointer-events: none; }
+.op-map text { fill: var(--text-muted); font-size: 9px; pointer-events: none; font-family: var(--font-sans); }
+
+/* ---------- Assinatura ---------- */
+.op-signature { width: 100%; height: 180px; border: 1.5px dashed var(--border-strong); border-radius: var(--radius-md); background: var(--surface-card); touch-action: none; display: block; cursor: crosshair; }
+
+/* ---------- Galeria ---------- */
+.op-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--space-3); }
+.op-gallery figure { margin: 0; border-radius: var(--radius-md); overflow: hidden; background: var(--surface-sunken); border: 1px solid var(--border-subtle); }
+.op-gallery figure > div { aspect-ratio: 4 / 3; }
+.op-gallery img { width: 100%; height: 100%; object-fit: cover; }
+.op-gallery figcaption { padding: 6px 8px; font-size: var(--text-xs); color: var(--text-muted); }
+
+/* ---------- Comparação ---------- */
+.op-compare { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-4); }
+@media (max-width: 760px) { .op-compare { grid-template-columns: minmax(0, 1fr); } }
+.op-diff-row td { background: var(--warning-bg); }
+
+/* ---------- Kanban de OS ---------- */
+.op-kanban { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(240px, 1fr); gap: var(--space-3); overflow-x: auto; padding-bottom: var(--space-2); }
+.op-kanban__col { background: var(--surface-sunken); border-radius: var(--radius-lg); padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2); min-height: 160px; }
+.op-kanban__title { display: flex; justify-content: space-between; font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--text-strong); padding: 0 var(--space-1) var(--space-1); }
+.op-kanban__card { background: var(--surface-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: var(--space-3); cursor: pointer; text-align: left; font: inherit; color: inherit; display: flex; flex-direction: column; gap: 4px; }
+.op-kanban__card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+.op-kanban__card[data-overdue='true'] { border-left: 3px solid var(--danger-strong); }
+
+/* ---------- Barras de vencimento ---------- */
+.op-due { display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
