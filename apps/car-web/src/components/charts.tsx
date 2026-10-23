@@ -13,6 +13,9 @@ export function BarChart({ labels, series, height = 220, format = (v: number) =>
   labels: string[]; series: Series[]; height?: number; format?: (v: number) => string; stacked?: boolean;
 }) {
   const id = useId();
+  if (!series.some((s) => s.values.some((v) => v > 0))) {
+    return <div className="nc-empty" style={{ padding: 'var(--space-7)' }}><div className="nc-empty__desc">Sem valores no período selecionado.</div></div>;
+  }
   const width = 640;
   const pad = { top: 12, right: 8, bottom: 26, left: 48 };
   const totals = labels.map((_, i) => (stacked ? series.reduce((a, s) => a + Math.max(0, s.values[i] ?? 0), 0) : Math.max(...series.map((s) => s.values[i] ?? 0))));
@@ -63,6 +66,9 @@ export function BarChart({ labels, series, height = 220, format = (v: number) =>
 export function LineChart({ labels, series, height = 220, format = (v: number) => compact.format(v) }: {
   labels: string[]; series: Series[]; height?: number; format?: (v: number) => string;
 }) {
+  if (!series.some((s) => s.values.some((v) => v > 0))) {
+    return <div className="nc-empty" style={{ padding: 'var(--space-7)' }}><div className="nc-empty__desc">Sem valores no período selecionado.</div></div>;
+  }
   const width = 640;
   const pad = { top: 12, right: 12, bottom: 26, left: 48 };
   const all = series.flatMap((s) => s.values);
@@ -137,7 +143,8 @@ export function Donut({ data, size = 160, center }: { data: { label: string; val
 }
 
 function niceTicks(max: number, count = 4): number[] {
-  const raw = max / count;
+  // Passo mínimo de 1: eixo de valores pequenos não repete rótulos arredondados.
+  const raw = Math.max(1, max / count);
   const mag = 10 ** Math.floor(Math.log10(raw));
   const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? raw;
   return Array.from({ length: count + 1 }, (_, i) => Math.round(i * step * 100) / 100);
