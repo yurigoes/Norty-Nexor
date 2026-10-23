@@ -49,3 +49,9 @@ apps/web/.env
 
 # Cache incremental do TypeScript
 *.tsbuildinfo
+
+# Norty Car
+apps/car-api/.env
+apps/car-api/src/generated/
+apps/car-api/storage/
+apps/car-web/.env

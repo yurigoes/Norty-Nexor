@@ -1,0 +1,2689 @@
+// =========================================================
+//  Norty Car — Modelo de dados
+// ---------------------------------------------------------
+//  Três escopos, e cada tabela pertence a exatamente um:
+//
+//   PLATAFORMA  usuários, sessões, planos, assinaturas do SaaS,
+//               domínios, acessos de suporte. Sem organizationId.
+//   EMPRESA     tudo o que tem `organizationId`. Protegido por
+//               Row-Level Security (ver migração `rls`): mesmo uma
+//               consulta que esqueça o filtro só enxerga a empresa
+//               da transação corrente.
+//   FILIAL      subconjunto da empresa: registros com `branchId`
+//               são filtrados também pelas filiais autorizadas.
+//
+//  Regras que não podem ser burladas vivem aqui ou nas migrações
+//  SQL: unicidades, CHECKs, a restrição de exclusão que impede
+//  duas reservas sobrepostas do mesmo carro e os gatilhos que
+//  tornam auditoria e movimentações de estoque imutáveis.
+//
+//  Dinheiro: Decimal(12,2). Data com hora: timestamptz (UTC).
+//  Data sem hora (vencimentos): date. Placa e CPF nunca são PK.
+// =========================================================
+
+generator client {
+  provider = "prisma-client-js"
+  // Saída própria, fora do node_modules: o my Home (apps/api) usa o
+  // @prisma/client padrão do monorepo, e o npm apagaria um client gerado
+  // dentro de node_modules a cada instalação. A pasta é copiada para
+  // dist/ pelo nest-cli (assets) e fica fora do git.
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =========================================================
+//  PLATAFORMA
+// =========================================================
+
+enum PlatformRole {
+  NONE
+  SUPPORT
+  ADMIN
+  SUPER
+}
+
+enum ContextKind {
+  STAFF
+  CUSTOMER
+  PLATFORM
+  SUPPORT
+}
+
+model User {
+  id                 String       @id @default(uuid()) @db.Uuid
+  email              String       @unique
+  name               String
+  phone              String?
+  passwordHash       String
+  platformRole       PlatformRole @default(NONE)
+  active             Boolean      @default(true)
+  mustChangePassword Boolean      @default(false)
+  mfaEnabled         Boolean      @default(false)
+  /// Segredo TOTP cifrado com a chave do servidor (AES-256-GCM).
+  mfaSecretEnc       String?
+  failedLogins       Int          @default(0)
+  lockedUntil        DateTime?    @db.Timestamptz(3)
+  lastLoginAt        DateTime?    @db.Timestamptz(3)
+  passwordChangedAt  DateTime?    @db.Timestamptz(3)
+  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime     @updatedAt @db.Timestamptz(3)
+
+  sessions       Session[]
+  resetTokens    PasswordResetToken[]
+  memberships    Membership[]
+  customerLinks  CustomerLink[]
+  supportGrants  SupportAccessGrant[] @relation("SupportGrantRequester")
+
+  @@map("users")
+}
+
+model Session {
+  id             String      @id @default(uuid()) @db.Uuid
+  userId         String      @db.Uuid
+  refreshHash    String      @unique
+  contextKind    ContextKind?
+  organizationId String?     @db.Uuid
+  membershipId   String?     @db.Uuid
+  customerId     String?     @db.Uuid
+  supportGrantId String?     @db.Uuid
+  mfaVerified    Boolean     @default(false)
+  ip             String?
+  userAgent      String?
+  createdAt      DateTime    @default(now()) @db.Timestamptz(3)
+  lastUsedAt     DateTime    @default(now()) @db.Timestamptz(3)
+  expiresAt      DateTime    @db.Timestamptz(3)
+  revokedAt      DateTime?   @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique
+  expiresAt DateTime  @db.Timestamptz(3)
+  usedAt    DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_tokens")
+}
+
+model Plan {
+  id           String   @id @default(uuid()) @db.Uuid
+  code         String   @unique
+  name         String
+  description  String?
+  priceMonthly Decimal  @db.Decimal(12, 2)
+  maxVehicles  Int?
+  maxBranches  Int?
+  maxUsers     Int?
+  modules      String[]
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+enum OrganizationStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+model Organization {
+  id           String             @id @default(uuid()) @db.Uuid
+  name         String
+  legalName    String?
+  document     String?            @unique
+  slug         String             @unique
+  email        String?
+  phone        String?
+  status       OrganizationStatus @default(TRIAL)
+  statusReason String?
+  timezone     String             @default("America/Sao_Paulo")
+  /// Regras configuráveis da empresa (ver OrgSettings em src/common/org-settings.ts).
+  settings     Json               @default("{}")
+  /// Módulos extras habilitados além dos do plano.
+  extraModules String[]           @default([])
+  createdAt    DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime           @updatedAt @db.Timestamptz(3)
+
+  subscription  Subscription?
+  saasInvoices  SaasInvoice[]
+  domains       Domain[]
+  supportGrants SupportAccessGrant[]
+  supportTickets SupportTicket[]
+
+  branches          Branch[]
+  roles             Role[]
+  memberships       Membership[]
+  counters          OrgCounter[]
+  files             FileAsset[]
+  categories        VehicleCategory[]
+  makes             VehicleMake[]
+  models            VehicleModel[]
+  versions          VehicleVersion[]
+  vehicles          VehicleUnit[]
+  vehicleStatus     VehicleStatusChange[]
+  timeline          VehicleTimelineEvent[]
+  odometer          OdometerReading[]
+  allocations       VehicleAllocation[]
+  rateTables        RateTable[]
+  extraServices     ExtraService[]
+  customers         Customer[]
+  drivers           Driver[]
+  customerLinks     CustomerLink[]
+  reservations      Reservation[]
+  contracts         RentalContract[]
+  contractVersions  ContractVersion[]
+  contractVehicles  ContractVehicle[]
+  contractDrivers   ContractDriver[]
+  contractExtras    ContractExtra[]
+  costCenters       CostCenter[]
+  receivables       Receivable[]
+  payables          Payable[]
+  payments          Payment[]
+  deposits          SecurityDeposit[]
+  depositEntries    DepositEntry[]
+  suppliers         Supplier[]
+  invCategories     InventoryCategory[]
+  products          InventoryProduct[]
+  locations         InventoryLocation[]
+  balances          StockBalance[]
+  movements         InventoryMovement[]
+  purchaseOrders    PurchaseOrder[]
+  purchaseItems     PurchaseOrderItem[]
+  inventoryCounts   InventoryCount[]
+  inventoryCountItems InventoryCountItem[]
+  serviceTypes      MaintenanceServiceType[]
+  workOrders        WorkOrder[]
+  workOrderItems    WorkOrderItem[]
+  workOrderEvents   WorkOrderEvent[]
+  maintenancePlans  MaintenancePlan[]
+  tires             Tire[]
+  tireEvents        TireEvent[]
+  inspectionTemplates InspectionTemplate[]
+  inspections       Inspection[]
+  inspectionItems   InspectionItem[]
+  inspectionDamages InspectionDamage[]
+  inspectionPhotos  InspectionPhoto[]
+  infractions       TrafficInfraction[]
+  infractionEvents  InfractionEvent[]
+  policies          InsurancePolicy[]
+  claims            Claim[]
+  claimEvents       ClaimEvent[]
+  refuels           RefuelRecord[]
+  sales             VehicleSale[]
+  saleProposals     SaleProposal[]
+  siteConfig        SiteConfig?
+  leads             Lead[]
+  serviceRequests   ServiceRequest[]
+  serviceMessages   ServiceRequestMessage[]
+  notifications     Notification[]
+  notificationReads NotificationRead[]
+  deliveries        NotificationDelivery[]
+  auditLogs         AuditLog[]
+  integrations      IntegrationConfig[]
+  apiKeys           ApiKey[]
+  webhookEndpoints  WebhookEndpoint[]
+
+  @@map("organizations")
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+/// Assinatura do SaaS. Financeiro da Norty, separado do financeiro da locadora.
+model Subscription {
+  id               String             @id @default(uuid()) @db.Uuid
+  organizationId   String             @unique @db.Uuid
+  planId           String             @db.Uuid
+  status           SubscriptionStatus @default(TRIALING)
+  priceOverride    Decimal?           @db.Decimal(12, 2)
+  trialEndsAt      DateTime?          @db.Timestamptz(3)
+  currentPeriodEnd DateTime?          @db.Timestamptz(3)
+  canceledAt       DateTime?          @db.Timestamptz(3)
+  createdAt        DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime           @updatedAt @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  plan         Plan         @relation(fields: [planId], references: [id])
+
+  @@map("subscriptions")
+}
+
+enum SaasInvoiceStatus {
+  OPEN
+  PAID
+  OVERDUE
+  VOID
+}
+
+model SaasInvoice {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @db.Uuid
+  competence     String
+  amount         Decimal           @db.Decimal(12, 2)
+  dueDate        DateTime          @db.Date
+  status         SaasInvoiceStatus @default(OPEN)
+  paidAt         DateTime?         @db.Timestamptz(3)
+  notes          String?
+  createdAt      DateTime          @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, competence])
+  @@map("saas_invoices")
+}
+
+enum DomainKind {
+  SUBDOMAIN
+  CUSTOM
+}
+
+enum DomainStatus {
+  PENDING_VERIFICATION
+  VERIFIED
+  ACTIVE
+  MISCONFIGURED
+  REMOVED
+}
+
+/// Domínio do site público. Tabela de plataforma: o roteamento por host
+/// precisa resolvê-la antes de saber de qual empresa é a requisição.
+model Domain {
+  id                String       @id @default(uuid()) @db.Uuid
+  organizationId    String       @db.Uuid
+  hostname          String       @unique
+  kind              DomainKind
+  status            DomainStatus @default(PENDING_VERIFICATION)
+  verificationToken String
+  verifiedAt        DateTime?    @db.Timestamptz(3)
+  lastCheckedAt     DateTime?    @db.Timestamptz(3)
+  lastCheckError    String?
+  isPrimary         Boolean      @default(false)
+  createdAt         DateTime     @default(now()) @db.Timestamptz(3)
+  removedAt         DateTime?    @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@map("domains")
+}
+
+enum SupportGrantStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  REVOKED
+  EXPIRED
+}
+
+/// Acesso excepcional do suporte Norty a uma empresa: pedido com
+/// finalidade, autorizado por alguém da empresa, com escopo e prazo.
+model SupportAccessGrant {
+  id               String             @id @default(uuid()) @db.Uuid
+  organizationId   String             @db.Uuid
+  requestedById    String             @db.Uuid
+  purpose          String
+  scope            String[]
+  durationHours    Int
+  status           SupportGrantStatus @default(REQUESTED)
+  decidedByUserId  String?            @db.Uuid
+  decidedAt        DateTime?          @db.Timestamptz(3)
+  decisionNote     String?
+  expiresAt        DateTime?          @db.Timestamptz(3)
+  createdAt        DateTime           @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  requestedBy  User         @relation("SupportGrantRequester", fields: [requestedById], references: [id])
+
+  @@index([organizationId, status])
+  @@map("support_access_grants")
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+model SupportTicket {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @db.Uuid
+  openedById     String              @db.Uuid
+  subject        String
+  description    String
+  status         SupportTicketStatus @default(OPEN)
+  assignedToId   String?             @db.Uuid
+  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime            @updatedAt @db.Timestamptz(3)
+
+  organization Organization          @relation(fields: [organizationId], references: [id])
+  messages     SupportTicketMessage[]
+
+  @@map("support_tickets")
+}
+
+model SupportTicketMessage {
+  id         String   @id @default(uuid()) @db.Uuid
+  ticketId   String   @db.Uuid
+  authorId   String   @db.Uuid
+  fromNorty  Boolean  @default(false)
+  body       String
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@map("support_ticket_messages")
+}
+
+model PlatformSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  updatedBy String?  @db.Uuid
+
+  @@map("platform_settings")
+}
+
+/// Eventos recebidos de provedores externos (pagamento, assinatura...).
+/// `provider + eventId` único: o mesmo evento entregue duas vezes é
+/// processado uma vez só.
+model InboundWebhookEvent {
+  id             String    @id @default(uuid()) @db.Uuid
+  provider       String
+  eventId        String
+  organizationId String?   @db.Uuid
+  eventType      String
+  payload        Json
+  signatureValid Boolean
+  receivedAt     DateTime  @default(now()) @db.Timestamptz(3)
+  processedAt    DateTime? @db.Timestamptz(3)
+  attempts       Int       @default(0)
+  lastError      String?
+
+  @@unique([provider, eventId])
+  @@map("inbound_webhook_events")
+}
+
+// =========================================================
+//  EMPRESA — estrutura, acesso e numeração
+// =========================================================
+
+model Branch {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  code           String
+  name           String
+  document       String?
+  phone          String?
+  email          String?
+  street         String?
+  number         String?
+  district       String?
+  city           String?
+  state          String?
+  zip            String?
+  /// Horas de preparo entre uma locação e outra nesta filial (sobrepõe a regra da empresa).
+  turnaroundHours Int?
+  publicVisible  Boolean  @default(true)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  memberships  MembershipBranch[]
+  vehicles     VehicleUnit[]
+  locations    InventoryLocation[]
+
+  @@unique([organizationId, code])
+  @@map("branches")
+}
+
+model Role {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  key            String
+  name           String
+  description    String?
+  permissions    String[]
+  /// Perfis criados a partir de um modelo podem ser editados, mas não excluídos.
+  templateKey    String?
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  memberships  Membership[]
+
+  @@unique([organizationId, key])
+  @@map("roles")
+}
+
+model Membership {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  userId         String   @db.Uuid
+  roleId         String   @db.Uuid
+  title          String?
+  allBranches    Boolean  @default(false)
+  /// Alçada para aprovar despesas e descontos; nulo = sem limite próprio (usa só a permissão).
+  approvalLimit  Decimal? @db.Decimal(12, 2)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  user         User               @relation(fields: [userId], references: [id])
+  role         Role               @relation(fields: [roleId], references: [id])
+  branches     MembershipBranch[]
+
+  @@unique([organizationId, userId])
+  @@map("memberships")
+}
+
+model MembershipBranch {
+  membershipId   String @db.Uuid
+  branchId       String @db.Uuid
+  organizationId String @db.Uuid
+
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  branch     Branch     @relation(fields: [branchId], references: [id])
+
+  @@id([membershipId, branchId])
+  @@map("membership_branches")
+}
+
+/// Numeração sequencial por empresa (reserva, contrato, OS...), gerada
+/// com UPDATE ... RETURNING dentro da transação: nunca repete número.
+model OrgCounter {
+  organizationId String @db.Uuid
+  key            String
+  value          Int    @default(0)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@id([organizationId, key])
+  @@map("org_counters")
+}
+
+/// Arquivo enviado. O conteúdo fica no armazenamento de objetos; o
+/// download passa sempre pela API, que confere a permissão.
+model FileAsset {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  storageKey     String    @unique
+  originalName   String
+  mimeType       String
+  size           Int
+  sha256         String
+  entityType     String
+  entityId       String?   @db.Uuid
+  category       String?
+  description    String?
+  expiresAt      DateTime? @db.Date
+  /// Liberado ao cliente no portal.
+  customerVisible Boolean  @default(false)
+  uploadedById   String?   @db.Uuid
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  deletedAt      DateTime? @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, entityType, entityId])
+  @@map("files")
+}
+
+// =========================================================
+//  FROTA
+// =========================================================
+
+model VehicleCategory {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  code           String
+  name           String
+  description    String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  models       VehicleModel[]
+  units        VehicleUnit[]
+  rateTables   RateTable[]
+  reservations Reservation[]
+
+  @@unique([organizationId, code])
+  @@map("vehicle_categories")
+}
+
+model VehicleMake {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  models       VehicleModel[]
+
+  @@unique([organizationId, name])
+  @@map("vehicle_makes")
+}
+
+/// Modelo de catálogo (o que aparece na vitrine). Várias unidades físicas
+/// compartilham o mesmo modelo, as mesmas fotos e o mesmo arquivo 3D.
+model VehicleModel {
+  id               String   @id @default(uuid()) @db.Uuid
+  organizationId   String   @db.Uuid
+  makeId           String   @db.Uuid
+  categoryId       String   @db.Uuid
+  name             String
+  bodyType         String?
+  seats            Int?
+  doors            Int?
+  trunkLiters      Int?
+  tankLiters       Int?
+  description      String?
+  specs            Json     @default("{}")
+  /// Pontos de interesse do visualizador 3D: [{ key, label, description, position }].
+  hotspots         Json     @default("[]")
+  model3dFileId    String?  @db.Uuid
+  coverFileId      String?  @db.Uuid
+  publicVisible    Boolean  @default(true)
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  make         VehicleMake      @relation(fields: [makeId], references: [id])
+  category     VehicleCategory  @relation(fields: [categoryId], references: [id])
+  versions     VehicleVersion[]
+  units        VehicleUnit[]
+
+  @@unique([organizationId, makeId, name])
+  @@map("vehicle_models")
+}
+
+enum FuelType {
+  FLEX
+  GASOLINE
+  ETHANOL
+  DIESEL
+  ELECTRIC
+  HYBRID
+  CNG
+}
+
+enum Transmission {
+  MANUAL
+  AUTOMATIC
+  CVT
+  AUTOMATED
+}
+
+model VehicleVersion {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid
+  modelId        String        @db.Uuid
+  name           String
+  engine         String?
+  fuel           FuelType?
+  transmission   Transmission?
+  specs          Json          @default("{}")
+  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  model        VehicleModel  @relation(fields: [modelId], references: [id])
+  units        VehicleUnit[]
+
+  @@unique([modelId, name])
+  @@map("vehicle_versions")
+}
+
+enum CommercialStatus {
+  AVAILABLE
+  RESERVED
+  RENTED
+  FOR_SALE
+  SOLD
+}
+
+enum OperationalStatus {
+  RELEASED
+  IN_INSPECTION
+  IN_MAINTENANCE
+  BLOCKED
+  AWAITING_RELEASE
+}
+
+/// Unidade física: a placa. Identidade é o `id`; placa, RENAVAM e chassi
+/// são únicos por empresa mas podem ser corrigidos sem quebrar histórico.
+model VehicleUnit {
+  id                String            @id @default(uuid()) @db.Uuid
+  organizationId    String            @db.Uuid
+  branchId          String            @db.Uuid
+  modelId           String            @db.Uuid
+  versionId         String?           @db.Uuid
+  categoryId        String            @db.Uuid
+  internalCode      String
+  plate             String
+  renavam           String?
+  chassis           String?
+  engineNumber      String?
+  yearManufacture   Int
+  yearModel         Int
+  color             String
+  fuel              FuelType
+  transmission      Transmission
+  doors             Int?
+  tankCapacityLiters Int?
+  odometerKm        Int               @default(0)
+  initialOdometerKm Int?
+  acquiredAt        DateTime?         @db.Date
+  acquisitionValue  Decimal?          @db.Decimal(12, 2)
+  marketValue       Decimal?          @db.Decimal(12, 2)
+  supplierId        String?           @db.Uuid
+  location          String?
+  commercialStatus  CommercialStatus  @default(AVAILABLE)
+  operationalStatus OperationalStatus @default(RELEASED)
+  blockReason       String?
+  licensingDueDate  DateTime?         @db.Date
+  ipvaDueDate       DateTime?         @db.Date
+  insurancePolicyId String?           @db.Uuid
+  publicVisible     Boolean           @default(true)
+  notes             String?
+  soldAt            DateTime?         @db.Timestamptz(3)
+  deletedAt         DateTime?         @db.Timestamptz(3)
+  createdAt         DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime          @updatedAt @db.Timestamptz(3)
+
+  organization    Organization      @relation(fields: [organizationId], references: [id])
+  branch          Branch            @relation(fields: [branchId], references: [id])
+  model           VehicleModel      @relation(fields: [modelId], references: [id])
+  version         VehicleVersion?   @relation(fields: [versionId], references: [id])
+  category        VehicleCategory   @relation(fields: [categoryId], references: [id])
+  supplier        Supplier?         @relation(fields: [supplierId], references: [id])
+  insurancePolicy InsurancePolicy?  @relation(fields: [insurancePolicyId], references: [id])
+
+  statusChanges    VehicleStatusChange[]
+  timeline         VehicleTimelineEvent[]
+  odometerReadings OdometerReading[]
+  allocations      VehicleAllocation[]
+  reservations     Reservation[]
+  contractVehicles ContractVehicle[]
+  workOrders       WorkOrder[]
+  maintenancePlans MaintenancePlan[]
+  tires            Tire[]
+  inspections      Inspection[]
+  infractions      TrafficInfraction[]
+  claims           Claim[]
+  refuels          RefuelRecord[]
+  sales            VehicleSale[]
+  movements        InventoryMovement[]
+  payables         Payable[]
+
+  @@unique([organizationId, plate])
+  @@unique([organizationId, internalCode])
+  @@unique([organizationId, renavam])
+  @@unique([organizationId, chassis])
+  @@index([organizationId, branchId])
+  @@index([organizationId, commercialStatus, operationalStatus])
+  @@map("vehicle_units")
+}
+
+enum StatusField {
+  COMMERCIAL
+  OPERATIONAL
+}
+
+model VehicleStatusChange {
+  id             String      @id @default(uuid()) @db.Uuid
+  organizationId String      @db.Uuid
+  vehicleUnitId  String      @db.Uuid
+  field          StatusField
+  fromStatus     String
+  toStatus       String
+  reason         String?
+  userId         String?     @db.Uuid
+  at             DateTime    @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  vehicle      VehicleUnit  @relation(fields: [vehicleUnitId], references: [id])
+
+  @@index([vehicleUnitId, at])
+  @@map("vehicle_status_changes")
+}
+
+/// Linha do tempo por placa. Só recebe inserções (gatilho bloqueia
+/// UPDATE/DELETE): o histórico do carro sobrevive ao contrato e à venda.
+model VehicleTimelineEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  vehicleUnitId  String   @db.Uuid
+  type           String
+  title          String
+  description    String?
+  refType        String?
+  refId          String?  @db.Uuid
+  data           Json?
+  actorUserId    String?  @db.Uuid
+  actorName      String?
+  at             DateTime @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  vehicle      VehicleUnit  @relation(fields: [vehicleUnitId], references: [id])
+
+  @@index([vehicleUnitId, at])
+  @@map("vehicle_timeline_events")
+}
+
+enum OdometerSource {
+  REGISTRATION
+  INSPECTION
+  CONTRACT
+  REFUEL
+  WORK_ORDER
+  MANUAL
+}
+
+model OdometerReading {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  vehicleUnitId  String         @db.Uuid
+  km             Int
+  source         OdometerSource
+  refId          String?        @db.Uuid
+  userId         String?        @db.Uuid
+  at             DateTime       @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  vehicle      VehicleUnit  @relation(fields: [vehicleUnitId], references: [id])
+
+  @@index([vehicleUnitId, at])
+  @@map("odometer_readings")
+}
+
+enum AllocationKind {
+  RESERVATION
+  CONTRACT
+  MAINTENANCE
+  BLOCK
+  INSPECTION
+}
+
+/// Agenda do veículo: o coração do motor de disponibilidade.
+/// Reserva confirmada, contrato, manutenção e bloqueio viram um bloco
+/// aqui. A restrição de exclusão (migração `availability`) impede que
+/// dois blocos ativos do mesmo carro se sobreponham — inclusive o tempo
+/// de preparo (`blockedUntil`). Duas requisições simultâneas não passam
+/// juntas: a segunda falha no banco.
+model VehicleAllocation {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  vehicleUnitId  String         @db.Uuid
+  kind           AllocationKind
+  startsAt       DateTime       @db.Timestamptz(3)
+  endsAt         DateTime       @db.Timestamptz(3)
+  /// Fim + tempo de preparo. É este o limite usado na exclusão.
+  blockedUntil   DateTime       @db.Timestamptz(3)
+  active         Boolean        @default(true)
+  reservationId  String?        @db.Uuid
+  contractVehicleId String?     @db.Uuid
+  workOrderId    String?        @db.Uuid
+  reason         String?
+  createdById    String?        @db.Uuid
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+  releasedAt     DateTime?      @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  vehicle      VehicleUnit  @relation(fields: [vehicleUnitId], references: [id])
+
+  @@index([vehicleUnitId, startsAt])
+  @@map("vehicle_allocations")
+}
+
+// =========================================================
+//  TARIFAS
+// =========================================================
+
+model RateTable {
+  id                    String   @id @default(uuid()) @db.Uuid
+  organizationId        String   @db.Uuid
+  categoryId            String   @db.Uuid
+  /// Nulo = vale para todas as filiais; preenchido = tarifa específica da filial.
+  branchId              String?  @db.Uuid
+  name                  String
+  dailyRate             Decimal  @db.Decimal(12, 2)
+  weeklyRate            Decimal? @db.Decimal(12, 2)
+  monthlyRate           Decimal? @db.Decimal(12, 2)
+  includedKmPerDay      Int?
+  extraKmRate           Decimal? @db.Decimal(12, 2)
+  additionalDriverDaily Decimal  @default(0) @db.Decimal(12, 2)
+  lateGraceMinutes      Int      @default(60)
+  depositAmount         Decimal  @default(0) @db.Decimal(12, 2)
+  /// Contrato mensal: mensalidade de referência e franquia de km por mês.
+  longTermMonthly       Decimal? @db.Decimal(12, 2)
+  longTermKmPerMonth    Int?
+  publicVisible         Boolean  @default(true)
+  active                Boolean  @default(true)
+  createdAt             DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  category     VehicleCategory @relation(fields: [categoryId], references: [id])
+
+  @@unique([organizationId, categoryId, branchId])
+  @@map("rate_tables")
+}
+
+enum ExtraPricing {
+  PER_DAY
+  FIXED
+}
+
+model ExtraService {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  name           String
+  description    String?
+  pricing        ExtraPricing
+  price          Decimal      @db.Decimal(12, 2)
+  publicVisible  Boolean      @default(true)
+  active         Boolean      @default(true)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, name])
+  @@map("extra_services")
+}
+
+// =========================================================
+//  PESSOAS
+// =========================================================
+
+enum PersonType {
+  PF
+  PJ
+}
+
+enum CustomerStatus {
+  ACTIVE
+  BLOCKED
+  PENDING_REVIEW
+}
+
+model Customer {
+  id                String         @id @default(uuid()) @db.Uuid
+  organizationId    String         @db.Uuid
+  type              PersonType
+  name              String
+  tradeName         String?
+  /// Só dígitos. Único por empresa.
+  document          String
+  birthDate         DateTime?      @db.Date
+  email             String?
+  phone             String?
+  street            String?
+  number            String?
+  complement        String?
+  district          String?
+  city              String?
+  state             String?
+  zip               String?
+  emergencyContact  Json?
+  preferredPayment  String?
+  status            CustomerStatus @default(ACTIVE)
+  blockReason       String?
+  internalNotes     String?
+  createdAt         DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime       @updatedAt @db.Timestamptz(3)
+  deletedAt         DateTime?      @db.Timestamptz(3)
+  anonymizedAt      DateTime?      @db.Timestamptz(3)
+
+  organization    Organization       @relation(fields: [organizationId], references: [id])
+  drivers         Driver[]
+  links           CustomerLink[]
+  reservations    Reservation[]
+  contracts       RentalContract[]
+  receivables     Receivable[]
+  deposits        SecurityDeposit[]
+  infractions     TrafficInfraction[]
+  serviceRequests ServiceRequest[]
+
+  @@unique([organizationId, document])
+  @@map("customers")
+}
+
+/// Motorista/condutor. Pode ser o próprio cliente PF ou alguém indicado
+/// por um cliente PJ. CNH com validade controlada.
+model Driver {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  customerId     String?   @db.Uuid
+  name           String
+  cpf            String
+  birthDate      DateTime? @db.Date
+  email          String?
+  phone          String?
+  cnhNumber      String
+  cnhCategory    String
+  cnhExpiresAt   DateTime  @db.Date
+  cnhFirstIssueAt DateTime? @db.Date
+  active         Boolean   @default(true)
+  notes          String?
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
+  anonymizedAt   DateTime? @db.Timestamptz(3)
+
+  organization    Organization        @relation(fields: [organizationId], references: [id])
+  customer        Customer?           @relation(fields: [customerId], references: [id])
+  contractDrivers ContractDriver[]
+  infractions     TrafficInfraction[]
+  refuels         RefuelRecord[]
+
+  @@unique([organizationId, cpf])
+  @@map("drivers")
+}
+
+/// Acesso de um usuário ao portal do cliente, por cadastro de cliente.
+model CustomerLink {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  userId         String   @db.Uuid
+  customerId     String   @db.Uuid
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+  customer     Customer     @relation(fields: [customerId], references: [id])
+
+  @@unique([userId, customerId])
+  @@map("customer_links")
+}
+
+// =========================================================
+//  RESERVAS E CONTRATOS
+// =========================================================
+
+enum ReservationStatus {
+  REQUESTED
+  CONFIRMED
+  CHECKED_OUT
+  CANCELLED
+  NO_SHOW
+  EXPIRED
+}
+
+enum ReservationSource {
+  INTERNAL
+  PUBLIC_SITE
+  PORTAL
+}
+
+model Reservation {
+  id               String            @id @default(uuid()) @db.Uuid
+  organizationId   String            @db.Uuid
+  branchId         String            @db.Uuid
+  returnBranchId   String?           @db.Uuid
+  code             String
+  customerId       String            @db.Uuid
+  driverId         String?           @db.Uuid
+  categoryId       String            @db.Uuid
+  vehicleUnitId    String?           @db.Uuid
+  startAt          DateTime          @db.Timestamptz(3)
+  endAt            DateTime          @db.Timestamptz(3)
+  status           ReservationStatus @default(REQUESTED)
+  source           ReservationSource @default(INTERNAL)
+  /// Cotação calculada pelo servidor no momento da criação/confirmação.
+  quote            Json
+  total            Decimal           @db.Decimal(12, 2)
+  depositAmount    Decimal           @default(0) @db.Decimal(12, 2)
+  extras           Json              @default("[]")
+  additionalDrivers Int              @default(0)
+  discountPercent  Decimal           @default(0) @db.Decimal(5, 2)
+  notes            String?
+  cancelReason     String?
+  confirmedAt      DateTime?         @db.Timestamptz(3)
+  confirmedById    String?           @db.Uuid
+  cancelledAt      DateTime?         @db.Timestamptz(3)
+  createdById      String?           @db.Uuid
+  createdAt        DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime          @updatedAt @db.Timestamptz(3)
+
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  customer     Customer         @relation(fields: [customerId], references: [id])
+  category     VehicleCategory  @relation(fields: [categoryId], references: [id])
+  vehicle      VehicleUnit?     @relation(fields: [vehicleUnitId], references: [id])
+  contract     RentalContract?
+
+  @@unique([organizationId, code])
+  @@index([organizationId, status, startAt])
+  @@map("reservations")
+}
+
+enum ContractKind {
+  PERIOD
+  LONG_TERM
+}
+
+enum ContractStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  ACTIVE
+  CLOSED
+  TERMINATED
+  CANCELLED
+}
+
+enum SignatureStatus {
+  NOT_REQUIRED
+  PENDING
+  SIGNED_PHYSICAL
+  SIGNED_ELECTRONIC
+}
+
+model RentalContract {
+  id                     String          @id @default(uuid()) @db.Uuid
+  organizationId         String          @db.Uuid
+  branchId               String          @db.Uuid
+  number                 String
+  kind                   ContractKind
+  status                 ContractStatus  @default(DRAFT)
+  customerId             String          @db.Uuid
+  reservationId          String?         @unique @db.Uuid
+  startAt                DateTime        @db.Timestamptz(3)
+  endAt                  DateTime        @db.Timestamptz(3)
+  actualStartAt          DateTime?       @db.Timestamptz(3)
+  actualEndAt            DateTime?       @db.Timestamptz(3)
+  // Por período
+  totalAmount            Decimal?        @db.Decimal(12, 2)
+  quote                  Json?
+  // Longo prazo
+  monthlyAmount          Decimal?        @db.Decimal(12, 2)
+  termMonths             Int?
+  billingDay             Int?
+  adjustmentIndex        String?
+  nextAdjustmentAt       DateTime?       @db.Date
+  // Quilometragem
+  kmAllowance            Int?
+  kmAllowancePeriod      String?
+  extraKmRate            Decimal?        @db.Decimal(12, 2)
+  // Encargos
+  lateFeePercent         Decimal         @default(2) @db.Decimal(5, 2)
+  monthlyInterestPercent Decimal         @default(1) @db.Decimal(5, 2)
+  depositRequired        Decimal         @default(0) @db.Decimal(12, 2)
+  includedServices       String[]        @default([])
+  terms                  String?
+  signatureStatus        SignatureStatus @default(PENDING)
+  signedAt               DateTime?       @db.Timestamptz(3)
+  currentVersion         Int             @default(1)
+  approvedById           String?         @db.Uuid
+  approvedAt             DateTime?       @db.Timestamptz(3)
+  closedById             String?         @db.Uuid
+  closeReason            String?
+  finalSettlement        Json?
+  renewedFromId          String?         @db.Uuid
+  createdById            String?         @db.Uuid
+  createdAt              DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime        @updatedAt @db.Timestamptz(3)
+
+  organization Organization      @relation(fields: [organizationId], references: [id])
+  customer     Customer          @relation(fields: [customerId], references: [id])
+  reservation  Reservation?      @relation(fields: [reservationId], references: [id])
+  versions     ContractVersion[]
+  vehicles     ContractVehicle[]
+  drivers      ContractDriver[]
+  extras       ContractExtra[]
+  receivables  Receivable[]
+  deposit      SecurityDeposit?
+  inspections  Inspection[]
+  infractions  TrafficInfraction[]
+  claims       Claim[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@map("rental_contracts")
+}
+
+/// Cada alteração relevante do contrato gera uma versão com o retrato
+/// completo. A versão é imutável; o contrato aponta para a corrente.
+model ContractVersion {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  contractId     String   @db.Uuid
+  version        Int
+  reason         String
+  snapshot       Json
+  createdById    String?  @db.Uuid
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  contract     RentalContract @relation(fields: [contractId], references: [id])
+
+  @@unique([contractId, version])
+  @@map("contract_versions")
+}
+
+/// Intervalo em que cada carro esteve vinculado ao contrato. A troca de
+/// veículo fecha um intervalo e abre outro — nada é sobrescrito.
+model ContractVehicle {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  contractId     String    @db.Uuid
+  vehicleUnitId  String    @db.Uuid
+  startAt        DateTime  @db.Timestamptz(3)
+  endAt          DateTime? @db.Timestamptz(3)
+  startKm        Int?
+  endKm          Int?
+  reason         String?
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  contract     RentalContract @relation(fields: [contractId], references: [id])
+  vehicle      VehicleUnit    @relation(fields: [vehicleUnitId], references: [id])
+
+  @@index([contractId])
+  @@index([vehicleUnitId])
+  @@map("contract_vehicles")
+}
+
+/// Vínculo do motorista com o contrato. Trocar o motorista encerra este
+/// registro (endAt) e cria outro — o histórico de quem dirigia quando é
+/// o que resolve a indicação de condutor de uma multa.
+model ContractDriver {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  contractId     String    @db.Uuid
+  driverId       String    @db.Uuid
+  primary        Boolean   @default(true)
+  startAt        DateTime  @db.Timestamptz(3)
+  endAt          DateTime? @db.Timestamptz(3)
+  reason         String?
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  contract     RentalContract @relation(fields: [contractId], references: [id])
+  driver       Driver         @relation(fields: [driverId], references: [id])
+
+  @@index([contractId])
+  @@index([driverId])
+  @@map("contract_drivers")
+}
+
+model ContractExtra {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  contractId     String       @db.Uuid
+  name           String
+  pricing        ExtraPricing
+  price          Decimal      @db.Decimal(12, 2)
+  quantity       Int          @default(1)
+
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  contract     RentalContract @relation(fields: [contractId], references: [id])
+
+  @@map("contract_extras")
+}
+
+// =========================================================
+//  FINANCEIRO
+// =========================================================
+
+model CostCenter {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  code           String
+  name           String
+  active         Boolean  @default(true)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  receivables  Receivable[]
+  payables     Payable[]
+
+  @@unique([organizationId, code])
+  @@map("cost_centers")
+}
+
+enum ReceivableKind {
+  RENTAL
+  MONTHLY
+  EXTRA
+  DAMAGE
+  INFRACTION_REIMBURSEMENT
+  FEE
+  VEHICLE_SALE
+  OTHER
+}
+
+enum TitleStatus {
+  OPEN
+  PARTIAL
+  PAID
+  CANCELLED
+}
+
+model Receivable {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  branchId       String         @db.Uuid
+  customerId     String?        @db.Uuid
+  contractId     String?        @db.Uuid
+  vehicleUnitId  String?        @db.Uuid
+  kind           ReceivableKind
+  description    String
+  amount         Decimal        @db.Decimal(12, 2)
+  paidAmount     Decimal        @default(0) @db.Decimal(12, 2)
+  dueDate        DateTime       @db.Date
+  competence     String?
+  installment    Int?
+  status         TitleStatus    @default(OPEN)
+  costCenterId   String?        @db.Uuid
+  cancelReason   String?
+  createdById    String?        @db.Uuid
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @db.Timestamptz(3)
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  customer     Customer?       @relation(fields: [customerId], references: [id])
+  contract     RentalContract? @relation(fields: [contractId], references: [id])
+  costCenter   CostCenter?     @relation(fields: [costCenterId], references: [id])
+  payments     Payment[]
+
+  /// Uma mensalidade por competência por contrato — gerar de novo não duplica.
+  @@unique([contractId, kind, competence])
+  @@index([organizationId, status, dueDate])
+  @@map("receivables")
+}
+
+enum PayableKind {
+  MAINTENANCE
+  PARTS
+  INSURANCE
+  TAX
+  FINE
+  FUEL
+  PURCHASE
+  SALE_PREPARATION
+  DOCUMENTATION
+  VEHICLE_ACQUISITION
+  OTHER
+}
+
+enum ApprovalStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+model Payable {
+  id              String         @id @default(uuid()) @db.Uuid
+  organizationId  String         @db.Uuid
+  branchId        String         @db.Uuid
+  supplierId      String?        @db.Uuid
+  kind            PayableKind
+  description     String
+  amount          Decimal        @db.Decimal(12, 2)
+  paidAmount      Decimal        @default(0) @db.Decimal(12, 2)
+  dueDate         DateTime       @db.Date
+  status          TitleStatus    @default(OPEN)
+  approval        ApprovalStatus @default(PENDING_APPROVAL)
+  approvedById    String?        @db.Uuid
+  approvedAt      DateTime?      @db.Timestamptz(3)
+  vehicleUnitId   String?        @db.Uuid
+  workOrderId     String?        @db.Uuid
+  purchaseOrderId String?        @db.Uuid
+  infractionId    String?        @db.Uuid
+  claimId         String?        @db.Uuid
+  saleId          String?        @db.Uuid
+  costCenterId    String?        @db.Uuid
+  documentNumber  String?
+  cancelReason    String?
+  createdById     String?        @db.Uuid
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime       @updatedAt @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  supplier     Supplier?    @relation(fields: [supplierId], references: [id])
+  vehicle      VehicleUnit? @relation(fields: [vehicleUnitId], references: [id])
+  costCenter   CostCenter?  @relation(fields: [costCenterId], references: [id])
+  payments     Payment[]
+
+  @@index([organizationId, status, dueDate])
+  @@index([vehicleUnitId])
+  @@map("payables")
+}
+
+enum PaymentMethod {
+  PIX
+  BOLETO
+  CARD
+  CASH
+  TRANSFER
+  DEPOSIT_OFFSET
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+  REFUNDED
+  REVERSED
+}
+
+enum PaymentDirection {
+  IN
+  OUT
+}
+
+/// Movimento financeiro efetivo. Pagamento só conta como recebido quando
+/// `CONFIRMED` — por baixa de quem tem `finance.settle` ou por webhook
+/// assinado do provedor. Retorno do navegador nunca confirma nada.
+model Payment {
+  id              String           @id @default(uuid()) @db.Uuid
+  organizationId  String           @db.Uuid
+  direction       PaymentDirection
+  receivableId    String?          @db.Uuid
+  payableId       String?          @db.Uuid
+  method          PaymentMethod
+  amount          Decimal          @db.Decimal(12, 2)
+  paidAt          DateTime         @db.Timestamptz(3)
+  status          PaymentStatus    @default(CONFIRMED)
+  provider        String?
+  providerEventId String?
+  providerChargeId String?
+  idempotencyKey  String
+  bankReference   String?
+  reconciled      Boolean          @default(false)
+  reconciledAt    DateTime?        @db.Timestamptz(3)
+  reconciledById  String?          @db.Uuid
+  notes           String?
+  registeredById  String?          @db.Uuid
+  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  receivable   Receivable?  @relation(fields: [receivableId], references: [id])
+  payable      Payable?     @relation(fields: [payableId], references: [id])
+
+  /// A mesma requisição repetida (falha de rede, clique duplo) não baixa duas vezes.
+  @@unique([organizationId, idempotencyKey])
+  /// O mesmo evento do provedor não registra duas cobranças.
+  @@unique([provider, providerEventId])
+  @@index([organizationId, paidAt])
+  @@map("payments")
+}
+
+enum DepositStatus {
+  PENDING
+  HELD
+  PARTIALLY_USED
+  REFUND_PENDING
+  REFUNDED
+  CLOSED
+}
+
+/// Caução: obrigação a devolver, separada da receita de locação.
+model SecurityDeposit {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid
+  contractId     String        @unique @db.Uuid
+  customerId     String        @db.Uuid
+  expectedAmount Decimal       @db.Decimal(12, 2)
+  status         DepositStatus @default(PENDING)
+  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime      @updatedAt @db.Timestamptz(3)
+
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  contract     RentalContract @relation(fields: [contractId], references: [id])
+  customer     Customer       @relation(fields: [customerId], references: [id])
+  entries      DepositEntry[]
+
+  @@map("security_deposits")
+}
+
+enum DepositEntryType {
+  RECEIPT
+  DEDUCTION
+  REFUND
+  ADJUSTMENT
+}
+
+model DepositEntry {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  depositId      String           @db.Uuid
+  type           DepositEntryType
+  amount         Decimal          @db.Decimal(12, 2)
+  method         PaymentMethod?
+  at             DateTime         @default(now()) @db.Timestamptz(3)
+  reason         String?
+  status         ApprovalStatus   @default(APPROVED)
+  approvedById   String?          @db.Uuid
+  approvedAt     DateTime?        @db.Timestamptz(3)
+  /// Desconto aplicado contra um título (avaria, multa...).
+  receivableId   String?          @db.Uuid
+  idempotencyKey String
+  createdById    String?          @db.Uuid
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  deposit      SecurityDeposit @relation(fields: [depositId], references: [id])
+
+  @@unique([organizationId, idempotencyKey])
+  @@map("deposit_entries")
+}
+
+// =========================================================
+//  FORNECEDORES E ESTOQUE
+// =========================================================
+
+model Supplier {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String
+  document       String?
+  kinds          String[] @default([])
+  email          String?
+  phone          String?
+  contactName    String?
+  city           String?
+  state          String?
+  notes          String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  organization   Organization       @relation(fields: [organizationId], references: [id])
+  vehicles       VehicleUnit[]
+  payables       Payable[]
+  products       InventoryProduct[]
+  purchaseOrders PurchaseOrder[]
+  workOrders     WorkOrder[]
+  policies       InsurancePolicy[]
+
+  @@unique([organizationId, document])
+  @@map("suppliers")
+}
+
+model InventoryCategory {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  name           String
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  products     InventoryProduct[]
+
+  @@unique([organizationId, name])
+  @@map("inventory_categories")
+}
+
+model InventoryProduct {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  sku            String
+  barcode        String?
+  description    String
+  categoryId     String   @db.Uuid
+  brand          String?
+  manufacturer   String?
+  unit           String   @default("UN")
+  reference      String?
+  supplierId     String?  @db.Uuid
+  lastCost       Decimal  @default(0) @db.Decimal(12, 2)
+  /// Custo médio ponderado, com 4 casas para não acumular erro de arredondamento.
+  averageCost    Decimal  @default(0) @db.Decimal(14, 4)
+  referencePrice Decimal? @db.Decimal(12, 2)
+  minStock       Decimal  @default(0) @db.Decimal(12, 3)
+  maxStock       Decimal? @db.Decimal(12, 3)
+  trackLot       Boolean  @default(false)
+  trackExpiry    Boolean  @default(false)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  category     InventoryCategory   @relation(fields: [categoryId], references: [id])
+  supplier     Supplier?           @relation(fields: [supplierId], references: [id])
+  balances     StockBalance[]
+  movements    InventoryMovement[]
+
+  @@unique([organizationId, sku])
+  @@unique([organizationId, barcode])
+  @@map("inventory_products")
+}
+
+model InventoryLocation {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  branchId       String  @db.Uuid
+  name           String
+  active         Boolean @default(true)
+
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  branch       Branch         @relation(fields: [branchId], references: [id])
+  balances     StockBalance[]
+
+  @@unique([organizationId, branchId, name])
+  @@map("inventory_locations")
+}
+
+/// Saldo por produto e local. CHECK no banco impede saldo negativo; a
+/// baixa é um UPDATE condicional na mesma transação da movimentação.
+model StockBalance {
+  organizationId String   @db.Uuid
+  productId      String   @db.Uuid
+  locationId     String   @db.Uuid
+  quantity       Decimal  @default(0) @db.Decimal(12, 3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization      @relation(fields: [organizationId], references: [id])
+  product      InventoryProduct  @relation(fields: [productId], references: [id])
+  location     InventoryLocation @relation(fields: [locationId], references: [id])
+
+  @@id([productId, locationId])
+  @@map("stock_balances")
+}
+
+enum MovementType {
+  PURCHASE_IN
+  MANUAL_IN
+  RETURN_IN
+  TRANSFER_IN
+  MAINTENANCE_OUT
+  VEHICLE_OUT
+  DRIVER_OUT
+  TRANSFER_OUT
+  LOSS
+  ADJUSTMENT
+}
+
+/// Movimentação de estoque. Imutável (gatilho): erro se corrige com
+/// uma movimentação de estorno, nunca editando a original.
+model InventoryMovement {
+  id              String       @id @default(uuid()) @db.Uuid
+  organizationId  String       @db.Uuid
+  productId       String       @db.Uuid
+  locationId      String       @db.Uuid
+  type            MovementType
+  /// Com sinal: positivo entra, negativo sai.
+  quantity        Decimal      @db.Decimal(12, 3)
+  unitCost        Decimal      @db.Decimal(14, 4)
+  totalCost       Decimal      @db.Decimal(12, 2)
+  balanceAfter    Decimal      @db.Decimal(12, 3)
+  counterpartLocationId String? @db.Uuid
+  transferGroupId String?      @db.Uuid
+  vehicleUnitId   String?      @db.Uuid
+  driverId        String?      @db.Uuid
+  workOrderId     String?      @db.Uuid
+  purchaseOrderId String?      @db.Uuid
+  reversalOfId    String?      @db.Uuid
+  lot             String?
+  expiresAt       DateTime?    @db.Date
+  reason          String?
+  idempotencyKey  String
+  userId          String?      @db.Uuid
+  at              DateTime     @default(now()) @db.Timestamptz(3)
+
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  product      InventoryProduct @relation(fields: [productId], references: [id])
+  vehicle      VehicleUnit?     @relation(fields: [vehicleUnitId], references: [id])
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, productId, at])
+  @@index([vehicleUnitId])
+  @@index([workOrderId])
+  @@map("inventory_movements")
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @db.Uuid
+  branchId       String              @db.Uuid
+  number         String
+  supplierId     String              @db.Uuid
+  status         PurchaseOrderStatus @default(DRAFT)
+  total          Decimal             @default(0) @db.Decimal(12, 2)
+  expectedAt     DateTime?           @db.Date
+  notes          String?
+  approvedById   String?             @db.Uuid
+  approvedAt     DateTime?           @db.Timestamptz(3)
+  createdById    String?             @db.Uuid
+  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime            @updatedAt @db.Timestamptz(3)
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  supplier     Supplier            @relation(fields: [supplierId], references: [id])
+  items        PurchaseOrderItem[]
+
+  @@unique([organizationId, number])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id              String  @id @default(uuid()) @db.Uuid
+  organizationId  String  @db.Uuid
+  purchaseOrderId String  @db.Uuid
+  productId       String  @db.Uuid
+  quantity        Decimal @db.Decimal(12, 3)
+  unitCost        Decimal @db.Decimal(12, 2)
+  receivedQty     Decimal @default(0) @db.Decimal(12, 3)
+
+  organization  Organization  @relation(fields: [organizationId], references: [id])
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+
+  @@map("purchase_order_items")
+}
+
+enum InventoryCountStatus {
+  OPEN
+  APPLIED
+  CANCELLED
+}
+
+model InventoryCount {
+  id             String               @id @default(uuid()) @db.Uuid
+  organizationId String               @db.Uuid
+  locationId     String               @db.Uuid
+  status         InventoryCountStatus @default(OPEN)
+  notes          String?
+  createdById    String?              @db.Uuid
+  appliedById    String?              @db.Uuid
+  appliedAt      DateTime?            @db.Timestamptz(3)
+  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
+
+  organization Organization         @relation(fields: [organizationId], references: [id])
+  items        InventoryCountItem[]
+
+  @@map("inventory_counts")
+}
+
+model InventoryCountItem {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  countId        String   @db.Uuid
+  productId      String   @db.Uuid
+  systemQty      Decimal  @db.Decimal(12, 3)
+  countedQty     Decimal? @db.Decimal(12, 3)
+
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  count        InventoryCount @relation(fields: [countId], references: [id])
+
+  @@unique([countId, productId])
+  @@map("inventory_count_items")
+}
+
+// =========================================================
+//  MANUTENÇÃO
+// =========================================================
+
+model MaintenanceServiceType {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  name           String
+  active         Boolean @default(true)
+
+  organization Organization      @relation(fields: [organizationId], references: [id])
+  workOrders   WorkOrder[]
+  plans        MaintenancePlan[]
+
+  @@unique([organizationId, name])
+  @@map("maintenance_service_types")
+}
+
+enum MaintenanceKind {
+  PREVENTIVE
+  CORRECTIVE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum WorkOrderStatus {
+  OPEN
+  AWAITING_ESTIMATE
+  AWAITING_APPROVAL
+  AWAITING_PARTS
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model WorkOrder {
+  id                String          @id @default(uuid()) @db.Uuid
+  organizationId    String          @db.Uuid
+  branchId          String          @db.Uuid
+  number            String
+  vehicleUnitId     String          @db.Uuid
+  odometerKm        Int?
+  serviceTypeId     String          @db.Uuid
+  kind              MaintenanceKind
+  description       String
+  priority          Priority        @default(MEDIUM)
+  status            WorkOrderStatus @default(OPEN)
+  openedAt          DateTime        @default(now()) @db.Timestamptz(3)
+  dueAt             DateTime?       @db.Timestamptz(3)
+  supplierId        String?         @db.Uuid
+  responsibleId     String?         @db.Uuid
+  estimateAmount    Decimal?        @db.Decimal(12, 2)
+  approvedAmount    Decimal?        @db.Decimal(12, 2)
+  approvedById      String?         @db.Uuid
+  approvedAt        DateTime?       @db.Timestamptz(3)
+  laborCost         Decimal         @default(0) @db.Decimal(12, 2)
+  partsCost         Decimal         @default(0) @db.Decimal(12, 2)
+  otherCost         Decimal         @default(0) @db.Decimal(12, 2)
+  invoiceNumber     String?
+  completedAt       DateTime?       @db.Timestamptz(3)
+  releasedById      String?         @db.Uuid
+  releasedAt        DateTime?       @db.Timestamptz(3)
+  /// Se verdadeiro, a OS ocupa a agenda do carro enquanto estiver aberta.
+  blocksVehicle     Boolean         @default(true)
+  claimId           String?         @db.Uuid
+  maintenancePlanId String?         @db.Uuid
+  cancelReason      String?
+  createdById       String?         @db.Uuid
+  createdAt         DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime        @updatedAt @db.Timestamptz(3)
+
+  organization Organization           @relation(fields: [organizationId], references: [id])
+  vehicle      VehicleUnit            @relation(fields: [vehicleUnitId], references: [id])
+  serviceType  MaintenanceServiceType @relation(fields: [serviceTypeId], references: [id])
+  supplier     Supplier?              @relation(fields: [supplierId], references: [id])
+  items        WorkOrderItem[]
+  events       WorkOrderEvent[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@map("work_orders")
+}
+
+enum WorkOrderItemType {
+  PART
+  LABOR
+  SERVICE
+  EXPENSE
+}
+
+model WorkOrderItem {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @db.Uuid
+  workOrderId    String            @db.Uuid
+  type           WorkOrderItemType
+  description    String
+  productId      String?           @db.Uuid
+  quantity       Decimal           @db.Decimal(12, 3)
+  unitCost       Decimal           @db.Decimal(14, 4)
+  total          Decimal           @db.Decimal(12, 2)
+  movementId     String?           @unique @db.Uuid
+  createdById    String?           @db.Uuid
+  createdAt      DateTime          @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  workOrder    WorkOrder    @relation(fields: [workOrderId], references: [id])
+
+  @@map("work_order_items")
+}
+
+model WorkOrderEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  workOrderId    String   @db.Uuid
+  fromStatus     String?
+  toStatus       String
+  note           String?
+  userId         String?  @db.Uuid
+  at             DateTime @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  workOrder    WorkOrder    @relation(fields: [workOrderId], references: [id])
+
+  @@map("work_order_events")
+}
+
+model MaintenancePlan {
+  id               String    @id @default(uuid()) @db.Uuid
+  organizationId   String    @db.Uuid
+  vehicleUnitId    String    @db.Uuid
+  serviceTypeId    String    @db.Uuid
+  name             String
+  intervalKm       Int?
+  intervalDays     Int?
+  lastDoneAt       DateTime? @db.Timestamptz(3)
+  lastDoneKm       Int?
+  alertKmBefore    Int       @default(1000)
+  alertDaysBefore  Int       @default(15)
+  blockWhenOverdue Boolean   @default(false)
+  active           Boolean   @default(true)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @db.Timestamptz(3)
+
+  organization Organization           @relation(fields: [organizationId], references: [id])
+  vehicle      VehicleUnit            @relation(fields: [vehicleUnitId], references: [id])
+  serviceType  MaintenanceServiceType @relation(fields: [serviceTypeId], references: [id])
+
+  @@map("maintenance_plans")
+}
+
+enum TireStatus {
+  STOCK
+  INSTALLED
+  REMOVED
+  DISCARDED
+}
+
+model Tire {
+  id               String     @id @default(uuid()) @db.Uuid
+  organizationId   String     @db.Uuid
+  code             String
+  brand            String
+  model            String?
+  size             String
+  dot              String?
+  cost             Decimal    @default(0) @db.Decimal(12, 2)
+  status           TireStatus @default(STOCK)
+  vehicleUnitId    String?    @db.Uuid
+  position         String?
+  installedKm      Int?
+  accumulatedKm    Int        @default(0)
+  createdAt        DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime   @updatedAt @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  vehicle      VehicleUnit? @relation(fields: [vehicleUnitId], references: [id])
+  events       TireEvent[]
+
+  @@unique([organizationId, code])
+  @@map("tires")
+}
+
+enum TireEventType {
+  INSTALL
+  ROTATE
+  REPAIR
+  REMOVE
+  DISCARD
+}
+
+model TireEvent {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid
+  tireId         String        @db.Uuid
+  type           TireEventType
+  vehicleUnitId  String?       @db.Uuid
+  position       String?
+  odometerKm     Int?
+  cost           Decimal?      @db.Decimal(12, 2)
+  notes          String?
+  userId         String?       @db.Uuid
+  at             DateTime      @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  tire         Tire         @relation(fields: [tireId], references: [id])
+
+  @@map("tire_events")
+}
+
+// =========================================================
+//  VISTORIAS
+// =========================================================
+
+model InspectionTemplate {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String
+  /// [{ key, label, area }]
+  items          Json
+  isDefault      Boolean  @default(false)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@map("inspection_templates")
+}
+
+enum InspectionType {
+  DELIVERY
+  PERIODIC
+  DRIVER_CHANGE
+  RETURN
+}
+
+enum InspectionStatus {
+  DRAFT
+  COMPLETED
+  APPROVED
+}
+
+enum ConfirmationType {
+  SIGNATURE_DRAWN
+  ACKNOWLEDGED_IN_PERSON
+}
+
+/// Vistoria. Ao concluir, itens, avarias e fotos ficam imutáveis
+/// (gatilho): a evidência não pode ser trocada depois.
+model Inspection {
+  id               String            @id @default(uuid()) @db.Uuid
+  organizationId   String            @db.Uuid
+  branchId         String            @db.Uuid
+  number           String
+  type             InspectionType
+  status           InspectionStatus  @default(DRAFT)
+  vehicleUnitId    String            @db.Uuid
+  contractId       String?           @db.Uuid
+  driverId         String?           @db.Uuid
+  inspectorId      String            @db.Uuid
+  odometerKm       Int?
+  /// Nível de combustível em oitavos (0 a 8).
+  fuelEighths      Int?
+  notes            String?
+  pendencies       String?
+  confirmationType ConfirmationType?
+  signerName       String?
+  signatureFileId  String?           @db.Uuid
+  visibleToCustomer Boolean          @default(false)
+  startedAt        DateTime          @default(now()) @db.Timestamptz(3)
+  completedAt      DateTime?         @db.Timestamptz(3)
+  approvedById     String?           @db.Uuid
+  approvedAt       DateTime?         @db.Timestamptz(3)
+  createdAt        DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime          @updatedAt @db.Timestamptz(3)
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  vehicle      VehicleUnit        @relation(fields: [vehicleUnitId], references: [id])
+  contract     RentalContract?    @relation(fields: [contractId], references: [id])
+  items        InspectionItem[]
+  damages      InspectionDamage[]
+  photos       InspectionPhoto[]
+
+  @@unique([organizationId, number])
+  @@index([vehicleUnitId, startedAt])
+  @@map("inspections")
+}
+
+enum InspectionItemStatus {
+  OK
+  DAMAGED
+  MISSING
+  NA
+}
+
+model InspectionItem {
+  id             String               @id @default(uuid()) @db.Uuid
+  organizationId String               @db.Uuid
+  inspectionId   String               @db.Uuid
+  key            String
+  label          String
+  area           String
+  status         InspectionItemStatus @default(OK)
+  notes          String?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  inspection   Inspection   @relation(fields: [inspectionId], references: [id])
+
+  @@unique([inspectionId, key])
+  @@map("inspection_items")
+}
+
+model InspectionDamage {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  inspectionId   String   @db.Uuid
+  region         String
+  severity       String   @default("LIGHT")
+  description    String
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  inspection   Inspection   @relation(fields: [inspectionId], references: [id])
+
+  @@map("inspection_damages")
+}
+
+model InspectionPhoto {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  inspectionId   String   @db.Uuid
+  fileId         String   @db.Uuid
+  itemKey        String?
+  region         String?
+  caption        String?
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  inspection   Inspection   @relation(fields: [inspectionId], references: [id])
+
+  @@map("inspection_photos")
+}
+
+// =========================================================
+//  REGULARIZAÇÃO
+// =========================================================
+
+enum InfractionAdminStatus {
+  RECEIVED
+  UNDER_REVIEW
+  AWAITING_DRIVER_ID
+  DRIVER_INDICATED
+  APPEALING
+  GRANTED
+  DENIED
+  CANCELLED
+  FINISHED
+}
+
+enum InfractionFinancialStatus {
+  PENDING
+  BILLING
+  PAID_BY_COMPANY
+  AWAITING_REIMBURSEMENT
+  REIMBURSED
+  CANCELLED
+}
+
+model TrafficInfraction {
+  id                      String                    @id @default(uuid()) @db.Uuid
+  organizationId          String                    @db.Uuid
+  branchId                String?                   @db.Uuid
+  autoNumber              String
+  authority               String
+  infractionCode          String?
+  description             String
+  occurredAt              DateTime                  @db.Timestamptz(3)
+  location                String?
+  vehicleUnitId           String                    @db.Uuid
+  driverId                String?                   @db.Uuid
+  contractId              String?                   @db.Uuid
+  customerId              String?                   @db.Uuid
+  notifiedAt              DateTime?                 @db.Date
+  driverIndicationDeadline DateTime?                @db.Date
+  defenseDeadline         DateTime?                 @db.Date
+  originalAmount          Decimal                   @db.Decimal(12, 2)
+  discountAmount          Decimal                   @default(0) @db.Decimal(12, 2)
+  interestAmount          Decimal                   @default(0) @db.Decimal(12, 2)
+  finalAmount             Decimal                   @db.Decimal(12, 2)
+  dueDate                 DateTime?                 @db.Date
+  adminStatus             InfractionAdminStatus     @default(RECEIVED)
+  financialStatus         InfractionFinancialStatus @default(PENDING)
+  appealProtocol          String?
+  result                  String?
+  notes                   String?
+  points                  Int?
+  payableId               String?                   @db.Uuid
+  receivableId            String?                   @db.Uuid
+  driverIndicatedAt       DateTime?                 @db.Timestamptz(3)
+  driverIndicatedById     String?                   @db.Uuid
+  createdById             String?                   @db.Uuid
+  createdAt               DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime                  @updatedAt @db.Timestamptz(3)
+
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  vehicle      VehicleUnit      @relation(fields: [vehicleUnitId], references: [id])
+  driver       Driver?          @relation(fields: [driverId], references: [id])
+  contract     RentalContract?  @relation(fields: [contractId], references: [id])
+  customer     Customer?        @relation(fields: [customerId], references: [id])
+  events       InfractionEvent[]
+
+  @@unique([organizationId, authority, autoNumber])
+  @@index([organizationId, adminStatus])
+  @@map("traffic_infractions")
+}
+
+model InfractionEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  infractionId   String   @db.Uuid
+  field          String
+  fromValue      String?
+  toValue        String?
+  note           String?
+  userId         String?  @db.Uuid
+  at             DateTime @default(now()) @db.Timestamptz(3)
+
+  organization Organization      @relation(fields: [organizationId], references: [id])
+  infraction   TrafficInfraction @relation(fields: [infractionId], references: [id])
+
+  @@map("infraction_events")
+}
+
+model InsurancePolicy {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  insurerId      String   @db.Uuid
+  policyNumber   String
+  startsAt       DateTime @db.Date
+  endsAt         DateTime @db.Date
+  coverage       String?
+  deductible     Decimal? @db.Decimal(12, 2)
+  premium        Decimal? @db.Decimal(12, 2)
+  notes          String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  insurer      Supplier      @relation(fields: [insurerId], references: [id])
+  vehicles     VehicleUnit[]
+  claims       Claim[]
+
+  @@unique([organizationId, insurerId, policyNumber])
+  @@map("insurance_policies")
+}
+
+enum ClaimType {
+  ACCIDENT
+  COLLISION
+  DAMAGE
+  THEFT
+  ROBBERY
+  GLASS
+  NATURAL_EVENT
+  OTHER
+}
+
+enum ClaimStatus {
+  OPEN
+  INSURER_NOTIFIED
+  UNDER_REVIEW
+  REPAIRING
+  INDEMNIFIED
+  DENIED
+  CLOSED
+}
+
+model Claim {
+  id                 String      @id @default(uuid()) @db.Uuid
+  organizationId     String      @db.Uuid
+  branchId           String      @db.Uuid
+  number             String
+  vehicleUnitId      String      @db.Uuid
+  contractId         String?     @db.Uuid
+  driverId           String?     @db.Uuid
+  type               ClaimType
+  status             ClaimStatus @default(OPEN)
+  occurredAt         DateTime    @db.Timestamptz(3)
+  location           String?
+  description        String
+  policyId           String?     @db.Uuid
+  insurerClaimNumber String?
+  policeReportNumber String?
+  deductibleAmount   Decimal?    @db.Decimal(12, 2)
+  estimatedCost      Decimal?    @db.Decimal(12, 2)
+  indemnityAmount    Decimal?    @db.Decimal(12, 2)
+  responsibleId      String?     @db.Uuid
+  workOrderId        String?     @db.Uuid
+  blocksVehicle      Boolean     @default(true)
+  closedAt           DateTime?   @db.Timestamptz(3)
+  createdById        String?     @db.Uuid
+  createdAt          DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime    @updatedAt @db.Timestamptz(3)
+
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  vehicle      VehicleUnit      @relation(fields: [vehicleUnitId], references: [id])
+  contract     RentalContract?  @relation(fields: [contractId], references: [id])
+  policy       InsurancePolicy? @relation(fields: [policyId], references: [id])
+  events       ClaimEvent[]
+
+  @@unique([organizationId, number])
+  @@map("claims")
+}
+
+model ClaimEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  claimId        String   @db.Uuid
+  fromStatus     String?
+  toStatus       String?
+  note           String
+  userId         String?  @db.Uuid
+  at             DateTime @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  claim        Claim        @relation(fields: [claimId], references: [id])
+
+  @@map("claim_events")
+}
+
+// =========================================================
+//  ABASTECIMENTO E VENDA DE FROTA
+// =========================================================
+
+model RefuelRecord {
+  id               String         @id @default(uuid()) @db.Uuid
+  organizationId   String         @db.Uuid
+  vehicleUnitId    String         @db.Uuid
+  driverId         String?        @db.Uuid
+  contractId       String?        @db.Uuid
+  at               DateTime       @db.Timestamptz(3)
+  station          String?
+  fuel             FuelType
+  liters           Decimal        @db.Decimal(10, 3)
+  pricePerLiter    Decimal        @db.Decimal(10, 3)
+  total            Decimal        @db.Decimal(12, 2)
+  odometerKm       Int
+  paymentMethod    PaymentMethod?
+  paidByCompany    Boolean        @default(true)
+  receiptFileId    String?        @db.Uuid
+  notes            String?
+  flags            String[]       @default([])
+  consumptionKmL   Decimal?       @db.Decimal(8, 2)
+  createdById      String?        @db.Uuid
+  createdAt        DateTime       @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  vehicle      VehicleUnit  @relation(fields: [vehicleUnitId], references: [id])
+  driver       Driver?      @relation(fields: [driverId], references: [id])
+
+  @@index([vehicleUnitId, at])
+  @@map("refuel_records")
+}
+
+enum SaleStatus {
+  LISTED
+  NEGOTIATING
+  SOLD
+  WITHDRAWN
+}
+
+model VehicleSale {
+  id               String     @id @default(uuid()) @db.Uuid
+  organizationId   String     @db.Uuid
+  vehicleUnitId    String     @db.Uuid
+  status           SaleStatus @default(LISTED)
+  appraisalValue   Decimal?   @db.Decimal(12, 2)
+  askingPrice      Decimal    @db.Decimal(12, 2)
+  minimumPrice     Decimal?   @db.Decimal(12, 2)
+  listedAt         DateTime   @default(now()) @db.Timestamptz(3)
+  adChannels       String[]   @default([])
+  soldAt           DateTime?  @db.Timestamptz(3)
+  salePrice        Decimal?   @db.Decimal(12, 2)
+  buyerName        String?
+  buyerDocument    String?
+  receivableId     String?    @db.Uuid
+  bookValueAtSale  Decimal?   @db.Decimal(12, 2)
+  notes            String?
+  createdById      String?    @db.Uuid
+  createdAt        DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime   @updatedAt @db.Timestamptz(3)
+
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  vehicle      VehicleUnit    @relation(fields: [vehicleUnitId], references: [id])
+  proposals    SaleProposal[]
+
+  @@index([organizationId, status])
+  @@map("vehicle_sales")
+}
+
+enum ProposalStatus {
+  OPEN
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+model SaleProposal {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  saleId         String         @db.Uuid
+  name           String
+  contact        String?
+  amount         Decimal        @db.Decimal(12, 2)
+  status         ProposalStatus @default(OPEN)
+  notes          String?
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  sale         VehicleSale  @relation(fields: [saleId], references: [id])
+
+  @@map("sale_proposals")
+}
+
+// =========================================================
+//  SITE PÚBLICO E PORTAL DO CLIENTE
+// =========================================================
+
+model SiteConfig {
+  organizationId   String   @id @db.Uuid
+  published        Boolean  @default(false)
+  brandName        String
+  logoFileId       String?  @db.Uuid
+  bannerFileId     String?  @db.Uuid
+  primaryColor     String   @default("#1677FF")
+  accentColor      String   @default("#20C5A0")
+  heroTitle        String?
+  heroSubtitle     String?
+  about            String?
+  faq              Json     @default("[]")
+  terms            String?
+  privacy          String?
+  whatsapp         String?
+  phone            String?
+  email            String?
+  citiesServed     String[] @default([])
+  featuredModelIds String[] @default([])
+  seoTitle         String?
+  seoDescription   String?
+  updatedAt        DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@map("site_configs")
+}
+
+enum LeadKind {
+  QUOTE
+  CONTACT
+  MONTHLY
+  RESERVATION_REQUEST
+}
+
+enum LeadStatus {
+  NEW
+  IN_PROGRESS
+  CONVERTED
+  DISCARDED
+}
+
+/// Pedido vindo do site. Nunca é uma reserva confirmada: alguém da
+/// locadora analisa, confere disponibilidade e confirma.
+model Lead {
+  id             String     @id @default(uuid()) @db.Uuid
+  organizationId String     @db.Uuid
+  branchId       String?    @db.Uuid
+  kind           LeadKind
+  status         LeadStatus @default(NEW)
+  name           String
+  email          String?
+  phone          String?
+  message        String?
+  categoryId     String?    @db.Uuid
+  modelId        String?    @db.Uuid
+  startAt        DateTime?  @db.Timestamptz(3)
+  endAt          DateTime?  @db.Timestamptz(3)
+  quote          Json?
+  consent        Boolean    @default(false)
+  reservationId  String?    @db.Uuid
+  handledById    String?    @db.Uuid
+  createdAt      DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime   @updatedAt @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, status])
+  @@map("leads")
+}
+
+enum ServiceRequestType {
+  MAINTENANCE
+  ASSISTANCE
+  VEHICLE_SWAP
+  RENEWAL
+  TERMINATION
+  DATA_CORRECTION
+  DATA_ACCESS
+  OTHER
+}
+
+enum ServiceRequestStatus {
+  OPEN
+  IN_PROGRESS
+  ANSWERED
+  CLOSED
+}
+
+model ServiceRequest {
+  id             String               @id @default(uuid()) @db.Uuid
+  organizationId String               @db.Uuid
+  customerId     String               @db.Uuid
+  contractId     String?              @db.Uuid
+  type           ServiceRequestType
+  subject        String
+  description    String
+  status         ServiceRequestStatus @default(OPEN)
+  createdByUserId String?             @db.Uuid
+  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime             @updatedAt @db.Timestamptz(3)
+
+  organization Organization            @relation(fields: [organizationId], references: [id])
+  customer     Customer                @relation(fields: [customerId], references: [id])
+  messages     ServiceRequestMessage[]
+
+  @@index([organizationId, status])
+  @@map("service_requests")
+}
+
+model ServiceRequestMessage {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  requestId      String   @db.Uuid
+  authorUserId   String?  @db.Uuid
+  fromCustomer   Boolean
+  body           String
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  request      ServiceRequest @relation(fields: [requestId], references: [id])
+
+  @@map("service_request_messages")
+}
+
+// =========================================================
+//  NOTIFICAÇÕES, AUDITORIA E INTEGRAÇÕES
+// =========================================================
+
+enum NotificationSeverity {
+  INFO
+  WARNING
+  CRITICAL
+  SUCCESS
+}
+
+/// Notificação para a equipe com uma permissão (`audiencePermission`) ou
+/// para um usuário específico. `dedupeKey` único por empresa: o mesmo
+/// alerta (ex.: CNH do motorista X vencendo em 30 dias) nasce uma vez.
+model Notification {
+  id                 String               @id @default(uuid()) @db.Uuid
+  organizationId     String               @db.Uuid
+  branchId           String?              @db.Uuid
+  userId             String?              @db.Uuid
+  customerId         String?              @db.Uuid
+  audiencePermission String?
+  type               String
+  severity           NotificationSeverity @default(INFO)
+  title              String
+  body               String
+  link               String?
+  dedupeKey          String
+  createdAt          DateTime             @default(now()) @db.Timestamptz(3)
+
+  organization Organization           @relation(fields: [organizationId], references: [id])
+  reads        NotificationRead[]
+  deliveries   NotificationDelivery[]
+
+  @@unique([organizationId, dedupeKey])
+  @@index([organizationId, createdAt])
+  @@map("notifications")
+}
+
+model NotificationRead {
+  notificationId String   @db.Uuid
+  userId         String   @db.Uuid
+  organizationId String   @db.Uuid
+  readAt         DateTime @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@id([notificationId, userId])
+  @@map("notification_reads")
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  WHATSAPP
+  WEBHOOK
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED_NOT_CONFIGURED
+}
+
+/// Fila de envio por canal externo. Tentativas controladas com backoff.
+model NotificationDelivery {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @db.Uuid
+  notificationId String              @db.Uuid
+  channel        NotificationChannel
+  target         String
+  status         DeliveryStatus      @default(PENDING)
+  attempts       Int                 @default(0)
+  nextAttemptAt  DateTime            @default(now()) @db.Timestamptz(3)
+  lastError      String?
+  sentAt         DateTime?           @db.Timestamptz(3)
+  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, channel, target])
+  @@index([status, nextAttemptAt])
+  @@map("notification_deliveries")
+}
+
+enum ActorType {
+  USER
+  PLATFORM
+  SUPPORT
+  CUSTOMER
+  SYSTEM
+  INTEGRATION
+  PUBLIC
+}
+
+/// Trilha de auditoria. Só aceita INSERT (gatilho). `organizationId`
+/// nulo = ação de plataforma, visível só ao Master.
+model AuditLog {
+  id             String    @id @default(uuid()) @db.Uuid
+  at             DateTime  @default(now()) @db.Timestamptz(3)
+  organizationId String?   @db.Uuid
+  branchId       String?   @db.Uuid
+  actorType      ActorType
+  actorUserId    String?   @db.Uuid
+  actorName      String?
+  supportGrantId String?   @db.Uuid
+  action         String
+  entityType     String
+  entityId       String?
+  before         Json?
+  after          Json?
+  reason         String?
+  ip             String?
+  userAgent      String?
+  requestId      String?
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, at])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+enum IntegrationStatus {
+  NOT_CONFIGURED
+  CONFIGURED
+  VERIFIED
+  ERROR
+}
+
+/// Configuração de integração. `organizationId` nulo = global da Norty.
+/// Segredos ficam cifrados (`secretEnc`) e nunca voltam para o cliente.
+model IntegrationConfig {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String?           @db.Uuid
+  provider       String
+  status         IntegrationStatus @default(NOT_CONFIGURED)
+  config         Json              @default("{}")
+  secretEnc      String?
+  lastTestAt     DateTime?         @db.Timestamptz(3)
+  lastTestResult String?
+  createdAt      DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime          @updatedAt @db.Timestamptz(3)
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, provider])
+  @@map("integration_configs")
+}
+
+/// Chave de API para integração de sistemas. Só o hash é guardado.
+model ApiKey {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  name           String
+  prefix         String    @unique
+  keyHash        String
+  scopes         String[]
+  lastUsedAt     DateTime? @db.Timestamptz(3)
+  expiresAt      DateTime? @db.Timestamptz(3)
+  revokedAt      DateTime? @db.Timestamptz(3)
+  createdById    String?   @db.Uuid
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@map("api_keys")
+}
+
+/// Webhook de saída: a empresa recebe eventos assinados com HMAC.
+model WebhookEndpoint {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  url            String
+  events         String[]
+  secretEnc      String
+  active         Boolean   @default(true)
+  lastStatus     Int?
+  lastDeliveryAt DateTime? @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@map("webhook_endpoints")
+}

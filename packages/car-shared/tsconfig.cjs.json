@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "node10",
+    "declaration": false,
+    "declarationMap": false,
+    "outDir": "dist/cjs",
+    "ignoreDeprecations": "6.0"
+  }
+}
