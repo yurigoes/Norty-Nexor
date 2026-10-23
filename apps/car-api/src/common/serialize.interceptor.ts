@@ -1,4 +1,4 @@
-import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
+import { CallHandler, ExecutionContext, Injectable, NestInterceptor, StreamableFile } from '@nestjs/common';
 import { map, type Observable } from 'rxjs';
 import { Prisma } from '../generated/prisma';
 
@@ -24,7 +24,7 @@ export function toJsonSafe(value: unknown): unknown {
 @Injectable()
 export class SerializeInterceptor implements NestInterceptor {
   intercept(_context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    return next.handle().pipe(map((data) => (data instanceof Object && 'pipe' in data ? data : toJsonSafe(data))));
+    return next.handle().pipe(map((data) => (data instanceof StreamableFile || Buffer.isBuffer(data) ? data : toJsonSafe(data))));
   }
 }
 
