@@ -167,7 +167,7 @@ function Scene({ modelUrl, title, hotspots = [], colorHex, onError }: Vehicle3DV
         model.position.sub(center);
         model.position.y += size.y / 2;
         const radius = Math.max(size.x, size.y, size.z);
-        const home = new THREE.Vector3(radius * 1.25, radius * 0.6, radius * 1.35);
+        const home = new THREE.Vector3(radius * 0.95, radius * 0.42, radius * 1.05);
         camera.position.copy(home);
         controls.target.set(0, size.y / 2.2, 0);
         controls.minDistance = radius * 0.6;
