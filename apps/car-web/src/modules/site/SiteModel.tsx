@@ -8,6 +8,7 @@ import { fromLocalInput, money } from '../../lib/format';
 import { Alert, ErrorState, KeyValue, LoadingBlock } from '../../components/ui';
 import { Field, Input } from '../../components/form';
 import { Vehicle3DViewer } from '../../components/viewer3d/Vehicle3DViewer';
+import { bodyKindFor } from '../../components/viewer3d/CarIllustration';
 import { fileUrl, usePageMeta, useSite } from './site-lib';
 import { LeadForm, QuoteBox, defaultPeriod } from './SiteForms';
 
@@ -43,7 +44,8 @@ export function SiteModel() {
       <Link to={`${base}/veiculos${params.toString() ? `?${params}` : ''}`} className="row small"><ArrowLeft size={14} aria-hidden /> Voltar ao catálogo</Link>
       <div className="site-model">
         <div className="stack">
-          <Vehicle3DViewer title={title} photos={photos} modelUrl={fileUrl(site.slug, model.model3dFileId)} hotspots={model.hotspots} unavailable={model.available === false} height={380} />
+          <Vehicle3DViewer title={title} photos={photos} modelUrl={null} unavailable={model.available === false} height={380}
+            colorName={model.colors.find((c) => c.available !== false)?.color ?? model.colors[0]?.color} bodyKind={bodyKindFor(model.category.name, model.bodyType)} />
           <div className="stack-sm">
             <span className="xsmall muted">{model.category.name}</span>
             <h1>{title}</h1>

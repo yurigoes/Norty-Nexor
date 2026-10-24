@@ -2,7 +2,10 @@
 
 O componente `apps/car-web/src/components/viewer3d/Vehicle3DViewer.tsx` é usado no catálogo
 interno, no site público e no portal. Ele **não inventa modelos**: sem um arquivo `.glb` real,
-mostra a galeria de fotos do modelo.
+mostra a galeria de fotos do modelo. Sem fotos, mostra uma **ilustração em perspectiva**
+(`CarIllustration.tsx`) na cor cadastrada da frota e no tipo de carroceria (carro, SUV ou
+caminhão): o veículo entra em perspectiva, pisca os faróis duas vezes e inclina levemente
+com o mouse. A ilustração é identificada como desenho — não é foto do veículo.
 
 ## Como funciona
 

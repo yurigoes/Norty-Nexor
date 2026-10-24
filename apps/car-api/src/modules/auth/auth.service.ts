@@ -339,7 +339,42 @@ export class AuthService {
         },
         permissions: [...ctx.permissions],
         availableContexts: contexts.length,
+        demo: await this.demoInfo(tx, ctx),
       };
+    });
+  }
+
+  /* ================= Modo apresentação ================= */
+
+  private isDemoAccount(ctx: RequestContext): boolean {
+    return config.demoRoleSwitchEmails.includes(ctx.email.toLowerCase());
+  }
+
+  private async demoInfo(tx: Parameters<Parameters<PrismaService['platform']>[0]>[0], ctx: RequestContext): Promise<SessionInfo['demo']> {
+    if (!this.isDemoAccount(ctx) || ctx.kind !== 'STAFF' || !ctx.membershipId || !ctx.organizationId) return null;
+    const [roles, membership] = await Promise.all([
+      tx.role.findMany({ where: { organizationId: ctx.organizationId }, orderBy: { name: 'asc' }, select: { id: true, key: true, name: true } }),
+      tx.membership.findUniqueOrThrow({ where: { id: ctx.membershipId } }),
+    ]);
+    return { roles, currentRoleId: membership.roleId };
+  }
+
+  /**
+   * Troca o perfil da própria conta de apresentação. Só vale para e-mails
+   * listados em DEMO_ROLE_SWITCH_EMAILS; qualquer outra conta recebe 403.
+   * A troca vale na próxima requisição (o guard relê o vínculo) e fica na
+   * auditoria da empresa.
+   */
+  async switchDemoRole(ctx: RequestContext, roleId: string): Promise<void> {
+    if (!this.isDemoAccount(ctx) || ctx.kind !== 'STAFF' || !ctx.membershipId || !ctx.organizationId) {
+      throw new ForbiddenException('Troca de perfil disponível só na conta de apresentação.');
+    }
+    await this.prisma.tenant({ organizationId: ctx.organizationId }, async (tx) => {
+      const role = await tx.role.findUnique({ where: { id: roleId } });
+      if (!role) throw new NotFoundException('Perfil não encontrado.');
+      const before = await tx.membership.findUniqueOrThrow({ where: { id: ctx.membershipId! } });
+      await tx.membership.update({ where: { id: before.id }, data: { roleId: role.id, allBranches: true } });
+      await this.audit.record(tx, ctx, { action: 'demo.role_switched', entityType: 'Membership', entityId: before.id, before: { roleId: before.roleId }, after: { roleId: role.id, role: role.name } });
     });
   }
 

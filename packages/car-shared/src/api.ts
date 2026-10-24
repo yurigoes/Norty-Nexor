@@ -108,6 +108,8 @@ export interface SessionInfo {
   };
   permissions: string[];
   availableContexts: number;
+  /** Modo apresentação: a conta pode trocar o próprio perfil para demonstrar o sistema. */
+  demo?: { roles: { id: string; key: string; name: string }[]; currentRoleId: string } | null;
 }
 
 export interface MfaSetup {

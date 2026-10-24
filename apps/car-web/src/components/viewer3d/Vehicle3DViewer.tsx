@@ -10,6 +10,7 @@
    inventa um modelo.
    ========================================================= */
 import { useEffect, useRef, useState } from 'react';
+import { CarIllustration, type BodyKind } from './CarIllustration';
 import { Car, ChevronLeft, ChevronRight, Pause, Play, RotateCcw } from 'lucide-react';
 import './viewer3d.css';
 
@@ -28,6 +29,9 @@ export interface Vehicle3DViewerProps {
   /** Cor de pintura em hex, quando o modelo 3D tiver material de carroceria. */
   colorHex?: string | null;
   height?: number;
+  /** Sem foto: a ilustração usa a cor real da frota e o tipo de carroceria. */
+  colorName?: string | null;
+  bodyKind?: BodyKind;
 }
 
 /** Materiais tratados como pintura da carroceria (convenção documentada em docs/norty-car/VISUALIZADOR-3D.md). */
@@ -57,9 +61,11 @@ export function Vehicle3DViewer(props: Vehicle3DViewerProps) {
       {mode === '3d' && modelUrl ? (
         <Scene {...props} modelUrl={modelUrl} onError={(msg) => { setFailure(msg); setMode('photos'); }} />
       ) : (
-        <Gallery photos={photos} title={title} />
+        photos.length ? <Gallery photos={photos} title={title} /> : (
+          <CarIllustration title={title} color={props.colorName} kind={props.bodyKind} unavailable={unavailable} height={height} />
+        )
       )}
-      {unavailable && <span className="v3d__badge">Indisponível</span>}
+      {unavailable && (photos.length > 0 || mode === '3d') && <span className="v3d__badge">Indisponível</span>}
       {failure && photos.length > 0 && <span className="v3d__note">Visualização 3D indisponível neste aparelho. Mostrando fotos.</span>}
       {modelUrl && photos.length > 0 && !failure && (
         <div className="v3d__switch" role="group" aria-label="Modo de visualização">

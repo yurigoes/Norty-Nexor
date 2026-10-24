@@ -10,6 +10,7 @@ import { ForgotPasswordPage, ForcePasswordChange, ResetPasswordPage } from './mo
 import { NotFoundPage } from './modules/shared/StatusPages';
 import { STAFF_ROUTES, MASTER_ROUTES, PORTAL_ROUTES } from './routes';
 import { Guard } from './routes/Guard';
+import { ALL_STAFF_ITEMS } from './app/navigation';
 import { MasterLayout, PortalLayout, PublicSiteRoot, isPublicSiteHost } from './routes/surfaces';
 
 export function App() {
@@ -53,9 +54,15 @@ function AppRoutes() {
 }
 
 function HomeRedirect() {
-  const { status, session } = useSession();
+  const { status, session, canAny, hasModule } = useSession();
   if (status === 'loading') return <LoadingBlock />;
-  return <Navigate to={status === 'authenticated' ? homeFor(session) : '/entrar'} replace />;
+  if (status !== 'authenticated') return <Navigate to="/entrar" replace />;
+  // Equipe sem dashboard (vistoriador, mecânico...) entra na primeira tela que pode usar.
+  if (session && (session.context.kind === 'STAFF' || session.context.kind === 'SUPPORT') && !canAny(['dashboard.view'])) {
+    const first = ALL_STAFF_ITEMS.find((i) => canAny(i.permissions) && (!i.module || hasModule(i.module)));
+    if (first) return <Navigate to={first.path} replace />;
+  }
+  return <Navigate to={homeFor(session)} replace />;
 }
 
 function RequireAuth({ kinds, children }: { kinds: string[]; children: React.ReactNode }) {

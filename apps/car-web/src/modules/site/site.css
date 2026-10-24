@@ -83,3 +83,4 @@ a.site-tile:hover { text-decoration: none; border-color: var(--brand); }
   .site-section { padding-top: var(--space-6); padding-bottom: var(--space-6); }
   .site-panel { padding: var(--space-4); }
 }
+.site-card__media .car-illu { width: 100%; border-radius: 0; }

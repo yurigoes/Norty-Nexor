@@ -26,6 +26,8 @@ export interface AppConfig {
   jobs: { enabled: boolean; intervalSeconds: number };
   smtp: { host?: string; port: number; user?: string; pass?: string; from?: string };
   ai: { anthropicApiKey?: string; model: string };
+  /** Contas de apresentação que podem trocar o próprio perfil (nunca use com conta real). */
+  demoRoleSwitchEmails: string[];
 }
 
 function required(keys: string[]): void {
@@ -93,6 +95,7 @@ export function loadConfig(): AppConfig {
       pass: process.env.SMTP_PASS || undefined,
       from: process.env.SMTP_FROM || undefined,
     },
+    demoRoleSwitchEmails: list(process.env.DEMO_ROLE_SWITCH_EMAILS).map((e) => e.toLowerCase()),
     ai: {
       anthropicApiKey: process.env.ANTHROPIC_API_KEY || undefined,
       model: process.env.NORTY_AI_MODEL ?? 'claude-sonnet-5-5',

@@ -3,7 +3,7 @@ import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import type { LoginStep, SessionInfo, SessionTokens } from '@nortycar/shared';
 import { AuthService } from './auth.service';
-import { ChangePasswordDto, LoginDto, MfaDisableDto, MfaDto, ResetConfirmDto, ResetRequestDto, SelectContextDto } from './dto';
+import { ChangePasswordDto, DemoRoleDto, LoginDto, MfaDisableDto, MfaDto, ResetConfirmDto, ResetRequestDto, SelectContextDto } from './dto';
 import { AllowTicket, AnyContext, Ctx, Public, type RequestContext } from '../../common/context';
 import type { TicketPayload } from '../../common/tokens';
 import { loadConfig } from '../../config/env';
@@ -92,6 +92,13 @@ export class AuthController {
   @Get('session')
   session(@Ctx() ctx: RequestContext): Promise<SessionInfo> {
     return this.auth.sessionInfo(ctx);
+  }
+
+  /** Modo apresentação: troca o próprio perfil (só contas de demonstração). */
+  @Post('demo/role')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  demoRole(@Ctx() ctx: RequestContext, @Body() dto: DemoRoleDto): Promise<void> {
+    return this.auth.switchDemoRole(ctx, dto.roleId);
   }
 
   @AnyContext()

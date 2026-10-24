@@ -74,6 +74,23 @@ não enxerga nada da outra. As empresas de demonstração nascem **sem veículos
 clientes ou lançamentos**: o painel mostra os estados vazios de uma locadora
 real no primeiro dia.
 
+### Conta de apresentação (Araújo Veículos)
+
+Para demonstrar o sistema com um único login:
+
+```bash
+npm run db:apresentacao -w @nortycar/api     # empresa Araújo Veículos, frota, site publicado
+# e na API: DEMO_ROLE_SWITCH_EMAILS=demo@nortycar.test
+```
+
+Entre com `demo@nortycar.test` / `1234` (ou `DEMO_LOGIN_PASSWORD`). No menu do
+usuário, **Modo apresentação — ver como** troca o perfil (Proprietário,
+Atendente, Vistoriador, Mecânico…) e o menu se ajusta às permissões. Em
+**Trocar empresa ou contexto** a mesma conta abre o portal do cliente e o
+Master Norty. O site fica em `/site/araujo-veiculos`. A troca de perfil só
+vale para os e-mails listados em `DEMO_ROLE_SWITCH_EMAILS` e é auditada; não
+use em produção real.
+
 ## Testes
 
 ```bash

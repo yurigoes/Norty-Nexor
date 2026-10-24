@@ -13,6 +13,7 @@
     "db:migrate:dev": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "db:demo": "tsx prisma/demo.ts",
+    "db:apresentacao": "tsx prisma/apresentacao.ts",
     "db:studio": "prisma studio",
     "test": "node --import tsx --test --test-concurrency=1 test/*.test.ts"
   },

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Car, Users, DoorOpen } from 'lucide-react';
+import { CarIllustration, bodyKindFor } from '../../components/viewer3d/CarIllustration';
 import type { PublicModel } from '@nortycar/shared';
 import { api, errorMessage } from '../../lib/api';
 import { fromLocalInput, money } from '../../lib/format';
@@ -15,7 +16,10 @@ export function ModelCard({ model, query }: { model: PublicModel; query?: string
   return (
     <Link to={`${base}/modelos/${model.id}${query ? `?${query}` : ''}`} className="site-card" data-unavailable={unavailable || undefined}>
       <div className="site-card__media">
-        {cover ? <img src={cover} alt={`${model.make} ${model.name}`} loading="lazy" /> : <Car size={48} aria-hidden />}
+        {cover ? <img src={cover} alt={`${model.make} ${model.name}`} loading="lazy" /> : (
+          <CarIllustration title={`${model.make} ${model.name}`} color={model.colors.find((c) => c.available !== false)?.color ?? model.colors[0]?.color}
+            kind={bodyKindFor(model.category.name, model.bodyType)} animate={false} height="100%" />
+        )}
         {unavailable && <span className="site-card__badge">Indisponível</span>}
         {model.available && <span className="site-card__badge site-card__badge--ok">Disponível</span>}
       </div>

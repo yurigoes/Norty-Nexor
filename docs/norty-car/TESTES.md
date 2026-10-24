@@ -17,7 +17,7 @@ verificador válido.
 | Arquivo | Testes | Cobre |
 |---|---|---|
 | `car-shared/test/rules.test.ts` | 15 | dinheiro em centavos, CPF/CNPJ/placa/RENAVAM/chassi, cotação, atraso e km, mensalidades, caução, encargos, custo médio, manutenção, abastecimento, rentabilidade, permissões |
-| `foundation.test.ts` | 18 | RLS em toda tabela de empresa, isolamento A↔B, auditoria imutável, login, bloqueio progressivo, rotação de refresh, logout, troca de contexto, chave forjada, MFA do Master, escopo de filial, último administrador, convite |
+| `foundation.test.ts` | 19 | RLS em toda tabela de empresa, isolamento A↔B, auditoria imutável, login, bloqueio progressivo, rotação de refresh, logout, troca de contexto, chave forjada, MFA do Master, escopo de filial, último administrador, convite, troca de perfil do modo apresentação recusada para conta comum |
 | `fleet.test.ts` | 15 | cadastro e duplicidade, isolamento por id, filial não autorizada, bloqueio/liberação com permissão, disponibilidade com preparo, exclusão lógica, CPF, mascaramento, anonimização LGPD, documentos a vencer |
 | `rentals.test.ts` | 15 | **duas confirmações simultâneas → uma 409**, preparo entre locações, bloqueado/vendido não reserva, retirada vira contrato, entrega exige vistoria, troca de motorista e de veículo preservando histórico, alçada, mensalidades sem duplicar |
 | `finance.test.ts` | 13 | idempotência de baixa (inclusive concorrente), webhook com evento repetido e assinatura inválida, caução fora da receita, dedução com aprovação, falha de pagamento não mexe no contrato, estorno |
@@ -26,7 +26,7 @@ verificador válido.
 | `insights.test.ts` | 15 | relatórios por permissão e filial, exportação, rotina sem duplicar alertas, audiência das notificações, busca isolada, dashboard zerado, IA sem chave → 503 |
 | `portals.test.ts` | 11 | Master cria empresa, PLATFORM sem dado operacional, suspensão/reativação, fluxo de suporte somente leitura e revogação, portal isolado por cliente, site despublicado, catálogo sem placa, consentimento, domínio único e TLS sob demanda, chave de API e segredo de webhook |
 | `acceptance.test.ts` | 16 | **roteiro completo do item 36**, encadeado só por HTTP (abaixo) |
-| **Total** | **146** | 131 de integração + 15 de regras — todos passando |
+| **Total** | **147** | 132 de integração + 15 de regras — todos passando |
 
 ## Roteiro de aceitação (`acceptance.test.ts`)
 

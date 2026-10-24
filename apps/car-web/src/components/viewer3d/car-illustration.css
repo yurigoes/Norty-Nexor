@@ -1,0 +1,45 @@
+/* Ilustração do veículo em perspectiva. Só tokens; as cores da pintura vêm do cadastro. */
+.car-illu {
+  position: relative; overflow: hidden; border-radius: var(--radius-lg);
+  background: radial-gradient(120% 90% at 50% 0%, var(--surface-card) 0%, var(--surface-sunken) 100%);
+  perspective: 900px; perspective-origin: 50% 40%;
+}
+.car-illu[data-unavailable] { filter: grayscale(1) opacity(0.65); }
+.car-illu__glow { position: absolute; left: 10%; right: 10%; top: 18%; height: 50%; background: radial-gradient(closest-side, var(--brand-soft), transparent); opacity: 0.7; }
+.car-illu__road { position: absolute; left: 0; right: 0; bottom: 14%; height: 2px; background: linear-gradient(90deg, transparent, var(--border-strong) 25%, var(--border-strong) 75%, transparent); }
+.car-illu__stage {
+  position: absolute; inset: 6% 6% 10%; display: grid; place-items: center;
+  transform-style: preserve-3d; transform: rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+  transition: transform 420ms var(--ease);
+}
+.car-illu__car { width: 100%; max-width: 560px; transform-style: preserve-3d; }
+.car-illu__svg { width: 100%; height: auto; display: block; overflow: visible; }
+.car-illu__light, .car-illu__lamp, .car-illu__beam { opacity: 0.3; }
+.car-illu__lamp { filter: blur(6px); }
+.car-illu__badge { position: absolute; top: var(--space-3); left: var(--space-3); font-size: var(--text-xs); font-weight: var(--weight-semibold); padding: 2px 10px; border-radius: var(--radius-pill); background: var(--surface-raised); color: var(--text-strong); border: 1px solid var(--border-default); }
+
+/* Entrada: chega de longe em perspectiva, rodas girando, e pisca os faróis duas vezes. */
+.car-illu[data-animate] .car-illu__car { animation: illu-enter 1.7s cubic-bezier(0.16, 0.84, 0.32, 1) 0.1s both, illu-float 5s ease-in-out 2.2s infinite; }
+.car-illu[data-animate] .car-illu__wheel { animation: illu-wheel 0.45s linear 4 both; animation-delay: 0.1s; }
+.car-illu[data-animate] .car-illu__light,
+.car-illu[data-animate] .car-illu__lamp,
+.car-illu[data-animate] .car-illu__beam { animation: illu-blink 0.9s ease-in-out 1.85s 1 both; }
+@keyframes illu-enter {
+  0% { transform: translate3d(-90%, -4px, -240px) rotateY(34deg) scale(0.86); opacity: 0; }
+  25% { opacity: 1; }
+  100% { transform: translate3d(0, 0, 0) rotateY(-8deg) scale(1); opacity: 1; }
+}
+@keyframes illu-float { 0%, 100% { transform: rotateY(-8deg) translateY(0); } 50% { transform: rotateY(-4deg) translateY(-4px); } }
+@keyframes illu-wheel { to { transform: rotate(360deg); } }
+@keyframes illu-blink {
+  0%, 18% { opacity: 0; }
+  24%, 40% { opacity: 1; }
+  48%, 58% { opacity: 0; }
+  64%, 80% { opacity: 1; }
+  100% { opacity: 0.3; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .car-illu[data-animate] .car-illu__car, .car-illu[data-animate] .car-illu__wheel,
+  .car-illu[data-animate] .car-illu__light, .car-illu[data-animate] .car-illu__lamp, .car-illu[data-animate] .car-illu__beam { animation: none; }
+  .car-illu__stage { transition: none; }
+}

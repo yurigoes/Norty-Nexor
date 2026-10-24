@@ -170,6 +170,15 @@ describe('Permissões e escopo de filial', () => {
     assert.equal((await c.post('/branches', { code: 'X1', name: 'Nova' })).status, 403);
   });
 
+  test('troca de papel do modo apresentação é recusada para conta comum', async () => {
+    const c = new Client();
+    await c.login(A.users.owner!);
+    const session = await c.get('/auth/session');
+    assert.equal(session.data.demo, null);
+    const res = await c.post('/auth/demo/role', { roleId: '00000000-0000-4000-8000-000000000000' });
+    assert.equal(res.status, 403);
+  });
+
   test('gerente de loja vê só a filial atribuída', async () => {
     const c = new Client();
     await c.login(A.users.branch_manager!);

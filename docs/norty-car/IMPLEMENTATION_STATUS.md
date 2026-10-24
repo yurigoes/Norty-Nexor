@@ -6,7 +6,7 @@ externa** (nada é simulado) · ⏳ não implementado (planejado).
 
 **Resumo:** todos os critérios de aceitação do item 36 executam com
 persistência real e passam no teste automatizado `acceptance.test.ts`. Suíte:
-131 testes de integração + 15 de regras, 0 falhas.
+132 testes de integração + 15 de regras, 0 falhas.
 
 ## Critérios de aceitação (item 36)
 
@@ -54,7 +54,7 @@ persistência real e passam no teste automatizado `acceptance.test.ts`. Suíte:
 | 18 | Abastecimento | ✅ com detecção de inconsistências |
 | 19 | Site público e domínio próprio | ✅ site por empresa, catálogo, cotação, pedidos com consentimento, domínio com verificação DNS real e TLS sob demanda; 🟡 SEO de SPA (metatags no cliente + página Open Graph no servidor; sem pré-renderização) |
 | 20 | Portal do cliente | ✅ |
-| 21 | Visualizador 3D | 🟡 Three.js com rotação, zoom, pontos de interesse, troca de cor e fallback para fotos; **nenhum arquivo .glb acompanha o sistema** (deve ser enviado por modelo — ver VISUALIZADOR-3D.md); Draco/Meshopt não suportados |
+| 21 | Visualizador 3D | 🟡 Three.js com rotação, zoom, pontos de interesse, troca de cor e fallback para fotos; **nenhum arquivo .glb acompanha o sistema** (deve ser enviado por modelo — ver VISUALIZADOR-3D.md); Draco/Meshopt não suportados; sem fotos nem 3D, ilustração em perspectiva na cor da frota |
 | 22 | Dashboards | ✅ dados reais por permissão e filial; Master com painel próprio |
 | 23 | Notificações e automações | ✅ central interna, rotinas agendadas sem duplicação, fila com tentativas, webhooks assinados; 🔌 e-mail (SMTP), 🔌 WhatsApp |
 | 24 | Norty IA | 🔌 integração com ferramentas somente leitura e escopadas implementada; sem `ANTHROPIC_API_KEY` responde "não configurada". **Não testada com chave real** |

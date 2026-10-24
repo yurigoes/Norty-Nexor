@@ -64,3 +64,8 @@ export class RevokeSessionDto {
   @IsString()
   reason?: string;
 }
+
+export class DemoRoleDto {
+  @IsUUID()
+  roleId!: string;
+}
