@@ -10,6 +10,13 @@ Fase 2 — aplicativo, API e banco de produção
 
 ---
 
+> **Norty Car | Sistema de Controle de Carros** — o produto de gestão de
+> locadoras do ecossistema Norty vive neste mesmo monorepo
+> (`apps/car-api`, `apps/car-web`, `packages/car-shared`). Documentação,
+> instalação e status em [docs/norty-car/README.md](docs/norty-car/README.md).
+
+---
+
 ## O que é esta entrega
 
 Monorepo com o aplicativo web, a API e o domínio compartilhado entre os dois:

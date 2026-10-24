@@ -113,3 +113,38 @@ demonstração as contas nascem com troca de senha obrigatória.
 ## Idioma
 
 Interface, comentários e commits em **português (pt-BR)**.
+
+---
+
+# Norty Car | Sistema de Controle de Carros
+
+Produto irmão neste monorepo: `packages/car-shared`, `apps/car-api`
+(NestJS + Prisma, porta 3334), `apps/car-web` (React + Vite, porta 5174),
+`infra/norty-car`, `scripts/norty-car`. Documentação em `docs/norty-car/`
+(comece por README.md e IMPLEMENTATION_STATUS.md). Não compartilha código de
+domínio nem banco com o my Home.
+
+```bash
+npm run dev:car-api / dev:car-web
+npm run db:car:migrate && npm run db:car:seed   # db:car:demo só em desenvolvimento
+npm run test:car                                  # regras + integração (PostgreSQL nortycar_test)
+```
+
+Regras que não devem ser desfeitas:
+
+1. Prisma Client do Norty Car é gerado em `apps/car-api/src/generated`
+   (não em node_modules). Testes importam a API compilada de `dist/`.
+2. Todo acesso a dado de empresa passa por `PrismaService.tenant(ctx, …)`;
+   o RLS está FORCE em toda tabela com `organizationId`. Tabela nova de
+   empresa chama `nc_enable_tenant_rls` na migração (o teste da fundação falha
+   se esquecer). Bypass só em `PrismaService.platform()`.
+3. O usuário do banco não pode ser superusuário nem ter BYPASSRLS.
+4. Agenda do veículo só por `AvailabilityService` (restrição de exclusão no
+   banco); situação por `VehicleStatusService`; eventos de veículo pela
+   `TimelineService`; operação sensível com `AuditService` na mesma transação.
+5. Histórico, auditoria, movimentos e versões são imutáveis (gatilhos):
+   corrija com novo registro. Caução nunca é receita. Pagamento só com
+   idempotencyKey ou evento de provedor assinado.
+6. Integração sem credencial mostra "pendente de configuração"; nunca simule.
+7. Rotas novas: registro do grupo em `src/modules/registry.<grupo>.ts` e
+   `apps/car-web/src/routes/<grupo>.tsx`; menu em `app/navigation.ts`.
