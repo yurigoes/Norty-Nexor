@@ -124,5 +124,6 @@ A suíte de integração sobe a API compilada contra `nortycar_test`
 | [VISUALIZADOR-3D.md](VISUALIZADOR-3D.md) | como publicar modelos 3D por veículo |
 | [PWA-OFFLINE.md](PWA-OFFLINE.md) | uso em campo e desenho do modo offline |
 | [TESTES.md](TESTES.md) | estratégia e cobertura dos testes |
+| [HANDOFF-TYR.md](HANDOFF-TYR.md) | passagem para subir a apresentação na Tyr |
 | [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) | o que está pronto, o que está pendente |
 | [../../infra/norty-car/DEPLOY.md](../../infra/norty-car/DEPLOY.md) | implantação, backup e recuperação |
