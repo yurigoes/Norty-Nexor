@@ -1,0 +1,93 @@
+# =========================================================
+#  Norty Car — stack de APRESENTAÇÃO (uma máquina, um comando)
+# ---------------------------------------------------------
+#  Tudo num lugar só, para demonstrar o sistema:
+#    db          PostgreSQL próprio (papel da aplicação sem superusuário)
+#    api         API do Norty Car
+#    web         aplicativo + proxy de /v1 para a API (mesmo endereço)
+#    tunnel      Cloudflare Tunnel: com CLOUDFLARE_TUNNEL_TOKEN usa o seu
+#                túnel; sem ele, abre um endereço *.trycloudflare.com
+#
+#  Não é a stack de produção (essa é ../docker-compose.yml, com o
+#  Postgres do CT 102). Instale com scripts/norty-car/apresentacao.sh.
+# =========================================================
+
+name: nortycar-apresentacao
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: nca-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${DB_ADMIN_PASSWORD:?defina DB_ADMIN_PASSWORD}
+      APP_DB_PASSWORD: ${DB_PASSWORD:?defina DB_PASSWORD}
+    volumes:
+      - nca-db:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/10-nortycar.sh:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "nortycar"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: ../../..
+      dockerfile: infra/norty-car/api.Dockerfile
+    container_name: nca-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3334
+      DATABASE_URL: postgresql://nortycar:${DB_PASSWORD}@db:5432/nortycar?schema=public&connection_limit=10
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET}
+      SECRETS_KEY: ${SECRETS_KEY:?defina SECRETS_KEY}
+      APP_URL: ${APP_URL:-http://localhost:${WEB_PORT:-3070}}
+      CORS_ORIGINS: ${APP_URL:-http://localhost:${WEB_PORT:-3070}}
+      SITE_BASE_DOMAIN: ${SITE_BASE_DOMAIN:-}
+      # túnel → nginx → api
+      TRUST_PROXY_HOPS: "2"
+      # Apresentação: a conta demo entra no Master sem MFA e troca de perfil.
+      MFA_REQUIRED_PLATFORM: "false"
+      DEMO_ROLE_SWITCH_EMAILS: demo@nortycar.test
+      DEMO_LOGIN_PASSWORD: ${DEMO_LOGIN_PASSWORD:-1234}
+      JOBS_ENABLED: "true"
+      APP_VERSION: apresentacao
+    volumes:
+      - nca-storage:/data/storage
+
+  web:
+    build:
+      context: ../../..
+      dockerfile: infra/norty-car/web.Dockerfile
+      args:
+        VITE_API_URL: /v1
+        VITE_APP_HOSTS: localhost,127.0.0.1,*.trycloudflare.com,${APP_HOSTS:-localhost}
+    container_name: nca-web
+    restart: unless-stopped
+    depends_on: [api]
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "${WEB_PORT:-3070}:80"
+
+  tunnel:
+    image: cloudflare/cloudflared:2024.12.2
+    container_name: nca-tunnel
+    restart: unless-stopped
+    depends_on: [web]
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    # Com token: túnel nomeado (a rota pública aponta para http://web:80
+    # no painel da Cloudflare). Sem token: endereço temporário.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'if [ -n "$$TUNNEL_TOKEN" ]; then exec cloudflared --no-autoupdate tunnel run; else exec cloudflared --no-autoupdate tunnel --url http://web:80; fi'
+
+volumes:
+  nca-db:
+  nca-storage:

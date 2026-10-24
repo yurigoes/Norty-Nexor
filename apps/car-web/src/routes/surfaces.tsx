@@ -53,7 +53,9 @@ export function PortalLayout() {
 /** Hosts que servem o aplicativo; os demais são sites públicos de locadoras. */
 export function isPublicSiteHost(): boolean {
   const hosts = (import.meta.env.VITE_APP_HOSTS ?? 'localhost,127.0.0.1').split(',').map((h: string) => h.trim()).filter(Boolean);
-  return !hosts.includes(window.location.hostname);
+  const host = window.location.hostname;
+  // "*.exemplo.com" vale para qualquer subdomínio (túnel com endereço sorteado).
+  return !hosts.some((h: string) => (h.startsWith('*.') ? host.endsWith(h.slice(1)) : h === host));
 }
 
 /** Site público: em /site/:slug dentro do app, ou na raiz de um domínio próprio. */

@@ -66,7 +66,8 @@ interface RequestOptions {
 }
 
 function buildUrl(path: string, query?: Query): string {
-  const url = new URL(`${API_URL}${path.startsWith('/') ? path : `/${path}`}`);
+  // API_URL pode ser relativa ("/v1") quando app e API dividem o mesmo host.
+  const url = new URL(`${API_URL}${path.startsWith('/') ? path : `/${path}`}`, window.location.origin);
   for (const [k, v] of Object.entries(query ?? {})) {
     if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, String(v));
   }

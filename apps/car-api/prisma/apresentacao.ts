@@ -23,7 +23,8 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { hash } from '@node-rs/argon2';
 import { PrismaClient } from '../src/generated/prisma';
-import { provisionOrganization } from '../src/common/provisioning';
+// Do build: assim o seed roda também na imagem de produção, que não leva o fonte.
+import { provisionOrganization } from '../dist/common/provisioning';
 
 const prisma = new PrismaClient();
 const EMAIL = 'demo@nortycar.test';

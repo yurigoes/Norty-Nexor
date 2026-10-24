@@ -91,6 +91,17 @@ Master Norty. O site fica em `/site/araujo-veiculos`. A troca de perfil só
 vale para os e-mails listados em `DEMO_ROLE_SWITCH_EMAILS` e é auditada; não
 use em produção real.
 
+Para subir a apresentação numa máquina com Docker (banco próprio, aplicativo
+e túnel da Cloudflare, tudo num comando):
+
+```bash
+git clone https://github.com/yurigoes/Norty-Nexor.git && cd Norty-Nexor
+git checkout claude/nexor-mvp-condominio-7zmymy
+./scripts/norty-car/apresentacao.sh                          # link temporário *.trycloudflare.com
+CLOUDFLARE_TUNNEL_TOKEN=<token> APP_HOST=car.seudominio.com \
+  ./scripts/norty-car/apresentacao.sh                         # seu túnel: rota pública → http://web:80
+```
+
 ## Testes
 
 ```bash
