@@ -45,7 +45,7 @@ export function ProfileMenu({ profilePath = '/perfil' }: { profilePath?: string 
             <>
               <hr />
               <div className="nc-menu__label">Modo apresentação — ver como</div>
-              <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+              <div style={{ maxHeight: 'min(240px, 30dvh)', overflowY: 'auto' }}>
                 {session.demo.roles.map((r) => (
                   <button key={r.id} type="button" role="menuitemradio" aria-checked={r.id === session.demo!.currentRoleId}
                     onClick={() => api.post('/auth/demo/role', { roleId: r.id })

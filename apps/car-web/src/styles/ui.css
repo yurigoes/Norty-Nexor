@@ -198,7 +198,7 @@
 .nc-toast__title { font-weight: var(--weight-semibold); color: var(--text-strong); }
 .nc-toast__msg { font-size: var(--text-sm); color: var(--text-muted); }
 
-.nc-menu { position: absolute; right: 0; top: calc(100% + 6px); min-width: 220px; background: var(--surface-raised); border: 1px solid var(--border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); padding: var(--space-1); z-index: var(--z-dropdown); animation: nc-rise var(--duration-fast) var(--ease); }
+.nc-menu { position: absolute; right: 0; top: calc(100% + 6px); min-width: 220px; max-height: calc(100dvh - 80px); overflow-y: auto; overscroll-behavior: contain; background: var(--surface-raised); border: 1px solid var(--border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); padding: var(--space-1); z-index: var(--z-dropdown); animation: nc-rise var(--duration-fast) var(--ease); }
 .nc-menu button, .nc-menu a { display: flex; width: 100%; align-items: center; gap: var(--space-2); padding: 8px var(--space-3); border: 0; background: transparent; border-radius: var(--radius-sm); cursor: pointer; color: var(--text-default); text-align: left; font-size: var(--text-md); text-decoration: none; }
 .nc-menu button:hover, .nc-menu a:hover, .nc-menu button:focus-visible { background: var(--surface-hover); }
 .nc-menu svg { width: 16px; height: 16px; color: var(--text-muted); }
