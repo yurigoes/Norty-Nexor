@@ -33,6 +33,8 @@ export function EntityPicker({ value, onChange, load, placeholder = 'Buscar…',
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState(0);
+  /** Posição fixa da lista: assim ela não é cortada pelo modal que rola. */
+  const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const term = useDebounced(q, 250);
   const box = useRef<HTMLDivElement>(null);
   const loadRef = useRef(load);
@@ -52,6 +54,18 @@ export function EntityPicker({ value, onChange, load, placeholder = 'Buscar…',
       .finally(() => alive && setLoading(false));
     return () => { alive = false; };
   }, [term, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const r = box.current?.getBoundingClientRect();
+      if (r) setRect({ top: r.bottom + 4, left: r.left, width: r.width });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); };
+  }, [open]);
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
@@ -97,7 +111,8 @@ export function EntityPicker({ value, onChange, load, placeholder = 'Buscar…',
         </span>
       </div>
       {open && (
-        <ul id={listId} role="listbox" className="nc-menu" style={{ left: 0, right: 0, maxHeight: 280, overflowY: 'auto', listStyle: 'none', margin: 0 }}>
+        <ul id={listId} role="listbox" className="nc-menu"
+          style={{ position: 'fixed', top: rect?.top, left: rect?.left, width: rect?.width, right: 'auto', zIndex: 'calc(var(--z-modal) + 5)' as never, maxHeight: 280, overflowY: 'auto', listStyle: 'none', margin: 0 }}>
           {loading && <li className="nc-menu__label">Buscando…</li>}
           {error && <li className="nc-menu__label text-danger">{error}</li>}
           {!loading && !error && !options.length && <li className="nc-menu__label">Nenhum resultado</li>}
