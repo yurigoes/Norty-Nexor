@@ -80,13 +80,23 @@ services:
     container_name: nca-tunnel
     restart: unless-stopped
     depends_on: [web]
+    # A imagem do cloudflared não tem shell: em vez de um "if" no comando,
+    # dois serviços em perfis, e o script liga um ou outro (COMPOSE_PROFILES).
+    # Sem token: endereço temporário *.trycloudflare.com.
+    profiles: [tunel-temporario]
+    command: ["tunnel", "--no-autoupdate", "--url", "http://web:80"]
+
+  # Com token: túnel nomeado (a rota pública aponta para http://web:80
+  # no painel da Cloudflare).
+  tunnel-nomeado:
+    image: cloudflare/cloudflared:2024.12.2
+    container_name: nca-tunnel-nomeado
+    restart: unless-stopped
+    depends_on: [web]
+    profiles: [tunel-nomeado]
     environment:
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
-    # Com token: túnel nomeado (a rota pública aponta para http://web:80
-    # no painel da Cloudflare). Sem token: endereço temporário.
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - 'if [ -n "$$TUNNEL_TOKEN" ]; then exec cloudflared --no-autoupdate tunnel run; else exec cloudflared --no-autoupdate tunnel --url http://web:80; fi'
+    command: ["tunnel", "--no-autoupdate", "run"]
 
 volumes:
   nca-db:

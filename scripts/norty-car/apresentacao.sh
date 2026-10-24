@@ -26,7 +26,7 @@ command -v docker >/dev/null || { erro "Docker não encontrado. Instale com: cur
 docker compose version >/dev/null 2>&1 || { erro "Falta o plugin docker compose."; exit 1; }
 COMPOSE="docker compose -f $DIR/docker-compose.yml --env-file $ENV_FILE"
 
-if [[ "${1:-}" == "--parar" ]]; then $COMPOSE down; exit 0; fi
+if [[ "${1:-}" == "--parar" ]]; then $COMPOSE --profile '*' down; exit 0; fi
 
 azul "1/5 · Configuração"
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -48,6 +48,12 @@ fi
 definir() { sed -i "s|^$1=.*|$1=$2|" "$ENV_FILE"; }
 [[ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]] && definir CLOUDFLARE_TUNNEL_TOKEN "$CLOUDFLARE_TUNNEL_TOKEN"
 if [[ -n "${APP_HOST:-}" ]]; then definir APP_HOSTS "$APP_HOST"; definir APP_URL "https://$APP_HOST"; fi
+# Qual dos dois serviços de túnel do compose sobe.
+if grep -qE '^CLOUDFLARE_TUNNEL_TOKEN=.+' "$ENV_FILE"; then
+  export COMPOSE_PROFILES=tunel-nomeado
+else
+  export COMPOSE_PROFILES=tunel-temporario
+fi
 
 azul "2/5 · Construindo as imagens (a primeira vez leva alguns minutos)"
 $COMPOSE build --pull
